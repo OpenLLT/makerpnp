@@ -421,7 +421,7 @@ impl AppState {
         let project_tab_message = Dynamic::new(ProjectTabMessage::default());
 
         let (project, message) = Project::from_path(path);
-        
+
         let project_key = self.projects.lock().insert(project);
 
         let project_tab = ProjectTab::new(project_key, project_tab_message.clone());

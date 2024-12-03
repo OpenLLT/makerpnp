@@ -61,7 +61,7 @@ pub struct Capabilities {
     navigate: Navigator<Event>
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
     pub reference: Reference,
     pub process: ProcessName,
@@ -69,14 +69,14 @@ pub struct PhaseOverview {
     pub pcb_side: PcbSide,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhasePlacementOrderings {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub placement_orderings: Vec<PlacementSortingItem>
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PlacementsList {
     // FUTURE consider introducing PlacementListItem, a subset of Placement
     placements: Vec<Placement>
@@ -93,7 +93,7 @@ pub struct ProjectTree {
     pub items: Vec<ProjectTreeItem>
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ProjectView {
     ProjectTree(ProjectTree),
     Placements(PlacementsList),

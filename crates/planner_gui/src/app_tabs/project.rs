@@ -4,7 +4,7 @@ use cushy::widgets::label::Displayable;
 use slotmap::SlotMap;
 use crate::action::Action;
 use crate::context::Context;
-use crate::project::{Project, ProjectKey, ProjectMessage};
+use crate::project::{Project, ProjectAction, ProjectKey, ProjectMessage};
 use crate::task::Task;
 use crate::widgets::tab_bar::{Tab, TabKey};
 
@@ -54,6 +54,23 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
     }
 
     fn update(&mut self, context: &Dynamic<Context>, _tab_key: TabKey, message: ProjectTabMessage) -> Action<ProjectTabAction> {
-        Action::new(ProjectTabAction::None)
+
+        let action = context.lock().with_context::<Dynamic<SlotMap<ProjectKey, Project>>, _, _>(|projects| {
+            let mut projects_guard = projects.lock();
+            let project = projects_guard.get_mut(self.project_key).unwrap();
+            
+            match message {
+                ProjectTabMessage::None => ProjectTabAction::None,
+                ProjectTabMessage::ProjectMessage(message) => {
+                    let action = project.update(message);
+                    match action.into_inner() {
+                        ProjectAction::None => ProjectTabAction::None,
+                        ProjectAction::Task(task) => ProjectTabAction::Task(task),
+                    }
+                }
+            }
+        }).unwrap();
+
+        Action::new(action)
     }
 }
