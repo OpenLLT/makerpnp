@@ -5,28 +5,33 @@ use cushy::widget::{WidgetInstance};
 use crate::action::Action;
 use crate::app_tabs::home::{HomeTab, HomeTabAction, HomeTabMessage};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
+use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
 use crate::context::Context;
 use crate::widgets::tab_bar::{Tab, TabKey};
 
 pub mod home;
 pub mod new;
+pub mod project;
 
 #[derive(Clone)]
 pub enum TabKind {
     Home(HomeTab),
     New(NewTab),
+    Project(ProjectTab)
 }
 
 #[derive(Clone, Debug)]
 pub enum TabKindMessage {
     HomeTabMessage(HomeTabMessage),
     NewTabMessage(NewTabMessage),
+    ProjectTabMessage(ProjectTabMessage),
 }
 
 #[derive(Debug)]
 pub enum TabKindAction {
     HomeTabAction(TabKey, HomeTabAction),
     NewTabAction(TabKey, NewTabAction),
+    ProjectTabAction(TabKey, ProjectTabAction),
 }
 
 impl Tab<TabKindMessage, TabKindAction> for TabKind {
@@ -34,6 +39,7 @@ impl Tab<TabKindMessage, TabKindAction> for TabKind {
         match self {
             TabKind::Home(tab) => tab.label(context),
             TabKind::New(tab) => tab.label(context),
+            TabKind::Project(tab) => tab.label(context),
         }
     }
 
@@ -41,6 +47,7 @@ impl Tab<TabKindMessage, TabKindAction> for TabKind {
         match self {
             TabKind::Home(tab) => tab.make_content(context, tab_key),
             TabKind::New(tab) => tab.make_content(context, tab_key),
+            TabKind::Project(tab) => tab.make_content(context, tab_key),
         }
     }
 
@@ -58,6 +65,13 @@ impl Tab<TabKindMessage, TabKindAction> for TabKind {
                     .update(context, tab_key, message)
                     .map(|action|{
                         TabKindAction::NewTabAction(tab_key, action)
+                    })
+            },
+            (TabKind::Project(tab), TabKindMessage::ProjectTabMessage(message)) => {
+                tab
+                    .update(context, tab_key, message)
+                    .map(|action|{
+                        TabKindAction::ProjectTabAction(tab_key, action)
                     })
             },
             (_, _) => {

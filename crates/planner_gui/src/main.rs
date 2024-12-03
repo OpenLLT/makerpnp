@@ -1,5 +1,6 @@
 extern crate core;
 
+use std::path;
 use std::path::PathBuf;
 /// Run as follows:
 /// `cargo run --package planner_gui --bin planner_gui`
@@ -8,6 +9,7 @@ use std::path::PathBuf;
 /// `RUST_LOG=debug,selectors::matching=info`
 
 use cushy::{App, Application, Run};
+use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::value::{Destination, Dynamic, Source};
@@ -15,6 +17,7 @@ use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::widgets::label::Displayable;
 use cushy::window::{PendingWindow, WindowHandle};
 use slotmap::SlotMap;
+use thiserror::Error;
 use tracing::info;
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
@@ -24,8 +27,10 @@ use crate::action::Action;
 use crate::app_tabs::{TabKind, TabKindAction, TabKindMessage};
 use crate::app_tabs::home::{HomeTab, HomeTabAction};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
+use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
 use crate::config::Config;
 use crate::context::Context;
+use crate::project::{Project, ProjectKey};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::task::Task;
 use crate::toolbar::ToolbarMessage;
@@ -40,6 +45,7 @@ mod config;
 mod toolbar;
 mod runtime;
 mod task;
+mod project;
 
 #[derive(Clone, Debug, Default)]
 enum AppMessage {
@@ -48,6 +54,7 @@ enum AppMessage {
     TabMessage(TabMessage<TabKindMessage>),
     ToolBarMessage(ToolbarMessage),
     ChooseFile(WindowHandle),
+    FileOpened(PathBuf),
 }
 
 struct AppState {
@@ -55,6 +62,7 @@ struct AppState {
     config: Dynamic<Config>,
     context: Dynamic<Context>,
 
+    projects: Dynamic<SlotMap<ProjectKey, Project>>,
     message: Dynamic<AppMessage>,
 }
 
@@ -97,6 +105,7 @@ fn main(app: &mut App) -> cushy::Result {
     let window = pending.handle();
 
     let config = Dynamic::new(config::load());
+    let projects = Dynamic::new(SlotMap::default());
 
     let tab_message = Dynamic::default();
     tab_message.for_each_cloned({
@@ -111,6 +120,7 @@ fn main(app: &mut App) -> cushy::Result {
 
     let mut context = Context::default();
     context.provide(config.clone());
+    context.provide(projects.clone());
     context.provide(window);
 
     let context = Dynamic::new(context);
@@ -119,6 +129,7 @@ fn main(app: &mut App) -> cushy::Result {
         tab_bar: tab_bar.clone(),
         context: context.clone(),
         config,
+        projects,
         message: message.clone(),
     };
 
@@ -236,8 +247,37 @@ impl AppState {
                     .on_toolbar_message(message)
             }
             AppMessage::ChooseFile(window) => {
-                // TODO
+
+                // TODO translate strings using the window's locale
+                FilePicker::new()
+                    .with_title("Open file")
+                    .with_types([
+                        FileType::from(("Project files", ["mpnp.json"])),
+                    ])
+                    .pick_file(&window,{
+
+                        let message = self.message.clone();
+
+                        move |path|{
+                            if let Some(path) = path {
+                                println!("path: {:?}", path);
+                                message.force_set(AppMessage::FileOpened(path))
+                            }
+                        }
+                    });
+
                 Task::none()
+            }
+            AppMessage::FileOpened(path) => {
+                match self.open_project(path) {
+                    Ok(message) => {
+                        Task::done(message)
+                    }
+                    Err(_error) => {
+                        // TODO improve error handling by using '_error'
+                        Task::none()
+                    }
+                }
             }
         }
     }
@@ -335,6 +375,16 @@ impl AppState {
                                 })
                             }
                         }
+                    },
+                    TabKindAction::ProjectTabAction(tab_key, action) => {
+                        match action {
+                            ProjectTabAction::None => Task::none(),
+                            ProjectTabAction::Task(task) => {
+                                task.map(move |message| {
+                                    AppMessage::TabMessage(TabMessage::TabKindMessage(tab_key, TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(message))))
+                                })
+                            }
+                        }
                     }
                 }
             }
@@ -346,7 +396,10 @@ impl AppState {
         println!("tab closed, key: {:?}", tab_key);
         match tab {
             TabKind::Home(_tab) => (),
-            TabKind::New(_tab) => ()
+            TabKind::New(_tab) => (),
+            TabKind::Project(tab) => {
+                self.projects.lock().remove(tab.project_key);
+            }
         }
         Task::none()
     }
@@ -355,4 +408,54 @@ impl AppState {
         // TODO
         Task::none()
     }
+
+    fn open_project(
+        &self,
+        path: PathBuf
+    ) -> Result<AppMessage, OpenProjectError> {
+        println!("open_project. path: {:?}", path);
+
+        let path = path::absolute(path)
+            .or_else(|cause| Err(OpenProjectError::IoError { cause }))?;
+
+        let project_tab_message = Dynamic::new(ProjectTabMessage::default());
+
+        let (project, message) = Project::from_path(path);
+        
+        let project_key = self.projects.lock().insert(project);
+
+        let project_tab = ProjectTab::new(project_key, project_tab_message.clone());
+
+        let mut tab_bar_guard = self.tab_bar.lock();
+        let tab_key = tab_bar_guard.add_tab(&self.context, TabKind::Project(project_tab));
+
+        self.create_project_tab_mapping(project_tab_message, tab_key);
+
+        let message_to_emit = AppMessage::TabMessage(TabMessage::TabKindMessage(tab_key, TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(message))));
+
+        Ok(message_to_emit)
+    }
+
+    fn create_project_tab_mapping(&self, document_tab_message: Dynamic<ProjectTabMessage>, tab_key: TabKey) {
+        document_tab_message.for_each_cloned({
+            let message = self.message.clone();
+            move |document_tab_message| {
+                message.force_set(
+                    AppMessage::TabMessage(
+                        TabMessage::TabKindMessage(
+                            tab_key,
+                            TabKindMessage::ProjectTabMessage(document_tab_message)
+                        )
+                    )
+                );
+            }
+        })
+            .persist();
+    }
+}
+
+#[derive(Error, Debug)]
+enum OpenProjectError {
+    #[error("IO error, cause: {cause}")]
+    IoError{cause: std::io::Error},
 }
