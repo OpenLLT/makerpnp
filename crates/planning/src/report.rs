@@ -1,6 +1,6 @@
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use tracing::{info, trace};
 use std::cmp::Ordering;
@@ -30,7 +30,7 @@ pub enum ReportGenerationError {
 // FUTURE add a test to ensure that duplicate issues are not added to the report.
 //        currently a BTreeSet is used to prevent duplicate issues.
 
-pub fn project_generate_report(project: &Project, path: &PathBuf, name: &String, phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>, issue_set: &mut BTreeSet<ProjectReportIssue>) -> Result<(), ReportGenerationError> {
+pub fn project_generate_report(project: &Project, directory: &Path, phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>, issue_set: &mut BTreeSet<ProjectReportIssue>) -> Result<(), ReportGenerationError> {
 
     let mut report = ProjectReport::default();
 
@@ -129,7 +129,7 @@ pub fn project_generate_report(project: &Project, path: &PathBuf, name: &String,
     
     report.issues = issues;
 
-    let report_file_path = build_report_file_path(name, path);
+    let report_file_path = build_report_file_path(&project.name, directory);
 
     project_report_save(&report, &report_file_path).map_err(|err|{
         ReportGenerationError::UnableToSaveReport { reason: err }
@@ -680,8 +680,8 @@ pub enum IssueKind {
     UnassignedPartFeeder { part: Part },
 }
 
-fn build_report_file_path(name: &str, path: &PathBuf) -> PathBuf {
-    let mut report_file_path: PathBuf = path.clone();
+fn build_report_file_path(name: &str, directory: &Path) -> PathBuf {
+    let mut report_file_path: PathBuf = PathBuf::from(directory);
     report_file_path.push(format!("{}_report.json", name));
     report_file_path
 }

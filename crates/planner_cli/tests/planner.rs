@@ -146,7 +146,7 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Created job: job1",
+            "Created project successfully",
         ]);
 
         // and

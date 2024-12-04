@@ -5,7 +5,7 @@ use planner_app::{Effect, Event, NavigationOperation};
 use crossbeam_channel::unbounded;
 use tracing::{debug, trace};
 use crate::core::Core;
-use crate::opts::{EventError, Opts};
+use crate::opts::{build_project_file_path, EventError, Opts};
 
 mod core;
 mod opts;
@@ -21,7 +21,9 @@ fn main() -> anyhow::Result<()>{
     cli::tracing::configure_tracing(opts.trace.clone(), opts.verbose.clone())?;
 
     let project_name = opts.project.clone().unwrap();
-    let path = opts.path.clone();
+    let directory = opts.path.clone();
+
+    let path = build_project_file_path(&project_name, &directory);
 
     let event: Result<Event, _> = Event::try_from(opts);
     
@@ -34,9 +36,9 @@ fn main() -> anyhow::Result<()>{
                 _ => true,
             };
             if should_load_first {
-                run_loop(&core, Event::Load { project_name, directory_path: path })?;
+                run_loop(&core, Event::Load { path })?;
             }
-            
+
             run_loop(&core, event)?;
         },
         // clap configuration prevents this

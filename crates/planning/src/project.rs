@@ -3,7 +3,7 @@ use tracing::{debug, info, trace, warn};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::cmp::Ordering;
 use thiserror::Error;
 use anyhow::Error;
@@ -240,20 +240,19 @@ pub enum ArtifactGenerationError {
     ReportGenerationError { reason: anyhow::Error },
 }
 
-pub fn generate_artifacts(project: &Project, path: &PathBuf, name: &String, phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>) -> Result<(), ArtifactGenerationError> {
+pub fn generate_artifacts(project: &Project, directory: &Path, phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>) -> Result<(), ArtifactGenerationError> {
     
     let mut issues: BTreeSet<ProjectReportIssue> = BTreeSet::new();
     
-
     for reference in project.phase_orderings.iter() {
         let phase = project.phases.get(reference).unwrap();
 
         let load_out_items = phase_load_out_items_map.get(reference).unwrap();
         
-        generate_phase_artifacts(project, phase, load_out_items.as_slice(), path, &mut issues)?;
+        generate_phase_artifacts(project, phase, load_out_items.as_slice(), directory, &mut issues)?;
     }
         
-    report::project_generate_report(project, path, name, &phase_load_out_items_map, &mut issues).map_err(|err|{
+    report::project_generate_report(project, directory, &phase_load_out_items_map, &mut issues).map_err(|err|{
         ArtifactGenerationError::ReportGenerationError { reason: err.into() }
     })?;
     
@@ -262,7 +261,7 @@ pub fn generate_artifacts(project: &Project, path: &PathBuf, name: &String, phas
     Ok(())
 }
 
-fn generate_phase_artifacts(project: &Project, phase: &Phase, load_out_items: &[LoadOutItem], path: &PathBuf, issues: &mut BTreeSet<ProjectReportIssue>) -> Result<(), ArtifactGenerationError> {
+fn generate_phase_artifacts(project: &Project, phase: &Phase, load_out_items: &[LoadOutItem], directory: &Path, issues: &mut BTreeSet<ProjectReportIssue>) -> Result<(), ArtifactGenerationError> {
     let mut placement_states: Vec<(&ObjectPath, &PlacementState)> = project.placements.iter().filter_map(|(object_path, state)|{
         match &state.phase {
             Some(placement_phase) if placement_phase.eq(&phase.reference) => Some((object_path, state)),
@@ -324,7 +323,7 @@ fn generate_phase_artifacts(project: &Project, phase: &Phase, load_out_items: &[
         };
     }
 
-    let mut phase_placements_path = PathBuf::from(path);
+    let mut phase_placements_path = PathBuf::from(directory);
     phase_placements_path.push(format!("{}_placements.csv", phase.reference));
 
     store_phase_placements_as_csv(&phase_placements_path, &placement_states, load_out_items).map_err(|e|{
@@ -600,12 +599,6 @@ pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: Pro
     }
 }
 
-pub fn build_project_file_path(name: &str, path: &PathBuf) -> PathBuf {
-    let mut project_file_path: PathBuf = path.clone();
-    project_file_path.push(format!("project-{}.mpnp.json", name));
-    project_file_path
-}
-
 pub fn load(project_file_path: &PathBuf) -> anyhow::Result<Project> {
     let project_file = File::open(project_file_path.clone())?;
     let mut de = serde_json::Deserializer::from_reader(project_file);
@@ -625,7 +618,7 @@ pub fn save(project: &Project, project_file_path: &PathBuf) -> anyhow::Result<()
     Ok(())
 }
 
-pub fn update_placements_operation(project: &mut Project, path: &PathBuf, object_path_patterns: Vec<Regex>, operation: PlacementOperation) -> anyhow::Result<bool> {
+pub fn update_placements_operation(project: &mut Project, directory: &Path, object_path_patterns: Vec<Regex>, operation: PlacementOperation) -> anyhow::Result<bool> {
     let mut modified = false;
     let mut history_item_map: HashMap<Reference, Vec<OperationHistoryItem>> = HashMap::new();
     
@@ -674,7 +667,7 @@ pub fn update_placements_operation(project: &mut Project, path: &PathBuf, object
         update_phase_operation_states(project);
 
         for (phase_reference, history_items) in history_item_map {
-            let mut phase_log_path = path.clone();
+            let mut phase_log_path = PathBuf::from(directory);
             phase_log_path.push(format!("{}_log.json", phase_reference));
 
             let mut operation_history: Vec<OperationHistoryItem> = operation_history::read_or_default(&phase_log_path)?;
@@ -768,7 +761,7 @@ pub enum PartStateError {
     NoPartStateFound { part: Part }
 }
 
-pub fn update_phase_operation(project: &mut Project, path: &PathBuf, phase_reference: &Reference, operation: ProcessOperationKind, set_item: ProcessOperationSetItem) -> anyhow::Result<bool> {
+pub fn update_phase_operation(project: &mut Project, directory: &Path, phase_reference: &Reference, operation: ProcessOperationKind, set_item: ProcessOperationSetItem) -> anyhow::Result<bool> {
 
     let phase_state = project.phase_states.get_mut(phase_reference)
         .ok_or(PhaseError::UnknownPhase(phase_reference.clone()))?;
@@ -800,7 +793,7 @@ pub fn update_phase_operation(project: &mut Project, path: &PathBuf, phase_refer
             extra: Default::default(),
         };
 
-        let mut phase_log_path = path.clone();
+        let mut phase_log_path = PathBuf::from(directory);
         phase_log_path.push(format!("{}_log.json", phase_reference));
 
         let mut operation_history: Vec<OperationHistoryItem> = operation_history::read_or_default(&phase_log_path)?;

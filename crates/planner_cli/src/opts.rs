@@ -9,7 +9,7 @@ use planning::process::ProcessName;
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
 use regex::Regex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use stores::load_out::LoadOutSource;
 use thiserror::Error;
 
@@ -32,7 +32,7 @@ pub(crate) struct Opts {
 
     /// Path
     #[arg(long, default_value = ".")]
-    pub(crate) path: PathBuf,
+    pub(crate) path: Box<Path>,
 
     /// Project name
     #[arg(long, value_name = "PROJECT_NAME")]
@@ -193,9 +193,12 @@ impl TryFrom<Opts> for Event {
 
         match opts.command {
             Command::Create { } => {
-                let project_name = opts.project.ok_or(EventError::MissingProjectName)?;
+                let name = opts.project.ok_or(EventError::MissingProjectName)?;
+                let directory = opts.path.clone();
 
-                Ok(Event::CreateProject { project_name, directory_path: opts.path })
+                let path = build_project_file_path(&name, &directory);
+
+                Ok(Event::CreateProject { name, path })
             },
             Command::AddPcb { kind, name } => 
                 Ok(Event::AddPcb { kind: kind.into(), name: name.to_string() }),
@@ -239,4 +242,10 @@ impl TryFrom<Opts> for Event {
                 Ok(Event::ResetOperations {} ),
         }
     }
+}
+
+pub fn build_project_file_path(name: &str, directory: &Path) -> PathBuf {
+    let mut project_file_path: PathBuf = PathBuf::from(directory);
+    project_file_path.push(format!("project-{}.mpnp.json", name));
+    project_file_path
 }

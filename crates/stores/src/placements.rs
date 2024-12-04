@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing::trace;
 use rust_decimal::Decimal;
 use anyhow::Context;
@@ -82,13 +82,13 @@ pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyho
     Ok(records)
 }
 
-pub fn load_all_placements(unique_design_variants: &[DesignVariant], path: &PathBuf) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
+pub fn load_all_placements(unique_design_variants: &[DesignVariant], directory: &Path) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
     let mut all_placements: BTreeMap<DesignVariant, Vec<Placement>> = Default::default();
 
     for design_variant in unique_design_variants {
         let DesignVariant { design_name: design, variant_name: variant } = design_variant;
 
-        let mut placements_path = PathBuf::from(path);
+        let mut placements_path = PathBuf::from(directory);
         placements_path.push(format!("{}_{}_placements.csv", design, variant));
 
         let placements = load_placements(placements_path)?;
