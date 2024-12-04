@@ -14,7 +14,6 @@ use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{IntoWidgetList, MakeWidget};
-use cushy::widgets::label::Displayable;
 use cushy::window::{PendingWindow, WindowHandle};
 use slotmap::SlotMap;
 use thiserror::Error;
@@ -198,6 +197,20 @@ fn main(app: &mut App) -> cushy::Result {
         }
     }
 
+    {
+        // TODO here we can re-open previously-opened project files from the last session
+        
+        let messages: Vec<_> = vec![];
+
+        for message in messages {
+            // this causes deadlock
+            // dyn_app_state.lock().message.force_set(message);
+
+            // so it's required to use the sender instead
+            let _result = sender.start_send(message);
+        }
+    }
+
     ui.open_centered(app)?;
 
     // FIXME control never returns here (at least on windows)
@@ -224,11 +237,6 @@ fn add_home_tab(context: &Dynamic<Context>, tab_bar: &Dynamic<TabBar<TabKind, Ta
         tab_bar_guard
             .add_tab(context, TabKind::Home(HomeTab::default()));
     }
-}
-
-fn into_array<T, const N: usize>(v: Vec<T>) -> [T; N] {
-    v.try_into()
-        .unwrap_or_else(|v: Vec<T>| panic!("Incorrect element count. required: {}, actual: {}", N, v.len()))
 }
 
 impl AppState {
