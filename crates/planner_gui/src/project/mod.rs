@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use cushy::value::Dynamic;
 use slotmap::new_key_type;
+use tracing::debug;
 use planner_app::{Event, ProjectView};
 use crate::action::Action;
 use crate::app_core::CoreService;
@@ -14,15 +15,29 @@ new_key_type! {
 #[derive(Debug, Clone)]
 pub enum ProjectMessage {
     None,
+    
+    //
+    // User interactions
+    //
+    
     Load,
+    Navigate(String),
+    
+    //
+    // Internal messages
+    //
+    Error(String),
     View(ProjectView),
+    Loaded,
 }
 
 #[derive(Default)]
 pub enum ProjectAction {
     #[default]
     None,
-    Task(Task<ProjectMessage>)
+    Task(Task<ProjectMessage>),
+    Navigate(String),
+    ShowError(String),
 }
 
 
@@ -50,16 +65,41 @@ impl Project {
                 ProjectAction::None
             }
             ProjectMessage::Load => {
-
-                // TODO a file called `.<extension>' will cause a panic here
-                let project_name = self.path.file_stem().unwrap().to_str().unwrap().to_string();
-                let directory_path = self.path.parent().unwrap().to_path_buf();
-
-                let task = self.core_service.update(Event::Load { project_name, directory_path });
+                let task = self.core_service
+                    .update(Event::Load { path: self.path.clone() })
+                    .then(|result| match result {
+                        message @ ProjectMessage::Error(_) => Task::done(message),
+                        ProjectMessage::None => {
+                            Task::done(ProjectMessage::Loaded)
+                        },
+                        _ => unreachable!()
+                    });
+                ProjectAction::Task(task)
+            },
+            ProjectMessage::Loaded => {
+                let task = self.core_service
+                    .update(Event::ProjectTree {});
                 ProjectAction::Task(task)
             }
+            ProjectMessage::Navigate(path) => {
+                // TODO if the path starts with `/project/` then show/hide UI elements based on the path, e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
+                //      otherwise delegate to the app.
+                ProjectAction::Navigate(path)
+            }
+            ProjectMessage::Error(error) => {
+                ProjectAction::ShowError(error)
+            }
             ProjectMessage::View(view) => {
-                println!("View: {:?}", view);
+                // TODO update the GUI using the view
+                match view {
+                    ProjectView::ProjectTree(project_tree) => {
+                        debug!("project tree: {:?}", project_tree);
+                    }
+                    ProjectView::Placements(placements) => {}
+                    ProjectView::PhaseOverview(phase_overview) => {}
+                    ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {}
+                }
+                
                 ProjectAction::None
             }
         };

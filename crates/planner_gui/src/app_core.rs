@@ -1,7 +1,5 @@
 use std::sync::Arc;
-use cushy::value::{Destination, Dynamic};
-use futures::AsyncReadExt;
-use tracing::{debug};
+use tracing::debug;
 use planner_app::{Effect, Event, NavigationOperation, Planner, ProjectView};
 use planner_app::view_renderer::ViewRendererOperation;
 use crate::project::ProjectMessage;
@@ -35,18 +33,21 @@ impl CoreService {
     }
 }
 
-fn process_effect(_core: &Core, effect: Effect) -> Task<ProjectMessage> {
+fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
     debug!("core::process_effect. effect: {:?}", effect);
     match effect {
-        ref render @ Effect::Render(ref request) => {
-            // TODO
-            Task::none()
+        ref _render @ Effect::Render(ref _request) => {
+            
+            let mut view = core.view();
+            match view.error.take() {
+                Some(error) => Task::done(ProjectMessage::Error(error)),
+                None => Task::done(ProjectMessage::None),
+            }
         }
         Effect::Navigator(request) => {
             match request.operation {
                 NavigationOperation::Navigate { path } => {
-                    // TODO
-                    Task::none()
+                    Task::done(ProjectMessage::Navigate(path))
                 }
             }
         }

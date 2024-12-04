@@ -2,6 +2,7 @@ use cushy::value::Dynamic;
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
 use slotmap::SlotMap;
+use tracing::{error, info};
 use crate::action::Action;
 use crate::context::Context;
 use crate::project::{Project, ProjectAction, ProjectKey, ProjectMessage};
@@ -65,7 +66,20 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
                     let action = project.update(message);
                     match action.into_inner() {
                         ProjectAction::None => ProjectTabAction::None,
-                        ProjectAction::Task(task) => ProjectTabAction::Task(task),
+                        ProjectAction::Task(task) => {
+                            info!("ProjectAction::Task.");
+                            ProjectTabAction::Task(task)
+                        },
+                        ProjectAction::Navigate(path) => {
+                            info!("ProjectAction::Navigate. path: {}", path);
+                            ProjectTabAction::None
+                        }
+                        ProjectAction::ShowError(error) => {
+                            // TODO show error dialog
+                            error!("ProjectAction::ShowError. error: {}", error);
+                            ProjectTabAction::None
+                        }
+
                     }
                 }
             }
