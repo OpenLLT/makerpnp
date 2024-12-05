@@ -260,7 +260,10 @@ impl AppState {
                 FilePicker::new()
                     .with_title("Open file")
                     .with_types([
-                        FileType::from(("Project files", ["mpnp.json"])),
+                        // FIXME 'mpnp.json' doesn't work on OSX (no files are selectable), works fine on Windows.
+                        //       consider using different file extensions for each type of json file, however this isn't ideal
+                        //       since all the other tools woud need to be told about all the different types of file extensions
+                        FileType::from(("Project files", ["json"])),
                     ])
                     .pick_file(&window,{
 
