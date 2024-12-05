@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use cushy::value::Dynamic;
+use cushy::value::{Destination, Dynamic, Source};
 use slotmap::new_key_type;
 use tracing::debug;
 use planner_app::{Event, ProjectView};
@@ -27,9 +27,19 @@ pub enum ProjectMessage {
     // Internal messages
     //
     Error(String),
-    View(ProjectView),
+    UpdateView(ProjectView),
     Loaded,
+    Create,
+    Created,
+    RequestView(ProjectViewRequest),
 }
+
+#[derive(Debug, Clone)]
+pub enum ProjectViewRequest {
+    Overview,
+    ProjectTree,
+}
+
 
 #[derive(Default)]
 pub enum ProjectAction {
@@ -38,6 +48,7 @@ pub enum ProjectAction {
     Task(Task<ProjectMessage>),
     Navigate(String),
     ShowError(String),
+    NameChanged(String),
 }
 
 
@@ -48,6 +59,17 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn new(name: String, path: PathBuf) -> (Self, ProjectMessage) {
+        let core_service = CoreService::new();
+        let instance = Self {
+            name: Dynamic::new(Some(name)),
+            path,
+            core_service,
+        };
+
+        (instance, ProjectMessage::Create)
+    }
+
     pub fn from_path(path: PathBuf) -> (Self, ProjectMessage) {
         let core_service = CoreService::new();
         let instance = Self {
@@ -67,18 +89,35 @@ impl Project {
             ProjectMessage::Load => {
                 let task = self.core_service
                     .update(Event::Load { path: self.path.clone() })
-                    .then(|result| match result {
-                        message @ ProjectMessage::Error(_) => Task::done(message),
-                        ProjectMessage::None => {
-                            Task::done(ProjectMessage::Loaded)
-                        },
-                        _ => unreachable!()
-                    });
+                    .chain(Task::done(ProjectMessage::Loaded));
                 ProjectAction::Task(task)
             },
             ProjectMessage::Loaded => {
                 let task = self.core_service
-                    .update(Event::ProjectTree {});
+                    .update(Event::RequestOverviewView {})
+                    .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
+                ProjectAction::Task(task)
+            }
+            ProjectMessage::Create => {
+                let task = self.core_service
+                    .update(Event::CreateProject { name: self.name.get().unwrap(), path: self.path.clone() })
+                    .chain(Task::done(ProjectMessage::Created));
+                ProjectAction::Task(task)
+            },
+            ProjectMessage::Created => {
+                let task = self.core_service
+                    .update(Event::RequestOverviewView {})
+                    .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
+                ProjectAction::Task(task)
+            },
+            ProjectMessage::RequestView(view) => {
+                let event = match view {
+                    ProjectViewRequest::Overview => Event::RequestOverviewView {},
+                    ProjectViewRequest::ProjectTree => Event::RequestOverviewView {},
+                };
+                
+                let task = self.core_service
+                    .update( event);
                 ProjectAction::Task(task)
             }
             ProjectMessage::Navigate(path) => {
@@ -89,18 +128,30 @@ impl Project {
             ProjectMessage::Error(error) => {
                 ProjectAction::ShowError(error)
             }
-            ProjectMessage::View(view) => {
+            ProjectMessage::UpdateView(view) => {
                 // TODO update the GUI using the view
                 match view {
+                    ProjectView::Overview(project_overview) => {
+                        debug!("project overview: {:?}", project_overview);
+                        self.name.set(Some(project_overview.name.clone()));
+                        
+                        ProjectAction::NameChanged(project_overview.name)
+                    }
                     ProjectView::ProjectTree(project_tree) => {
                         debug!("project tree: {:?}", project_tree);
+
+                        ProjectAction::None
                     }
-                    ProjectView::Placements(placements) => {}
-                    ProjectView::PhaseOverview(phase_overview) => {}
-                    ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {}
+                    ProjectView::Placements(placements) => {
+                        ProjectAction::None
+                    }
+                    ProjectView::PhaseOverview(phase_overview) => {
+                        ProjectAction::None
+                    }
+                    ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {
+                        ProjectAction::None
+                    }
                 }
-                
-                ProjectAction::None
             }
         };
 

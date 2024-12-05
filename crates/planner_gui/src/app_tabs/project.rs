@@ -1,4 +1,4 @@
-use cushy::value::Dynamic;
+use cushy::value::{Destination, Dynamic};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
 use slotmap::SlotMap;
@@ -26,6 +26,7 @@ pub enum ProjectTabAction {
 pub struct ProjectTab {
     pub project_key: ProjectKey,
     message: Dynamic<ProjectTabMessage>,
+    pub label: Dynamic<String>,
 }
 
 impl ProjectTab {
@@ -33,14 +34,14 @@ impl ProjectTab {
         Self {
             project_key,
             message,
+            label: Dynamic::new("Loading...".to_string())
         }
     }
 }
 
 impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
-    fn label(&self, context: &Dynamic<Context>) -> String {
-        
-        "Loading...".to_string()
+    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
+        self.label.clone().into()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
@@ -66,6 +67,11 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
                     let action = project.update(message);
                     match action.into_inner() {
                         ProjectAction::None => ProjectTabAction::None,
+                        ProjectAction::NameChanged(name) => {
+                            info!("Name changed. name: {:?}", name);
+                            self.label.set(name);
+                            ProjectTabAction::None
+                        },
                         ProjectAction::Task(task) => {
                             info!("ProjectAction::Task.");
                             ProjectTabAction::Task(task)

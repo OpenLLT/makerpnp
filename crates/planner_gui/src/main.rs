@@ -1,13 +1,13 @@
-extern crate core;
-
-use std::path;
-use std::path::PathBuf;
 /// Run as follows:
 /// `cargo run --package planner_gui --bin planner_gui`
 ///
 /// To enable logging, set the environment variable appropriately, for example:
 /// `RUST_LOG=debug,selectors::matching=info`
 
+extern crate core;
+
+use std::path;
+use std::path::PathBuf;
 use cushy::{App, Application, Run};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
@@ -374,8 +374,8 @@ impl AppState {
                     TabKindAction::NewTabAction(tab_key, action) => {
                         match action {
                             NewTabAction::None => Task::none(),
-                            NewTabAction::CreateProject(name, path) => {
-                                self.create_project(tab_key, name, path)
+                            NewTabAction::CreateProject(name, directory) => {
+                                self.create_project(tab_key, name, directory)
                             }
                             NewTabAction::Task(task) => {
                                 task.map(move |message| {
@@ -412,9 +412,23 @@ impl AppState {
         Task::none()
     }
 
-    fn create_project(&self, tab_key: TabKey, name: String, path: PathBuf) -> Task<AppMessage> {
-        // TODO
-        Task::none()
+    fn create_project(&self, tab_key: TabKey, name: String, directory: PathBuf) -> Task<AppMessage> {
+
+        let project_tab_message = Dynamic::new(ProjectTabMessage::default());
+
+        self.create_project_tab_mapping(project_tab_message.clone(), tab_key);
+
+        let path = build_project_file_path(&name, directory);
+        let (project, message) = Project::new(name, path);
+
+        let project_key = self.projects.lock().insert(project);
+        let project_tab = ProjectTab::new(project_key, project_tab_message);
+
+        self.tab_bar.lock().replace(tab_key, &self.context, TabKind::Project(project_tab));
+
+        let message_to_emit = AppMessage::TabMessage(TabMessage::TabKindMessage(tab_key, TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(message))));
+
+        Task::done(message_to_emit)
     }
 
     fn open_project(
@@ -466,4 +480,10 @@ impl AppState {
 enum OpenProjectError {
     #[error("IO error, cause: {cause}")]
     IoError{cause: std::io::Error},
+}
+
+pub fn build_project_file_path(name: &str, directory: PathBuf) -> PathBuf {
+    let mut project_file_path: PathBuf = directory;
+    project_file_path.push(format!("project-{}.mpnp.json", name));
+    project_file_path
 }

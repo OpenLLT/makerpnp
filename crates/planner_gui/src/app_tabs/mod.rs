@@ -35,7 +35,7 @@ pub enum TabKindAction {
 }
 
 impl Tab<TabKindMessage, TabKindAction> for TabKind {
-    fn label(&self, context: &Dynamic<Context>) -> String {
+    fn label(&self, context: &Dynamic<Context>) -> Dynamic<String> {
         match self {
             TabKind::Home(tab) => tab.label(context),
             TabKind::New(tab) => tab.label(context),

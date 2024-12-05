@@ -87,12 +87,18 @@ pub struct ProjectTreeItem {
     
 }
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
+pub struct ProjectOverview {
+    pub name: String
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectTree {
     pub items: Vec<ProjectTreeItem>
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ProjectView {
+    Overview(ProjectOverview),
     ProjectTree(ProjectTree),
     Placements(PlacementsList),
     PhaseOverview(PhaseOverview),
@@ -178,7 +184,8 @@ pub enum Event {
     //
     // Views
     //
-    ProjectTree { }
+    RequestOverviewView { },
+    RequestProjectTreeView { },
     
 }
 
@@ -497,7 +504,28 @@ impl App for Planner {
                 };
             },
             
-            Event::ProjectTree { } => {
+            //
+            // Views
+            // 
+            Event::RequestOverviewView { } => {
+                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
+                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
+
+                        let overview = ProjectOverview {
+                            name: project.name.clone(),
+                        };
+                        caps.view.view(ProjectView::Overview(overview), |_|Event::None)
+
+                    } else {
+                        model.error.replace("project required".to_string());
+                    }
+                    Ok(())
+                };
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
+            }
+            Event::RequestProjectTreeView { } => {
 
                 default_render = false;
                 

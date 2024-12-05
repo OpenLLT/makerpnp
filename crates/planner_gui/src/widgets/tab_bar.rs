@@ -37,7 +37,7 @@ pub enum TabAction<TKA, TK> {
 }
 
 pub trait Tab<TKM, TKA> {
-    fn label(&self, context: &Dynamic<Context>) -> String;
+    fn label(&self, context: &Dynamic<Context>) -> Dynamic<String>;
     fn make_content(&self, context: &Dynamic<Context>, tab_key: TabKey) -> WidgetInstance;
     fn update(&mut self, context: &Dynamic<Context>, tab_key: TabKey, message: TKM) -> Action<TKA>;
 }
@@ -116,7 +116,10 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
 
         tab_state.tab = tab;
         tab_state.widget.set(tab_content_widget);
-        tab_state.label.set(tab_label);
+        
+        // FIXME the tab button name does not change, probably due to the subscribers being lost when the old dynamic label is dropped.
+        //       the subscriber should be the tab button's label widget instance.
+        tab_state.label = tab_label;
 
         // prevent deadlock in the switcher closure
         drop(tabs);
@@ -143,7 +146,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
 
             let tab_state = TabState {
                 tab,
-                label: Dynamic::new(tab_label),
+                label: tab_label,
                 widget: Dynamic::new(tab_content),
             };
 
@@ -349,7 +352,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
                     .map(move |action|TabAction::TabAction(tab_key, action));
 
                 action
-            }
+            },
         }
     }
 }

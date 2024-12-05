@@ -27,8 +27,8 @@ pub enum HomeTabAction {
 pub struct HomeTab {}
 
 impl Tab<HomeTabMessage, HomeTabAction> for HomeTab {
-    fn label(&self, _context: &Dynamic<Context>) -> String {
-        "Home".to_string()
+    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
+        "Home".to_string().into()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {

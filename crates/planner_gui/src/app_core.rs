@@ -54,7 +54,7 @@ fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
         
         Effect::ViewRenderer(request) => {
             let ViewRendererOperation::View { view} = request.operation;
-            Task::done(ProjectMessage::View(view))
+            Task::done(ProjectMessage::UpdateView(view))
         }
     }
 }

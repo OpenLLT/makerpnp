@@ -50,8 +50,8 @@ impl NewTab {
 }
 
 impl Tab<NewTabMessage, NewTabAction> for NewTab {
-    fn label(&self, _context: &Dynamic<Context>) -> String {
-        "New".to_string()
+    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
+        "New".to_string().into()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
