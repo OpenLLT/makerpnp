@@ -75,6 +75,20 @@ impl<T> Task<T> {
         })
     }
 
+    pub fn chain(self, task: Self) -> Self
+    where
+        T: 'static,
+    {
+        match self.0 {
+            None => task,
+            Some(first) => match task.0 {
+                None => Task::none(),
+                Some(second) => Task(Some(boxed_stream(first.chain(second)))),
+            },
+        }
+    }
+
+
     pub fn future(future: impl Future<Output = T> + Send + 'static) -> Self
     where
         T: 'static,
