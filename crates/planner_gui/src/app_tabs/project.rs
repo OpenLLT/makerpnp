@@ -1,13 +1,13 @@
 use cushy::value::{Destination, Dynamic};
-use cushy::widget::{MakeWidget, WidgetInstance};
+use cushy::widget::WidgetInstance;
 use cushy::widgets::label::Displayable;
 use slotmap::SlotMap;
 use tracing::{error, info};
-use crate::action::Action;
-use crate::context::Context;
+use planner_gui::action::Action;
+use planner_gui::context::Context;
 use crate::project::{Project, ProjectAction, ProjectKey, ProjectMessage};
-use crate::task::Task;
-use crate::widgets::tab_bar::{Tab, TabKey};
+use planner_gui::task::Task;
+use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 #[derive(Clone, Debug, Default)]
 pub enum ProjectTabMessage {
@@ -45,14 +45,12 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
-        let path = context.lock().with_context::<Dynamic<SlotMap<ProjectKey, Project>>, _, _>(|projects| {
+        context.lock().with_context::<Dynamic<SlotMap<ProjectKey, Project>>, _, _>(|projects| {
             let projects_guard = projects.lock();
             let project = projects_guard.get(self.project_key).unwrap();
 
-            project.path.clone()
-        }).unwrap();
-
-        format!("Path: '{:?}'", path).into_label().make_widget()
+            project.make_widget()
+        }).unwrap()
     }
 
     fn update(&mut self, context: &Dynamic<Context>, _tab_key: TabKey, message: ProjectTabMessage) -> Action<ProjectTabAction> {

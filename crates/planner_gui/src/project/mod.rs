@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 use cushy::value::{Destination, Dynamic, Source};
+use cushy::widget::{MakeWidget, WidgetInstance};
+use cushy::widgets::label::Displayable;
 use slotmap::new_key_type;
 use tracing::debug;
-use planner_app::{Event, ProjectView};
-use crate::action::Action;
+use planner_app::{Event, ProjectTree, ProjectView};
+use planner_gui::action::Action;
 use crate::app_core::CoreService;
-use crate::task::Task;
+use planner_gui::task::Task;
+use cushy::widgets::tree::Tree;
 
 new_key_type! {
     /// A key for a project
@@ -51,34 +54,60 @@ pub enum ProjectAction {
     NameChanged(String),
 }
 
+#[derive(Default)]
+struct ProjectTreeViewItem {
+    name: String,
+}
 
 pub struct Project {
     pub(crate) name: Dynamic<Option<String>>,
     pub(crate) path: PathBuf,
     core_service: CoreService,
+    project_tree: Dynamic<Tree>,
 }
 
 impl Project {
     pub fn new(name: String, path: PathBuf) -> (Self, ProjectMessage) {
+        let project_tree = Dynamic::new(Tree::default());
+        
         let core_service = CoreService::new();
         let instance = Self {
             name: Dynamic::new(Some(name)),
             path,
             core_service,
+            project_tree,
         };
 
         (instance, ProjectMessage::Create)
     }
 
     pub fn from_path(path: PathBuf) -> (Self, ProjectMessage) {
+        let project_tree = Dynamic::new(Tree::default());
         let core_service = CoreService::new();
         let instance = Self {
             name: Dynamic::default(),
             path,
             core_service,
+            project_tree,
         };
 
         (instance, ProjectMessage::Load)
+    }
+
+    pub fn make_widget(&self) -> WidgetInstance {
+
+        let project_tree_widget = self.project_tree.lock().make_widget();
+        let project_explorer = "Project Explorer".contain()
+            .and(project_tree_widget.contain())
+            .into_rows()
+            .contain()
+            .make_widget();
+
+        project_explorer
+            .and("content-pane".to_label().centered().expand().contain())
+            .into_columns()
+            .expand_horizontally()
+            .make_widget()
     }
 
     pub fn update(&mut self, message: ProjectMessage) -> Action<ProjectAction> {
@@ -113,7 +142,7 @@ impl Project {
             ProjectMessage::RequestView(view) => {
                 let event = match view {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
-                    ProjectViewRequest::ProjectTree => Event::RequestOverviewView {},
+                    ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
                 };
                 
                 let task = self.core_service
@@ -140,6 +169,8 @@ impl Project {
                     ProjectView::ProjectTree(project_tree) => {
                         debug!("project tree: {:?}", project_tree);
 
+                        self.update_tree(project_tree);
+                        
                         ProjectAction::None
                     }
                     ProjectView::Placements(placements) => {
@@ -156,6 +187,22 @@ impl Project {
         };
 
         Action::new(action)
+    }
+
+    fn update_tree(&mut self, project_tree_view: ProjectTree) {
+
+        // TODO synchronize instead of rebuild, when we need to show a selected tree item this will be a problem
+        //      as the selection will be lost and need to be re-determined.
+        // FIXME currently the `project_tree` is not a tree, it's a list with no depth and no way to uniquely identify items
+        //       so the only way to synchronize would be by name, which is a bad idea.
+        let mut project_tree = self.project_tree.lock();
+        project_tree.clear();
+        
+        let root = project_tree.insert_child("Root".to_label().make_widget(), None).unwrap();
+        
+        for item in project_tree_view.items {
+            let child_key = project_tree.insert_child(item.name.to_label().make_widget(), Some(&root));
+        }
     }
 }
 

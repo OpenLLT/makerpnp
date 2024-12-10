@@ -2,8 +2,8 @@ use std::sync::Arc;
 use tracing::debug;
 use planner_app::{Effect, Event, NavigationOperation, Planner, ProjectView};
 use planner_app::view_renderer::ViewRendererOperation;
+use planner_gui::task::Task;
 use crate::project::ProjectMessage;
-use crate::task::Task;
 
 type Core = Arc<planner_app::Core<Effect, Planner>>;
 

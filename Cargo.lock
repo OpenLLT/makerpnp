@@ -1188,7 +1188,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "cushy"
 version = "0.4.0"
-source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#5d39fecbf1359efb91d54638dfb5078ef62b535e"
+source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#2c58c2cda1f8a3eb97783b461c90353695d91a1f"
 dependencies = [
  "ahash 0.8.11",
  "alot",
@@ -1199,6 +1199,7 @@ dependencies = [
  "fluent-bundle",
  "fluent-langneg",
  "image",
+ "indexmap 2.7.0",
  "intentional",
  "interner",
  "kempt",
@@ -1219,7 +1220,7 @@ dependencies = [
 [[package]]
 name = "cushy-macros"
 version = "0.4.0"
-source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#5d39fecbf1359efb91d54638dfb5078ef62b535e"
+source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#2c58c2cda1f8a3eb97783b461c90353695d91a1f"
 dependencies = [
  "attribute-derive",
  "manyhow",
@@ -2414,7 +2415,7 @@ checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 [[package]]
 name = "kludgine"
 version = "0.11.0"
-source = "git+https://github.com/khonsulabs/kludgine#1a96d3704dcc05caf9e68ccabb7cd7bf60fef361"
+source = "git+https://github.com/khonsulabs/kludgine#8c00d667dfeb820f2f367e6e6be31074613d6d8d"
 dependencies = [
  "ahash 0.8.11",
  "alot",

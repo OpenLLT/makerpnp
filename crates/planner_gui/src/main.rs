@@ -22,28 +22,26 @@ use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use unic_langid::LanguageIdentifier;
-use crate::action::Action;
+use planner_gui::action::Action;
+use planner_gui::context::Context;
+use planner_gui::runtime::{Executor, MessageDispatcher, RunTime};
+use planner_gui::task;
+use planner_gui::task::Task;
+use planner_gui::widgets::tab_bar::{TabAction, TabBar, TabKey, TabMessage};
 use crate::app_tabs::{TabKind, TabKindAction, TabKindMessage};
 use crate::app_tabs::home::{HomeTab, HomeTabAction};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
 use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
 use crate::config::Config;
-use crate::context::Context;
 use crate::project::{Project, ProjectKey};
-use crate::runtime::{Executor, MessageDispatcher, RunTime};
-use crate::task::Task;
 use crate::toolbar::ToolbarMessage;
-use crate::widgets::tab_bar::{TabAction, TabBar, TabKey, TabMessage};
 
-mod widgets;
-mod action;
-mod context;
+extern crate planner_gui;
+
 mod app_core;
 mod app_tabs;
 mod config;
 mod toolbar;
-mod runtime;
-mod task;
 mod project;
 
 #[derive(Clone, Debug, Default)]

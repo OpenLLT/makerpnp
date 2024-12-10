@@ -8,10 +8,10 @@ use cushy::widgets::{Button, Grid, Input, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::Displayable;
 use cushy::window::WindowHandle;
-use crate::action::Action;
-use crate::context::Context;
-use crate::task::Task;
-use crate::widgets::tab_bar::{Tab, TabKey};
+use planner_gui::action::Action;
+use planner_gui::context::Context;
+use planner_gui::task::Task;
+use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 #[derive(Clone, Debug)]
 pub enum NewTabMessage {

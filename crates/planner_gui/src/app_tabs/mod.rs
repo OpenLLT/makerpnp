@@ -2,12 +2,12 @@
 
 use cushy::value::Dynamic;
 use cushy::widget::{WidgetInstance};
-use crate::action::Action;
+use planner_gui::action::Action;
 use crate::app_tabs::home::{HomeTab, HomeTabAction, HomeTabMessage};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
 use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
-use crate::context::Context;
-use crate::widgets::tab_bar::{Tab, TabKey};
+use planner_gui::context::Context;
+use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 pub mod home;
 pub mod new;

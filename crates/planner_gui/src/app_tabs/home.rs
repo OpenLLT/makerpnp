@@ -2,10 +2,10 @@ use cushy::localization::Localize;
 use cushy::value::Source;
 use crate::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
-use crate::action::Action;
+use planner_gui::action::Action;
 use crate::config::Config;
-use crate::context::Context;
-use crate::widgets::tab_bar::{Tab, TabKey};
+use planner_gui::context::Context;
+use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 #[derive(Clone, Debug)]
 pub enum HomeTabMessage {

@@ -84,8 +84,8 @@ pub struct PlacementsList {
 pub struct ProjectTreeItem {
     pub name: String,
     pub path: String,
-    
 }
+
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectOverview {
     pub name: String
