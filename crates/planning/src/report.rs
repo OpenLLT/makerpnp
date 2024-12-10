@@ -693,7 +693,7 @@ fn project_report_save(report: &ProjectReport, report_file_path: &PathBuf) -> an
     report.serialize(&mut ser)?;
 
     let mut report_file = ser.into_inner();
-    report_file.write(b"\n")?;
+    let _written = report_file.write(b"\n")?;
 
     info!("Generated report. path: {:?}", report_file_path);
     

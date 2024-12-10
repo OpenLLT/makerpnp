@@ -35,5 +35,5 @@ pub fn save(config_reference: &Config) {
     let content: String = serde_json::to_string(config_reference).unwrap();
 
     let mut file = File::create(PathBuf::from(CONFIG_FILE_NAME)).unwrap();
-    file.write(content.as_bytes()).unwrap();
+    let _written = file.write(content.as_bytes()).unwrap();
 }

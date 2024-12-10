@@ -613,7 +613,7 @@ pub fn save(project: &Project, project_file_path: &PathBuf) -> anyhow::Result<()
     project.serialize(&mut ser)?;
 
     let mut project_file = ser.into_inner();
-    project_file.write(b"\n")?;
+    let _written = project_file.write(b"\n")?;
 
     Ok(())
 }

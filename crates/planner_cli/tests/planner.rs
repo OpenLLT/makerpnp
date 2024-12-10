@@ -237,7 +237,7 @@ mod operation_sequence_1 {
         println!("creating placements, path: {:?}", &placements_path);
         
         let mut placments_file = File::create(placements_path)?;
-        placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
+        let _written = placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
         placments_file.flush()?;
 
         // and
@@ -361,7 +361,7 @@ mod operation_sequence_1 {
         placements_path.push("design_a_variant_a_placements.csv");
 
         let mut placments_file = File::create(placements_path)?;
-        placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
+        let _written = placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
         placments_file.flush()?;
 
         // and
