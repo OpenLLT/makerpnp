@@ -65,7 +65,7 @@ impl ViewRendererResult {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum ViewRendererOperation {
     View { 
         view: ProjectView
