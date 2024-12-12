@@ -25,6 +25,7 @@ use pnp::pcb::{PcbKind, PcbSide};
 use stores::load_out::LoadOutSource;
 
 pub use crux_core::Core;
+use petgraph::Graph;
 use thiserror::Error;
 use pnp::placement::Placement;
 use crate::view_renderer::ViewRenderer;
@@ -83,6 +84,7 @@ pub struct PlacementsList {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectTreeItem {
     pub name: String,
+    /// "/" = root, paths are "/" separated.
     pub path: String,
 }
 
@@ -91,15 +93,53 @@ pub struct ProjectOverview {
     pub name: String
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
-pub struct ProjectTree {
-    pub items: Vec<ProjectTreeItem>
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
+pub struct ProjectTreeView {
+    
+    /// A directed graph of ProjectTreeItem.
+    /// 
+    /// The only relationships in the tree are parent->child, i.e. not parent->grandchild
+    /// the first element is the only root element
+    pub tree: Graph<ProjectTreeItem, ()>
+}
+
+impl ProjectTreeView {
+    fn new() -> Self {
+        Self {
+            tree: Graph::new()
+        }
+    }
+}
+
+impl PartialEq for ProjectTreeView {
+    fn eq(&self, other: &ProjectTreeView) -> bool {
+
+        /// Acknowledgement: https://github.com/petgraph/petgraph/issues/199#issuecomment-484077775
+        fn graph_eq<N, E, Ty, Ix>(
+            a: &petgraph::Graph<N, E, Ty, Ix>,
+            b: &petgraph::Graph<N, E, Ty, Ix>,
+        ) -> bool
+        where
+            N: PartialEq,
+            E: PartialEq,
+            Ty: petgraph::EdgeType,
+            Ix: petgraph::graph::IndexType + PartialEq,
+        {
+            let a_ns = a.raw_nodes().iter().map(|n| &n.weight);
+            let b_ns = b.raw_nodes().iter().map(|n| &n.weight);
+            let a_es = a.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+            let b_es = b.raw_edges().iter().map(|e| (e.source(), e.target(), &e.weight));
+            a_ns.eq(b_ns) && a_es.eq(b_es)
+        }
+        
+        graph_eq(&self.tree, &other.tree)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ProjectView {
     Overview(ProjectOverview),
-    ProjectTree(ProjectTree),
+    ProjectTree(ProjectTreeView),
     Placements(PlacementsList),
     PhaseOverview(PhaseOverview),
     PhasePlacementOrderings(PhasePlacementOrderings),
@@ -534,19 +574,40 @@ impl App for Planner {
                 let try_fn = |model: &mut Model| -> anyhow::Result<()> {
                     if let Some(ModelProject { project, .. }) = &mut model.model_project {
 
-                        let mut project_tree = ProjectTree {
-                            items: vec![
-                                ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() }
-                            ],
-                        };
+                        let add_test_nodes = false;
+                        
+                        let mut project_tree = ProjectTreeView::new();
+                        
+                        let root_node = project_tree.tree.add_node(ProjectTreeItem { name: "Root".to_string(), path: "/".to_string() });
+                        
+                        let phases_node = project_tree.tree.add_node(ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() });
+                        project_tree.tree.add_edge(root_node.clone(), phases_node.clone(), ());
                         
                         for (reference, ..) in &project.phases {
-                            project_tree.items.push ( ProjectTreeItem { 
-                                name: reference.to_string(), 
-                                path: format!("/phases/{}", reference).to_string() }
-                            )
+                            let phase_node = project_tree.tree.add_node(ProjectTreeItem {
+                                name: reference.to_string(),
+                                path: format!("/phases/{}", reference).to_string()
+                            });
+                            project_tree.tree.add_edge(phases_node.clone(), phase_node, ());
+                            
+                            if add_test_nodes {
+                                let test_node = project_tree.tree.add_node(ProjectTreeItem {
+                                    name: "Test".to_string(),
+                                    path: format!("/phases/{}/test", reference).to_string()
+                                });
+                                project_tree.tree.add_edge(phase_node, test_node, ());
+                            }
                         }
-                        
+
+                        if add_test_nodes {
+                            let test_node = project_tree.tree.add_node(ProjectTreeItem {
+                                name: "Test".to_string(),
+                                path: "/test".to_string()
+                            });
+                            project_tree.tree.add_edge(root_node.clone(), test_node, ());
+                        }
+
+
                         caps.view.view(ProjectView::ProjectTree(project_tree), |_|Event::None)    
                         
                     } else {

@@ -4,11 +4,12 @@ use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
 use slotmap::new_key_type;
 use tracing::debug;
-use planner_app::{Event, ProjectTree, ProjectView};
+use planner_app::{Event, ProjectTreeView, ProjectView};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
 use planner_gui::task::Task;
-use cushy::widgets::tree::Tree;
+use cushy::widgets::tree::{Tree, TreeNodeKey};
+use petgraph::visit::{depth_first_search, Control, DfsEvent};
 
 new_key_type! {
     /// A key for a project
@@ -189,20 +190,62 @@ impl Project {
         Action::new(action)
     }
 
-    fn update_tree(&mut self, project_tree_view: ProjectTree) {
+    fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
 
-        // TODO synchronize instead of rebuild, when we need to show a selected tree item this will be a problem
+        // TODO maybe synchronize instead of rebuild, when we need to show a selected tree item this will be a problem
         //      as the selection will be lost and need to be re-determined.
-        // FIXME currently the `project_tree` is not a tree, it's a list with no depth and no way to uniquely identify items
-        //       so the only way to synchronize would be by name, which is a bad idea.
+        //      instead of syncronization, maybe just remember the 'path' and re-select a tree item that has the same path  
         let mut project_tree = self.project_tree.lock();
         project_tree.clear();
+
+        //
+        // Create the tree widget nodes from the project tree view
+        //
+        // Assumes the only relationships in the tree are parent->child, i.e. parent->grandchild is catered handled.
+
+        use petgraph::graph::node_index as n;
+
+        let start = n(0);
         
-        let root = project_tree.insert_child("Root".to_label().make_widget(), None).unwrap();
+        let mut stack: Vec<(Option<TreeNodeKey>, Option<TreeNodeKey>)> = vec![];
+
+        let mut current_parent_key: Option<TreeNodeKey> = None;
+        let mut current_node_key: Option<TreeNodeKey> = None;
         
-        for item in project_tree_view.items {
-            let child_key = project_tree.insert_child(item.name.to_label().make_widget(), Some(&root));
-        }
+        // FIXME depth_first_search doesn't emit (Discover) nodes in the same order they were added to the tree.
+        //       the order *is* important here.
+        
+        depth_first_search(&project_tree_view.tree, Some(start),{
+
+            |event| {
+
+                //debug!("event: {:?}", event);
+                match event {
+                    DfsEvent::Discover(node, _) => {
+                        let item = &project_tree_view.tree[node];
+                        let node_widget = item.name.to_label().make_widget();
+
+                        let child_key = project_tree.insert_child(node_widget, current_parent_key.as_ref()).unwrap();
+
+                        current_node_key.replace(child_key);
+                    }
+                    DfsEvent::TreeEdge(_from, _to) => {
+                        stack.push((current_node_key.clone(), current_parent_key.clone()));
+                        current_parent_key.replace(current_node_key.take().unwrap());
+                        current_node_key.take();
+                    }
+                    DfsEvent::Finish(_from, _time) => {
+                        if let Some((node_key, parent_key)) = stack.pop() {
+                            current_node_key.replace(node_key.unwrap_or_default());
+                            current_parent_key.replace(parent_key.unwrap_or_default());
+                        }
+                    }
+                    _ => {
+                    }
+                }
+                Control::<()>::Continue
+            }
+        });
     }
 }
 

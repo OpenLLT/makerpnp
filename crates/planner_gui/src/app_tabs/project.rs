@@ -1,6 +1,5 @@
 use cushy::value::{Destination, Dynamic};
 use cushy::widget::WidgetInstance;
-use cushy::widgets::label::Displayable;
 use slotmap::SlotMap;
 use tracing::{error, info};
 use planner_gui::action::Action;

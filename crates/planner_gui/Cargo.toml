@@ -6,19 +6,20 @@ edition = "2021"
 [dependencies]
 planner_app = { path = "../planner_app" }
 slotmap = { version = "1.0.7" }
-futures = "0.3.31"
-async-std = "1.13.0"
-serde = { version = "1.0.210", features = ["derive"] }
-serde_json = { version = "1.0.128" }
-thiserror = "1.0.65"
+futures =  { workspace = true }
+async-std =  { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+petgraph = { workspace = true }
 
 #gui
 # not using chusy 'tracing-output' default feature as we initilize tracing in the app.
-cushy = { git = "https://github.com/hydra/cushy.git", branch = "makerpnp", default-features = false, features = ["roboto-flex", "native-dialogs"]}
+cushy = { workspace = true, default-features = false, features = ["roboto-flex", "native-dialogs"]}
 
 #i18n
-unic-langid = {version = "0.9", features = ["macros"]}
+unic-langid = { workspace = true, features = ["macros"]}
 
 #logging
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tracing = "0.1.40"
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+tracing = { workspace = true }
