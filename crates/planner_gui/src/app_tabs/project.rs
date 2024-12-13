@@ -24,6 +24,9 @@ pub enum ProjectTabAction {
 #[derive(Clone)]
 pub struct ProjectTab {
     pub project_key: ProjectKey,
+
+    /// The project tab owns the message, it's read elsewhere and passed to `update`
+    #[allow(dead_code)]
     message: Dynamic<ProjectTabMessage>,
     pub label: Dynamic<String>,
 }

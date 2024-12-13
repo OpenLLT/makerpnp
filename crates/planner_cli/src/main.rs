@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use anyhow::bail;
 use clap::Parser;
-use planner_app::{Effect, Event, NavigationOperation};
+use planner_app::{Effect, Event};
 use crossbeam_channel::unbounded;
 use tracing::{debug, trace};
+use planner_app::capabilities::navigator::NavigationOperation;
 use crate::core::Core;
 use crate::opts::{build_project_file_path, EventError, Opts};
 
@@ -31,10 +32,7 @@ fn main() -> anyhow::Result<()>{
         Ok(event) => {
             let core = core::new();
 
-            let should_load_first = match event {
-                Event::CreateProject { .. } => false,
-                _ => true,
-            };
+            let should_load_first = !matches!(event, Event::CreateProject { .. });
             if should_load_first {
                 run_loop(&core, Event::Load { path })?;
             }
