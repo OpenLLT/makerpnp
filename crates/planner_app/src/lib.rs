@@ -54,7 +54,7 @@ pub struct Model {
 
 #[derive(Effect)]
 pub struct Capabilities {
-    // TODO remove 'render'
+    // TODO remove 'render'? perhaps put the latest view enum in the Model?
     render: Render<Event>,
     view: ViewRenderer<Event>,
     navigate: Navigator<Event>
@@ -147,24 +147,29 @@ pub enum ProjectView {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct ProjectOperationViewModel {
+    pub modified: bool,
     pub error: Option<String>
 }
 
 #[serde_as]
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub enum Event {
-    None, // TODO REMOVE
+    None,
     CreateProject {
         name: String,
         /// The name of the project file
         path: PathBuf,
     },
-    CreatedProject(Result<(), ()>),
+
+    // TODO consider if the 'shell' should be loading and saving the project, not the core?
+    //      currently the core does all loading/saving and uses stores too, this might not be how
+    //      crux is intended to be used.
     Save,
     Load {
         /// The name of the project file
         path: PathBuf,
     },
+    
     AddPcb {
         kind: PcbKind,
         name: String,
@@ -249,24 +254,7 @@ impl App for Planner {
                     modified: true,
                 });
 
-                default_render = false;
-                self.update(Event::Save {}, model, caps); // TODO remove this?
-                self.update( Event::CreatedProject(Ok(())), model, caps);
-            },
-            Event::CreatedProject(Ok(_)) => {
                 info!("Created project successfully.");
-                default_render = false;
-
-                let path_encoded = BASE64_STANDARD.encode(model.model_project.as_ref().unwrap().path.to_str().unwrap());
-
-                let path = format!("/project/load/{}", path_encoded);
-                
-                caps.navigate.navigate(path, |_| Event::None);
-            },
-            Event::CreatedProject(Err(error)) => {
-                info!("Creating project failed.");
-                
-                model.error.replace(format!("creating project failed. cause: {:?}", error));
             },
             Event::Load { path } => {
                 info!("Load project. path: {:?}", &path);
@@ -306,8 +294,6 @@ impl App for Planner {
                     match project::add_pcb(project, kind.clone().into(), name) {
                         Ok(_) => {
                             *modified = true;
-
-                            self.update(Event::Save {}, model, caps); // TODO remove this?
                         },
                         Err(e) => {
                             model.error.replace(format!("{:?}", e));
@@ -324,8 +310,6 @@ impl App for Planner {
                         project.update_assignment(unit.clone(), DesignVariant { design_name: design.clone(), variant_name: variant.clone() })?;
                         *modified = true;
                         let _all_parts = Self::refresh_project(project, path)?;
-
-                        self.update(Event::Save {}, model, caps); // TODO remove this?
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -354,8 +338,6 @@ impl App for Planner {
                         *modified = true;
 
                         project::update_applicable_processes(project, all_parts.as_slice(), process, manufacturer_pattern, mpn_pattern);
-
-                        self.update(Event::Save {}, model, caps); // TODO remove this?
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -378,8 +360,6 @@ impl App for Planner {
                         stores::load_out::ensure_load_out(&load_out)?;
 
                         project.update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)?;
-
-                        self.update(Event::Save {}, model, caps); // TODO remove this?
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -412,8 +392,6 @@ impl App for Planner {
                         }
 
                         stores::load_out::add_parts_to_load_out(&LoadOutSource::from_str(&phase.load_out_source).unwrap(), parts)?;
-
-                        self.update(Event::Save {}, model, caps); // TODO remove this?
                     } else {
                         model.error.replace("project and path required".to_string());
                     }
@@ -450,10 +428,6 @@ impl App for Planner {
                         *modified = true;
 
                         *modified = project::update_placement_orderings(project, &reference, &placement_orderings)?;
-
-                        if *modified {
-                            self.update(Event::Save {}, model, caps); // TODO remove this?
-                        }
                     } else {
                         model.error.replace("project and path required".to_string());
                     }
@@ -477,10 +451,6 @@ impl App for Planner {
 
                         let directory = path.parent().unwrap();
                         project::generate_artifacts(&project, directory, phase_load_out_item_map)?;
-
-                        if *modified {
-                            self.update(Event::Save {}, model, caps); // TODO remove this?
-                        }
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -496,9 +466,6 @@ impl App for Planner {
                     if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
                         let directory = path.parent().unwrap();
                         *modified = project::update_phase_operation(project, directory, &reference, operation.into(), set.into())?;
-                        if *modified {
-                            self.update(Event::Save {}, model, caps); // TODO remove this?
-                        }
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -514,9 +481,6 @@ impl App for Planner {
                     if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
                         let directory = path.parent().unwrap();
                         *modified = project::update_placements_operation(project, directory, object_path_patterns, operation.into())?;
-                        if *modified {
-                            self.update(Event::Save {}, model, caps); // TODO remove this?
-                        }
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -532,7 +496,6 @@ impl App for Planner {
                     if let Some(ModelProject { project, modified, .. }) = &mut model.model_project {
                         project::reset_operations(project)?;
                         *modified = true;
-                        self.update(Event::Save {}, model, caps); // TODO remove this?
                     } else {
                         model.error.replace("project required".to_string());
                     }
@@ -568,8 +531,6 @@ impl App for Planner {
             Event::RequestProjectTreeView { } => {
 
                 default_render = false;
-                
-                // TODO use the path to find the right project to work on, for now use the only project
                 
                 let try_fn = |model: &mut Model| -> anyhow::Result<()> {
                     if let Some(ModelProject { project, .. }) = &mut model.model_project {
@@ -629,7 +590,12 @@ impl App for Planner {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
+        let modified = model.model_project
+            .as_ref()
+            .map_or(false, |project| project.modified);
+        
         ProjectOperationViewModel {
+            modified,
             error: model.error.clone(),
         }
     }

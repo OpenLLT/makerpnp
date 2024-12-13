@@ -58,15 +58,22 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
         match effect {
             _render @ Effect::Render(_) => {
                 let view = core.view();
+                
                 if let Some(error) = view.error {
                     bail!(error)
                 }
+                
+                // Saving after any operation is implicit for the CLI.
+                // FUTURE: Maybe it would be useful to have a 'dry-run' flag that doesn't trigger a save.
+                if view.modified {
+                    run_loop(core, Event::Save)?
+                }
             },
             Effect::Navigator(request) => {
-                // FIXME What goes here?
                 let operation = request.operation;
                 match operation {
                     NavigationOperation::Navigate { path } => {
+                        // Currently, the CLI app cannot navigate anywhere and does not request views.
                         debug!("navigate from run_loop. path: {}", path)
                     }
                 }
