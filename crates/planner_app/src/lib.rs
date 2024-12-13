@@ -382,7 +382,7 @@ impl App for Planner {
                         let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
                         trace!("Required load_out parts: {:?}", parts);
 
-                        let _modified = project::update_phase_operation_states(project);
+                        *modified |= project::update_phase_operation_states(project);
 
                         for part in parts.iter() {
                             let part_state = project.part_states.get_mut(&part)
@@ -427,7 +427,7 @@ impl App for Planner {
                         let _all_parts = Self::refresh_project(project, path)?;
                         *modified = true;
 
-                        *modified = project::update_placement_orderings(project, &reference, &placement_orderings)?;
+                        *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)?;
                     } else {
                         model.error.replace("project and path required".to_string());
                     }
