@@ -8,7 +8,7 @@ extern crate core;
 
 use std::path;
 use std::path::PathBuf;
-use cushy::{App, Application, Run};
+use cushy::{App, Application};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
@@ -33,7 +33,7 @@ use crate::app_tabs::home::{HomeTab, HomeTabAction};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
 use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
 use crate::config::Config;
-use crate::project::{Project, ProjectKey};
+use crate::project::{Project, ProjectKey, ProjectMessage};
 use crate::toolbar::ToolbarMessage;
 
 extern crate planner_gui;
@@ -420,7 +420,11 @@ impl AppState {
         self.create_project_tab_mapping(project_tab_message.clone(), tab_key);
 
         let path = build_project_file_path(&name, directory);
-        let (project, message) = Project::new(name, path);
+        let project_message = Dynamic::new(ProjectMessage::None);
+        
+        self.create_project_mapping(project_message.clone(), project_tab_message.clone());
+        
+        let (project, message) = Project::new(name, path, project_message);
 
         let project_key = self.projects.lock().insert(project);
         let project_tab = ProjectTab::new(project_key, project_tab_message);
@@ -443,7 +447,10 @@ impl AppState {
 
         let project_tab_message = Dynamic::new(ProjectTabMessage::default());
 
-        let (project, message) = Project::from_path(path);
+        let project_message = Dynamic::new(ProjectMessage::None);
+        self.create_project_mapping(project_message.clone(), project_tab_message.clone());
+        
+        let (project, message) = Project::from_path(path, project_message);
 
         let project_key = self.projects.lock().insert(project);
 
@@ -459,17 +466,29 @@ impl AppState {
         Ok(message_to_emit)
     }
 
-    fn create_project_tab_mapping(&self, document_tab_message: Dynamic<ProjectTabMessage>, tab_key: TabKey) {
-        document_tab_message.for_each_cloned({
+    fn create_project_tab_mapping(&self, project_tab_message: Dynamic<ProjectTabMessage>, tab_key: TabKey) {
+        project_tab_message.for_each_cloned({
             let message = self.message.clone();
-            move |document_tab_message| {
+            move |project_tab_message| {
                 message.force_set(
                     AppMessage::TabMessage(
                         TabMessage::TabKindMessage(
                             tab_key,
-                            TabKindMessage::ProjectTabMessage(document_tab_message)
+                            TabKindMessage::ProjectTabMessage(project_tab_message)
                         )
                     )
+                );
+            }
+        })
+            .persist();
+    }
+
+    fn create_project_mapping(&self, project_message: Dynamic<ProjectMessage>, project_tab_message: Dynamic<ProjectTabMessage>) {
+        project_message.for_each_cloned({
+            let message = project_tab_message.clone();
+            move |project_message| {
+                message.force_set(
+                    ProjectTabMessage::ProjectMessage(project_message)
                 );
             }
         })

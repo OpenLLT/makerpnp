@@ -1,9 +1,10 @@
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
 use slotmap::new_key_type;
-use tracing::debug;
+use tracing::{debug, info, trace};
 use planner_app::{Event, ProjectTreeView, ProjectView};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
@@ -16,6 +17,21 @@ new_key_type! {
     pub struct ProjectKey;
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectPath(String);
+
+impl ProjectPath {
+    pub fn new(path: String) -> Self {
+        Self(path)
+    }
+}
+
+impl Display for ProjectPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ProjectMessage {
     None,
@@ -25,7 +41,7 @@ pub enum ProjectMessage {
     //
     
     Load,
-    Navigate(String),
+    Navigate(ProjectPath),
     
     //
     // Internal messages
@@ -50,14 +66,8 @@ pub enum ProjectAction {
     #[default]
     None,
     Task(Task<ProjectMessage>),
-    Navigate(String),
     ShowError(String),
     NameChanged(String),
-}
-
-#[derive(Default)]
-struct ProjectTreeViewItem {
-    name: String,
 }
 
 pub struct Project {
@@ -65,10 +75,12 @@ pub struct Project {
     pub(crate) path: PathBuf,
     core_service: CoreService,
     project_tree: Dynamic<Tree>,
+    project_tree_path: Dynamic<ProjectPath>,
+    message: Dynamic<ProjectMessage>,
 }
 
 impl Project {
-    pub fn new(name: String, path: PathBuf) -> (Self, ProjectMessage) {
+    pub fn new(name: String, path: PathBuf, project_message: Dynamic<ProjectMessage>) -> (Self, ProjectMessage) {
         let project_tree = Dynamic::new(Tree::default());
         
         let core_service = CoreService::new();
@@ -77,12 +89,14 @@ impl Project {
             path,
             core_service,
             project_tree,
+            project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
+            message: project_message
         };
 
         (instance, ProjectMessage::Create)
     }
 
-    pub fn from_path(path: PathBuf) -> (Self, ProjectMessage) {
+    pub fn from_path(path: PathBuf, project_message: Dynamic<ProjectMessage>) -> (Self, ProjectMessage) {
         let project_tree = Dynamic::new(Tree::default());
         let core_service = CoreService::new();
         let instance = Self {
@@ -90,6 +104,8 @@ impl Project {
             path,
             core_service,
             project_tree,
+            project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
+            message: project_message
         };
 
         (instance, ProjectMessage::Load)
@@ -104,8 +120,16 @@ impl Project {
             .contain()
             .make_widget();
 
+        let content_pane = "content-pane"
+            .to_label()
+            .centered()
+            .and(self.project_tree_path.to_label().centered())
+            .into_rows()
+            .expand()
+            .contain();
+        
         project_explorer
-            .and("content-pane".to_label().centered().expand().contain())
+            .and(content_pane)
             .into_columns()
             .expand_horizontally()
             .make_widget()
@@ -151,15 +175,18 @@ impl Project {
                 ProjectAction::Task(task)
             }
             ProjectMessage::Navigate(path) => {
-                // TODO if the path starts with `/project/` then show/hide UI elements based on the path, e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
-                //      otherwise delegate to the app.
-                ProjectAction::Navigate(path)
+                // TODO if the path starts with `/project/` then show/hide UI elements based on the path, 
+                //      e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
+                info!("ProjectMessage::Navigate. path: {}", path);
+                self.project_tree_path.set(path);
+
+                ProjectAction::None
             }
             ProjectMessage::Error(error) => {
                 ProjectAction::ShowError(error)
             }
             ProjectMessage::UpdateView(view) => {
-                // TODO update the GUI using the view
+                // update the GUI using the view
                 match view {
                     ProjectView::Overview(project_overview) => {
                         debug!("project overview: {:?}", project_overview);
@@ -219,11 +246,20 @@ impl Project {
 
             |event| {
 
-                //debug!("event: {:?}", event);
+                trace!("dfs. event: {:?}", event);
                 match event {
                     DfsEvent::Discover(node, _) => {
                         let item = &project_tree_view.tree[node];
-                        let node_widget = item.name.to_label().make_widget();
+                        
+                        let path = ProjectPath(format!("/project{}", item.path).to_string());
+
+                        let message = self.message.clone();
+                        let node_widget = item.name
+                            .to_button()
+                            .on_click(move |_event|{
+                                message.force_set(ProjectMessage::Navigate(path.clone()));
+                            })
+                            .make_widget();
 
                         let child_key = project_tree.insert_child(node_widget, current_parent_key.as_ref()).unwrap();
 

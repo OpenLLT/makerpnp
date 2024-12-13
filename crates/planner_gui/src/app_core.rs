@@ -3,7 +3,7 @@ use tracing::debug;
 use planner_app::{Effect, Event, NavigationOperation, Planner, ProjectView};
 use planner_app::view_renderer::ViewRendererOperation;
 use planner_gui::task::Task;
-use crate::project::ProjectMessage;
+use crate::project::{ProjectMessage, ProjectPath};
 
 type Core = Arc<planner_app::Core<Effect, Planner>>;
 
@@ -47,7 +47,7 @@ fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
         Effect::Navigator(request) => {
             match request.operation {
                 NavigationOperation::Navigate { path } => {
-                    Task::done(ProjectMessage::Navigate(path))
+                    Task::done(ProjectMessage::Navigate(ProjectPath::new(path)))
                 }
             }
         }

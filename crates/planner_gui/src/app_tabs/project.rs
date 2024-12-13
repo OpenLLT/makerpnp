@@ -73,10 +73,6 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
                             info!("ProjectAction::Task.");
                             ProjectTabAction::Task(task)
                         },
-                        ProjectAction::Navigate(path) => {
-                            info!("ProjectAction::Navigate. path: {}", path);
-                            ProjectTabAction::None
-                        }
                         ProjectAction::ShowError(error) => {
                             // TODO show error dialog
                             error!("ProjectAction::ShowError. error: {}", error);
