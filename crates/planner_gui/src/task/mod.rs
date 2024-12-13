@@ -6,8 +6,6 @@ use futures::StreamExt;
 use futures::FutureExt;
 use crate::runtime::boxed_stream;
 
-pub mod rt;
-
 pub struct Task<T>(Option<BoxStream<'static, T>>);
 
 impl<T> Task<T> {
