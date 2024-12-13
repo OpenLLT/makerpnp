@@ -585,6 +585,7 @@ impl App for Planner {
         }
 
         if default_render {
+            // This causes the shell to request the view, via `view()`
             caps.render.render();
         }
     }
