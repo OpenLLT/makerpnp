@@ -3,7 +3,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Reference(String);
+pub struct Reference(pub String);
 
 impl FromStr for Reference {
     type Err = ReferenceError;
