@@ -13,7 +13,6 @@ use planning::placement::{PlacementOperation, PlacementSortingItem};
 use planning::process::{ProcessName, ProcessOperationKind, ProcessOperationSetItem};
 use planning::project;
 use planning::project::{PartStateError, ProcessFactory, Project};
-use planning::reference::Reference;
 use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
@@ -26,6 +25,8 @@ use petgraph::Graph;
 use pnp::placement::Placement;
 use crate::capabilities::navigator::Navigator;
 use crate::capabilities::view_renderer::ViewRenderer;
+
+pub use planning::reference::Reference;
 
 pub mod capabilities;
 
@@ -62,7 +63,7 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
-    pub reference: Reference,
+    pub phase: Reference,
     pub process: ProcessName,
     pub load_out_source: String,
     pub pcb_side: PcbSide,
@@ -85,6 +86,7 @@ pub struct PlacementsList {
 pub struct ProjectTreeItem {
     pub name: String,
     /// "/" = root, paths are "/" separated.
+    // FIXME path elements that contain a `/` need to be escaped and un-escaped.  e.g. a phase reference of `top/1`
     pub path: String,
 }
 
@@ -231,6 +233,9 @@ pub enum Event {
     //
     RequestOverviewView { },
     RequestProjectTreeView { },
+    RequestPhaseOverviewView { 
+        phase: Reference
+    },
     
 }
 
@@ -581,7 +586,17 @@ impl App for Planner {
                     model.error.replace(format!("{:?}", e));
                 };
             }
-            
+
+            Event::RequestPhaseOverviewView { phase } => {
+
+                let phase_overview = PhaseOverview {
+                    phase,
+                    process: ProcessName("test".to_string()),
+                    load_out_source: "".to_string(),
+                    pcb_side: PcbSide::Top,
+                };
+                caps.view.view(ProjectView::PhaseOverview(phase_overview), |_|Event::None)
+            }
         }
 
         if default_render {
