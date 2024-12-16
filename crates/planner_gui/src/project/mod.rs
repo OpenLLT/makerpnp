@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use std::path::PathBuf;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance};
@@ -23,6 +24,14 @@ pub struct ProjectPath(String);
 impl ProjectPath {
     pub fn new(path: String) -> Self {
         Self(path)
+    }
+}
+
+impl Deref for ProjectPath {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
