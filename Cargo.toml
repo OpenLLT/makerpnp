@@ -21,7 +21,7 @@ members = [ "crates/cli",
 ]
 
 [workspace.dependencies]
-thiserror = { version = "1.0.65" }
+thiserror = { version = "2.0.7" }
 anyhow = { version = "1.0.86" }
 regex = { version = "1.10.6" }
 time = { version = "0.3.36" }
