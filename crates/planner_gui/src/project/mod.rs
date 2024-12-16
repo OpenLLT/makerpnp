@@ -90,7 +90,9 @@ pub struct Project {
     project_tree_path: Dynamic<ProjectPath>,
     message: Dynamic<ProjectMessage>,
     
-    phase_overview_widget: Option<PiledWidget>
+    phase_overview_widget: Option<PiledWidget>,
+    
+    default_content_handle: Option<PiledWidget>
 }
 
 impl Project {
@@ -106,6 +108,7 @@ impl Project {
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
             phase_overview_widget: None,
+            default_content_handle: None,
         };
 
         (instance, ProjectMessage::Create)
@@ -122,12 +125,13 @@ impl Project {
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
             phase_overview_widget: None,
+            default_content_handle: None,
         };
 
         (instance, ProjectMessage::Load)
     }
 
-    pub fn make_widget(&self) -> WidgetInstance {
+    pub fn make_widget(&mut self) -> WidgetInstance {
         
         let project_tree_widget = self.project_tree.lock().make_widget();
         let project_explorer = "Project Explorer".contain()
@@ -137,6 +141,7 @@ impl Project {
             .make_widget();
 
         let content_pile = Pile::default();
+
         
         let default_content = "content-pane"
             .to_label()
@@ -146,13 +151,17 @@ impl Project {
         
         let default_content_handle = content_pile
             .push(default_content);
-
-        default_content_handle.show(false);
-
+        
+        // TODO improve this workaround for https://github.com/khonsulabs/cushy/issues/231
+        //      we have to store the default_content_handle otherwise the widget
+        //      will be dropped at the end of this method, and when it does the widget will be removed from the pile
+        //      so we have to hold on to the handle, but doing so required changing this method to accept `&mut self` instead of `&self`
+        self.default_content_handle.replace(default_content_handle);
+        
         let content_pane = content_pile
             .expand()
             .contain();
-        
+                
         project_explorer
             .and(content_pane)
             .into_columns()

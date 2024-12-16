@@ -48,8 +48,8 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
         context.lock().with_context::<Dynamic<SlotMap<ProjectKey, Project>>, _, _>(|projects| {
-            let projects_guard = projects.lock();
-            let project = projects_guard.get(self.project_key).unwrap();
+            let mut projects_guard = projects.lock();
+            let project = projects_guard.get_mut(self.project_key).unwrap();
 
             project.make_widget()
         }).unwrap()
