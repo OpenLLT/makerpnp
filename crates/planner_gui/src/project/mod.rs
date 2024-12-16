@@ -4,14 +4,16 @@ use std::path::PathBuf;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
+use cushy::widgets::pile::{Pile, PiledWidget};
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
-use planner_app::{Event, ProjectTreeView, ProjectView};
+use planner_app::{Event, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
 use planner_gui::task::Task;
 use cushy::widgets::tree::{Tree, TreeNodeKey};
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
+use regex::Regex;
 
 new_key_type! {
     /// A key for a project
@@ -67,6 +69,7 @@ pub enum ProjectMessage {
 pub enum ProjectViewRequest {
     Overview,
     ProjectTree,
+    PhaseOverview { phase: String },
 }
 
 
@@ -86,6 +89,8 @@ pub struct Project {
     project_tree: Dynamic<Tree>,
     project_tree_path: Dynamic<ProjectPath>,
     message: Dynamic<ProjectMessage>,
+    
+    phase_overview_widget: Option<PiledWidget>
 }
 
 impl Project {
@@ -99,7 +104,8 @@ impl Project {
             core_service,
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
-            message: project_message
+            message: project_message,
+            phase_overview_widget: None,
         };
 
         (instance, ProjectMessage::Create)
@@ -114,14 +120,15 @@ impl Project {
             core_service,
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
-            message: project_message
+            message: project_message,
+            phase_overview_widget: None,
         };
 
         (instance, ProjectMessage::Load)
     }
 
     pub fn make_widget(&self) -> WidgetInstance {
-
+        
         let project_tree_widget = self.project_tree.lock().make_widget();
         let project_explorer = "Project Explorer".contain()
             .and(project_tree_widget.contain())
@@ -129,11 +136,20 @@ impl Project {
             .contain()
             .make_widget();
 
-        let content_pane = "content-pane"
+        let content_pile = Pile::default();
+        
+        let default_content = "content-pane"
             .to_label()
             .centered()
             .and(self.project_tree_path.to_label().centered())
-            .into_rows()
+            .into_rows();
+        
+        let default_content_handle = content_pile
+            .push(default_content);
+
+        default_content_handle.show(false);
+
+        let content_pane = content_pile
             .expand()
             .contain();
         
@@ -177,6 +193,7 @@ impl Project {
                 let event = match view {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
+                    ProjectViewRequest::PhaseOverview{ phase } => Event::RequestPhaseOverviewView { phase: Reference(phase) },
                 };
                 
                 let task = self.core_service
@@ -187,9 +204,22 @@ impl Project {
                 // TODO if the path starts with `/project/` then show/hide UI elements based on the path, 
                 //      e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
                 info!("ProjectMessage::Navigate. path: {}", path);
-                self.project_tree_path.set(path);
+                self.project_tree_path.set(path.clone());
 
-                ProjectAction::None
+                let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
+                if let Some(captures) = phase_pattern.captures(&path) {
+                    let phase_reference: String = captures.name("phase").unwrap().as_str().to_string();
+                    debug!("phase_reference: {}", phase_reference);
+                    
+
+                    // TODO activate the corresponding pile widget
+                    
+                    ProjectAction::Task(Task::done(ProjectMessage::RequestView(ProjectViewRequest::PhaseOverview { phase: 
+                        phase_reference 
+                    })))
+                } else {
+                    ProjectAction::None
+                }
             }
             ProjectMessage::Error(error) => {
                 ProjectAction::ShowError(error)
@@ -214,6 +244,7 @@ impl Project {
                         ProjectAction::None
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
+                        debug!("phase overview: {:?}", phase_overview);
                         ProjectAction::None
                     }
                     ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {

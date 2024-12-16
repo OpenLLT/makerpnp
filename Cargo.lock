@@ -3395,6 +3395,7 @@ dependencies = [
  "futures",
  "petgraph",
  "planner_app",
+ "regex",
  "serde",
  "serde_json",
  "slotmap",
