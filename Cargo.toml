@@ -64,7 +64,7 @@ cushy = { git = "https://github.com/hydra/cushy.git", branch = "makerpnp", defau
 unic-langid = "0.9.5"
 
 # testing
-rstest = { version = "0.22.0" }
+rstest = { version = "0.23.0" }
 assert_cmd = { version = "2.0.14" }
 assert_fs = { version = "1.1.1" }
 tempfile = { version = "3.10.1" }
