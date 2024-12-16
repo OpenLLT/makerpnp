@@ -39,7 +39,7 @@ rust_decimal_macros = { version = "1.35"}
 
 # cli
 clap = { version = "4.5.8" }
-clap-verbosity-flag = { version = "2.2.1" }
+clap-verbosity-flag = { version = "3.0.2" }
 argfile = { version = "0.2.1" }
 
 # logging
