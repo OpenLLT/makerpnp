@@ -1,19 +1,24 @@
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
+use cushy::localization::Localize;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::label::Displayable;
-use cushy::widgets::pile::{Pile, PiledWidget};
+use cushy::widgets::pile::{Focus, Pile, PiledWidget};
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
-use planner_app::{Event, ProjectTreeView, ProjectView, Reference};
+use planner_app::{Event, PcbSide, PhaseOverview, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
 use planner_gui::task::Task;
 use cushy::widgets::tree::{Tree, TreeNodeKey};
+use fluent_bundle::FluentValue;
+use fluent_bundle::types::FluentNumber;
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
 use regex::Regex;
+use planner_gui::widgets::properties::{Properties, PropertiesItem};
 
 new_key_type! {
     /// A key for a project
@@ -82,6 +87,11 @@ pub enum ProjectAction {
     NameChanged(String),
 }
 
+struct PhaseOverviewState {
+    overview: Dynamic<PhaseOverview>,
+    handle: PiledWidget,
+}
+
 pub struct Project {
     pub(crate) name: Dynamic<Option<String>>,
     pub(crate) path: PathBuf,
@@ -90,9 +100,10 @@ pub struct Project {
     project_tree_path: Dynamic<ProjectPath>,
     message: Dynamic<ProjectMessage>,
     
-    phase_overview_widget: Option<PiledWidget>,
+    phase_overview_widgets: HashMap<Reference, PhaseOverviewState>,
     
-    default_content_handle: Option<PiledWidget>
+    default_content_handle: Option<PiledWidget>,
+    pile: Pile,
 }
 
 impl Project {
@@ -107,7 +118,8 @@ impl Project {
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
-            phase_overview_widget: None,
+            pile: Pile::default(),
+            phase_overview_widgets: HashMap::new(),
             default_content_handle: None,
         };
 
@@ -124,7 +136,8 @@ impl Project {
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
-            phase_overview_widget: None,
+            pile: Pile::default(),
+            phase_overview_widgets: HashMap::new(),
             default_content_handle: None,
         };
 
@@ -139,9 +152,6 @@ impl Project {
             .into_rows()
             .contain()
             .make_widget();
-
-        let content_pile = Pile::default();
-
         
         let default_content = "content-pane"
             .to_label()
@@ -149,7 +159,7 @@ impl Project {
             .and(self.project_tree_path.to_label().centered())
             .into_rows();
         
-        let default_content_handle = content_pile
+        let default_content_handle = self.pile
             .push(default_content);
         
         // TODO improve this workaround for https://github.com/khonsulabs/cushy/issues/231
@@ -158,7 +168,7 @@ impl Project {
         //      so we have to hold on to the handle, but doing so required changing this method to accept `&mut self` instead of `&self`
         self.default_content_handle.replace(default_content_handle);
         
-        let content_pane = content_pile
+        let content_pane = self.pile.clone()
             .expand()
             .contain();
                 
@@ -202,7 +212,7 @@ impl Project {
                 let event = match view {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
-                    ProjectViewRequest::PhaseOverview{ phase } => Event::RequestPhaseOverviewView { phase: Reference(phase) },
+                    ProjectViewRequest::PhaseOverview{ phase } => Event::RequestPhaseOverviewView { phase_reference: Reference(phase) },
                 };
                 
                 let task = self.core_service
@@ -254,6 +264,33 @@ impl Project {
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
+                        
+                        let maybe_state = self.phase_overview_widgets.get(&phase_overview.phase_reference);
+                        let handle = match maybe_state {
+                            None => {
+                                let phase = phase_overview.phase_reference.clone();
+                                let dyn_overview = Dynamic::new(phase_overview);
+                                
+                                let handle = self.pile.push(
+                                    make_phase_overview_widget(&dyn_overview)
+                                );
+                                
+                                let state = PhaseOverviewState {
+                                    overview: dyn_overview,
+                                    handle: handle.clone(),
+                                };
+                                
+                                let _ = self.phase_overview_widgets.insert(phase, state);
+                                
+                                handle
+                            }
+                            Some(state) => {
+                                state.overview.replace(phase_overview);
+                                state.handle.clone()
+                            },
+                        };
+                        handle.show(Focus::Focused);
+                        
                         ProjectAction::None
                     }
                     ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {
@@ -332,5 +369,51 @@ impl Project {
             }
         });
     }
+}
+
+fn make_phase_overview_widget(dyn_overview: &Dynamic<PhaseOverview>) -> impl MakeWidget + Sized {
+    let mut items: Vec<PropertiesItem> = vec![];
+
+    let reference_item = PropertiesItem::from_optional_value(
+        Localize::new("phase-reference"),
+        dyn_overview.map_each(|phase_overview|Some(phase_overview.phase_reference.to_string()))
+    );
+    items.push(reference_item);
+
+    let load_out_source_item = PropertiesItem::from_optional_value(
+        Localize::new("phase-load-out-source"),
+        dyn_overview.map_each(|phase_overview|Some(phase_overview.load_out_source.clone()))
+    );
+    items.push(load_out_source_item);
+
+    let pcb_side_item = PropertiesItem::from_field(
+        Localize::new("phase-pcb-side").into_label(),
+        dyn_overview.map_each(|phase_overview|{
+            let pcb_side = match phase_overview.pcb_side {
+                PcbSide::Top => Localize::new("pcb-side-top"),
+                PcbSide::Bottom => Localize::new("pcb-side-bottom"),
+            };
+            pcb_side.make_widget()
+        })
+    );
+    items.push(pcb_side_item);
+
+    let process_item = PropertiesItem::from_optional_value(
+        Localize::new("phase-process"),
+        dyn_overview.map_each(|phase_overview|Some(phase_overview.process.to_string()))
+    );
+    items.push(process_item);
+
+    let properties = Properties::default()
+        .with_header_label(Localize::new("phase-properties-header").into_label())
+        .with_footer_label(
+            Localize::new("phase-properties-footer")
+                .arg("count", FluentValue::Number(FluentNumber::from(items.len()))
+                )
+                .into_label()
+        )
+        .with_items(items);
+
+    properties.make_widget()
 }
 

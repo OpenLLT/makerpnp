@@ -11,3 +11,14 @@ tab-label-home = Inicio
 
 home-banner = Pestaña de inicio
 home-checkbox-label-show-on-startup = Mostrar al inicio
+
+phase-properties-header = Propiedades de fase
+phase-properties-footer = { $count } items
+
+phase-reference = Referencia
+phase-load-out-source = Fuente de carga
+phase-pcb-side = Lado PCB
+phase-process = Proceso
+
+pcb-side-top = Parte superior
+pcb-side-bottom = Parte inferior

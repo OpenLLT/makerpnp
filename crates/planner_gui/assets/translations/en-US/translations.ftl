@@ -12,3 +12,13 @@ tab-label-home = Home
 home-banner = Home tab
 home-checkbox-label-show-on-startup = Show on startup
 
+phase-properties-header = Phase properties
+phase-properties-footer = { $count } items
+
+phase-reference = Reference
+phase-load-out-source = Load-out source
+phase-pcb-side = PCB Side
+phase-process = Process
+
+pcb-side-top = Top
+pcb-side-bottom = Bottom

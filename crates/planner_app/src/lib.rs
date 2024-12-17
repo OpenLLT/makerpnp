@@ -17,7 +17,7 @@ use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::{PcbKind, PcbSide};
+pub use pnp::pcb::{PcbKind, PcbSide};
 use stores::load_out::LoadOutSource;
 
 pub use crux_core::Core;
@@ -63,7 +63,7 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
-    pub phase: Reference,
+    pub phase_reference: Reference,
     pub process: ProcessName,
     pub load_out_source: String,
     pub pcb_side: PcbSide,
@@ -234,7 +234,7 @@ pub enum Event {
     RequestOverviewView { },
     RequestProjectTreeView { },
     RequestPhaseOverviewView { 
-        phase: Reference
+        phase_reference: Reference
     },
     
 }
@@ -587,15 +587,34 @@ impl App for Planner {
                 };
             }
 
-            Event::RequestPhaseOverviewView { phase } => {
+            Event::RequestPhaseOverviewView { phase_reference } => {
 
-                let phase_overview = PhaseOverview {
-                    phase,
-                    process: ProcessName("test".to_string()),
-                    load_out_source: "".to_string(),
-                    pcb_side: PcbSide::Top,
+                default_render = false;
+
+                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
+                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
+                        
+                        if let Some(phase) = project.phases.get(&phase_reference) {
+                            let phase_overview = PhaseOverview {
+                                phase_reference,
+                                process: phase.process.clone(),
+                                load_out_source: phase.load_out_source.clone(),
+                                pcb_side: phase.pcb_side.clone(),
+                            };
+
+                            caps.view.view(ProjectView::PhaseOverview(phase_overview), |_| Event::None)
+                        } else {
+                            model.error.replace("unknown reference".to_string());
+                        }
+                    } else {
+                        model.error.replace("project required".to_string());
+                    }
+                    Ok(())
                 };
-                caps.view.view(ProjectView::PhaseOverview(phase_overview), |_|Event::None)
+
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
             }
         }
 
