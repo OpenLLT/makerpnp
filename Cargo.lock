@@ -1188,7 +1188,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "cushy"
 version = "0.4.0"
-source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#8a32ea7c485260047203dacee5a103312786332d"
+source = "git+https://github.com/makerpnp/cushy.git?branch=makerpnp#bbc36108f7f1cdfc954e4e7cb564d1f8a1150f0e"
 dependencies = [
  "ahash 0.8.11",
  "alot",
@@ -1220,7 +1220,7 @@ dependencies = [
 [[package]]
 name = "cushy-macros"
 version = "0.4.0"
-source = "git+https://github.com/hydra/cushy.git?branch=makerpnp#8a32ea7c485260047203dacee5a103312786332d"
+source = "git+https://github.com/makerpnp/cushy.git?branch=makerpnp#bbc36108f7f1cdfc954e4e7cb564d1f8a1150f0e"
 dependencies = [
  "attribute-derive",
  "manyhow",
@@ -4845,9 +4845,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ab17db44d7388991a428b2ee655ce0c212e862eff1768a455c58f9aad6e7893"
+checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-bidi-mirroring"

@@ -5,7 +5,8 @@
 # See https://doc.rust-lang.org/beta/cargo/reference/resolver.html#resolver-versions
 resolver = "2"
 
-members = [ "crates/cli",
+members = [
+    "crates/cli",
     "crates/pnp",
     "crates/cli",
     "crates/planning",
@@ -17,7 +18,8 @@ members = [ "crates/cli",
     "crates/criteria",
     "crates/variantbuilder",
     "crates/planner_cli",
-    "crates/planner_app", "crates/planner_gui",
+    "crates/planner_app",
+    "crates/planner_gui",
 ]
 
 [workspace.dependencies]
@@ -58,7 +60,7 @@ serde_regex = { version = "1.1.0" }
 crux_core = { version = "0.10.0" }
 
 #gui
-cushy = { git = "https://github.com/hydra/cushy.git", branch = "makerpnp", default-features = false }
+cushy = { git = "https://github.com/makerpnp/cushy.git", branch = "makerpnp", default-features = false }
 
 #i18n
 unic-langid = "0.9.5"
