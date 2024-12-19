@@ -289,7 +289,7 @@ impl Project {
                                 state.handle.clone()
                             },
                         };
-                        handle.show(Focus::Focused);
+                        handle.show(Focus::Unchanged);
                         
                         ProjectAction::None
                     }
