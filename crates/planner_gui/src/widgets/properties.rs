@@ -16,6 +16,7 @@ pub struct Properties {
     grid_dimensions: Dynamic<[GridDimension;2]>,
     header: WidgetInstance,
     footer: WidgetInstance,
+    expand_vertically: bool,
 }
 
 impl Default for Properties {
@@ -25,6 +26,7 @@ impl Default for Properties {
             grid_dimensions: Default::default(),
             header: Space::default().make_widget(),
             footer: Space::default().make_widget(),
+            expand_vertically: false,
         }
     }
 }
@@ -57,6 +59,11 @@ impl Properties {
         self.header = properties_header.make_widget();
         self
     }
+    
+    pub fn expand_vertically(mut self) -> Self {
+        self.expand_vertically = true;
+        self
+    }
 
     pub fn with_footer_label<T>(mut self, label: Label<T>) -> Self
     where
@@ -75,7 +82,7 @@ impl Properties {
         self.items.push(item);
     }
 
-    pub fn make_widget(&self) -> impl MakeWidget {
+    pub fn make_widget(&self) -> WidgetInstance {
 
         let grid_rows: Vec<(WidgetInstance, WidgetInstance)> = self.items.iter().map(|item|{
             (
@@ -96,17 +103,31 @@ impl Properties {
 
         let scrollable_content = grid_widget
             .vertical_scroll()
-            .contain_level(ContainerLevel::High)
-            .expand_vertically()
-            .make_widget();
-
+            .contain_level(ContainerLevel::High);
+        
+        let scrollable_content = if self.expand_vertically {
+            scrollable_content
+                .expand_vertically()
+                .make_widget()
+            
+        } else {
+            scrollable_content
+                .make_widget()
+        };
+        
         let properties_widget = self.header.clone()
             .and(scrollable_content)
             .and(self.footer.clone())
-            .into_rows()
-            .expand_horizontally()
-            // required so that when the background of the properties fills the container
-            .expand_vertically();
+            .into_rows();
+        
+        let properties_widget = if self.expand_vertically {
+            properties_widget
+                .expand_vertically()
+                .make_widget()
+        } else {
+            properties_widget
+                .make_widget()
+        };
         
         properties_widget
     }

@@ -11,7 +11,7 @@ use crate::design::DesignVariant;
 use crate::reference::Reference;
 
 #[serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct PlacementState {
 
     #[serde_as(as = "DisplayFromStr")]

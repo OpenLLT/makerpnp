@@ -4,12 +4,14 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use cushy::localization::Localize;
 use cushy::value::{Destination, Dynamic, Source};
-use cushy::widget::{MakeWidget, WidgetInstance};
+use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
+use cushy::widgets::list::ListStyle;
 use cushy::widgets::pile::{Focus, Pile, PiledWidget};
+use cushy::widgets::Space;
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
-use planner_app::{Event, PcbSide, PhaseOverview, ProjectTreeView, ProjectView, Reference};
+use planner_app::{Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
 use planner_gui::task::Task;
@@ -75,6 +77,7 @@ pub enum ProjectViewRequest {
     Overview,
     ProjectTree,
     PhaseOverview { phase: String },
+    PhasePlacements { phase: String },
 }
 
 
@@ -87,8 +90,9 @@ pub enum ProjectAction {
     NameChanged(String),
 }
 
-struct PhaseOverviewState {
-    overview: Dynamic<PhaseOverview>,
+struct PhaseWidgetState {
+    overview: Option<Dynamic<PhaseOverview>>,
+    placements: Option<Dynamic<PhasePlacements>>,
     handle: PiledWidget,
 }
 
@@ -100,7 +104,7 @@ pub struct Project {
     project_tree_path: Dynamic<ProjectPath>,
     message: Dynamic<ProjectMessage>,
     
-    phase_overview_widgets: HashMap<Reference, PhaseOverviewState>,
+    phase_widgets: HashMap<Reference, PhaseWidgetState>,
     
     default_content_handle: Option<PiledWidget>,
     pile: Pile,
@@ -119,7 +123,7 @@ impl Project {
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
             pile: Pile::default(),
-            phase_overview_widgets: HashMap::new(),
+            phase_widgets: HashMap::new(),
             default_content_handle: None,
         };
 
@@ -137,7 +141,7 @@ impl Project {
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
             message: project_message,
             pile: Pile::default(),
-            phase_overview_widgets: HashMap::new(),
+            phase_widgets: HashMap::new(),
             default_content_handle: None,
         };
 
@@ -212,7 +216,8 @@ impl Project {
                 let event = match view {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
-                    ProjectViewRequest::PhaseOverview{ phase } => Event::RequestPhaseOverviewView { phase_reference: Reference(phase) },
+                    ProjectViewRequest::PhaseOverview { phase } => Event::RequestPhaseOverviewView { phase_reference: Reference(phase) },
+                    ProjectViewRequest::PhasePlacements { phase } => Event::RequestPhasePlacementsView { phase_reference: Reference(phase) },
                 };
                 
                 let task = self.core_service
@@ -220,8 +225,8 @@ impl Project {
                 ProjectAction::Task(task)
             }
             ProjectMessage::Navigate(path) => {
-                // TODO if the path starts with `/project/` then show/hide UI elements based on the path, 
-                //      e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
+                // if the path starts with `/project/` then show/hide UI elements based on the path, 
+                // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
                 info!("ProjectMessage::Navigate. path: {}", path);
                 self.project_tree_path.set(path.clone());
 
@@ -229,13 +234,17 @@ impl Project {
                 if let Some(captures) = phase_pattern.captures(&path) {
                     let phase_reference: String = captures.name("phase").unwrap().as_str().to_string();
                     debug!("phase_reference: {}", phase_reference);
-                    
 
-                    // TODO activate the corresponding pile widget
+                    let tasks: Vec<_> = vec![
+                        Task::done(ProjectMessage::RequestView(ProjectViewRequest::PhaseOverview { phase:
+                            phase_reference.clone()
+                        })),
+                        Task::done(ProjectMessage::RequestView(ProjectViewRequest::PhasePlacements { phase:
+                            phase_reference.clone()
+                        })),
+                    ];
                     
-                    ProjectAction::Task(Task::done(ProjectMessage::RequestView(ProjectViewRequest::PhaseOverview { phase: 
-                        phase_reference 
-                    })))
+                    ProjectAction::Task(Task::batch(tasks))
                 } else {
                     ProjectAction::None
                 }
@@ -264,33 +273,18 @@ impl Project {
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
+                        let phase = phase_overview.phase_reference.clone();
                         
-                        let maybe_state = self.phase_overview_widgets.get(&phase_overview.phase_reference);
-                        let handle = match maybe_state {
-                            None => {
-                                let phase = phase_overview.phase_reference.clone();
-                                let dyn_overview = Dynamic::new(phase_overview);
-                                
-                                let handle = self.pile.push(
-                                    make_phase_overview_widget(&dyn_overview)
-                                );
-                                
-                                let state = PhaseOverviewState {
-                                    overview: dyn_overview,
-                                    handle: handle.clone(),
-                                };
-                                
-                                let _ = self.phase_overview_widgets.insert(phase, state);
-                                
-                                handle
-                            }
-                            Some(state) => {
-                                state.overview.replace(phase_overview);
-                                state.handle.clone()
-                            },
-                        };
-                        handle.show(Focus::Unchanged);
+                        self.update_phase_state(phase, Some(phase_overview), None);
                         
+                        ProjectAction::None
+                    }
+                    ProjectView::PhasePlacements(phase_placements) => {
+                        debug!("phase placements: {:?}", phase_placements);
+                        let phase = phase_placements.phase_reference.clone();
+
+                        self.update_phase_state(phase, None, Some(phase_placements));
+
                         ProjectAction::None
                     }
                     ProjectView::PhasePlacementOrderings(phase_placement_orderings) => {
@@ -303,6 +297,61 @@ impl Project {
         Action::new(action)
     }
 
+    fn update_phase_state(&mut self, phase_reference: Reference, mut phase_overview: Option<PhaseOverview>, mut phase_placements: Option<PhasePlacements>) {
+
+        let maybe_state = self.phase_widgets.get_mut(&phase_reference);
+        let handle = match maybe_state {
+            None => {
+                let dyn_overview = phase_overview.map(Dynamic::new);
+                let dyn_placements = phase_placements.map(Dynamic::new);
+
+                let widget = update_stuff(&dyn_overview, &dyn_placements);
+                let handle = self.pile.push(widget);
+
+                let state = PhaseWidgetState {
+                    overview: dyn_overview,
+                    placements: dyn_placements,
+                    handle: handle.clone(),
+                };
+
+                let _ = self.phase_widgets.insert(phase_reference, state);
+
+                handle
+            }
+            Some(state) => {
+                match &state.overview {
+                    None => {
+                        state.overview = phase_overview.map(Dynamic::new);
+                    }
+                    Some(overview) => {
+                        if phase_overview.is_some() {
+                            overview.replace(phase_overview.take().unwrap());
+                        }
+                    }
+                }
+                match &state.placements {
+                    None => {
+                        state.placements = phase_placements.map(Dynamic::new);
+                    }
+                    Some(placements) => {
+                        if phase_placements.is_some() {
+                            placements.replace(phase_placements.take().unwrap());
+                        }
+                    }
+                }
+
+                let widget = update_stuff(&state.overview, &state.placements);
+                let handle = self.pile.push(widget);
+                
+                // replacing the handle causes the old pile instance to be removed from the pile
+                state.handle = handle.clone();
+
+                state.handle.clone()
+            },
+        };
+        handle.show(Focus::Unchanged);
+    }
+    
     fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
 
         // TODO maybe synchronize instead of rebuild, when we need to show a selected tree item this will be a problem
@@ -372,6 +421,7 @@ impl Project {
 }
 
 fn make_phase_overview_widget(dyn_overview: &Dynamic<PhaseOverview>) -> impl MakeWidget + Sized {
+    
     let mut items: Vec<PropertiesItem> = vec![];
 
     let reference_item = PropertiesItem::from_optional_value(
@@ -414,6 +464,40 @@ fn make_phase_overview_widget(dyn_overview: &Dynamic<PhaseOverview>) -> impl Mak
         )
         .with_items(items);
 
-    properties.make_widget()
+    properties
+        .make_widget()
+        .expand_horizontally()
 }
 
+fn make_phase_placements_widget(dyn_placements: &Dynamic<PhasePlacements>) -> impl MakeWidget + Sized {
+    dyn_placements.map_each(|phase_placements| {
+        phase_placements.placements.iter().map(|state|
+            format!("{:?}", state.placement)
+        ).collect::<WidgetList>()
+    })
+        .into_list()
+        .style(ListStyle::Decimal)
+        .vertical_scroll()
+        .expand()
+        .contain()
+}
+
+fn update_stuff(dyn_overview: &Option<Dynamic<PhaseOverview>>, dyn_placements: &Option<Dynamic<PhasePlacements>>) -> WidgetInstance {
+
+    let overview_widget = match dyn_overview {
+        Some(overview) => make_phase_overview_widget(overview).make_widget(),
+        None => Space::default().make_widget(),
+    };
+
+    let placements_widget = match dyn_placements {
+        Some(placements) => make_phase_placements_widget(placements).make_widget(),
+        None => Space::default().make_widget(),
+    };
+
+    let widgets = overview_widget
+        .and(placements_widget)
+        .into_rows();
+
+    widgets
+        .make_widget()
+}

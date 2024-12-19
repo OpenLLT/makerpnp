@@ -9,7 +9,7 @@ use serde_with::serde_as;
 use tracing::{info, trace};
 use planning::design::{DesignName, DesignVariant};
 use planning::phase::PhaseError;
-use planning::placement::{PlacementOperation, PlacementSortingItem};
+use planning::placement::{PlacementOperation, PlacementSortingItem, PlacementState};
 use planning::process::{ProcessName, ProcessOperationKind, ProcessOperationSetItem};
 use planning::project;
 use planning::project::{PartStateError, ProcessFactory, Project};
@@ -22,6 +22,7 @@ use stores::load_out::LoadOutSource;
 
 pub use crux_core::Core;
 use petgraph::Graph;
+use thiserror::Error;
 use pnp::placement::Placement;
 use crate::capabilities::navigator::Navigator;
 use crate::capabilities::view_renderer::ViewRenderer;
@@ -67,6 +68,12 @@ pub struct PhaseOverview {
     pub process: ProcessName,
     pub load_out_source: String,
     pub pcb_side: PcbSide,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PhasePlacements {
+    pub phase_reference: Reference,
+    pub placements: Vec<PlacementState>
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -144,6 +151,7 @@ pub enum ProjectView {
     ProjectTree(ProjectTreeView),
     Placements(PlacementsList),
     PhaseOverview(PhaseOverview),
+    PhasePlacements(PhasePlacements),
     PhasePlacementOrderings(PhasePlacementOrderings),
 }
 
@@ -234,6 +242,9 @@ pub enum Event {
     RequestOverviewView { },
     RequestProjectTreeView { },
     RequestPhaseOverviewView { 
+        phase_reference: Reference
+    },
+    RequestPhasePlacementsView { 
         phase_reference: Reference
     },
     
@@ -534,7 +545,6 @@ impl App for Planner {
                 };
             }
             Event::RequestProjectTreeView { } => {
-
                 default_render = false;
                 
                 let try_fn = |model: &mut Model| -> anyhow::Result<()> {
@@ -586,9 +596,7 @@ impl App for Planner {
                     model.error.replace(format!("{:?}", e));
                 };
             }
-
             Event::RequestPhaseOverviewView { phase_reference } => {
-
                 default_render = false;
 
                 let try_fn = |model: &mut Model| -> anyhow::Result<()> {
@@ -616,6 +624,34 @@ impl App for Planner {
                     model.error.replace(format!("{:?}", e));
                 };
             }
+            Event::RequestPhasePlacementsView { phase_reference } => {
+                default_render = false;
+
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+
+                    let _phase = project.phases.get(&phase_reference).ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+
+                    let placements = project.placements.iter().filter_map(|(path, state)|{
+                        match &state.phase {
+                            Some(candidate_phase) if phase_reference == *candidate_phase => Some(state.clone()),
+                            _ => None
+                        }
+                    }).collect();
+                    
+                    let phase_placements = PhasePlacements {
+                        phase_reference,
+                        placements
+                    };
+
+                    caps.view.view(ProjectView::PhasePlacements(phase_placements), |_|Event::None);
+                    Ok(())
+                };
+
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
+            }
         }
 
         if default_render {
@@ -634,6 +670,14 @@ impl App for Planner {
             error: model.error.clone(),
         }
     }
+}
+
+#[derive(Error, Debug)]
+enum AppError {
+    #[error("Unknown phase reference. reference: {0}")]
+    UnknownPhaseReference(Reference),
+    #[error("Operation requires a project")]
+    OperationRequiresProject,
 }
 
 impl Planner {
