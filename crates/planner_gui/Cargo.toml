@@ -19,6 +19,7 @@ cushy = { workspace = true, default-features = false, features = ["roboto-flex",
 
 #i18n
 unic-langid = { workspace = true, features = ["macros"]}
+fluent-bundle = { workspace = true }
 
 #logging
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

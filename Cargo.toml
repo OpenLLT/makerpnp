@@ -64,6 +64,7 @@ cushy = { git = "https://github.com/makerpnp/cushy.git", branch = "makerpnp", de
 
 #i18n
 unic-langid = "0.9.5"
+fluent-bundle = "0.15"
 
 # testing
 rstest = { version = "0.23.0" }
