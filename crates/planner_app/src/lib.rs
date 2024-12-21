@@ -628,6 +628,7 @@ impl App for Planner {
                 default_render = false;
 
                 let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    // TODO use this style of returning early (using .ok_or()) in other event handlers to reduce nesting.
                     let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
 
                     let _phase = project.phases.get(&phase_reference).ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
