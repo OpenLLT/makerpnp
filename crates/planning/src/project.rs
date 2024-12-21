@@ -144,7 +144,7 @@ impl Project {
         self.processes.iter().find(|&process| {
             process.name.eq(&process_name)
         }).ok_or(
-            ProcessError::UnusedProcessError { processes: self.processes.clone(), process: process_name.to_string() }
+            ProcessError::UndefinedProcessError { processes: self.processes.clone(), process: process_name.to_string() }
         )
     }
 
@@ -234,10 +234,10 @@ pub enum ArtifactGenerationError {
     PhasePlacementsGenerationError(Error),
 
     #[error("Unable to load items. source: {load_out_source}, error: {reason}")]
-    UnableToLoadItems { load_out_source: String, reason: anyhow::Error },
+    UnableToLoadItems { load_out_source: String, reason: Error },
 
     #[error("Unable to generate report. error: {reason}")]
-    ReportGenerationError { reason: anyhow::Error },
+    ReportGenerationError { reason: Error },
 }
 
 pub fn generate_artifacts(project: &Project, directory: &Path, phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>) -> Result<(), ArtifactGenerationError> {
@@ -599,14 +599,14 @@ pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: Pro
     }
 }
 
-pub fn load(project_file_path: &PathBuf) -> anyhow::Result<Project> {
+pub fn load(project_file_path: &PathBuf) -> Result<Project, std::io::Error> {
     let project_file = File::open(project_file_path.clone())?;
     let mut de = serde_json::Deserializer::from_reader(project_file);
     let project = Project::deserialize(&mut de)?;
     Ok(project)
 }
 
-pub fn save(project: &Project, project_file_path: &PathBuf) -> anyhow::Result<()> {
+pub fn save(project: &Project, project_file_path: &PathBuf) -> Result<(), std::io::Error> {
     let project_file = File::create(project_file_path)?;
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
     let mut ser = serde_json::Serializer::with_formatter(project_file, formatter);

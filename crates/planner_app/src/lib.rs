@@ -8,17 +8,16 @@ use regex::Regex;
 use serde_with::serde_as;
 use tracing::{info, trace};
 use planning::design::{DesignName, DesignVariant};
-use planning::phase::PhaseError;
 use planning::placement::{PlacementOperation, PlacementSortingItem, PlacementState};
 use planning::process::{ProcessName, ProcessOperationKind, ProcessOperationSetItem};
 use planning::project;
-use planning::project::{PartStateError, ProcessFactory, Project};
+use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project};
 use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
-use stores::load_out::LoadOutSource;
+use stores::load_out::{LoadOutOperationError, LoadOutSource};
 
 pub use crux_core::Core;
 use petgraph::Graph;
@@ -273,62 +272,71 @@ impl App for Planner {
                 info!("Created project successfully.");
             },
             Event::Load { path } => {
-                info!("Load project. path: {:?}", &path);
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    info!("Load project. path: {:?}", &path);
+    
+                    let project = project::load(&path)
+                        .map_err(AppError::IoError)?;
+                    
+                    model.model_project.replace(ModelProject {
+                        path,
+                        project,
+                        modified: false,
+                    });
+                    
+                    Ok(())
+                };
 
-                match project::load(&path) {
-                    Ok(project) => {
-                        model.model_project.replace(ModelProject {
-                            path,
-                            project,
-                            modified: false,
-                        });
-                    },
-                    Err(e) => {
-                        model.error.replace(format!("{:?}", e));
-                    }
-                }
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
             },
             Event::Save => {
-                if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+
                     info!("Save project. path: {:?}", &path);
                     
-                    match project::save(project, &path) {
-                        Ok(_) => {
-                            info!("Saved. path: {:?}", path);
-                            *modified = false;
-                        },
-                        Err(e) => {
-                            model.error.replace(format!("{:?}", e));
-                        },
-                    }
-                } else {
-                    model.error.replace("project required".to_string());
-                }
+                    project::save(project, path)
+                        .map_err(AppError::IoError)?;
+
+                    info!("Saved. path: {:?}", path);
+                    *modified = false;
+                    
+                    Ok(())
+                };
+
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
             },
             Event::AddPcb { kind, name } => {
-                if let Some(ModelProject { project, modified, .. }) = &mut model.model_project {
-                    match project::add_pcb(project, kind.clone().into(), name) {
-                        Ok(_) => {
-                            *modified = true;
-                        },
-                        Err(e) => {
-                            model.error.replace(format!("{:?}", e));
-                        },
-                    }
-                    self.update(Event::Save {}, model, caps);
-                } else {
-                    model.error.replace("project required".to_string());
-                }
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    
+                    project::add_pcb(project, kind.clone().into(), name)
+                        .map_err(|cause|AppError::PcbError(cause.into()))?;
+
+                    *modified = true;
+                    
+                    Ok(())
+                };
+                
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
             },
             Event::AssignVariantToUnit { design, variant, unit } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        project.update_assignment(unit.clone(), DesignVariant { design_name: design.clone(), variant_name: variant.clone() })?;
-                        *modified = true;
-                        let _all_parts = Self::refresh_project(project, path)?;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    project.update_assignment(
+                        unit.clone(), 
+                        DesignVariant { design_name: design.clone(), variant_name: variant.clone() }
+                    )
+                        .map_err(|cause|AppError::OperationError(cause.into()))?;
+                    *modified = true;
+                    let _all_parts = Self::refresh_project(project, path)
+                        .map_err(AppError::OperationError)?;
                     Ok(())
                 };
 
@@ -337,26 +345,31 @@ impl App for Planner {
                 };
             },
             Event::RefreshFromDesignVariants => {
-                if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                    if let Err(e) = Self::refresh_project(project, path) {
-                        model.error.replace(format!("{:?}", e));
-                    };
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let _all_parts = Self::refresh_project(project, path)
+                        .map_err(AppError::OperationError)?;
                     *modified = true;
-                } else {
-                    model.error.replace("project required".to_string());
-                }
+                    
+                    Ok(())
+                };
+
+                if let Err(e) = try_fn(model) {
+                    model.error.replace(format!("{:?}", e));
+                };
             },
             Event::AssignProcessToParts { process: process_name, manufacturer: manufacturer_pattern, mpn: mpn_pattern } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        let process = project.find_process(&process_name)?.clone();
-                        let all_parts = Self::refresh_project(project, path)?;
-                        *modified = true;
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let process = project.find_process(&process_name)
+                        .map_err(|cause|AppError::ProcessError(cause.into()))?.clone();
 
-                        project::update_applicable_processes(project, all_parts.as_slice(), process, manufacturer_pattern, mpn_pattern);
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                    let all_parts = Self::refresh_project(project, path)
+                        .map_err(AppError::OperationError)?;
+                    *modified = true;
+
+                    project::update_applicable_processes(project, all_parts.as_slice(), process, manufacturer_pattern, mpn_pattern);
+
                     Ok(())
                 };
 
@@ -365,20 +378,22 @@ impl App for Planner {
                 };
             },
             Event::CreatePhase { process: process_name, reference, load_out, pcb_side } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, modified, .. }) = &mut model.model_project {
-                        let process_name_str = process_name.to_string();
-                        let process = ProcessFactory::by_name(process_name_str.as_str())?;
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let process_name_str = process_name.to_string();
+                    let process = ProcessFactory::by_name(process_name_str.as_str())
+                        .map_err(|cause|AppError::ProcessError(cause.into()))?;
 
-                        project.ensure_process(&process)?;
-                        *modified = true;
+                    project.ensure_process(&process)
+                        .map_err(AppError::OperationError)?;
+                    *modified = true;
 
-                        stores::load_out::ensure_load_out(&load_out)?;
+                    stores::load_out::ensure_load_out(&load_out)
+                        .map_err(AppError::OperationError)?;
 
-                        project.update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)?;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                    project.update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)
+                        .map_err(AppError::OperationError)?;
+
                     Ok(())
                 };
 
@@ -386,31 +401,33 @@ impl App for Planner {
                     model.error.replace(format!("{:?}", e));
                 };
             },
-            Event::AssignPlacementsToPhase { phase: reference, placements: placements_pattern } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        let _all_parts = Self::refresh_project(project, path)?;
-                        *modified = true;
+            Event::AssignPlacementsToPhase { phase: phase_reference, placements: placements_pattern } => {
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let _all_parts = Self::refresh_project(project, path)
+                        .map_err(AppError::OperationError)?;
+                    *modified = true;
 
-                        let phase = project.phases.get(&reference)
-                            .ok_or(PhaseError::UnknownPhase(reference))?.clone();
+                    let phase = project.phases.get_mut(&phase_reference)
+                        .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?
+                        .clone();
 
-                        let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
-                        trace!("Required load_out parts: {:?}", parts);
+                    let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
+                    trace!("Required load_out parts: {:?}", parts);
 
-                        *modified |= project::update_phase_operation_states(project);
+                    *modified |= project::update_phase_operation_states(project);
 
-                        for part in parts.iter() {
-                            let part_state = project.part_states.get_mut(&part)
-                                .ok_or_else(|| PartStateError::NoPartStateFound { part: part.clone() })?;
+                    for part in parts.iter() {
+                        let part_state = project.part_states.get_mut(&part)
+                            .ok_or_else(|| PartStateError::NoPartStateFound { part: part.clone() })
+                            .map_err(AppError::PartError)?;
 
-                            project::add_process_to_part(part_state, part, phase.process.clone());
-                        }
-
-                        stores::load_out::add_parts_to_load_out(&LoadOutSource::from_str(&phase.load_out_source).unwrap(), parts)?;
-                    } else {
-                        model.error.replace("project and path required".to_string());
+                        project::add_process_to_part(part_state, part, phase.process.clone());
                     }
+
+                    stores::load_out::add_parts_to_load_out(&LoadOutSource::from_str(&phase.load_out_source).unwrap(), parts)
+                        .map_err(AppError::LoadoutError)?;
+                    
                     Ok(())
                 };
 
@@ -418,18 +435,17 @@ impl App for Planner {
                     model.error.replace(format!("{:?}", e));
                 };
             },
-            Event::AssignFeederToLoadOutItem { phase: reference, feeder_reference, manufacturer, mpn } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
-                        let phase = project.phases.get(&reference)
-                            .ok_or(PhaseError::UnknownPhase(reference))?.clone();
+            Event::AssignFeederToLoadOutItem { phase: phase_reference, feeder_reference, manufacturer, mpn } => {
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
 
-                        let process = project.find_process(&phase.process)?.clone();
+                    let phase = project.phases.get(&phase_reference).ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+                    
+                    let process = project.find_process(&phase.process)
+                        .map_err(|cause|AppError::ProcessError(cause.into()))?.clone();
 
-                        stores::load_out::assign_feeder_to_load_out_item(&phase, &process, &feeder_reference, manufacturer, mpn)?;
-                    } else {
-                        model.error.replace("project and path required".to_string());
-                    }
+                    stores::load_out::assign_feeder_to_load_out_item(&phase, &process, &feeder_reference, manufacturer, mpn)
+                        .map_err(AppError::OperationError)?;
                     Ok(())
                 };
 
@@ -438,15 +454,15 @@ impl App for Planner {
                 };
             },
             Event::SetPlacementOrdering { phase: reference, placement_orderings } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        let _all_parts = Self::refresh_project(project, path)?;
-                        *modified = true;
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let _all_parts = Self::refresh_project(project, path)
+                        .map_err(AppError::OperationError)?;
+                    *modified = true;
 
-                        *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)?;
-                    } else {
-                        model.error.replace("project and path required".to_string());
-                    }
+                    *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
+                        .map_err(AppError::OperationError)?;
+
                     Ok(())
                 };
 
@@ -455,21 +471,21 @@ impl App for Planner {
                 };
             },
             Event::GenerateArtifacts => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        *modified = project::update_phase_operation_states(project);
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
 
-                        let phase_load_out_item_map = project.phases.iter().try_fold(BTreeMap::<Reference, Vec<LoadOutItem>>::new(), |mut map, (reference, phase) | {
-                            let load_out_items = stores::load_out::load_items(&LoadOutSource::from_str(&phase.load_out_source).unwrap())?;
-                            map.insert(reference.clone(), load_out_items);
-                            Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
-                        })?;
+                    *modified = project::update_phase_operation_states(project);
 
-                        let directory = path.parent().unwrap();
-                        project::generate_artifacts(&project, directory, phase_load_out_item_map)?;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                    let phase_load_out_item_map = project.phases.iter().try_fold(BTreeMap::<Reference, Vec<LoadOutItem>>::new(), |mut map, (reference, phase) | {
+                        let load_out_items = stores::load_out::load_items(&LoadOutSource::from_str(&phase.load_out_source).unwrap())?;
+                        map.insert(reference.clone(), load_out_items);
+                        Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
+                    })
+                        .map_err(AppError::OperationError)?;
+
+                    let directory = path.parent().unwrap();
+                    project::generate_artifacts(project, directory, phase_load_out_item_map)
+                        .map_err(|cause|AppError::OperationError(cause.into()))?;
                     Ok(())
                 };
 
@@ -478,13 +494,12 @@ impl App for Planner {
                 };
             },
             Event::RecordPhaseOperation { phase: reference, operation, set } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        let directory = path.parent().unwrap();
-                        *modified = project::update_phase_operation(project, directory, &reference, operation.into(), set.into())?;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+
+                    let directory = path.parent().unwrap();
+                    *modified = project::update_phase_operation(project, directory, &reference, operation, set)
+                        .map_err(AppError::OperationError)?;
                     Ok(())
                 };
 
@@ -493,13 +508,11 @@ impl App for Planner {
                 };
             },
             Event::RecordPlacementsOperation { object_path_patterns, operation } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { path, project, modified, .. }) = &mut model.model_project {
-                        let directory = path.parent().unwrap();
-                        *modified = project::update_placements_operation(project, directory, object_path_patterns, operation.into())?;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, path, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let directory = path.parent().unwrap();
+                    *modified = project::update_placements_operation(project, directory, object_path_patterns, operation)
+                        .map_err(AppError::OperationError)?;
                     Ok(())
                 };
 
@@ -508,16 +521,14 @@ impl App for Planner {
                 };
             },
             Event::ResetOperations { } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, modified, .. }) = &mut model.model_project {
-                        project::reset_operations(project)?;
-                        *modified = true;
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, modified, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    project::reset_operations(project)
+                        .map_err(AppError::OperationError)?;
+                    
+                    *modified = true;
                     Ok(())
                 };
-
                 if let Err(e) = try_fn(model) {
                     model.error.replace(format!("{:?}", e));
                 };
@@ -527,19 +538,16 @@ impl App for Planner {
             // Views
             // 
             Event::RequestOverviewView { } => {
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
 
-                        let overview = ProjectOverview {
-                            name: project.name.clone(),
-                        };
-                        caps.view.view(ProjectView::Overview(overview), |_|Event::None)
-
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                    let overview = ProjectOverview {
+                        name: project.name.clone(),
+                    };
+                    caps.view.view(ProjectView::Overview(overview), |_|Event::None);
                     Ok(())
                 };
+                
                 if let Err(e) = try_fn(model) {
                     model.error.replace(format!("{:?}", e));
                 };
@@ -547,48 +555,43 @@ impl App for Planner {
             Event::RequestProjectTreeView { } => {
                 default_render = false;
                 
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
 
-                        let add_test_nodes = false;
+                    let add_test_nodes = false;
+                    
+                    let mut project_tree = ProjectTreeView::new();
+                    
+                    let root_node = project_tree.tree.add_node(ProjectTreeItem { name: "Root".to_string(), path: "/".to_string() });
+                    
+                    let phases_node = project_tree.tree.add_node(ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() });
+                    project_tree.tree.add_edge(root_node.clone(), phases_node.clone(), ());
+                    
+                    for (reference, ..) in &project.phases {
+                        let phase_node = project_tree.tree.add_node(ProjectTreeItem {
+                            name: reference.to_string(),
+                            path: format!("/phases/{}", reference).to_string()
+                        });
+                        project_tree.tree.add_edge(phases_node.clone(), phase_node, ());
                         
-                        let mut project_tree = ProjectTreeView::new();
-                        
-                        let root_node = project_tree.tree.add_node(ProjectTreeItem { name: "Root".to_string(), path: "/".to_string() });
-                        
-                        let phases_node = project_tree.tree.add_node(ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() });
-                        project_tree.tree.add_edge(root_node.clone(), phases_node.clone(), ());
-                        
-                        for (reference, ..) in &project.phases {
-                            let phase_node = project_tree.tree.add_node(ProjectTreeItem {
-                                name: reference.to_string(),
-                                path: format!("/phases/{}", reference).to_string()
-                            });
-                            project_tree.tree.add_edge(phases_node.clone(), phase_node, ());
-                            
-                            if add_test_nodes {
-                                let test_node = project_tree.tree.add_node(ProjectTreeItem {
-                                    name: "Test".to_string(),
-                                    path: format!("/phases/{}/test", reference).to_string()
-                                });
-                                project_tree.tree.add_edge(phase_node, test_node, ());
-                            }
-                        }
-
                         if add_test_nodes {
                             let test_node = project_tree.tree.add_node(ProjectTreeItem {
                                 name: "Test".to_string(),
-                                path: "/test".to_string()
+                                path: format!("/phases/{}/test", reference).to_string()
                             });
-                            project_tree.tree.add_edge(root_node.clone(), test_node, ());
+                            project_tree.tree.add_edge(phase_node, test_node, ());
                         }
-
-
-                        caps.view.view(ProjectView::ProjectTree(project_tree), |_|Event::None)    
-                        
-                    } else {
-                        model.error.replace("project required".to_string());
                     }
+
+                    if add_test_nodes {
+                        let test_node = project_tree.tree.add_node(ProjectTreeItem {
+                            name: "Test".to_string(),
+                            path: "/test".to_string()
+                        });
+                        project_tree.tree.add_edge(root_node.clone(), test_node, ());
+                    }
+
+                    caps.view.view(ProjectView::ProjectTree(project_tree), |_|Event::None);    
                     Ok(())
                 };
 
@@ -599,24 +602,18 @@ impl App for Planner {
             Event::RequestPhaseOverviewView { phase_reference } => {
                 default_render = false;
 
-                let try_fn = |model: &mut Model| -> anyhow::Result<()> {
-                    if let Some(ModelProject { project, .. }) = &mut model.model_project {
-                        
-                        if let Some(phase) = project.phases.get(&phase_reference) {
-                            let phase_overview = PhaseOverview {
-                                phase_reference,
-                                process: phase.process.clone(),
-                                load_out_source: phase.load_out_source.clone(),
-                                pcb_side: phase.pcb_side.clone(),
-                            };
+                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                    let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
+                    let phase = project.phases.get(&phase_reference).ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+                    
+                    let phase_overview = PhaseOverview {
+                        phase_reference,
+                        process: phase.process.clone(),
+                        load_out_source: phase.load_out_source.clone(),
+                        pcb_side: phase.pcb_side.clone(),
+                    };
 
-                            caps.view.view(ProjectView::PhaseOverview(phase_overview), |_| Event::None)
-                        } else {
-                            model.error.replace("unknown reference".to_string());
-                        }
-                    } else {
-                        model.error.replace("project required".to_string());
-                    }
+                    caps.view.view(ProjectView::PhaseOverview(phase_overview), |_| Event::None);
                     Ok(())
                 };
 
@@ -628,12 +625,10 @@ impl App for Planner {
                 default_render = false;
 
                 let try_fn = |model: &mut Model| -> Result<(), AppError> {
-                    // TODO use this style of returning early (using .ok_or()) in other event handlers to reduce nesting.
                     let ModelProject { project, .. } = model.model_project.as_mut().ok_or(AppError::OperationRequiresProject)?;
-
                     let _phase = project.phases.get(&phase_reference).ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                    let placements = project.placements.iter().filter_map(|(path, state)|{
+                    let placements = project.placements.iter().filter_map(|(_path, state)|{
                         match &state.phase {
                             Some(candidate_phase) if phase_reference == *candidate_phase => Some(state.clone()),
                             _ => None
@@ -675,10 +670,24 @@ impl App for Planner {
 
 #[derive(Error, Debug)]
 enum AppError {
-    #[error("Unknown phase reference. reference: {0}")]
-    UnknownPhaseReference(Reference),
     #[error("Operation requires a project")]
     OperationRequiresProject,
+    #[error("Operation error, cause: {0}")]
+    OperationError(anyhow::Error),
+    #[error("Process error. cause: {0}")]
+    ProcessError(anyhow::Error),
+    #[error("Part error. cause: {0}")]
+    PartError(PartStateError),
+    #[error("Loadout error. cause: {0}")]
+    LoadoutError(LoadOutOperationError),
+    #[error("PCB error. cause: {0}")]
+    PcbError(PcbOperationError),
+    #[error("IO error. cause: {0}")]
+    IoError(std::io::Error),
+
+    #[error("Unknown phase reference. reference: {0}")]
+    UnknownPhaseReference(Reference),
+    
 }
 
 impl Planner {

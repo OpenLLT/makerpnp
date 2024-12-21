@@ -99,7 +99,7 @@ impl Display for LoadOutSource {
 pub struct LoadOutSourceError;
 
 #[derive(Error, Debug)]
-pub enum LoadOutOperationError<E> {
+pub enum LoadOutOperationError {
     #[error("Unable to load items. source: {load_out_source}, error: {reason}")]
     UnableToLoadItems { load_out_source: LoadOutSource, reason: anyhow::Error },
 
@@ -107,19 +107,19 @@ pub enum LoadOutOperationError<E> {
     UnableToStoreItems { load_out_source: LoadOutSource, reason: anyhow::Error },
 
     #[error("Load-out operation error. source: {load_out_source}, error: {reason}")]
-    OperationError { load_out_source: LoadOutSource, reason: E },
+    OperationError { load_out_source: LoadOutSource, reason: anyhow::Error },
 }
 
-pub fn perform_load_out_operation<F, R, E>(source: &LoadOutSource, mut f: F) -> Result<R, LoadOutOperationError<E>> 
+pub fn perform_load_out_operation<F, R, E>(source: &LoadOutSource, mut f: F) -> Result<R, LoadOutOperationError> 
 where
-    F: FnMut(&mut Vec<LoadOutItem>) -> Result<R, E>
+    F: FnMut(&mut Vec<LoadOutItem>) -> Result<R, E>, E: std::error::Error + Send + Sync + 'static,
 {
     let mut load_out_items = load_items(source).map_err(|err|{
         LoadOutOperationError::UnableToLoadItems { load_out_source: source.clone(), reason: err }
     })?;
 
     let result = f(&mut load_out_items).map_err(|err|{
-        LoadOutOperationError::OperationError { load_out_source: source.clone(), reason: err }
+        LoadOutOperationError::OperationError { load_out_source: source.clone(), reason: err.into() }
     })?;
     
     store_items(source, &load_out_items).map_err(|err|{
@@ -130,7 +130,7 @@ where
 }
 
 
-pub fn add_parts_to_load_out(load_out_source: &LoadOutSource, parts: BTreeSet<Part>) -> Result<(), LoadOutOperationError<anyhow::Error>> {
+pub fn add_parts_to_load_out(load_out_source: &LoadOutSource, parts: BTreeSet<Part>) -> Result<(), LoadOutOperationError> {
 
     perform_load_out_operation(load_out_source, | load_out_items| {
         for part in parts.iter() {
@@ -152,7 +152,7 @@ pub fn add_parts_to_load_out(load_out_source: &LoadOutSource, parts: BTreeSet<Pa
             load_out_items.push(load_out_item)
         }
 
-        Ok(())
+        Ok::<(), std::io::Error>(())
     })
 }
 

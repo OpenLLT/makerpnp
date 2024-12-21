@@ -46,7 +46,7 @@ impl Process {
 #[derive(Error, Debug)]
 pub enum ProcessError {
     #[error("Unused process. processes: {:?}, process: '{}'", processes, process)]
-    UnusedProcessError { processes: Vec<Process>, process: String }
+    UndefinedProcessError { processes: Vec<Process>, process: String }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
