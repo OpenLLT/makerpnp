@@ -8,7 +8,7 @@ Pick-and-Place machine software, for Makers!
 
 [![MakerPnP - Project Introduction](http://img.youtube.com/vi/s9yh92Ctqh8/0.jpg)](http://www.youtube.com/watch?v=s9yh92Ctqh8 "MakerPnP Project Introduction")
 
-This project is work-in-progress, you can follow development using the links below:
+This project is work-in-progress, you can follow development using the links in the [links](#links) section below. 
 
 ## Project Status
 
