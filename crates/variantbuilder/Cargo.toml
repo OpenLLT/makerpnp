@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cli = { path = "../cli"}
+cli = { path = "../cli", features = ["tracing"]}
 assembly = { path = "../assembly"}
 part_mapper = { path = "../part_mapper"}
 pnp = { path = "../pnp"}
@@ -21,8 +21,13 @@ csv = { workspace = true }
 termtree = { workspace = true }
 thiserror = "1.0.63"
 
+crux_core = { workspace = true }
+
+
 [dev-dependencies]
 util = { path = "../util", features = ["testing"]}
+part_mapper = { path = "../part_mapper", features = ["testing"]}
+stores = { path = "../stores", features = ["testing"]}
 
 assert_cmd = { workspace = true }
 assert_fs = { workspace = true }

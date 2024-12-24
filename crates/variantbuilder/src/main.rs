@@ -1,15 +1,12 @@
 use std::path::PathBuf;
 use anyhow::Error;
-use clap::{Args, Parser, Subcommand};
-use clap_verbosity_flag::{InfoLevel, Verbosity};
+use clap::Parser;
 use csv::QuoteStyle;
 use termtree::Tree;
-use thiserror::Error;
 use tracing::{error, info, Level, trace};
 use assembly::AssemblyVariantProcessor;
 use assembly::assembly_variant::AssemblyVariant;
 use cli;
-use cli::args::EdaToolArg;
 use eda::placement::{EdaPlacement, EdaPlacementField};
 use eda::substitution::{EdaSubstitutionResult, EdaSubstitutionRule, EdaSubstitutor};
 use eda::EdaTool;
@@ -17,95 +14,10 @@ use stores::{assembly_rules, eda_placements, load_out, part_mappings, parts, sub
 use stores::placements::PlacementRecord;
 use stores::load_out::LoadOutSource;
 use part_mapper::{PartMapper, PartMapperError, PartMappingError, PartMappingResult, PlacementPartMappingResult};
+use crate::opts::{Command, Opts};
 
-#[derive(Parser)]
-#[command(name = "variantbuilder")]
-#[command(bin_name = "variantbuilder")]
-#[command(version, about, long_about = None)]
-struct Opts {
-    #[command(subcommand)]
-    command: Option<Command>,
+mod opts;
 
-    /// Trace log file
-    #[arg(long, num_args = 0..=1, default_missing_value = "trace.log")]
-    trace: Option<PathBuf>,
-
-    #[command(flatten)]
-    verbose: Verbosity<InfoLevel>,
-}
-
-#[derive(Args, Clone, Debug)]
-struct AssemblyVariantArgs {
-    /// Name of assembly variant
-    #[arg(long, default_value = "Default")]
-    name: String,
-
-    /// List of reference designators
-    #[arg(long, num_args = 0.., value_delimiter = ',')]
-    ref_des_list: Vec<String>
-}
-
-#[allow(dead_code)]
-#[derive(Error, Debug)]
-enum AssemblyVariantError {
-    #[error("Unknown error")]
-    Unknown
-}
-
-impl AssemblyVariantArgs {
-    pub fn build_assembly_variant(&self) -> Result<AssemblyVariant, AssemblyVariantError> {
-        Ok(AssemblyVariant::new(
-            self.name.clone(),
-            self.ref_des_list.clone(),
-        ))
-    }
-}
-
-#[derive(Subcommand)]
-#[command(arg_required_else_help(true))]
-enum Command {
-    /// Build variant
-    Build {
-        /// EDA tool
-        #[arg(long)]
-        eda: EdaToolArg,
-
-        /// Load-out source
-        #[arg(long, value_name = "SOURCE")]
-        load_out: Option<LoadOutSource>,
-
-        /// Placements source
-        #[arg(long, value_name = "SOURCE")]
-        placements: String,
-
-        /// Parts source
-        #[arg(long, value_name = "SOURCE")]
-        parts: String,
-
-        /// Part-mappings source
-        #[arg(long, value_name = "SOURCE")]
-        part_mappings: String,
-
-        /// Substitution sources
-        #[arg(long, value_delimiter = ',', num_args = 0.., value_name = "SOURCE")]
-        substitutions: Vec<String>,
-
-        /// List of reference designators to disable (use for do-not-fit, no-place, test-points, fiducials, etc)
-        #[arg(long, num_args = 0.., value_delimiter = ',')]
-        ref_des_disable_list: Vec<String>,
-
-        /// Assembly rules source
-        #[arg(long, value_name = "SOURCE")]
-        assembly_rules: Option<String>,
-
-        /// Output CSV file
-        #[arg(long, value_name = "FILE")]
-        output: String,
-
-        #[command(flatten)]
-        assembly_variant_args: Option<AssemblyVariantArgs>
-    },
-}
 
 fn main() -> anyhow::Result<()>{
     let args = argfile::expand_args(

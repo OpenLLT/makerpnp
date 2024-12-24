@@ -4990,6 +4990,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "cli",
+ "crux_core",
  "csv",
  "eda",
  "indoc",
