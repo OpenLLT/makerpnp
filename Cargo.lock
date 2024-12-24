@@ -5010,6 +5010,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "variantbuilder_app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crux_core",
+ "regex",
+ "serde",
+ "serde_regex",
+ "serde_with",
+ "thiserror 2.0.7",
+ "tracing",
+]
+
+[[package]]
 name = "version-compare"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

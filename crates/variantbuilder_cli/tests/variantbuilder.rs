@@ -626,7 +626,7 @@ mod tests {
             .assert()
             .success()
             .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff("variantbuilder 0.1.0\n")));
+            .stdout(print("stdout").and(predicate::str::diff("variantbuilder_cli 0.1.0\n")));
     }
 
     #[derive(Debug, serde::Serialize)]
@@ -711,7 +711,7 @@ mod help {
 
         // and
         let expected_output = indoc! {"
-            Usage: variantbuilder [OPTIONS] [COMMAND]
+            Usage: variantbuilder_cli [OPTIONS] [COMMAND]
 
             Commands:
               build  Build variant
@@ -750,7 +750,7 @@ mod help {
         let expected_output = indoc! {"
             Build variant
 
-            Usage: variantbuilder build [OPTIONS] --eda <EDA> --placements <SOURCE> --parts <SOURCE> --part-mappings <SOURCE> --output <FILE>
+            Usage: variantbuilder_cli build [OPTIONS] --eda <EDA> --placements <SOURCE> --parts <SOURCE> --part-mappings <SOURCE> --output <FILE>
 
             Options:
                   --eda <EDA>

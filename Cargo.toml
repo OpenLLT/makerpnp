@@ -16,10 +16,11 @@ members = [
     "crates/eda",
     "crates/util",
     "crates/criteria",
-    "crates/variantbuilder",
-    "crates/planner_cli",
     "crates/planner_app",
+    "crates/planner_cli",
     "crates/planner_gui",
+    "crates/variantbuilder_app",
+    "crates/variantbuilder_cli",
 ]
 
 [workspace.dependencies]

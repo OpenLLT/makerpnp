@@ -7,8 +7,8 @@ use cli::args::EdaToolArg;
 use stores::load_out::LoadOutSource;
 
 #[derive(Parser)]
-#[command(name = "variantbuilder")]
-#[command(bin_name = "variantbuilder")]
+#[command(name = "variantbuilder_cli")]
+#[command(bin_name = "variantbuilder_cli")]
 #[command(version, about, long_about = None)]
 pub struct Opts {
     #[command(subcommand)]
