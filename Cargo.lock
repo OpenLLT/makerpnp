@@ -289,6 +289,7 @@ name = "assembly"
 version = "0.1.0"
 dependencies = [
  "eda",
+ "serde",
  "thiserror 2.0.7",
 ]
 
@@ -4979,23 +4980,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ef4c4aa54d5d05a279399bfa921ec387b7aba77caf7a682ae8d86785b8fdad2"
 
 [[package]]
-name = "variantbuilder"
+name = "variantbuilder_app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assembly",
+ "crux_core",
+ "csv",
+ "eda",
+ "part_mapper",
+ "serde",
+ "serde_regex",
+ "serde_with",
+ "stores",
+ "termtree 0.5.1",
+ "thiserror 2.0.7",
+ "tracing",
+]
+
+[[package]]
+name = "variantbuilder_cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "argfile",
- "assembly",
  "assert_cmd",
  "assert_fs",
  "clap",
  "clap-verbosity-flag",
  "cli",
+ "crossbeam-channel",
  "crux_core",
  "csv",
- "eda",
  "indoc",
- "part_mapper",
- "pnp",
  "predicates",
  "predicates-tree",
  "rust_decimal",
@@ -5003,24 +5020,10 @@ dependencies = [
  "serde",
  "stores",
  "tempfile",
- "termtree 0.5.1",
  "thiserror 1.0.69",
  "tracing",
  "util",
-]
-
-[[package]]
-name = "variantbuilder_app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "crux_core",
- "regex",
- "serde",
- "serde_regex",
- "serde_with",
- "thiserror 2.0.7",
- "tracing",
+ "variantbuilder_app",
 ]
 
 [[package]]

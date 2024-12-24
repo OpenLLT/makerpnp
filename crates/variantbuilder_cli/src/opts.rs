@@ -2,9 +2,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use thiserror::Error;
-use assembly::assembly_variant::AssemblyVariant;
 use cli::args::EdaToolArg;
-use stores::load_out::LoadOutSource;
+use variantbuilder_app::{AssemblyVariant, Event, LoadOutSource};
 
 #[derive(Parser)]
 #[command(name = "variantbuilder_cli")]
@@ -12,7 +11,7 @@ use stores::load_out::LoadOutSource;
 #[command(version, about, long_about = None)]
 pub struct Opts {
     #[command(subcommand)]
-    pub command: Option<Command>,
+    pub command: Command,
 
     /// Trace log file
     #[arg(long, num_args = 0..=1, default_missing_value = "trace.log")]
@@ -93,4 +92,54 @@ pub enum Command {
         #[command(flatten)]
         assembly_variant_args: Option<AssemblyVariantArgs>
     },
+}
+
+#[derive(Error, Debug)]
+pub enum EventError {
+    #[error("None")]
+    None,
+    #[error("Assembly variant error. Cause: {0}")]
+    AssemblyVariantError(AssemblyVariantError),
+}
+
+impl TryFrom<Opts> for Event {
+    type Error = EventError;
+
+    fn try_from(ops: Opts) -> Result<Self, Self::Error> {
+        match ops.command {
+            Command::Build {
+                eda,
+                placements,
+                assembly_variant_args,
+                parts,
+                part_mappings,
+                substitutions,
+                load_out,
+                assembly_rules,
+                output,
+                ref_des_disable_list,
+            } => {
+                let eda_tool= eda.build();
+                let assembly_variant = assembly_variant_args.as_ref().map_or_else(|| Ok(AssemblyVariant::default()), | args | {
+                    args.build_assembly_variant()
+                })
+                    .map_err(|error|EventError::AssemblyVariantError(error))?;
+
+                let event = Event::Build {
+                    eda_tool,
+                    placements,
+                    assembly_variant,
+                    parts,
+                    part_mappings,
+                    substitutions,
+                    load_out,
+                    assembly_rules,
+                    output,
+                    ref_des_disable_list,
+                };
+
+                Ok(event)
+            }
+        }
+    }
 }

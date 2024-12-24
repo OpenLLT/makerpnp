@@ -20,7 +20,7 @@ mod tests {
     #[test]
     fn build() -> Result<(), std::io::Error> {
         // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
 
         // and
         let temp_dir = tempdir()?;
@@ -466,7 +466,7 @@ mod tests {
 
     #[test]
     fn build_kicad_using_default_assembly_variant() -> Result<(), std::io::Error> {
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
 
         // and
         let temp_dir = tempdir()?;
@@ -618,7 +618,7 @@ mod tests {
     #[test]
     fn version() {
         // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
 
         // when
         cmd.args(["-V"])
@@ -707,11 +707,11 @@ mod help {
     #[test]
     fn no_args() {
         // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
 
         // and
         let expected_output = indoc! {"
-            Usage: variantbuilder_cli [OPTIONS] [COMMAND]
+            Usage: variantbuilder_cli [OPTIONS] <COMMAND>
 
             Commands:
               build  Build variant
@@ -744,7 +744,7 @@ mod help {
     #[test]
     fn help_for_build_subcommand() {
         // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder"));
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
 
         // and
         let expected_output = indoc! {"

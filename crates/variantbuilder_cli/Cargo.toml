@@ -1,32 +1,26 @@
 [package]
-name = "variantbuilder"
+name = "variantbuilder_cli"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cli = { path = "../cli", features = ["tracing"]}
-assembly = { path = "../assembly"}
-part_mapper = { path = "../part_mapper"}
-pnp = { path = "../pnp"}
-eda = { path = "../eda"}
-stores = { path = "../stores"}
-util = { path = "../util"}
+# Important: there should be no direct dependencies on the core classes, only those re-exported by the app.
+variantbuilder_app = { path = "../variantbuilder_app"}
 
+# 3rd party dependencies
+cli = { path = "../cli", features = ["tracing"]}
 clap = { workspace = true, features = ["derive"] }
 clap-verbosity-flag = { workspace = true }
 argfile = { workspace = true }
 tracing = "0.1.40"
 anyhow = "1.0.86"
-csv = { workspace = true }
-termtree = { workspace = true }
 thiserror = "1.0.63"
 
 crux_core = { workspace = true }
-
+crossbeam-channel = { workspace = true }
 
 [dev-dependencies]
 util = { path = "../util", features = ["testing"]}
-part_mapper = { path = "../part_mapper", features = ["testing"]}
 stores = { path = "../stores", features = ["testing"]}
 
 assert_cmd = { workspace = true }

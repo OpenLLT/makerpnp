@@ -1,11 +1,11 @@
-use planner_app::{Effect, Event, Planner};
+use variantbuilder_app::{Effect, Event, VariantBuilder};
 
 use std::sync::Arc;
 use anyhow::anyhow;
 use crossbeam_channel::Sender;
 use tracing::debug;
 
-pub type Core = Arc<crux_core::Core<Effect, Planner>>;
+pub type Core = Arc<crux_core::Core<Effect, VariantBuilder>>;
 
 pub fn new() -> Core {
     Arc::new(crux_core::Core::new())

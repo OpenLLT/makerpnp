@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct AssemblyVariant {
     pub name: String,
     pub ref_des_list: Vec<String>,

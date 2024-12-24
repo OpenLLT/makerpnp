@@ -7,10 +7,16 @@ edition = "2021"
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
-regex = { workspace = true }
+csv = { workspace = true }
+termtree = { workspace = true }
 
 serde = { workspace = true }
 serde_regex = { workspace = true }
 serde_with = { workspace = true }
 
 crux_core = { workspace = true }
+
+assembly = { path = "../assembly"}
+part_mapper = { path = "../part_mapper"}
+eda = { path = "../eda"}
+stores = { path = "../stores"}
