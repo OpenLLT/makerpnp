@@ -1,4 +1,5 @@
 use std::ops::{Add, Sub};
+use regex::Regex;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use thiserror::Error;
@@ -8,7 +9,9 @@ use crate::placement::{EdaPlacement, EdaPlacementField};
 #[derive(Error, Debug)]
 pub enum EasyEdaPlacementRecordError {
     #[error("Unknown")]
-    Unknown
+    Unknown,
+    #[error("Unit parse error, cause: {0}")]
+    UnitParseError(EasyEdaUnitParserError),
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -21,9 +24,9 @@ pub struct EasyEdaPlacementRecord {
     #[serde(rename(deserialize = "Layer"))]
     side: EasyEdaPcbSide,
     #[serde(rename(deserialize = "Mid X"))]
-    x: Decimal,
+    x: String,
     #[serde(rename(deserialize = "Mid Y"))]
-    y: Decimal,
+    y: String,
     /// Positive values indicate anti-clockwise rotation.
     /// Range is >=0 to 359.999
     /// Rounding occurs on the 4th decimal, e.g. 359.9994 rounds to 359.999 and 359.995 rounds to 360, then gets converted to 0.
@@ -50,6 +53,13 @@ impl From<&EasyEdaPcbSide> for PcbSide {
 
 impl EasyEdaPlacementRecord {
     pub fn build_eda_placement(&self) -> Result<EdaPlacement, EasyEdaPlacementRecordError> {
+
+        let x = EasyEdaUnitParser::parse(&self.x)
+            .map_err(|cause|EasyEdaPlacementRecordError::UnitParseError(cause))?;
+        let y = EasyEdaUnitParser::parse(&self.y)
+            .map_err(|cause|EasyEdaPlacementRecordError::UnitParseError(cause))?;
+
+
         Ok(EdaPlacement {
             ref_des: self.ref_des.to_string(),
             place: true,
@@ -58,8 +68,8 @@ impl EasyEdaPlacementRecord {
                 EdaPlacementField { name: "value".to_string(), value: self.value.to_string() },
             ],
             pcb_side: PcbSide::from(&self.side),
-            x: self.x,
-            y: self.y,
+            x,
+            y,
             rotation: EasyEdaRotationConverter::convert(self.rotation),
         })
 
@@ -103,5 +113,55 @@ mod rotation_conversion_tests {
     #[case(dec!(359.999), dec!(-0.001))]
     fn easyeda_to_eda_placement(#[case] value: Decimal, #[case] expected_value: Decimal) {
         assert_eq!(EasyEdaRotationConverter::convert(value), expected_value);
+    }
+}
+
+struct EasyEdaUnitParser {}
+
+impl EasyEdaUnitParser {
+    /// Extract the decimal value from the input.
+    ///
+    /// The format is '<decimal-value><unit>', e.g. '359.999mm'
+    ///
+    /// Currently unit is ignored, users should export pick-and-place files using 'mm' in the EasyEDA UI.
+    pub fn parse(input: &String) -> Result<Decimal, EasyEdaUnitParserError> {
+        let pattern = Regex::new(r#"^(?<value>[-]?(\d+)+(\.(\d+))?){1}.*"#)
+            .unwrap();
+
+        let maybe_value = pattern.captures(input).map(|captures|{
+            captures.name("value").unwrap().as_str()
+        });
+
+        match maybe_value {
+            None => Err(EasyEdaUnitParserError::InvalidUnit(input.clone())),
+            Some(value) => Ok(Decimal::try_from(value).unwrap()),
+        }
+    }
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum EasyEdaUnitParserError {
+    #[error("Invalid unit. value: {0}")]
+    InvalidUnit(String),
+}
+
+#[cfg(test)]
+mod unit_parser_tests {
+    use crate::easyeda::csv::{EasyEdaUnitParser, EasyEdaUnitParserError};
+
+    use rstest::rstest;
+    use rust_decimal::Decimal;
+    use rust_decimal_macros::dec;
+
+    #[rstest]
+    #[case("3", Ok(dec!(3)))]
+    #[case("3mm", Ok(dec!(3)))]
+    #[case("0.3mm", Ok(dec!(0.3)))]
+    #[case("-3mm", Ok(dec!(-3)))]
+    #[case("-.999mm", Err(EasyEdaUnitParserError::InvalidUnit("-.999mm".to_string())))]
+    #[case("bananas", Err(EasyEdaUnitParserError::InvalidUnit("bananas".to_string())))]
+    #[case("3bananas", Ok(dec!(3)))]
+    fn parse(#[case] value: &str, #[case] expected_value: Result<Decimal, EasyEdaUnitParserError>) {
+        assert_eq!(EasyEdaUnitParser::parse(&value.to_string()), expected_value);
     }
 }

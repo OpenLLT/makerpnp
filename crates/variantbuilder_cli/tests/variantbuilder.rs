@@ -627,6 +627,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
+            .delimiter(b'\t')
             .from_path(test_placements_path)?;
 
         writer.serialize(TestEasyEdaPlacementRecord {
@@ -634,13 +635,21 @@ mod tests {
             device: "R_0402_1005Metric".to_string(),
             value: "330R".to_string(),
             layer: "T".to_string(),
-            x: Decimal::from(10),
-            y: Decimal::from(110),
+            x: format!("{}mm", Decimal::from(10)),
+            y: format!("{}mm", Decimal::from(110)),
             rotation: dec!(359.999),
-
         })?;
 
         writer.flush()?;
+
+        // FIXME EasyEDAPro (at least on OSX) exports pick-and-place files in UTF-16LE format.
+        //       However the CSV library used only supports UTF-8, so we need to transcode the
+        //       generated file into the correct format.
+        //       Currently users must export their files, then convert them before using them with
+        //       this tool.
+
+        // FIXME EasyEDAPro adds spurious tab characters at the end of each non-header line.
+        //       These need to be stripped before the CSV file is read.
 
         let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
 
@@ -819,10 +828,13 @@ mod tests {
         device: String,
         value: String,
         layer: String,
+
+        /// This has the format '<decimal-value><unit>', See ['EasyEdaUnitParser']
         #[serde(rename(serialize = "Mid X"))]
-        x: Decimal,
+        x: String,
+        /// This has the format '<decimal-value><unit>', See ['EasyEdaUnitParser']
         #[serde(rename(serialize = "Mid Y"))]
-        y: Decimal,
+        y: String,
         /// Positive values indicate anti-clockwise rotation.
         /// Range is >=0 to 359.999
         /// Rounding occurs on the 4th decimal, e.g. 359.9994 rounds to 359.999 and 359.995 rounds to 360, then gets converted to 0.
