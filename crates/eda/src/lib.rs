@@ -1,5 +1,6 @@
 pub mod diptrace;
 pub mod kicad;
+pub mod easyeda;
 
 pub mod placement;
 pub mod substitution;
@@ -9,4 +10,5 @@ pub mod criteria;
 pub enum EdaTool {
     DipTrace,
     KiCad,
+    EasyEda,
 }

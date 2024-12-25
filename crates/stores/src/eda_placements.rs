@@ -3,6 +3,7 @@ use anyhow::{Context, Error};
 use std::path::PathBuf;
 use tracing::trace;
 use eda::diptrace::csv::DiptracePlacementRecord;
+use eda::easyeda::csv::EasyEdaPlacementRecord;
 use eda::placement::EdaPlacement;
 use eda::EdaTool;
 use eda::kicad::csv::KiCadPlacementRecord;
@@ -41,6 +42,19 @@ pub fn load_eda_placements(eda_tool: EdaTool, placements_source: &String) -> Res
                 let placement = record.build_eda_placement()
                     .with_context(|| format!("Building placement from record. record: {:?}", record))?;
                 
+                placements.push(placement);
+            }
+        },
+        EdaTool::EasyEda => {
+            for result in csv_reader.deserialize() {
+                let record: EasyEdaPlacementRecord = result
+                    .with_context(|| "Deserializing placement record".to_string())?;
+
+                trace!("{:?}", record);
+
+                let placement = record.build_eda_placement()
+                    .with_context(|| format!("Building placement from record. record: {:?}", record))?;
+
                 placements.push(placement);
             }
         }

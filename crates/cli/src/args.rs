@@ -82,6 +82,8 @@ pub enum EdaToolArg {
     DipTrace,
     #[value(name("kicad"))]
     KiCad,
+    #[value(name("easyeda"))]
+    EasyEda,
 }
 
 impl EdaToolArg {
@@ -89,6 +91,7 @@ impl EdaToolArg {
         match self {
             EdaToolArg::DipTrace => EdaTool::DipTrace,
             EdaToolArg::KiCad => EdaTool::KiCad,
+            EdaToolArg::EasyEda => EdaTool::EasyEda,
         }
     }
 }

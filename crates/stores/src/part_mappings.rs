@@ -171,6 +171,11 @@ pub mod test {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub val: Option<String>,
 
+        // EasyEda specific
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub device: Option<String>,
+        // Shares 'value' with DipTrace
+
         //
         // To
         //
@@ -189,6 +194,13 @@ pub mod test {
         pub fn kicad_defaults() -> TestPartMappingRecord {
             TestPartMappingRecord {
                 eda: "KiCad".to_string(),
+                ..Default::default()
+            }
+        }
+
+        pub fn easyeda_defaults() -> TestPartMappingRecord {
+            TestPartMappingRecord {
+                eda: "EasyEda".to_string(),
                 ..Default::default()
             }
         }

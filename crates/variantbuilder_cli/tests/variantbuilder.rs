@@ -616,6 +616,157 @@ mod tests {
     }
 
     #[test]
+    fn build_easyeda_using_default_assembly_variant() -> Result<(), std::io::Error> {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
+
+        // and
+        let temp_dir = tempdir()?;
+
+        // and placements
+        let (test_placements_path, test_placements_file_name) = build_temp_csv_file(&temp_dir, "placements-all-pos");
+
+        let mut writer = csv::WriterBuilder::new()
+            .quote_style(QuoteStyle::Always)
+            .from_path(test_placements_path)?;
+
+        writer.serialize(TestEasyEdaPlacementRecord {
+            designator: "R1".to_string(),
+            device: "R_0402_1005Metric".to_string(),
+            value: "330R".to_string(),
+            layer: "T".to_string(),
+            x: Decimal::from(10),
+            y: Decimal::from(110),
+            rotation: dec!(359.999),
+
+        })?;
+
+        writer.flush()?;
+
+        let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
+
+        // and global substitutions
+        let (test_global_substitutions_path, test_global_substitutions_file_name) = build_temp_csv_file(&temp_dir, "global-substitutions");
+
+        let mut writer = csv::WriterBuilder::new()
+            .quote_style(QuoteStyle::Always)
+            .from_path(test_global_substitutions_path)?;
+
+        writer.serialize(TestEasyEdaSubstitutionRecord {
+            eda: "EasyEda".to_string(),
+            device_pattern: "R_0402_1005Metric".to_string(),
+            value_pattern: "330R".to_string(),
+            device: "R_0402_1005Metric".to_string(),
+            value: "330R 1/16W 5%".to_string(),
+        })?;
+
+        writer.flush()?;
+
+        let substitutions_arg = format!("--substitutions {}",
+            test_global_substitutions_file_name.to_str().unwrap(),
+        );
+
+        // and parts
+        let (test_parts_path, test_parts_file_name) = build_temp_csv_file(&temp_dir, "parts");
+
+        let mut writer = csv::WriterBuilder::new()
+            .quote_style(QuoteStyle::Always)
+            .from_path(test_parts_path)?;
+
+        writer.serialize(TestPartRecord {
+            manufacturer: "RES_MFR1".to_string(),
+            mpn: "RES1".to_string(),
+        })?;
+
+        writer.flush()?;
+
+        let parts_arg = format!("--parts {}", test_parts_file_name.to_str().unwrap());
+
+        // and part mappings
+        let (test_part_mappings_path, test_part_mappings_file_name) = build_temp_csv_file(&temp_dir, "part_mappings");
+
+        let mut writer = csv::WriterBuilder::new()
+            .quote_style(QuoteStyle::Always)
+            .from_path(test_part_mappings_path)?;
+
+        // and a mapping for a resistor
+        writer.serialize(TestPartMappingRecord {
+            device: Some("R_0402_1005Metric".to_string()),
+            value: Some("330R 1/16W 5%".to_string()),
+            // maps to
+            manufacturer: "RES_MFR1".to_string(),
+            mpn: "RES1".to_string(),
+            ..TestPartMappingRecord::easyeda_defaults()
+        })?;
+
+        writer.flush()?;
+
+        let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
+
+        let (test_csv_output_path, test_csv_output_file_name) = build_temp_csv_file(&temp_dir, "output");
+        let csv_output_arg = format!("--output {}", test_csv_output_file_name.to_str().unwrap());
+
+        // and
+        let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
+        let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
+
+        // and
+        let expected_part_mapping_tree = indoc! {"
+            Mapping Result
+            └── R1 (device: 'R_0402_1005Metric', value: '330R')
+                └── Substituted (device: 'R_0402_1005Metric', value: '330R 1/16W 5%'), by (device_pattern: 'R_0402_1005Metric', value_pattern: '330R')
+                    └── manufacturer: 'RES_MFR1', mpn: 'RES1' (Auto-selected)
+        "};
+
+        // and
+        let expected_csv_content = indoc! {r#"
+            "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
+            "R1","RES_MFR1","RES1","true","Top","10","110","-0.001"
+        "#}.to_string();
+
+        // when
+        cmd.args(prepare_args(vec![
+            trace_log_arg.as_str(),
+            "build",
+            "--eda easyeda",
+            placements_arg.as_str(),
+            parts_arg.as_str(),
+            part_mappings_arg.as_str(),
+            csv_output_arg.as_str(),
+            substitutions_arg.as_str(),
+        ]))
+            // then
+            .assert()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"))
+            .success();
+
+        // and
+        let trace_content: String = read_to_string(test_trace_log_path.clone())?;
+        println!("{}", trace_content);
+
+        let expected_substitutions_file_1_message = format!("Loaded 1 substitution rules from {}\n", test_global_substitutions_file_name.to_str().unwrap());
+
+        assert_contains_inorder!(trace_content, [
+            "Loaded 1 placements\n",
+            expected_substitutions_file_1_message.as_str(),
+            "Loaded 1 parts\n",
+            "Assembly variant: Default\n",
+            "Ref_des list: \n",
+            "Matched 1 placements for assembly variant\n",
+            expected_part_mapping_tree,
+        ]);
+
+        // and
+        let csv_output_file = assert_fs::NamedTempFile::new(test_csv_output_path).unwrap();
+        let csv_content = read_to_string(csv_output_file)?;
+        println!("{}", csv_content);
+
+        assert_csv_content(csv_content, expected_csv_content);
+
+        Ok(())
+    }
+
+    #[test]
     fn version() {
         // given
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
@@ -663,6 +814,24 @@ mod tests {
 
     #[derive(Debug, serde::Serialize)]
     #[serde(rename_all(serialize = "PascalCase"))]
+    struct TestEasyEdaPlacementRecord {
+        designator: String,
+        device: String,
+        value: String,
+        layer: String,
+        #[serde(rename(serialize = "Mid X"))]
+        x: Decimal,
+        #[serde(rename(serialize = "Mid Y"))]
+        y: Decimal,
+        /// Positive values indicate anti-clockwise rotation.
+        /// Range is >=0 to 359.999
+        /// Rounding occurs on the 4th decimal, e.g. 359.9994 rounds to 359.999 and 359.995 rounds to 360, then gets converted to 0.
+        rotation: Decimal,
+    }
+
+
+    #[derive(Debug, serde::Serialize)]
+    #[serde(rename_all(serialize = "PascalCase"))]
     struct TestPartRecord {
         manufacturer: String,
         mpn: String,
@@ -694,6 +863,16 @@ mod tests {
         val_pattern: String,
         package: String,
         val: String,
+    }
+
+    #[derive(Debug, serde::Serialize)]
+    #[serde(rename_all(serialize = "PascalCase"))]
+    struct TestEasyEdaSubstitutionRecord {
+        eda: String,
+        device_pattern: String,
+        value_pattern: String,
+        device: String,
+        value: String,
     }
 }
 
@@ -754,7 +933,7 @@ mod help {
 
             Options:
                   --eda <EDA>
-                      EDA tool [possible values: diptrace, kicad]
+                      EDA tool [possible values: diptrace, kicad, easyeda]
                   --load-out <SOURCE>
                       Load-out source
                   --placements <SOURCE>

@@ -231,6 +231,7 @@ fn eda_fields_names(eda: &EdaTool) -> &'static [&'static str] {
     match eda {
         EdaTool::DipTrace => &["name", "value"],
         EdaTool::KiCad => &["package", "val"],
+        EdaTool::EasyEda => &["device", "value"],
     }
 }
 
@@ -239,6 +240,8 @@ fn csv_eda_tool_value_to_eda_tool(eda: &String) -> Option<EdaTool> {
         Some(EdaTool::DipTrace)
     } else if eda.to_upper_camel_case().eq("KiCad") {
         Some(EdaTool::KiCad)
+    } else if eda.to_upper_camel_case().eq("EasyEda") {
+        Some(EdaTool::EasyEda)
     } else {
         None
     }

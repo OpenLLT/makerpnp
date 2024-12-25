@@ -37,7 +37,7 @@ Currently, it's thought that the software has these main components:
 * Machine operator UI - for machine configuration, job setup, and job operations.  feeders, cameras, head/nozzle/tool
   control, integrates with the machine control and planner components.  
 * Planner UI - used to manage assembly projects, can be used without a pick-and-place machine, can generates artifacts
-  usable by the operator UI (jobs), with EDA support (KiCad, Diptrace, etc).
+  usable by the operator UI (jobs), with EDA support (KiCad, Diptrace, EasyEda, etc).
 
 If you're familiar with 3D printing, you can think of the Planner as the 'slicer', the operator UI as the 3D printer's
 front panel (touchscreen/buttons/display), and Machine control is a bit like the firmware, but not, since the machine
