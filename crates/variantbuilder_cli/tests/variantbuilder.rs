@@ -1,6 +1,10 @@
 #[macro_use]
 extern crate util;
 
+use std::fs::read_to_string;
+use std::path::PathBuf;
+use thiserror::__private::AsDisplay;
+
 #[cfg(test)]
 mod tests {
     use std::fs::read_to_string;
@@ -16,7 +20,27 @@ mod tests {
     use stores::part_mappings::test::TestPartMappingRecord;
     use util::test::{build_temp_csv_file, build_temp_file, prepare_args, print};
     use stores::test::load_out_builder::TestLoadOutRecord;
+    use crate::test_helpers::{dump_args, dump_file};
 
+    /// This functional test tests the following:
+    /// 
+    /// * cli argument parsing
+    /// * placement file parsing (diptrace)
+    /// * global and assembly substitution file parsing and application order of substitutions
+    /// * load-out file parsing and matching of placements to load-out
+    /// * parts file parsing
+    /// * parts mappings file parsing
+    /// * assembly rules file parsing
+    /// * placement to parts using substitutions, loadouts, and rules.
+    /// * human-readable output generation, including mapping tree
+    /// * normalized placements file generation, suitable for use with the `planner` app.
+    ///
+    /// Note: it was written before the migration to crux, arguably some of this test could be moved
+    /// into the `variantbuilder_app` crate, leaving behind only the CLI specific tests; but then
+    /// there would not be a full functional test of the CLI + Crux APP integration...
+    /// 
+    /// There are tests for other EDA tools which are similar, but they are essentially cut-down
+    /// versions of this test, focussing only on the EDA tool differences.
     #[test]
     fn build() -> Result<(), std::io::Error> {
         // given
@@ -30,7 +54,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_placements_path)?;
+            .from_path(test_placements_path.clone())?;
 
         writer.serialize(TestDiptracePlacementRecord {
             ref_des: "R1".to_string(),
@@ -117,6 +141,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("placements", test_placements_path.clone())?;
+
         let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
 
         // and per-assembly-variant substitutions
@@ -124,7 +150,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_assembly_substitutions_path)?;
+            .from_path(test_assembly_substitutions_path.clone())?;
 
         writer.serialize(TestDiptraceSubstitutionRecord {
             eda: "DipTrace".to_string(),
@@ -136,12 +162,15 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("assembly substitutions", test_assembly_substitutions_path.clone())?;
+
+
         // and global substitutions
         let (test_global_substitutions_path, test_global_substitutions_file_name) = build_temp_csv_file(&temp_dir, "global-substitutions");
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_global_substitutions_path)?;
+            .from_path(test_global_substitutions_path.clone())?;
 
         writer.serialize(TestDiptraceSubstitutionRecord {
             eda: "DipTrace".to_string(),
@@ -160,6 +189,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("global substitutions", test_placements_path.clone())?;
+
         let substitutions_arg = format!("--substitutions {},{}",
                                         test_assembly_substitutions_file_name.to_str().unwrap(),
                                         test_global_substitutions_file_name.to_str().unwrap(),
@@ -170,7 +201,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_load_out_path)?;
+            .from_path(test_load_out_path.clone())?;
 
         writer.serialize(TestLoadOutRecord {
             reference: "FEEDER_1".to_string(),
@@ -192,6 +223,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("load-out", test_load_out_path.clone())?;
+
         let load_out_arg = format!("--load-out {}", test_load_out_file_name.to_str().unwrap());
 
         // and parts
@@ -199,7 +232,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_parts_path)?;
+            .from_path(test_parts_path.clone())?;
 
         writer.serialize(TestPartRecord {
             manufacturer: "CONN_MFR1".to_string(),
@@ -240,6 +273,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("parts", test_parts_path.clone())?;
+
         let parts_arg = format!("--parts {}", test_parts_file_name.to_str().unwrap());
 
         // and part mappings
@@ -247,7 +282,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_part_mappings_path)?;
+            .from_path(test_part_mappings_path.clone())?;
 
         // and a mapping for a resistor
         writer.serialize(TestPartMappingRecord {
@@ -333,6 +368,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("part mappings", test_part_mappings_path.clone())?;
+
         let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
 
         // and assembly-rules
@@ -340,7 +377,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_assembly_rule_path)?;
+            .from_path(test_assembly_rule_path.clone())?;
 
         writer.serialize(TestAssemblyRuleRecord {
             ref_des: "D1".to_string(),
@@ -349,6 +386,8 @@ mod tests {
         })?;
 
         writer.flush()?;
+
+        dump_file("assembly rules", test_assembly_rule_path.clone())?;
 
         let assembly_rules_arg = format!("--assembly-rules {}", test_assembly_rule_file_name.to_str().unwrap());
 
@@ -402,8 +441,8 @@ mod tests {
         let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
         let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
 
-        // when
-        cmd.args(prepare_args(vec![
+        // and
+        let args = prepare_args(vec![
             trace_log_arg.as_str(),
             "build",
             "--eda diptrace",
@@ -418,7 +457,11 @@ mod tests {
             "Variant_1",
             "--ref-des-list R1,R3,R4,D1,C1,J1,TP1,TP2",
             "--ref-des-disable-list TP1,TP2",
-        ]))
+        ]);
+        dump_args(&args);
+        
+        // when
+        cmd.args(args)
             // then
             .assert()
             .stderr(print("stderr"))
@@ -457,13 +500,14 @@ mod tests {
 
         Ok(())
     }
-
+    
     fn assert_csv_content(csv_content: String, expected_csv_content: String) {
         if let Some(case) = predicate::str::diff(expected_csv_content).find_case(false, csv_content.as_str()) {
             panic!("Unexpected CSV content\n{}", case.tree());
         }
     }
 
+    /// See `build` test, this test is focussed on Kicad specifics
     #[test]
     fn build_kicad_using_default_assembly_variant() -> Result<(), std::io::Error> {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
@@ -476,7 +520,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_placements_path)?;
+            .from_path(test_placements_path.clone())?;
 
         writer.serialize(TestKiCadPlacementRecord {
             ref_des: "R1".to_string(),
@@ -491,6 +535,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("placements", test_placements_path.clone())?;
+
         let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
 
         // and global substitutions
@@ -498,7 +544,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_global_substitutions_path)?;
+            .from_path(test_global_substitutions_path.clone())?;
 
         writer.serialize(TestKiCadSubstitutionRecord {
             eda: "KiCad".to_string(),
@@ -510,6 +556,9 @@ mod tests {
 
         writer.flush()?;
 
+
+        dump_file("global substitutions", test_placements_path.clone())?;
+
         let substitutions_arg = format!("--substitutions {}",
             test_global_substitutions_file_name.to_str().unwrap(),
         );
@@ -519,7 +568,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_parts_path)?;
+            .from_path(test_parts_path.clone())?;
 
         writer.serialize(TestPartRecord {
             manufacturer: "RES_MFR1".to_string(),
@@ -528,6 +577,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("parts", test_parts_path.clone())?;
+
         let parts_arg = format!("--parts {}", test_parts_file_name.to_str().unwrap());
 
         // and part mappings
@@ -535,7 +586,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_part_mappings_path)?;
+            .from_path(test_part_mappings_path.clone())?;
 
         // and a mapping for a resistor
         writer.serialize(TestPartMappingRecord {
@@ -548,6 +599,8 @@ mod tests {
         })?;
 
         writer.flush()?;
+
+        dump_file("part mappings", test_part_mappings_path.clone())?;
 
         let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
 
@@ -572,8 +625,8 @@ mod tests {
             "R1","RES_MFR1","RES1","true","Top","10","110","-179.999"
         "#}.to_string();
 
-        // when
-        cmd.args(prepare_args(vec![
+        // and 
+        let args = prepare_args(vec![
             trace_log_arg.as_str(),
             "build",
             "--eda kicad",
@@ -582,7 +635,11 @@ mod tests {
             part_mappings_arg.as_str(),
             csv_output_arg.as_str(),
             substitutions_arg.as_str(),
-        ]))
+        ]);
+        dump_args(&args);
+
+        // when
+        cmd.args(args)
             // then
             .assert()
             .stderr(print("stderr"))
@@ -615,6 +672,7 @@ mod tests {
         Ok(())
     }
 
+    /// See `build` test, this test is focussed on EasyEDA specifics
     #[test]
     fn build_easyeda_using_default_assembly_variant() -> Result<(), std::io::Error> {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_variantbuilder_cli"));
@@ -628,7 +686,7 @@ mod tests {
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
             .delimiter(b'\t')
-            .from_path(test_placements_path)?;
+            .from_path(test_placements_path.clone())?;
 
         writer.serialize(TestEasyEdaPlacementRecord {
             designator: "R1".to_string(),
@@ -641,6 +699,10 @@ mod tests {
         })?;
 
         writer.flush()?;
+        
+        dump_file("placements", test_placements_path.clone())?;
+
+        // FIXME EasyESAPro doesn't quote the headers
 
         // FIXME EasyEDAPro (at least on OSX) exports pick-and-place files in UTF-16LE format.
         //       However the CSV library used only supports UTF-8, so we need to transcode the
@@ -658,7 +720,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_global_substitutions_path)?;
+            .from_path(test_global_substitutions_path.clone())?;
 
         writer.serialize(TestEasyEdaSubstitutionRecord {
             eda: "EasyEda".to_string(),
@@ -670,6 +732,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("global substitutions", test_placements_path.clone())?;
+
         let substitutions_arg = format!("--substitutions {}",
             test_global_substitutions_file_name.to_str().unwrap(),
         );
@@ -679,7 +743,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_parts_path)?;
+            .from_path(test_parts_path.clone())?;
 
         writer.serialize(TestPartRecord {
             manufacturer: "RES_MFR1".to_string(),
@@ -688,6 +752,8 @@ mod tests {
 
         writer.flush()?;
 
+        dump_file("parts", test_parts_path.clone())?;
+
         let parts_arg = format!("--parts {}", test_parts_file_name.to_str().unwrap());
 
         // and part mappings
@@ -695,7 +761,7 @@ mod tests {
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_part_mappings_path)?;
+            .from_path(test_part_mappings_path.clone())?;
 
         // and a mapping for a resistor
         writer.serialize(TestPartMappingRecord {
@@ -708,6 +774,8 @@ mod tests {
         })?;
 
         writer.flush()?;
+
+        dump_file("part mappings", test_part_mappings_path.clone())?;
 
         let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
 
@@ -732,8 +800,8 @@ mod tests {
             "R1","RES_MFR1","RES1","true","Top","10","110","-0.001"
         "#}.to_string();
 
-        // when
-        cmd.args(prepare_args(vec![
+        // and
+        let args = prepare_args(vec![
             trace_log_arg.as_str(),
             "build",
             "--eda easyeda",
@@ -742,7 +810,11 @@ mod tests {
             part_mappings_arg.as_str(),
             csv_output_arg.as_str(),
             substitutions_arg.as_str(),
-        ]))
+        ]);
+        dump_args(&args);
+
+        // when
+        cmd.args(args)
             // then
             .assert()
             .stderr(print("stderr"))
@@ -774,7 +846,7 @@ mod tests {
 
         Ok(())
     }
-
+    
     #[test]
     fn version() {
         // given
@@ -888,6 +960,7 @@ mod tests {
     }
 }
 
+#[cfg(test)]
 mod help {
     use std::process::Command;
     use assert_cmd::prelude::OutputAssertExt;
@@ -987,5 +1060,22 @@ mod help {
             .success()
             .stderr(print("stderr"))
             .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+    }
+}
+#[cfg(test)]
+mod test_helpers {
+    use std::fs::read_to_string;
+    use std::path::PathBuf;
+    use thiserror::__private::AsDisplay;
+
+    pub fn dump_file(title: &str, path: PathBuf) -> Result<(), std::io::Error> {
+        let content: String = read_to_string(path.clone())?;
+        println!("file: {}\npath: {}\ncontent:\n{}", title, path.clone().as_display(), content);
+
+        Ok(())
+    }
+
+    pub fn dump_args(args: &Vec<&str>) {
+        println!("args: {:?}", args);
     }
 }
