@@ -21,7 +21,6 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
     let button_padding = Dimension::Lp(Lp::points(4));
 
     let home_button = Localize::new("toolbar-button-home")
-        .into_label()
         .into_button()
         .on_click({
             let message = toolbar_message.clone();
@@ -30,7 +29,6 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
         .with(&IntrinsicPadding, button_padding);
 
     let new_button = Localize::new("toolbar-button-new")
-        .into_label()
         .into_button()
         .on_click({
             let message = toolbar_message.clone();
@@ -39,7 +37,6 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
         .with(&IntrinsicPadding, button_padding);
 
     let open_button = Localize::new("toolbar-button-open")
-        .into_label()
         .into_button()
         .on_click({
             let message = toolbar_message.clone();
@@ -49,7 +46,6 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
 
 
     let close_all_button = Localize::new("toolbar-button-close-all")
-        .into_label()
         .into_button()
         .on_click({
             let message = toolbar_message.clone();

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use cushy::{App, Application};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
+use cushy::localization::Localization;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{IntoWidgetList, MakeWidget};
@@ -84,11 +85,19 @@ fn main(app: &mut App) -> cushy::Result {
 
     let language_identifier: Dynamic<LanguageIdentifier> = Dynamic::new(languages.first().unwrap().clone());
 
-    let translations = app.cushy().translations();
-    translations
-        .add(en_us_locale, include_str!("../assets/translations/en-US/translations.ftl").to_owned());
-    translations
-        .add(es_es_locale, include_str!("../assets/translations/es-ES/translations.ftl").to_owned());
+    app.cushy().localizations().add_default(
+        Localization::for_language(
+            "en-US", 
+            include_str!("../assets/translations/en-US/translations.ftl").to_owned()
+        ).unwrap()
+    );
+
+    app.cushy().localizations().add(
+        Localization::for_language(
+            "es-ES",
+            include_str!("../assets/translations/es-ES/translations.ftl").to_owned()
+        ).unwrap()
+    );
 
     let message: Dynamic<AppMessage> = Dynamic::default();
 
@@ -169,7 +178,7 @@ fn main(app: &mut App) -> cushy::Result {
             .fit_vertically()
             .fit_horizontally()
             .with(&IntrinsicPadding, Px::new(4))
-            .localized(language_identifier)
+            .localized_in(language_identifier)
             .make_widget()
     )
         .on_close({

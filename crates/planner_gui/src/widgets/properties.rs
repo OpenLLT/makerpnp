@@ -2,9 +2,9 @@ use std::fmt::Debug;
 use cushy::styles::ContainerLevel;
 use cushy::value::{Dynamic, Switchable};
 use cushy::widget::{MakeWidget, WidgetInstance};
-use cushy::widgets::{Grid, Label, Space};
+use cushy::widgets::{Grid, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
-use cushy::widgets::label::{Displayable, DynamicDisplay};
+use cushy::widgets::label::DynamicDisplay;
 
 pub struct PropertiesItem {
     label: WidgetInstance,
@@ -47,11 +47,12 @@ impl Properties {
         self
     }
 
-    pub fn with_header_label<T>(mut self, label: Label<T>) -> Self
+    pub fn with_header_label<T>(mut self, label: T) -> Self
     where
         T: Debug + DynamicDisplay + Send + 'static,
     {
         let properties_header = label
+            .into_label()
             .centered()
             .align_left()
             .contain_level(ContainerLevel::Highest);
@@ -65,11 +66,12 @@ impl Properties {
         self
     }
 
-    pub fn with_footer_label<T>(mut self, label: Label<T>) -> Self
+    pub fn with_footer_label<T>(mut self, label: T) -> Self
     where
         T: Debug + DynamicDisplay + Send + 'static,
     {
         let properties_footer = label
+            .into_label()
             .centered()
             .align_left()
             .contain_level(ContainerLevel::Highest);
@@ -147,7 +149,6 @@ impl PropertiesItem {
                 match value.clone() {
                     Some(value) =>
                         value
-                            .into_label()
                             .make_widget()
                     ,
                     None =>

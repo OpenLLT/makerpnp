@@ -437,7 +437,7 @@ fn make_phase_overview_widget(dyn_overview: &Dynamic<PhaseOverview>) -> impl Mak
     items.push(load_out_source_item);
 
     let pcb_side_item = PropertiesItem::from_field(
-        Localize::new("phase-pcb-side").into_label(),
+        Localize::new("phase-pcb-side"),
         dyn_overview.map_each(|phase_overview|{
             let pcb_side = match phase_overview.pcb_side {
                 PcbSide::Top => Localize::new("pcb-side-top"),
@@ -455,12 +455,11 @@ fn make_phase_overview_widget(dyn_overview: &Dynamic<PhaseOverview>) -> impl Mak
     items.push(process_item);
 
     let properties = Properties::default()
-        .with_header_label(Localize::new("phase-properties-header").into_label())
+        .with_header_label(Localize::new("phase-properties-header"))
         .with_footer_label(
             Localize::new("phase-properties-footer")
                 .arg("count", FluentValue::Number(FluentNumber::from(items.len()))
                 )
-                .into_label()
         )
         .with_items(items);
 

@@ -15,7 +15,7 @@ petgraph = { workspace = true }
 
 #gui
 # not using chusy 'tracing-output' default feature as we initilize tracing in the app.
-cushy = { workspace = true, default-features = false, features = ["roboto-flex", "native-dialogs"]}
+cushy = { workspace = true, default-features = false, features = ["roboto-flex", "native-dialogs", "localization"]}
 
 #i18n
 unic-langid = { workspace = true, features = ["macros"]}
