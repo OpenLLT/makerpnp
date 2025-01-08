@@ -53,6 +53,11 @@ enum AppMessage {
     ToolBarMessage(ToolbarMessage),
     ChooseFile(WindowHandle),
     FileOpened(PathBuf),
+    SaveActive,
+}
+
+enum AppError {
+    None,
 }
 
 struct AppState {
@@ -297,6 +302,21 @@ impl AppState {
                     }
                 }
             }
+            AppMessage::SaveActive => {
+                match self.save_active() {
+                    Some(Ok(message)) => {
+                        Task::done(message)
+                    }
+                    Some(Err(_error)) => {
+                        // TODO improve error handling by using '_error'
+                        Task::none()
+                    }
+                    None => {
+                        // No active tab
+                        Task::none()
+                    }
+                }
+            }
         }
     }
 
@@ -327,6 +347,11 @@ impl AppState {
                 println!("open clicked");
 
                 Task::done(AppMessage::ChooseFile(window))
+            }
+            ToolbarMessage::SaveClicked => {
+                println!("Save clicked");
+                
+                Task::done(AppMessage::SaveActive)
             }
             ToolbarMessage::CloseAllClicked => {
                 println!("close all clicked");
@@ -502,6 +527,26 @@ impl AppState {
             }
         })
             .persist();
+    }
+
+    fn save_active(&self) -> Option<Result<AppMessage, AppError>> {
+        let tab_bar = self.tab_bar.lock();
+        let message = tab_bar.with_active(|tab_key, tab_kind|{
+            match tab_kind {
+                TabKind::Project(_project_tab) => {
+                    Ok(AppMessage::TabMessage(TabMessage::TabKindMessage(
+                        tab_key,
+                        TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(
+                            ProjectMessage::Save
+                        ))
+                    )))
+                }
+                // nothing to do for other tabs
+                _ => Err(AppError::None)
+            }            
+        });
+        
+        message
     }
 }
 

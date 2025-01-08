@@ -15,6 +15,7 @@ pub enum ToolbarMessage {
     HomeClicked,
     NewClicked,
     CloseAllClicked,
+    SaveClicked,
 }
 
 pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_identifier: Dynamic<LanguageIdentifier>, languages: &Vec<LanguageIdentifier>) -> WidgetInstance {
@@ -44,6 +45,14 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
         })
         .with(&IntrinsicPadding, button_padding);
 
+    let save_button = Localize::new("toolbar-button-save")
+        .into_button()
+        .on_click({
+            let message = toolbar_message.clone();
+            move |_event| message.force_set(ToolbarMessage::SaveClicked)
+        })
+        .with(&IntrinsicPadding, button_padding);
+
 
     let close_all_button = Localize::new("toolbar-button-close-all")
         .into_button()
@@ -67,10 +76,11 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
     let language_selector = language_radio_buttons
         .into_columns();
 
-    let toolbar_widgets: [WidgetInstance; 6] = [
+    let toolbar_widgets: [WidgetInstance; 7] = [
         home_button.make_widget(),
         new_button.make_widget(),
         open_button.make_widget(),
+        save_button.make_widget(),
         close_all_button.make_widget(),
         Expand::empty().make_widget(),
         language_selector.make_widget(),

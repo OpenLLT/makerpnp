@@ -1,6 +1,7 @@
 toolbar-button-home = Home
 toolbar-button-new = New
 toolbar-button-open = Open
+toolbar-button-save = Save
 toolbar-button-close-all = Close all
 
 side-bar-header = Sidebar header

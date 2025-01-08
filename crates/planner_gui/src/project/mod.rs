@@ -70,6 +70,8 @@ pub enum ProjectMessage {
     Create,
     Created,
     RequestView(ProjectViewRequest),
+    Save,
+    Saved,
 }
 
 #[derive(Debug, Clone)]
@@ -212,6 +214,15 @@ impl Project {
                     .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
                 ProjectAction::Task(task)
             },
+            ProjectMessage::Save => {
+                let task = self.core_service
+                    .update(Event::Save { });
+                ProjectAction::Task(task)
+            },
+            ProjectMessage::Saved => {
+                info!("Saved project. path: {:?}", self.path);
+                ProjectAction::None
+            }
             ProjectMessage::RequestView(view) => {
                 let event = match view {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},

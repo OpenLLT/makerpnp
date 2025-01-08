@@ -1,6 +1,7 @@
 toolbar-button-home = Inicio
 toolbar-button-new = Nuevo
 toolbar-button-open = Abrir
+toolbar-button-save = Guardar
 toolbar-button-close-all = Cerrar todo
 
 side-bar-header = Encabezado de la barra lateral

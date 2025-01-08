@@ -336,6 +336,21 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
     pub fn activate(&self, tab_key: TabKey) {
         let _previously_active = self.active.lock().replace(tab_key);
     }
+    
+    pub fn active(&self) -> Option<TabKey> {
+        self.active.get()
+    }
+    
+    pub fn with_active<R, F>(&self, with_fn: F) -> Option<R> 
+    where
+        F: FnOnce(TabKey, &mut TK) -> R
+    {
+        self.active.get().map(|tab_key| {
+            let mut tabs = self.tabs.lock();
+            let tab_state = tabs.get_mut(tab_key).unwrap();
+            with_fn(tab_key, &mut tab_state.tab)
+        })
+    }
 
     pub fn update(&mut self, context: &Dynamic<Context>, message: TabMessage<TKM>) -> Action<TabAction<TKA, TK>> {
         match message {
