@@ -216,7 +216,8 @@ impl Project {
             },
             ProjectMessage::Save => {
                 let task = self.core_service
-                    .update(Event::Save { });
+                    .update(Event::Save { })
+                    .chain(Task::done(ProjectMessage::Saved));
                 ProjectAction::Task(task)
             },
             ProjectMessage::Saved => {
