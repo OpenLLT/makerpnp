@@ -563,7 +563,43 @@ impl App for Planner {
                     let mut project_tree = ProjectTreeView::new();
                     
                     let root_node = project_tree.tree.add_node(ProjectTreeItem { name: "Root".to_string(), path: "/".to_string() });
+
+                    let pcbs_node = project_tree.tree.add_node(ProjectTreeItem { name: "PCBs".to_string(), path: "/pcbs".to_string() });
+                    project_tree.tree.add_edge(root_node.clone(), pcbs_node.clone(), ());
+
+                    for (index, pcb) in project.pcbs.iter().enumerate() {
+                        let pcb_node = project_tree.tree.add_node(ProjectTreeItem {
+                            name: format!("{} - {}", index + 1, pcb.name).to_string(),
+                            path: format!("/pcbs/{}", index).to_string()
+                        });
+                        project_tree.tree.add_edge(pcbs_node.clone(), pcb_node, ());
+                    }
+
+                    let unit_assignments_node = project_tree.tree.add_node(ProjectTreeItem { name: "Units".to_string(), path: "/units".to_string() });
+                    project_tree.tree.add_edge(root_node.clone(), unit_assignments_node.clone(), ());
                     
+                    for (index, (path, design_variant)) in project.unit_assignments.iter().enumerate() {
+                        let unit_assignment_node = project_tree.tree.add_node(ProjectTreeItem {
+                            name: format!("{}", path).to_string(),
+                            path: format!("/units/{}", index).to_string()
+                        });
+
+                        project_tree.tree.add_edge(unit_assignments_node.clone(), unit_assignment_node, ());
+                    }
+
+                    let processes_node = project_tree.tree.add_node(ProjectTreeItem { name: "Processes".to_string(), path: "/processes".to_string() });
+                    project_tree.tree.add_edge(root_node.clone(), processes_node.clone(), ());
+
+                    for (index, process) in project.processes.iter().enumerate() {
+                        let process_node = project_tree.tree.add_node(ProjectTreeItem {
+                            name: format!("{}", process.name).to_string(),
+                            path: format!("/processes/{}", index).to_string()
+                        });
+
+                        project_tree.tree.add_edge(processes_node.clone(), process_node, ());
+                    }
+
+
                     let phases_node = project_tree.tree.add_node(ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() });
                     project_tree.tree.add_edge(root_node.clone(), phases_node.clone(), ());
                     
