@@ -8,6 +8,8 @@ side-bar-header = Encabezado de la barra lateral
 side-bar-footer = Pie de página de la barra lateral
 side-bar-item-path = Ruta
 
+project-toolbar-button-add-pcb = Añadir placa
+
 tab-label-home = Inicio
 
 home-banner = Pestaña de inicio

@@ -8,7 +8,7 @@ use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
 use cushy::widgets::list::ListStyle;
 use cushy::widgets::pile::{Focus, Pile, PiledWidget};
-use cushy::widgets::Space;
+use cushy::widgets::{Expand, Space};
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
 use planner_app::{Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
@@ -21,6 +21,9 @@ use fluent_bundle::types::FluentNumber;
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
 use regex::Regex;
 use planner_gui::widgets::properties::{Properties, PropertiesItem};
+use crate::project::toolbar::{make_toolbar, ToolbarMessage};
+
+mod toolbar;
 
 new_key_type! {
     /// A key for a project
@@ -72,6 +75,7 @@ pub enum ProjectMessage {
     RequestView(ProjectViewRequest),
     Save,
     Saved,
+    ToolbarMessage(ToolbarMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -173,8 +177,21 @@ impl Project {
         //      will be dropped at the end of this method, and when it does the widget will be removed from the pile
         //      so we have to hold on to the handle, but doing so required changing this method to accept `&mut self` instead of `&self`
         self.default_content_handle.replace(default_content_handle);
+
+        let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
+        toolbar_message.for_each_cloned({
+            let message = self.message.clone();
+            move |toolbar_message|{
+                message.force_set(ProjectMessage::ToolbarMessage(toolbar_message));
+            }
+        })
+            .persist();
         
-        let content_pane = self.pile.clone()
+        let toolbar = make_toolbar(toolbar_message);
+        
+        let content_pane = toolbar
+            .and(self.pile.clone())
+            .into_rows()
             .expand()
             .contain();
                 
@@ -304,6 +321,11 @@ impl Project {
                     }
                 }
             }
+            ProjectMessage::ToolbarMessage(message) => {
+                debug!("toolbar message: {:?}", message);
+                
+                self.on_toolbar_message(message)
+            }
         };
 
         Action::new(action)
@@ -429,6 +451,18 @@ impl Project {
                 Control::<()>::Continue
             }
         });
+    }
+
+    fn on_toolbar_message(&self, message: ToolbarMessage) -> ProjectAction {
+        
+        match message {
+            ToolbarMessage::None => {}
+            ToolbarMessage::AddPcb => {
+                debug!("AddPcb");
+            }
+        }
+        
+        ProjectAction::None
     }
 }
 

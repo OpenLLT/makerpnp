@@ -8,6 +8,8 @@ side-bar-header = Sidebar header
 side-bar-footer = Sidebar footer
 side-bar-item-path = Path
 
+project-toolbar-button-add-pcb = Add PCB
+
 tab-label-home = Home
 
 home-banner = Home tab
