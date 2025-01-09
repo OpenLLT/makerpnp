@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 use crux_core::App;
@@ -88,16 +88,30 @@ pub struct PlacementsList {
     placements: Vec<Placement>
 }
 
-// FIXME probably this needs 'key' and 'args', instead of 'name' so that the consumer of the tree
-//       item can build an internationalized string using the args.
-//       i.e. defer the 'name' generation to the UI which could use the 'key' to append to a
-//       localization key, and then use the 'args' as values for the localized string generation.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectTreeItem {
-    pub name: String,
+    pub key: String,
+    pub args: HashMap<String, Arg>,
+
     /// "/" = root, paths are "/" separated.
     // FIXME path elements that contain a `/` need to be escaped and un-escaped.  e.g. a phase reference of `top/1`
     pub path: String,
+}
+
+impl Default for ProjectTreeItem {
+    fn default() -> Self {
+        Self {
+            key: "unknown".to_string(),
+            args: HashMap::new(),
+            path: "/".to_string(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
+pub enum Arg {
+    String(String),
+    // Add other types, like 'Number' here as required.
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
@@ -566,40 +580,47 @@ impl App for Planner {
                     
                     let mut project_tree = ProjectTreeView::new();
                     
-                    let root_node = project_tree.tree.add_node(ProjectTreeItem { name: "Root".to_string(), path: "/".to_string() });
+                    let root_node = project_tree.tree.add_node(ProjectTreeItem { key: "root".to_string(), path: "/".to_string(), ..ProjectTreeItem::default() });
 
-                    let pcbs_node = project_tree.tree.add_node(ProjectTreeItem { name: "PCBs".to_string(), path: "/pcbs".to_string() });
+                    let pcbs_node = project_tree.tree.add_node(ProjectTreeItem { key: "pcbs".to_string(), path: "/pcbs".to_string(), ..ProjectTreeItem::default() });
                     project_tree.tree.add_edge(root_node.clone(), pcbs_node.clone(), ());
 
                     for (index, pcb) in project.pcbs.iter().enumerate() {
                         let pcb_node = project_tree.tree.add_node(ProjectTreeItem {
-                            // FIXME this 'name' formatting should be done by the consumer, not here
-                            name: format!("{} ({})", pcb.name, pcb.kind).to_string(),
+                            key: "pcb".to_string(),
+                            args: HashMap::from([
+                                ("name".to_string(), Arg::String(pcb.name.clone())),
+                                ("kind".to_string(), Arg::String(pcb.kind.to_string())),
+                            ]),
                             path: format!("/pcbs/{}", index).to_string()
                         });
                         project_tree.tree.add_edge(pcbs_node.clone(), pcb_node, ());
                     }
 
-                    let unit_assignments_node = project_tree.tree.add_node(ProjectTreeItem { name: "Units".to_string(), path: "/units".to_string() });
+                    let unit_assignments_node = project_tree.tree.add_node(ProjectTreeItem { key: "unit-assignments".to_string(), path: "/units".to_string(), ..ProjectTreeItem::default() });
                     project_tree.tree.add_edge(root_node.clone(), unit_assignments_node.clone(), ());
                     
                     for (index, (path, design_variant)) in project.unit_assignments.iter().enumerate() {
                         let unit_assignment_node = project_tree.tree.add_node(ProjectTreeItem {
-                            // FIXME this 'name' formatting should be done by the consumer, not here
-                            name: format!("{}", path).to_string(),
-                            path: format!("/units/{}", index).to_string()
+                            key: "unit-assignment".to_string(),
+                            args: HashMap::from([
+                                ("name".to_string(), Arg::String(path.to_string()))
+                            ]),
+                            path: format!("/units/{}", index).to_string(),
                         });
 
                         project_tree.tree.add_edge(unit_assignments_node.clone(), unit_assignment_node, ());
                     }
 
-                    let processes_node = project_tree.tree.add_node(ProjectTreeItem { name: "Processes".to_string(), path: "/processes".to_string() });
+                    let processes_node = project_tree.tree.add_node(ProjectTreeItem { key: "processes".to_string(), path: "/processes".to_string(), ..ProjectTreeItem::default() });
                     project_tree.tree.add_edge(root_node.clone(), processes_node.clone(), ());
 
                     for (index, process) in project.processes.iter().enumerate() {
                         let process_node = project_tree.tree.add_node(ProjectTreeItem {
-                            // FIXME this 'name' formatting should be done by the consumer, not here
-                            name: format!("{}", process.name).to_string(),
+                            key: "process".to_string(),
+                            args: HashMap::from([
+                                ("name".to_string(), Arg::String(process.name.to_string()))
+                            ]),
                             path: format!("/processes/{}", index).to_string()
                         });
 
@@ -607,21 +628,24 @@ impl App for Planner {
                     }
 
 
-                    let phases_node = project_tree.tree.add_node(ProjectTreeItem { name: "Phases".to_string(), path: "/phases".to_string() });
+                    let phases_node = project_tree.tree.add_node(ProjectTreeItem { key: "phases".to_string(), path: "/phases".to_string(), ..ProjectTreeItem::default() });
                     project_tree.tree.add_edge(root_node.clone(), phases_node.clone(), ());
                     
                     for (reference, ..) in &project.phases {
                         let phase_node = project_tree.tree.add_node(ProjectTreeItem {
-                            // FIXME this 'name' formatting should be done by the consumer, not here
-                            name: format!("{}", reference).to_string(),
-                            path: format!("/phases/{}", reference).to_string()
+                            key: "phase".to_string(),
+                            args: HashMap::from([
+                                ("reference".to_string(), Arg::String(reference.to_string()))
+                            ]),
+                            path: format!("/phases/{}", reference).to_string(),
                         });
                         project_tree.tree.add_edge(phases_node.clone(), phase_node, ());
                         
                         if add_test_nodes {
                             let test_node = project_tree.tree.add_node(ProjectTreeItem {
-                                name: "Test".to_string(),
-                                path: format!("/phases/{}/test", reference).to_string()
+                                key: "test".to_string(),
+                                path: format!("/phases/{}/test", reference).to_string(),
+                                ..ProjectTreeItem::default()
                             });
                             project_tree.tree.add_edge(phase_node, test_node, ());
                         }
@@ -629,8 +653,9 @@ impl App for Planner {
 
                     if add_test_nodes {
                         let test_node = project_tree.tree.add_node(ProjectTreeItem {
-                            name: "Test".to_string(),
-                            path: "/test".to_string()
+                            key: "test".to_string(),
+                            path: "/test".to_string(),
+                            ..ProjectTreeItem::default()
                         });
                         project_tree.tree.add_edge(root_node.clone(), test_node, ());
                     }

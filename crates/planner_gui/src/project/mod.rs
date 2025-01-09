@@ -11,7 +11,7 @@ use cushy::widgets::pile::{Focus, Pile, PiledWidget};
 use cushy::widgets::{Expand, Space};
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
-use planner_app::{Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
+use planner_app::{Arg, Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
 use planner_gui::task::Task;
@@ -421,9 +421,22 @@ impl Project {
                         let item = &project_tree_view.tree[node];
                         
                         let path = ProjectPath(format!("/project{}", item.path).to_string());
-
+                        
                         let message = self.message.clone();
-                        let node_widget = item.name
+                        
+                        let key = format!("project-explorer-node-{}", item.key);
+
+                        let mut title = Localize::new(key);
+                        
+                        for (key, value) in item.args.iter() {
+                            match value {
+                                Arg::String(value) => {
+                                    title = title.arg(key, value.clone());
+                                }
+                            }
+                        }
+                        
+                        let node_widget = title
                             .to_button()
                             .on_click(move |_event|{
                                 message.force_set(ProjectMessage::Navigate(path.clone()));

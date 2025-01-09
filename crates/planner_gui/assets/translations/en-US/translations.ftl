@@ -25,3 +25,13 @@ phase-process = Process
 
 pcb-side-top = Top
 pcb-side-bottom = Bottom
+
+project-explorer-node-root = Root
+project-explorer-node-phases = Phases
+project-explorer-node-phase = { $reference }
+project-explorer-node-unit-assignments = Unit assignments
+project-explorer-node-unit-assignment = { $name }
+project-explorer-node-pcbs = PCBs
+project-explorer-node-pcb = { $name } ({ $kind })
+project-explorer-node-processes = Processes
+project-explorer-node-process = { $name }
