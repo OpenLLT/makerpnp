@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum PcbSide {
@@ -26,6 +28,15 @@ impl TryFrom<&String> for PcbKind {
             "single" => Ok(PcbKind::Single),
             "panel" => Ok(PcbKind::Panel),
             _ => Err(())
+        }
+    }
+}
+
+impl Display for PcbKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PcbKind::Single => f.write_str("single"),
+            PcbKind::Panel => f.write_str("panel"),
         }
     }
 }
