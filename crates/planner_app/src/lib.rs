@@ -88,6 +88,10 @@ pub struct PlacementsList {
     placements: Vec<Placement>
 }
 
+// FIXME probably this needs 'key' and 'args', instead of 'name' so that the consumer of the tree
+//       item can build an internationalized string using the args.
+//       i.e. defer the 'name' generation to the UI which could use the 'key' to append to a
+//       localization key, and then use the 'args' as values for the localized string generation.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectTreeItem {
     pub name: String,
@@ -569,7 +573,8 @@ impl App for Planner {
 
                     for (index, pcb) in project.pcbs.iter().enumerate() {
                         let pcb_node = project_tree.tree.add_node(ProjectTreeItem {
-                            name: format!("{} - {}", index + 1, pcb.name).to_string(),
+                            // FIXME this 'name' formatting should be done by the consumer, not here
+                            name: format!("{} ({})", pcb.name, pcb.kind).to_string(),
                             path: format!("/pcbs/{}", index).to_string()
                         });
                         project_tree.tree.add_edge(pcbs_node.clone(), pcb_node, ());
@@ -580,6 +585,7 @@ impl App for Planner {
                     
                     for (index, (path, design_variant)) in project.unit_assignments.iter().enumerate() {
                         let unit_assignment_node = project_tree.tree.add_node(ProjectTreeItem {
+                            // FIXME this 'name' formatting should be done by the consumer, not here
                             name: format!("{}", path).to_string(),
                             path: format!("/units/{}", index).to_string()
                         });
@@ -592,6 +598,7 @@ impl App for Planner {
 
                     for (index, process) in project.processes.iter().enumerate() {
                         let process_node = project_tree.tree.add_node(ProjectTreeItem {
+                            // FIXME this 'name' formatting should be done by the consumer, not here
                             name: format!("{}", process.name).to_string(),
                             path: format!("/processes/{}", index).to_string()
                         });
@@ -605,7 +612,8 @@ impl App for Planner {
                     
                     for (reference, ..) in &project.phases {
                         let phase_node = project_tree.tree.add_node(ProjectTreeItem {
-                            name: reference.to_string(),
+                            // FIXME this 'name' formatting should be done by the consumer, not here
+                            name: format!("{}", reference).to_string(),
                             path: format!("/phases/{}", reference).to_string()
                         });
                         project_tree.tree.add_edge(phases_node.clone(), phase_node, ());
