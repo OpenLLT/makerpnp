@@ -387,13 +387,13 @@ impl Project {
         let mut current_node_key: Option<TreeNodeKey> = None;
         
         // FIXME depth_first_search doesn't emit (Discover) nodes in the same order they were added to the tree.
-        //       the order *is* important here.
+        //       the order *is* important here, so we need to replace this with a different tree visitor solution.
         
         depth_first_search(&project_tree_view.tree, Some(start),{
 
             |event| {
 
-                trace!("dfs. event: {:?}", event);
+                debug!("dfs. event: {:?}", event);
                 match event {
                     DfsEvent::Discover(node, _) => {
                         let item = &project_tree_view.tree[node];
