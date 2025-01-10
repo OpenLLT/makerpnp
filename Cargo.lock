@@ -1193,7 +1193,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "cushy"
 version = "0.4.0"
-source = "git+https://github.com/makerpnp/cushy.git?branch=makerpnp#ab085a09e017624118ba579c7907b86dbef3e67f"
+source = "git+https://github.com/makerpnp/cushy.git?tag=20250103-1824#ab085a09e017624118ba579c7907b86dbef3e67f"
 dependencies = [
  "ahash 0.8.11",
  "alot",
