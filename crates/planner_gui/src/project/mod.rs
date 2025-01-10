@@ -7,7 +7,7 @@ use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
 use cushy::widgets::list::ListStyle;
-use cushy::widgets::pile::{Focus, Pile, PiledWidget};
+use cushy::widgets::pile::{Pile, PiledWidget};
 use cushy::widgets::{Expand, Space};
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
@@ -383,7 +383,7 @@ impl Project {
                 state.handle.clone()
             },
         };
-        handle.show(Focus::Unchanged);
+        handle.show();
     }
     
     fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
