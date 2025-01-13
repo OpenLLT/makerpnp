@@ -60,8 +60,9 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
         let window = context.lock().with_context::<WindowHandle, _, _>(|window_handle| {
             window_handle.clone()
         }).unwrap();
-
-
+        
+        // TODO use translations
+        
         let name_label = "Name".into_label()
             .align_left();
         let name_input = Input::new(self.name.clone())
