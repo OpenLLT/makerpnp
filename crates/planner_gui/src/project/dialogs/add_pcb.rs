@@ -5,7 +5,7 @@ use cushy::value::{Dynamic, Source, Validations};
 use cushy::widget::MakeWidget;
 use cushy::widgets::{Grid, Input, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
-
+use crate::project::AddPcbArgs;
 
 #[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum PcbKind {
@@ -61,23 +61,18 @@ impl AddPcbForm {
         }
     }
 
-    pub fn result(&self) -> Result<AddPcbFormResult, ()> {
+    pub fn result(&self) -> Result<AddPcbArgs, ()> {
         if !self.validations.is_valid() {
             return Err(())
         }
         
         let kind = self.kind.get().try_into()?;
     
-        Ok(AddPcbFormResult {
+        Ok(AddPcbArgs {
             name: self.name.get(),
             kind
         })
     }
-}
-
-pub struct AddPcbFormResult {
-    pub name: String,
-    pub kind: planner_app::PcbKind
 }
 
 impl MakeWidget for &AddPcbForm {

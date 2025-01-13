@@ -59,6 +59,12 @@ impl Display for ProjectPath {
 }
 
 #[derive(Debug, Clone)]
+pub struct AddPcbArgs {
+    pub name: String,
+    pub kind: planner_app::PcbKind
+}
+
+#[derive(Debug, Clone)]
 pub enum ProjectMessage {
     None,
     
@@ -68,6 +74,8 @@ pub enum ProjectMessage {
     
     Load,
     Navigate(ProjectPath),
+    
+    AddPcb(AddPcbArgs),
     
     //
     // Internal messages
@@ -342,6 +350,14 @@ impl Project {
                 
                 self.on_toolbar_message(message)
             }
+            ProjectMessage::AddPcb(args) => {
+                debug!("Add Pcb. args: {:?}", args);
+
+                let task = self.core_service
+                    .update(Event::AddPcb { kind: args.kind, name: args.name })
+                    .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
+                ProjectAction::Task(task)
+            }
         };
 
         Action::new(action)
@@ -487,21 +503,20 @@ impl Project {
         match message {
             ToolbarMessage::None => {}
             ToolbarMessage::AddPcb => {
-                self.add_pcb();
+                self.display_add_pcb_modal();
             }
         }
         
         ProjectAction::None
     }
 
-    fn add_pcb(&self) {
-        debug!("AddPcb");
-
+    fn display_add_pcb_modal(&self) {
         let handle = self.add_pcb_modal.as_ref().unwrap();
         let form = AddPcbForm::default();
         handle
             .build_dialog(&form)
             .with_default_button(localize!("form-button-ok"), {
+                let message = self.message.clone();
                 move || {
                     info!("Add pcb. Ok clicked");
                     let validations = form.validations();
@@ -509,10 +524,10 @@ impl Project {
                         false => ShouldClose::Remain,
                         true => {
                             
-                            let result = form.result().unwrap();
-                            info!("Add pcb. name: {}, kind: {}", result.name, result.kind);
+                            let args = form.result().unwrap();
+                            info!("Add pcb. name: {}, kind: {}", args.name, args.kind);
                             
-                            // TODO actually add a PCB using the values from the form
+                            message.force_set(ProjectMessage::AddPcb(args));
                             
                             ShouldClose::Close
                         },
