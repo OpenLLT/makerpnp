@@ -35,3 +35,13 @@ project-explorer-node-pcbs = PCBs
 project-explorer-node-pcb = { $name } ({ $kind })
 project-explorer-node-processes = Procesos
 project-explorer-node-process = { $name }
+
+form-button-ok = Ok
+form-button-cancel = Cancelar
+
+form-add-pcb-input-name = Nombre
+form-add-pcb-choice-kind = Tipo
+form-add-pcb-choice-kind-single = Individual
+form-add-pcb-choice-kind-panel = Panel
+
+form-input-error-empty = No puede estar vacío

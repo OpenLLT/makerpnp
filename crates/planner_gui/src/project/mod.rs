@@ -2,15 +2,18 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
+use cushy::dialog::ShouldClose;
 use cushy::localization::Localize;
+use cushy::localize;
 use cushy::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
 use cushy::widgets::list::ListStyle;
 use cushy::widgets::pile::{Pile, PiledWidget};
-use cushy::widgets::{Expand, Space};
+use cushy::widgets::Space;
+use cushy::widgets::layers::{Modal, ModalHandle};
 use slotmap::new_key_type;
-use tracing::{debug, info, trace};
+use tracing::{debug, info,};
 use planner_app::{Arg, Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
@@ -21,9 +24,11 @@ use fluent_bundle::types::FluentNumber;
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
 use regex::Regex;
 use planner_gui::widgets::properties::{Properties, PropertiesItem};
+use crate::project::dialogs::add_pcb::AddPcbForm;
 use crate::project::toolbar::{make_toolbar, ToolbarMessage};
 
 mod toolbar;
+mod dialogs;
 
 new_key_type! {
     /// A key for a project
@@ -114,6 +119,8 @@ pub struct Project {
     
     default_content_handle: Option<PiledWidget>,
     pile: Pile,
+
+    add_pcb_modal: Option<ModalHandle>,
 }
 
 impl Project {
@@ -131,6 +138,7 @@ impl Project {
             pile: Pile::default(),
             phase_widgets: HashMap::new(),
             default_content_handle: None,
+            add_pcb_modal: None,
         };
 
         (instance, ProjectMessage::Create)
@@ -149,13 +157,17 @@ impl Project {
             pile: Pile::default(),
             phase_widgets: HashMap::new(),
             default_content_handle: None,
+            add_pcb_modal: None,
         };
 
         (instance, ProjectMessage::Load)
     }
 
     pub fn make_widget(&mut self) -> WidgetInstance {
-        
+
+        let modal = Modal::new();
+        self.add_pcb_modal.replace(modal.new_handle());
+
         let project_tree_widget = self.project_tree.lock().make_widget();
         let project_explorer = "Project Explorer".contain()
             .and(project_tree_widget.contain())
@@ -194,11 +206,15 @@ impl Project {
             .into_rows()
             .expand()
             .contain();
-                
-        project_explorer
+        
+        let project_ui = project_explorer
             .and(content_pane)
             .into_columns()
-            .expand_horizontally()
+            .expand_horizontally();
+        
+        project_ui
+            .and(modal)
+            .into_layers()
             .make_widget()
     }
 
@@ -471,11 +487,46 @@ impl Project {
         match message {
             ToolbarMessage::None => {}
             ToolbarMessage::AddPcb => {
-                debug!("AddPcb");
+                self.add_pcb();
             }
         }
         
         ProjectAction::None
+    }
+
+    fn add_pcb(&self) {
+        debug!("AddPcb");
+
+        let handle = self.add_pcb_modal.as_ref().unwrap();
+        let form = AddPcbForm::default();
+        handle
+            .build_dialog(&form)
+            .with_default_button(localize!("form-button-ok"), {
+                move || {
+                    info!("Add pcb. Ok clicked");
+                    let validations = form.validations();
+                    match validations.is_valid() {
+                        false => ShouldClose::Remain,
+                        true => {
+                            
+                            let result = form.result().unwrap();
+                            info!("Add pcb. name: {}, kind: {}", result.name, result.kind);
+                            
+                            // TODO actually add a PCB using the values from the form
+                            
+                            ShouldClose::Close
+                        },
+                    }
+                }
+            })
+            .with_cancel_button(localize!("form-button-cancel"), {
+                || {
+                    info!("Add pcb. Cancel clicked");
+                    ShouldClose::Close
+                }
+            })
+
+            .show();
     }
 }
 
