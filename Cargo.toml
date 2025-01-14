@@ -61,7 +61,7 @@ serde_regex = { version = "1.1.0" }
 crux_core = { version = "0.10.0" }
 
 #gui
-cushy = { git = "https://github.com/makerpnp/cushy.git", tag = "20250114-1001", default-features = false }
+cushy = { git = "https://github.com/makerpnp/cushy.git", tag = "20250114-1432", default-features = false }
 
 #i18n
 unic-langid = "0.9.5"
