@@ -562,7 +562,7 @@ impl App for Planner {
                     let overview = ProjectOverview {
                         name: project.name.clone(),
                     };
-                    caps.view.view(ProjectView::Overview(overview), |_|Event::None);
+                    caps.view.view(ProjectView::Overview(overview));
                     Ok(())
                 };
                 
@@ -660,7 +660,7 @@ impl App for Planner {
                         project_tree.tree.add_edge(root_node.clone(), test_node, ());
                     }
 
-                    caps.view.view(ProjectView::ProjectTree(project_tree), |_|Event::None);    
+                    caps.view.view(ProjectView::ProjectTree(project_tree));    
                     Ok(())
                 };
 
@@ -682,7 +682,7 @@ impl App for Planner {
                         pcb_side: phase.pcb_side.clone(),
                     };
 
-                    caps.view.view(ProjectView::PhaseOverview(phase_overview), |_| Event::None);
+                    caps.view.view(ProjectView::PhaseOverview(phase_overview));
                     Ok(())
                 };
 
@@ -709,7 +709,7 @@ impl App for Planner {
                         placements
                     };
 
-                    caps.view.view(ProjectView::PhasePlacements(phase_placements), |_|Event::None);
+                    caps.view.view(ProjectView::PhasePlacements(phase_placements));
                     Ok(())
                 };
 

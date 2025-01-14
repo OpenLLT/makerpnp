@@ -17,15 +17,11 @@ impl<Ev> ViewRenderer<Ev> {
 }
 impl<Ev: 'static> ViewRenderer<Ev> {
 
-    pub fn view<F>(&self, view: ProjectView, make_event: F)
-    where
-        F: FnOnce(Result<(), ViewRendererError>) -> Ev + Send + Sync + 'static,
-    {
+    pub fn view(&self, view: ProjectView) {
         self.context.spawn({
             let context = self.context.clone();
             async move {
-                let response = run_view(&context, view).await;
-                context.update_app(make_event(response))
+                run_view(&context, view).await;
             }
         });
     }
@@ -35,34 +31,10 @@ impl<Ev: 'static> ViewRenderer<Ev> {
 async fn run_view<Ev: 'static>(
     context: &CapabilityContext<ViewRendererOperation, Ev>,
     view: ProjectView,
-) -> Result<(), ViewRendererError> {
+) {
     context
-        .request_from_shell(ViewRendererOperation::View { view })
+        .notify_shell(ViewRendererOperation::View { view })
         .await
-        .unwrap_set()
-}
-
-
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
-pub enum ViewRendererResult {
-    Ok { response: ViewRendererResponse },
-    Err { error: ViewRendererError },
-}
-
-#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
-pub enum ViewRendererResponse {
-    Ok
-}
-
-impl ViewRendererResult {
-    fn unwrap_set(self) -> Result<(), ViewRendererError> {
-        match self {
-            ViewRendererResult::Ok { response } => match response {
-                ViewRendererResponse::Ok => Ok(()),
-            },
-            ViewRendererResult::Err { error } => Err(error.clone()),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -73,12 +45,5 @@ pub enum ViewRendererOperation {
 }
 
 impl Operation for ViewRendererOperation {
-    type Output = ViewRendererResult;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Error)]
-#[serde(rename_all = "camelCase")]
-pub enum ViewRendererError {
-    #[error("other error: {message}")]
-    Other { message: String },
+    type Output = ();
 }
