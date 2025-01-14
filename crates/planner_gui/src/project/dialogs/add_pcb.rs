@@ -1,7 +1,7 @@
 use cushy::figures::units::Px;
-use cushy::localize;
+use cushy::{localize, MaybeLocalized};
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Dynamic, Source, Validations};
+use cushy::value::{Dynamic, IntoValue, Source, Validations, Value};
 use cushy::widget::MakeWidget;
 use cushy::widgets::{Grid, Input, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
@@ -40,22 +40,18 @@ impl AddPcbForm {
         &self.validations
     }
     
-    fn validate_name(name: &String) -> Result<(), &'static str> {
+    fn validate_name(name: &String) -> Result<(), Value<MaybeLocalized>> {
         if name.is_empty() {
-            // FIXME requires support for localization on forms
-            //Err(localize!("form-input-error-empty"))
-            Err("Cannot be empty")
+            Err(localize!("form-input-error-empty").into_value())
         } else {
             Ok(())
         }
     }
     
-    fn validate_pcb_kind(kind: &PcbKind) -> Result<(), &'static str> {
+    fn validate_pcb_kind(kind: &PcbKind) -> Result<(), Value<MaybeLocalized>> {
         match kind {
             PcbKind::None => {
-                // FIXME requires support for localization on forms
-                //Err(localize!("form-input-choice-empty"))
-                Err("Choose an option")
+                Err(localize!("form-input-choice-empty").into_value())
             },
             _ => Ok(())
         }
@@ -87,9 +83,7 @@ impl MakeWidget for &AddPcbForm {
             //.placeholder(localize!("form-add-pcb-input-name-placeholder"))
             .placeholder("PCB name (e.g. 'default')")
             .validation(validations.validate(&self.name.clone(), AddPcbForm::validate_name))
-            // FIXME requires support for localization on forms
-            //.hint("form-field-required");
-            .hint("* required");
+            .hint(localize!("form-field-required"));
 
         let name_row = (name_label, name_input);
 
@@ -112,9 +106,7 @@ impl MakeWidget for &AddPcbForm {
             )
             .into_columns()
             .validation(self.validations.validate(&self.kind, AddPcbForm::validate_pcb_kind))
-            // FIXME requires support for localization on forms
-            //.hint("form-field-required");
-            .hint("* required");
+            .hint(localize!("form-field-required"));
         
         let kind_row = (kind_label, kind_choices);
 

@@ -44,4 +44,7 @@ form-add-pcb-choice-kind = Kind
 form-add-pcb-choice-kind-single = Single
 form-add-pcb-choice-kind-panel = Panel
 
+form-field-required = * Required
+
 form-input-error-empty = Cannot be empty
+form-input-choice-empty = Choose an option
