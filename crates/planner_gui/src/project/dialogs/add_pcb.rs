@@ -79,9 +79,7 @@ impl MakeWidget for &AddPcbForm {
         let name_label = localize!("form-add-pcb-input-name")
             .align_left();
         let name_input = Input::new(self.name.clone())
-            // FIXME requires support for localization on forms
-            //.placeholder(localize!("form-add-pcb-input-name-placeholder"))
-            .placeholder("PCB name (e.g. 'default')")
+            .placeholder(localize!("form-add-pcb-input-name-placeholder"))
             .validation(validations.validate(&self.name.clone(), AddPcbForm::validate_name))
             .hint(localize!("form-field-required"));
 

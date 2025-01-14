@@ -40,6 +40,8 @@ form-button-ok = Ok
 form-button-cancel = Cancelar
 
 form-add-pcb-input-name = Nombre
+form-add-pcb-input-name-placeholder = Nombre de PCB (por ejemplo, 'predeterminado')
+
 form-add-pcb-choice-kind = Tipo
 form-add-pcb-choice-kind-single = Individual
 form-add-pcb-choice-kind-panel = Panel
