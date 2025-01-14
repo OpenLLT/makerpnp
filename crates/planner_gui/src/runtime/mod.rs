@@ -1,7 +1,5 @@
 use std::future::Future;
 use std::marker::PhantomData;
-use std::thread::sleep;
-use std::time::Duration;
 use futures::channel::mpsc;
 use futures::{select, Sink, Stream, StreamExt};
 use futures::stream::{BoxStream, FusedStream};
@@ -48,22 +46,7 @@ where
 
         let message = self.sender.clone();
         let future =
-            stream.map(|item|{
-                // FIXME making the thread sleep fixes missing stream items, no idea why!
-                //       without this items in the stream are lost
-                //       additionally in release mode, or when debug logging is disabled, using a shorter period
-                //       e.g. `from_micros(1)` does not work around the issue.
-                //       In the current code base, the issue can be seen in the UI, commenting out
-                //       the `sleep` call will cause the app to miss the processing of the 
-                //       ProjectMessage::RequestView(ProjectViewRequest::ProjectOverview))
-                //       See `Project::update` where it handles `ProjectMessage::Loaded` and calls
-                //       `.update(Event::RequestOverviewView {})`.  The core receives the event, but
-                //       the task generated via `app_core::process_effect`'s `Effect::ViewRenderer`
-                //       handler is lost.
-                sleep(Duration::from_millis(1));
-                
-                Ok(item)
-            }).forward(message).map(|result| match result {
+            stream.map(Ok).forward(message).map(|result| match result {
                 Ok(()) => (),
                 Err(error) => {
                     println!("Stream unable to complete, cause: {error}");
