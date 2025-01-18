@@ -13,12 +13,12 @@ use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::localization::Localization;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Destination, Dynamic, Source};
+use cushy::value::{Destination, Dynamic, DynamicRead, Source};
 use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::window::{PendingWindow, WindowHandle};
 use slotmap::SlotMap;
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -119,14 +119,17 @@ fn main(app: &mut App) -> cushy::Result {
     let projects = Dynamic::new(SlotMap::default());
 
     let tab_message = Dynamic::default();
-    tab_message.for_each_cloned({
+    let tab_message_reader = tab_message.create_reader();
+    std::thread::spawn({
         let message = message.clone();
-        move |tab_message|{
+        move || loop {
+            let tab_message = tab_message_reader.get();
+            debug!("tab_message: {:?}", tab_message);
             message.force_set(AppMessage::TabMessage(tab_message));
+            tab_message_reader.block_until_updated();
         }
-    })
-        .persist();
-
+    });
+    
     let tab_bar = Dynamic::new(TabBar::new(&tab_message));
 
     let mut context = Context::default();
@@ -145,13 +148,17 @@ fn main(app: &mut App) -> cushy::Result {
     };
 
     let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
-    toolbar_message.for_each_cloned({
+    let toolbar_message_reader = toolbar_message.create_reader();
+    std::thread::spawn({
         let message = message.clone();
-        move |toolbar_message|{
+        move || loop {
+            let toolbar_message = toolbar_message_reader.get();
+            debug!("toolbar_message: {:?}", toolbar_message);
+
             message.force_set(AppMessage::ToolBarMessage(toolbar_message));
+            toolbar_message_reader.block_until_updated();
         }
-    })
-        .persist();
+    });
 
     let toolbar = toolbar::make_toolbar(toolbar_message, language_identifier.clone(), &languages);
 
@@ -161,19 +168,21 @@ fn main(app: &mut App) -> cushy::Result {
     ];
 
     let dyn_app_state = Dynamic::new(app_state);
+    let message_reader = message.create_reader();
+    std::thread::spawn({
+        let dyn_app_state = dyn_app_state.clone();
+        move || loop {
+            let message = message_reader.get();
+            debug!("app message: {:?}", message);
 
-    message
-        .for_each_cloned({
-            let dyn_app_state = dyn_app_state.clone();
-            move |message|{
-                let task = dyn_app_state.lock().update(message);
-
-                if let Some(stream) = task::into_stream(task) {
-                    runtime.run(stream);
-                }
+            let task = dyn_app_state.lock().update(message);
+    
+            if let Some(stream) = task::into_stream(task) {
+                runtime.run(stream);
             }
-        })
-        .persist();
+            message_reader.block_until_updated();
+        }
+    });
 
     let ui = pending.with_root(
         ui_elements
@@ -369,20 +378,21 @@ impl AppState {
         let tab_key = self.tab_bar.lock()
             .add_tab(&self.context, TabKind::New(NewTab::new(new_tab_message.clone())));
 
-        new_tab_message.for_each_cloned({
+        let new_tab_message_reader = new_tab_message.create_reader();
+        std::thread::spawn({
             let message = self.message.clone();
-            move |new_tab_message| {
-                message.force_set(
-                    AppMessage::TabMessage(
-                        TabMessage::TabKindMessage(
-                            tab_key,
-                            TabKindMessage::NewTabMessage(new_tab_message)
-                        )
+            move || loop {
+                let new_tab_message = new_tab_message_reader.get();
+                debug!("new_tab_message: {:?}", new_tab_message);
+                message.force_set(AppMessage::TabMessage(
+                    TabMessage::TabKindMessage(
+                        tab_key,
+                        TabKindMessage::NewTabMessage(new_tab_message)
                     )
-                );
+                ));
+                new_tab_message_reader.block_until_updated();
             }
-        })
-            .persist();
+        });
     }
 
     fn on_tab_action(&mut self, action: Action<TabAction<TabKindAction, TabKind>>) -> Task<AppMessage> {
@@ -501,32 +511,35 @@ impl AppState {
     }
 
     fn create_project_tab_mapping(&self, project_tab_message: Dynamic<ProjectTabMessage>, tab_key: TabKey) {
-        project_tab_message.for_each_cloned({
+
+        let project_tab_message_reader = project_tab_message.create_reader();
+        std::thread::spawn({
             let message = self.message.clone();
-            move |project_tab_message| {
-                message.force_set(
-                    AppMessage::TabMessage(
-                        TabMessage::TabKindMessage(
-                            tab_key,
-                            TabKindMessage::ProjectTabMessage(project_tab_message)
-                        )
+            move || loop {
+                let project_tab_message = project_tab_message_reader.get();
+                debug!("project_tab_message: {:?}", project_tab_message);
+                message.force_set(AppMessage::TabMessage(
+                    TabMessage::TabKindMessage(
+                        tab_key,
+                        TabKindMessage::ProjectTabMessage(project_tab_message)
                     )
-                );
+                ));
+                project_tab_message_reader.block_until_updated();
             }
-        })
-            .persist();
+        });
     }
 
     fn create_project_mapping(&self, project_message: Dynamic<ProjectMessage>, project_tab_message: Dynamic<ProjectTabMessage>) {
-        project_message.for_each_cloned({
+        let project_message_reader = project_message.create_reader();
+        std::thread::spawn({
             let message = project_tab_message.clone();
-            move |project_message| {
-                message.force_set(
-                    ProjectTabMessage::ProjectMessage(project_message)
-                );
+            move || loop {
+                let project_message = project_message_reader.get();
+                debug!("project_message: {:?}", project_message);
+                message.force_set(ProjectTabMessage::ProjectMessage(project_message));
+                project_message_reader.block_until_updated();
             }
-        })
-            .persist();
+        });
     }
 
     fn save_active(&self) -> Option<Result<AppMessage, AppError>> {

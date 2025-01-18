@@ -24,6 +24,7 @@ use fluent_bundle::types::FluentNumber;
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
 use regex::Regex;
 use planner_gui::widgets::properties::{Properties, PropertiesItem};
+use crate::app_tabs::project::ProjectTabMessage;
 use crate::project::dialogs::add_pcb::AddPcbForm;
 use crate::project::toolbar::{make_toolbar, ToolbarMessage};
 
@@ -197,16 +198,19 @@ impl Project {
         //      will be dropped at the end of this method, and when it does the widget will be removed from the pile
         //      so we have to hold on to the handle, but doing so required changing this method to accept `&mut self` instead of `&self`
         self.default_content_handle.replace(default_content_handle);
-
-        let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
-        toolbar_message.for_each_cloned({
-            let message = self.message.clone();
-            move |toolbar_message|{
-                message.force_set(ProjectMessage::ToolbarMessage(toolbar_message));
-            }
-        })
-            .persist();
         
+        let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
+        let toolbar_message_reader = toolbar_message.create_reader();
+        std::thread::spawn({
+            let message = self.message.clone();
+            move || loop {
+                let toolbar_message = toolbar_message_reader.get();
+                debug!("project_toolbar_message: {:?}", toolbar_message);
+                message.force_set(ProjectMessage::ToolbarMessage(toolbar_message));
+                toolbar_message_reader.block_until_updated();
+            }
+        });
+
         let toolbar = make_toolbar(toolbar_message);
         
         let content_pane = toolbar
