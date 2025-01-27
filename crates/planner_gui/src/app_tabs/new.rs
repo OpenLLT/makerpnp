@@ -3,7 +3,7 @@ use cushy::channel::Sender;
 use cushy::dialog::FilePicker;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Destination, Dynamic, Source, Validations};
+use cushy::value::{Destination, Dynamic, IntoValue, Source, Validations, Value};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::{Button, Grid, Input, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
@@ -46,8 +46,8 @@ impl NewTab {
 }
 
 impl Tab<NewTabMessage, NewTabAction> for NewTab {
-    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
-        "New".to_string().into()
+    fn label(&self, _context: &Dynamic<Context>) -> String {
+        "New".to_string()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {

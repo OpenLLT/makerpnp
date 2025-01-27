@@ -9,7 +9,7 @@ use cushy::define_components;
 use cushy::figures::units::Px;
 use cushy::styles::{Color, ContainerLevel, Edges};
 use cushy::styles::components::{ErrorColor, HighlightColor, IntrinsicPadding, OpaqueWidgetColor, WidgetBackground};
-use cushy::value::{Destination, Dynamic, Source, Switchable};
+use cushy::value::{Destination, Dynamic, Source, Switchable, Value};
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::grid::Orientation;
 use cushy::widgets::{Expand, Space, Stack};
@@ -23,6 +23,7 @@ use crate::context::Context;
 pub enum TabMessage<TKM> {
     CloseTab(TabKey),
     TabKindMessage(TabKey, TKM),
+    RenameTab(TabKey, String),
 }
 
 pub enum TabAction<TKA, TK> {
@@ -33,7 +34,7 @@ pub enum TabAction<TKA, TK> {
 }
 
 pub trait Tab<TKM, TKA> {
-    fn label(&self, context: &Dynamic<Context>) -> Dynamic<String>;
+    fn label(&self, context: &Dynamic<Context>) -> String;
     fn make_content(&self, context: &Dynamic<Context>, tab_key: TabKey) -> WidgetInstance;
     fn update(&mut self, context: &Dynamic<Context>, tab_key: TabKey, message: TKM) -> Action<TKA>;
 }
@@ -112,10 +113,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
 
         tab_state.tab = tab;
         tab_state.widget.set(tab_content_widget);
-        
-        // FIXME the tab button name does not change, probably due to the subscribers being lost when the old dynamic label is dropped.
-        //       the subscriber should be the tab button's label widget instance.
-        tab_state.label = tab_label;
+        tab_state.label.replace(tab_label);
 
         // prevent deadlock in the switcher closure
         drop(tabs);
@@ -142,7 +140,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
 
             let tab_state = TabState {
                 tab,
-                label: tab_label,
+                label: Dynamic::new(tab_label),
                 widget: Dynamic::new(tab_content),
             };
 
@@ -361,6 +359,13 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
                     .map(move |action|TabAction::TabAction(tab_key, action));
 
                 action
+            }
+            TabMessage::RenameTab(tab_key, label) => {
+                let mut guard = self.tabs.lock();
+                let tab_state = guard.get_mut(tab_key).unwrap();
+                tab_state.label.set(label);
+                
+                Action::new(TabAction::None)
             }
         }
     }

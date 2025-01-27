@@ -1,4 +1,4 @@
-use cushy::value::{Destination, Dynamic};
+use cushy::value::{Destination, Dynamic, Value};
 use cushy::widget::WidgetInstance;
 use slotmap::SlotMap;
 use tracing::{error, info};
@@ -17,27 +17,28 @@ pub enum ProjectTabMessage {
 pub enum ProjectTabAction {
     None,
     Task(Task<ProjectMessage>),
+    RenameTab(String),
 }
 
 #[derive(Clone)]
 pub struct ProjectTab {
     pub project_key: ProjectKey,
 
-    pub label: Dynamic<String>,
+    pub label: String,
 }
 
 impl ProjectTab {
     pub fn new(project_key: ProjectKey) -> Self {
         Self {
             project_key,
-            label: Dynamic::new("Loading...".to_string())
+            label: "Loading...".to_string()
         }
     }
 }
 
 impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
-    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
-        self.label.clone().into()
+    fn label(&self, _context: &Dynamic<Context>) -> String {
+        self.label.clone()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
@@ -62,8 +63,8 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
                         ProjectAction::None => ProjectTabAction::None,
                         ProjectAction::NameChanged(name) => {
                             info!("Name changed. name: {:?}", name);
-                            self.label.set(name);
-                            ProjectTabAction::None
+                            self.label = name.clone();
+                            ProjectTabAction::RenameTab(name)
                         },
                         ProjectAction::Task(task) => {
                             info!("ProjectAction::Task.");

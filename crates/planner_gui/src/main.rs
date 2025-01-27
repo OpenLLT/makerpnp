@@ -432,6 +432,9 @@ impl AppState {
                                 task.map(move |message| {
                                     AppMessage::TabMessage(TabMessage::TabKindMessage(tab_key, TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(message))))
                                 })
+                            },
+                            ProjectTabAction::RenameTab(label) => {
+                                Task::done(AppMessage::TabMessage(TabMessage::RenameTab(tab_key, label)))
                             }
                         }
                     }

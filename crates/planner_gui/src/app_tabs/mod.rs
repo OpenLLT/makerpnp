@@ -1,6 +1,6 @@
 //! The tabs for the application.
 
-use cushy::value::Dynamic;
+use cushy::value::{Dynamic, Value};
 use cushy::widget::{WidgetInstance};
 use planner_gui::action::Action;
 use crate::app_tabs::home::{HomeTab, HomeTabAction, HomeTabMessage};
@@ -35,7 +35,7 @@ pub enum TabKindAction {
 }
 
 impl Tab<TabKindMessage, TabKindAction> for TabKind {
-    fn label(&self, context: &Dynamic<Context>) -> Dynamic<String> {
+    fn label(&self, context: &Dynamic<Context>) -> String {
         match self {
             TabKind::Home(tab) => tab.label(context),
             TabKind::New(tab) => tab.label(context),

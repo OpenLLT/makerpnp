@@ -1,5 +1,5 @@
 use cushy::localization::Localize;
-use cushy::value::Source;
+use cushy::value::{IntoValue, Source, Value};
 use crate::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use planner_gui::action::Action;
@@ -27,8 +27,8 @@ pub enum HomeTabAction {
 pub struct HomeTab {}
 
 impl Tab<HomeTabMessage, HomeTabAction> for HomeTab {
-    fn label(&self, _context: &Dynamic<Context>) -> Dynamic<String> {
-        "Home".to_string().into()
+    fn label(&self, _context: &Dynamic<Context>) -> String {
+        "Home".to_string()
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
