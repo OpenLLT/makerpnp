@@ -36,6 +36,10 @@ impl Tab<HomeTabMessage, HomeTabAction> for HomeTab {
         context.lock().with_context::<Dynamic<Config>, _, _>(|config|{
             let config_guard = config.lock();
             let show_on_startup_value = Dynamic::new(config_guard.show_home_on_startup);
+            // FIXME why is an explicit drop required since cushy commit 4501558b0f
+            //       without this, the callback panics when `config_binding.lock()`is called in the closure
+            drop(config_guard);
+            
             let callback = show_on_startup_value.for_each_cloned({
                 let config_binding = config.clone();
 
