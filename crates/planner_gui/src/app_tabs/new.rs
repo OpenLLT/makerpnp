@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use cushy::channel::Sender;
 use cushy::dialog::FilePicker;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
@@ -15,14 +16,7 @@ use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 #[derive(Clone, Debug)]
 pub enum NewTabMessage {
-    None,
     OkClicked,
-}
-
-impl Default for NewTabMessage {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 #[derive(Debug)]
@@ -32,19 +26,21 @@ pub enum NewTabAction {
     Task(Task<NewTabMessage>),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct NewTab {
     name: Dynamic<String>,
     directory: Dynamic<PathBuf>,
-    message: Dynamic<NewTabMessage>,
+    sender: Sender<NewTabMessage>,
     validations: Validations,
 }
 
 impl NewTab {
-    pub fn new(message: Dynamic<NewTabMessage>) -> Self {
+    pub fn new(sender: Sender<NewTabMessage>) -> Self {
         Self {
-            message,
-            ..Self::default()
+            name: Dynamic::default(),
+            directory: Dynamic::default(),
+            sender,
+            validations: Validations::default(),
         }
     }
 }
@@ -142,8 +138,8 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
 
         let ok_button = "Ok".into_button()
             .on_click({
-                let message = self.message.clone();
-                move |_event| message.force_set(NewTabMessage::OkClicked)
+                let sender = self.sender.clone();
+                move |_event| sender.send(NewTabMessage::OkClicked).expect("sent")
             });
 
         let form = grid
@@ -168,7 +164,6 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
     fn update(&mut self, _context: &Dynamic<Context>, _tab_key: TabKey, message: NewTabMessage) -> Action<NewTabAction> {
 
         let action = match message {
-            NewTabMessage::None => NewTabAction::None,
             NewTabMessage::OkClicked => {
                 if self.validations.is_valid() {
                     NewTabAction::CreateProject(self.name.get(), self.directory.get())

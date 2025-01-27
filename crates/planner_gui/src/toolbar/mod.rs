@@ -1,3 +1,4 @@
+use cushy::channel::Sender;
 use cushy::figures::units::Lp;
 use cushy::localization::Localize;
 use cushy::styles::components::IntrinsicPadding;
@@ -7,10 +8,8 @@ use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use cushy::widgets::{Expand, Radio};
 use unic_langid::LanguageIdentifier;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub enum ToolbarMessage {
-    #[default]
-    None,
     OpenClicked,
     HomeClicked,
     NewClicked,
@@ -18,38 +17,38 @@ pub enum ToolbarMessage {
     SaveClicked,
 }
 
-pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_identifier: Dynamic<LanguageIdentifier>, languages: &Vec<LanguageIdentifier>) -> WidgetInstance {
+pub(crate) fn make_toolbar(toolbar_message_sender: Sender<ToolbarMessage>, language_identifier: Dynamic<LanguageIdentifier>, languages: &Vec<LanguageIdentifier>) -> WidgetInstance {
     let button_padding = Dimension::Lp(Lp::points(4));
 
     let home_button = Localize::new("toolbar-button-home")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::HomeClicked)
+            let toolbar_message_sender = toolbar_message_sender.clone();
+            move |_event| { let _ = toolbar_message_sender.send(ToolbarMessage::HomeClicked); }
         })
         .with(&IntrinsicPadding, button_padding);
 
     let new_button = Localize::new("toolbar-button-new")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::NewClicked)
+            let toolbar_message_sender = toolbar_message_sender.clone();
+            move |_event| { let _ = toolbar_message_sender.send(ToolbarMessage::NewClicked); }
         })
         .with(&IntrinsicPadding, button_padding);
 
     let open_button = Localize::new("toolbar-button-open")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::OpenClicked)
+            let toolbar_message_sender = toolbar_message_sender.clone();
+            move |_event| { let _ = toolbar_message_sender.send(ToolbarMessage::OpenClicked); }
         })
         .with(&IntrinsicPadding, button_padding);
 
     let save_button = Localize::new("toolbar-button-save")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::SaveClicked)
+            let toolbar_message_sender = toolbar_message_sender.clone();
+            move |_event| { let _ = toolbar_message_sender.send(ToolbarMessage::SaveClicked); }
         })
         .with(&IntrinsicPadding, button_padding);
 
@@ -57,8 +56,8 @@ pub(crate) fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>, language_id
     let close_all_button = Localize::new("toolbar-button-close-all")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::CloseAllClicked)
+            let toolbar_message_sender = toolbar_message_sender.clone();
+            move |_event| { let _ = toolbar_message_sender.send(ToolbarMessage::CloseAllClicked); }
         })
         .with(&IntrinsicPadding, button_padding);
 

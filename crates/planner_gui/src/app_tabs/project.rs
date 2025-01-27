@@ -8,10 +8,8 @@ use crate::project::{Project, ProjectAction, ProjectKey, ProjectMessage};
 use planner_gui::task::Task;
 use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub enum ProjectTabMessage {
-    #[default]
-    None,
     ProjectMessage(ProjectMessage)
 }
 
@@ -25,17 +23,13 @@ pub enum ProjectTabAction {
 pub struct ProjectTab {
     pub project_key: ProjectKey,
 
-    /// The project tab owns the message, it's read elsewhere and passed to `update`
-    #[allow(dead_code)]
-    message: Dynamic<ProjectTabMessage>,
     pub label: Dynamic<String>,
 }
 
 impl ProjectTab {
-    pub fn new(project_key: ProjectKey, message: Dynamic<ProjectTabMessage>) -> Self {
+    pub fn new(project_key: ProjectKey) -> Self {
         Self {
             project_key,
-            message,
             label: Dynamic::new("Loading...".to_string())
         }
     }
@@ -62,7 +56,6 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
             let project = projects_guard.get_mut(self.project_key).unwrap();
             
             match message {
-                ProjectTabMessage::None => ProjectTabAction::None,
                 ProjectTabMessage::ProjectMessage(message) => {
                     let action = project.update(message);
                     match action.into_inner() {

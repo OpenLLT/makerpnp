@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::default::Default;
+use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use slotmap::{new_key_type, SlotMap};
+use cushy::channel::Sender;
 use cushy::define_components;
 use cushy::figures::units::Px;
 use cushy::styles::{Color, ContainerLevel, Edges};
@@ -13,20 +15,14 @@ use cushy::widgets::grid::Orientation;
 use cushy::widgets::{Expand, Space, Stack};
 use cushy::widgets::button::{ButtonActiveBackground, ButtonActiveForeground, ButtonBackground, ButtonForeground, ButtonHoverBackground, ButtonHoverForeground};
 use cushy::widgets::label::{Displayable, LabelOverflow};
+use tracing::{debug, trace};
 use crate::action::Action;
 use crate::context::Context;
 
 #[derive(Clone, Debug)]
 pub enum TabMessage<TKM> {
-    None,
     CloseTab(TabKey),
     TabKindMessage(TabKey, TKM),
-}
-
-impl<TKM> Default for TabMessage<TKM> {
-    fn default() -> Self {
-        TabMessage::None
-    }
 }
 
 pub enum TabAction<TKA, TK> {
@@ -63,8 +59,8 @@ pub struct TabBar<TK, TKM, TKA>
     /// tracks the most recently used tab, used when closing a tab.
     history: RefCell<Vec<TabKey>>,
 
-    /// a message which is updated when interactions occur.
-    message: Dynamic<TabMessage<TKM>>,
+    /// a sender to use for interaction messages.
+    sender: Sender<TabMessage<TKM>>,
     _action: PhantomData<TKA>
 }
 
@@ -72,8 +68,8 @@ new_key_type! {
     pub struct TabKey;
 }
 
-impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBar<TK, TKM, TKA> {
-    pub fn new(message: &Dynamic<TabMessage<TKM>>) -> Self {
+impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TKA> TabBar<TK, TKM, TKA> {
+    pub fn new(sender: Sender<TabMessage<TKM>>) -> Self {
         let tabs: Dynamic<SlotMap<TabKey, TabState<TK>>> = Dynamic::default();
         let active: Dynamic<Option<TabKey>> = Dynamic::new(None);
         let switcher = active.clone().switcher({
@@ -81,11 +77,11 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
             move |tab_key, _|{
                 match tab_key {
                     None => {
-                        println!("switcher changed, no tabs");
+                        trace!("switcher changed, no tabs");
                         Space::clear().make_widget()
                     }
                     Some(tab_key) => {
-                        println!("switcher changed, tab_key: {:?}", tab_key);
+                        trace!("switcher changed, tab_key: {:?}", tab_key);
                         let tabs = tabs.lock();
                         let state = tabs.get(*tab_key).unwrap();
 
@@ -102,7 +98,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
             content_switcher: Dynamic::new(switcher.make_widget()),
             active,
             history: RefCell::new(Vec::new()),
-            message: message.clone(),
+            sender: sender.clone(),
             _action: Default::default(),
         }
     }
@@ -153,15 +149,17 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
             tab_state
         });
 
-        println!("tab_key: {:?}", tab_key);
+        debug!("adding tab. tab_key: {:?}", tab_key);
 
         let tabs = self.tabs.lock();
         let tab_state = tabs.get(tab_key).unwrap();
 
         let close_button = "X".into_button()
             .on_click({
-                let message = self.message.clone();
-                move |_event| message.force_set(TabMessage::CloseTab(tab_key))
+                let sender = self.sender.clone();
+                move |_event| {
+                    sender.send(TabMessage::CloseTab(tab_key)).expect("ok");
+                }
             })
             .with(&ButtonBackground, Color::CLEAR_BLACK)
             .with(&ButtonActiveBackground, Color::CLEAR_BLACK)
@@ -180,20 +178,20 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
             .pad_by(Edges::default().with_horizontal(Px::new(3)).with_top(Px::new(3)).with_bottom(Px::new(0)))
             .and(
                 self.active.clone().switcher(move |active, _|{
-                    match active {
-                        Some(active_tab_key) if active_tab_key.eq(&tab_key) => {
-                            Space::default()
-                                .height(Px::new(3))
-                                .with_dynamic(&WidgetBackground, TabBarActiveTabMarker)
-                                .make_widget()
+                   match active {
+                       Some(active_tab_key) if active_tab_key.eq(&tab_key) => {
+                           Space::default()
+                               .height(Px::new(3))
+                               .with_dynamic(&WidgetBackground, TabBarActiveTabMarker)
+                               .make_widget()
 
-                        }
-                        _ => {
-                            Space::default()
-                                .height(Px::new(3))
-                                .make_widget()
-                        }
-                    }
+                       }
+                       _ => {
+                           Space::default()
+                               .height(Px::new(3))
+                               .make_widget()
+                       }
+                   }
                 })
             )
             .into_rows()
@@ -245,14 +243,14 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
 
     pub fn close_tab(&mut self, tab_key: TabKey) -> TK {
 
-        println!("closing tab. tab_key: {:?}", tab_key);
+        debug!("closing tab. tab_key: {:?}", tab_key);
 
         let mut history = self.history.borrow_mut();
-        println!("history (before): {:?}", history);
+        trace!("history (before): {:?}", history);
         history.retain(|&other_key| other_key != tab_key);
         history.dedup();
         let recent = history.pop();
-        println!("history (after): {:?}, recent: {:?}", history, recent);
+        trace!("history (after): {:?}, recent: {:?}", history, recent);
         // drop the history guard now so we don't deadlock in other methods we call that use history
         drop(history);
 
@@ -271,7 +269,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
             }
         }).unwrap();
 
-        println!("tab_key_index: {:?}", tab_key_index);
+        trace!("tab_key_index: {:?}", tab_key_index);
 
         let widgets = self.tab_buttons
             .take();
@@ -280,9 +278,9 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
                 .iter()
                 .zip(tab_button_keys.iter())
                 .filter_map(|( widget, index_tab_key)|{
-                    println!("index_tab_key: {:?}", index_tab_key);
+                    trace!("index_tab_key: {:?}", index_tab_key);
                     if index_tab_key.eq(&tab_key) {
-                        println!("removing");
+                        trace!("removing");
                         None
                     } else {
                         Some(widget.clone())
@@ -299,14 +297,11 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
     }
 
     pub fn make_widget(&self) -> WidgetInstance {
-
-        println!("TabBar::make_widget");
-
         let callback = self.active.for_each({
             let history = self.history.clone();
             move |selected_tab_key|{
 
-                println!("key: {:?}", selected_tab_key);
+                debug!("selected tab. tab_key: {:?}", selected_tab_key);
 
                 if let Some(tab_key) = selected_tab_key {
                     let mut history = history.borrow_mut();
@@ -354,7 +349,6 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
 
     pub fn update(&mut self, context: &Dynamic<Context>, message: TabMessage<TKM>) -> Action<TabAction<TKA, TK>> {
         match message {
-            TabMessage::None => Action::new(TabAction::None),
             TabMessage::CloseTab(tab_key) => {
                 let tab = self.close_tab(tab_key);
                 Action::new(TabAction::TabClosed(tab_key, tab))
@@ -367,7 +361,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + 'static, TKA> TabBa
                     .map(move |action|TabAction::TabAction(tab_key, action));
 
                 action
-            },
+            }
         }
     }
 }
@@ -436,20 +430,20 @@ impl MakeWidget for TabBarWidget {
         let tab_bar_switcher = self.tab_buttons.switcher({
 
             move |tab_buttons, _|{
-                if tab_buttons.is_empty() {
-                    Space::clear().make_widget()
-                } else {
-                    let tab_bar = [
-                        Stack::new(Orientation::Column, dyn_tab_buttons.clone())
-                            .make_widget(),
-                        Expand::empty()
-                            .make_widget(),
-                    ]
-                        .into_columns()
-                        .contain_level(ContainerLevel::High);
+               if tab_buttons.is_empty() {
+                   Space::clear().make_widget()
+               } else {
+                   let tab_bar = [
+                       Stack::new(Orientation::Column, dyn_tab_buttons.clone())
+                           .make_widget(),
+                       Expand::empty()
+                           .make_widget(),
+                   ]
+                       .into_columns()
+                       .contain_level(ContainerLevel::High);
 
-                    tab_bar.make_widget()
-                }
+                   tab_bar.make_widget()
+               }
             }
         });
 

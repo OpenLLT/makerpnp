@@ -9,6 +9,7 @@ extern crate core;
 use std::path;
 use std::path::PathBuf;
 use cushy::{App, Application};
+use cushy::channel::{Receiver, Sender};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::localization::Localization;
@@ -18,7 +19,7 @@ use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::window::{PendingWindow, WindowHandle};
 use slotmap::SlotMap;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::{debug, error, info, trace};
 use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -66,7 +67,7 @@ struct AppState {
     context: Dynamic<Context>,
 
     projects: Dynamic<SlotMap<ProjectKey, Project>>,
-    message: Dynamic<AppMessage>,
+    app_message_sender: Sender<AppMessage>,
 }
 
 #[cushy::main]
@@ -104,12 +105,13 @@ fn main(app: &mut App) -> cushy::Result {
         ).unwrap()
     );
 
-    let message: Dynamic<AppMessage> = Dynamic::default();
+    let (app_message_sender, app_message_receiver) = cushy::channel::build()
+        .finish();
 
     let (mut sender, receiver) = futures::channel::mpsc::unbounded();
 
     let executor = Executor::new().expect("should be able to create an executor");
-    executor.spawn(MessageDispatcher::dispatch(receiver, message.clone()));
+    executor.spawn(MessageDispatcher::dispatch(receiver, app_message_sender.clone()));
     let mut runtime = RunTime::new(executor, sender.clone());
 
     let pending = PendingWindow::default();
@@ -118,19 +120,20 @@ fn main(app: &mut App) -> cushy::Result {
     let config = Dynamic::new(config::load());
     let projects = Dynamic::new(SlotMap::default());
 
-    let tab_message = Dynamic::default();
-    let tab_message_reader = tab_message.create_reader();
-    std::thread::spawn({
-        let message = message.clone();
-        move || loop {
-            let tab_message = tab_message_reader.get();
-            debug!("tab_message: {:?}", tab_message);
-            message.force_set(AppMessage::TabMessage(tab_message));
-            tab_message_reader.block_until_updated();
-        }
-    });
+    let tab_message_sender: Sender<TabMessage<TabKindMessage>> = cushy::channel::build()
+        .on_receive({
+            let app_message_sender = app_message_sender.clone();
+            move |tab_message| {
+                debug!("tab_message: {:?}", tab_message);
+                app_message_sender.send(AppMessage::TabMessage(tab_message))
+                    .map_err(|app_message|{
+                        error!("unable to forward, app_message: {:?}", app_message);
+                    }).ok();
+            }
+        })
+        .finish();
     
-    let tab_bar = Dynamic::new(TabBar::new(&tab_message));
+    let tab_bar = Dynamic::new(TabBar::new(tab_message_sender));
 
     let mut context = Context::default();
     context.provide(config.clone());
@@ -144,23 +147,26 @@ fn main(app: &mut App) -> cushy::Result {
         context: context.clone(),
         config,
         projects,
-        message: message.clone(),
+        app_message_sender: app_message_sender.clone(),
     };
 
-    let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
-    let toolbar_message_reader = toolbar_message.create_reader();
-    std::thread::spawn({
-        let message = message.clone();
-        move || loop {
-            let toolbar_message = toolbar_message_reader.get();
-            debug!("toolbar_message: {:?}", toolbar_message);
 
-            message.force_set(AppMessage::ToolBarMessage(toolbar_message));
-            toolbar_message_reader.block_until_updated();
-        }
-    });
+    let toolbar_message_sender: Sender<ToolbarMessage> = cushy::channel::build()
+        .on_receive({
+            let app_message_sender = app_message_sender.clone();
+            move |toolbar_message|{
+                debug!("forwarding toolbar message. message: {:?}", toolbar_message);
+                app_message_sender.send(AppMessage::ToolBarMessage(toolbar_message))
+                    .map_err(|app_message|{
+                        error!("unable to forward toolbar message, app_message: {:?}", app_message);
+                    })
+                    .ok();
+            }
 
-    let toolbar = toolbar::make_toolbar(toolbar_message, language_identifier.clone(), &languages);
+        })
+        .finish();
+
+    let toolbar = toolbar::make_toolbar(toolbar_message_sender, language_identifier.clone(), &languages);
 
     let ui_elements = [
         toolbar.make_widget(),
@@ -168,19 +174,17 @@ fn main(app: &mut App) -> cushy::Result {
     ];
 
     let dyn_app_state = Dynamic::new(app_state);
-    let message_reader = message.create_reader();
-    std::thread::spawn({
-        let dyn_app_state = dyn_app_state.clone();
-        move || loop {
-            let message = message_reader.get();
-            debug!("app message: {:?}", message);
-
-            let task = dyn_app_state.lock().update(message);
     
+    app_message_receiver.on_receive({
+        let dyn_app_state = dyn_app_state.clone();
+
+        move |app_message|{
+            trace!("message received. app_message: {:?}", app_message);
+            let task = dyn_app_state.lock().update(app_message);
+
             if let Some(stream) = task::into_stream(task) {
                 runtime.run(stream);
             }
-            message_reader.block_until_updated();
         }
     });
 
@@ -212,8 +216,7 @@ fn main(app: &mut App) -> cushy::Result {
         let app_state = &*app_state_guard;
 
 
-        if app_state.config.lock().show_home_on_startup
-        {
+        if app_state.config.lock().show_home_on_startup {
             add_home_tab(&context, &app_state.tab_bar);
         }
     }
@@ -224,10 +227,6 @@ fn main(app: &mut App) -> cushy::Result {
         let messages: Vec<_> = vec![];
 
         for message in messages {
-            // this causes deadlock
-            // dyn_app_state.lock().message.force_set(message);
-
-            // so it's required to use the sender instead
             let _result = sender.start_send(message);
         }
     }
@@ -288,12 +287,12 @@ impl AppState {
                     ])
                     .pick_file(&window,{
 
-                        let message = self.message.clone();
+                        let app_message_sender = self.app_message_sender.clone();
 
                         move |path|{
                             if let Some(path) = path {
                                 println!("path: {:?}", path);
-                                message.force_set(AppMessage::FileOpened(path))
+                                app_message_sender.send(AppMessage::FileOpened(path)).expect("sent");
                             }
                         }
                     });
@@ -331,9 +330,6 @@ impl AppState {
 
     fn on_toolbar_message(&mut self, message: ToolbarMessage) -> Task<AppMessage> {
         match message {
-            ToolbarMessage::None => {
-                Task::none()
-            }
             ToolbarMessage::HomeClicked => {
                 println!("home clicked");
 
@@ -373,24 +369,24 @@ impl AppState {
     }
 
     fn add_new_tab(&self) {
-        let new_tab_message: Dynamic<NewTabMessage> = Dynamic::default();
-
+        let (new_tab_message_sender, new_tab_message_receiver) = cushy::channel::build()
+            .finish();
+        
         let tab_key = self.tab_bar.lock()
-            .add_tab(&self.context, TabKind::New(NewTab::new(new_tab_message.clone())));
+            .add_tab(&self.context, TabKind::New(NewTab::new(new_tab_message_sender)));
 
-        let new_tab_message_reader = new_tab_message.create_reader();
-        std::thread::spawn({
-            let message = self.message.clone();
-            move || loop {
-                let new_tab_message = new_tab_message_reader.get();
+        new_tab_message_receiver.on_receive({
+            let app_message_sender = self.app_message_sender.clone();
+            move |new_tab_message| {
                 debug!("new_tab_message: {:?}", new_tab_message);
-                message.force_set(AppMessage::TabMessage(
+                app_message_sender.send(AppMessage::TabMessage(
                     TabMessage::TabKindMessage(
                         tab_key,
                         TabKindMessage::NewTabMessage(new_tab_message)
                     )
-                ));
-                new_tab_message_reader.block_until_updated();
+                ))
+                    .map_err(|message| error!("unable to forward new tab message. message: {:?}", message))
+                    .ok();
             }
         });
     }
@@ -459,19 +455,21 @@ impl AppState {
 
     fn create_project(&self, tab_key: TabKey, name: String, directory: PathBuf) -> Task<AppMessage> {
 
-        let project_tab_message = Dynamic::new(ProjectTabMessage::default());
+        let (project_tab_message_sender, project_tab_message_receiver) = cushy::channel::build()
+            .finish();
 
-        self.create_project_tab_mapping(project_tab_message.clone(), tab_key);
+        self.create_project_tab_mapping(project_tab_message_receiver, tab_key);
 
         let path = build_project_file_path(&name, directory);
-        let project_message = Dynamic::new(ProjectMessage::None);
+        let (project_message_sender, project_message_receiver) = cushy::channel::build()
+            .finish();
         
-        self.create_project_mapping(project_message.clone(), project_tab_message.clone());
+        self.create_project_mapping(project_message_receiver, project_tab_message_sender);
         
-        let (project, message) = Project::new(name, path, project_message);
+        let (project, message) = Project::new(name, path, project_message_sender);
 
         let project_key = self.projects.lock().insert(project);
-        let project_tab = ProjectTab::new(project_key, project_tab_message);
+        let project_tab = ProjectTab::new(project_key);
 
         self.tab_bar.lock().replace(tab_key, &self.context, TabKind::Project(project_tab));
 
@@ -489,56 +487,55 @@ impl AppState {
         let path = path::absolute(path)
             .or_else(|cause| Err(OpenProjectError::IoError { cause }))?;
 
-        let project_tab_message = Dynamic::new(ProjectTabMessage::default());
+        let (project_tab_message_sender, project_tab_message_receiver) = cushy::channel::build()
+            .finish();
 
-        let project_message = Dynamic::new(ProjectMessage::None);
-        self.create_project_mapping(project_message.clone(), project_tab_message.clone());
+        let (project_message_sender, project_message_receiver) = cushy::channel::build()
+            .finish();
+
+        self.create_project_mapping(project_message_receiver, project_tab_message_sender);
         
-        let (project, message) = Project::from_path(path, project_message);
+        let (project, message) = Project::from_path(path, project_message_sender);
 
         let project_key = self.projects.lock().insert(project);
 
-        let project_tab = ProjectTab::new(project_key, project_tab_message.clone());
+        let project_tab = ProjectTab::new(project_key);
 
         let mut tab_bar_guard = self.tab_bar.lock();
         let tab_key = tab_bar_guard.add_tab(&self.context, TabKind::Project(project_tab));
 
-        self.create_project_tab_mapping(project_tab_message, tab_key);
+        self.create_project_tab_mapping(project_tab_message_receiver, tab_key);
 
         let message_to_emit = AppMessage::TabMessage(TabMessage::TabKindMessage(tab_key, TabKindMessage::ProjectTabMessage(ProjectTabMessage::ProjectMessage(message))));
 
         Ok(message_to_emit)
     }
 
-    fn create_project_tab_mapping(&self, project_tab_message: Dynamic<ProjectTabMessage>, tab_key: TabKey) {
-
-        let project_tab_message_reader = project_tab_message.create_reader();
-        std::thread::spawn({
-            let message = self.message.clone();
-            move || loop {
-                let project_tab_message = project_tab_message_reader.get();
+    fn create_project_tab_mapping(&self, project_tab_message_receiver: Receiver<ProjectTabMessage>, tab_key: TabKey) {
+        project_tab_message_receiver.on_receive({
+            let app_message_sender = self.app_message_sender.clone();
+            move |project_tab_message| {
                 debug!("project_tab_message: {:?}", project_tab_message);
-                message.force_set(AppMessage::TabMessage(
+                app_message_sender.send(AppMessage::TabMessage(
                     TabMessage::TabKindMessage(
                         tab_key,
                         TabKindMessage::ProjectTabMessage(project_tab_message)
                     )
-                ));
-                project_tab_message_reader.block_until_updated();
+                ))
+                    .map_err(|message| error!("unable to forward project tab message. message: {:?}", message))
+                    .ok();
             }
         });
     }
 
-    fn create_project_mapping(&self, project_message: Dynamic<ProjectMessage>, project_tab_message: Dynamic<ProjectTabMessage>) {
-        let project_message_reader = project_message.create_reader();
-        std::thread::spawn({
-            let message = project_tab_message.clone();
-            move || loop {
-                let project_message = project_message_reader.get();
-                debug!("project_message: {:?}", project_message);
-                message.force_set(ProjectTabMessage::ProjectMessage(project_message));
-                project_message_reader.block_until_updated();
-            }
+    fn create_project_mapping(&self, project_message_receiver: Receiver<ProjectMessage>, project_tab_message_sender: Sender<ProjectTabMessage>) {
+        project_message_receiver.on_receive({
+           move |project_message| {
+               debug!("project_message: {:?}", project_message);
+               project_tab_message_sender.send(ProjectTabMessage::ProjectMessage(project_message))
+                   .map_err(|message| error!("unable to forward project message, message: {:?}", message))
+                   .ok();
+           }
         });
     }
 

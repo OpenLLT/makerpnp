@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
+use cushy::channel::Sender;
 use cushy::dialog::ShouldClose;
 use cushy::localization::Localize;
 use cushy::localize;
@@ -13,7 +14,7 @@ use cushy::widgets::pile::{Pile, PiledWidget};
 use cushy::widgets::Space;
 use cushy::widgets::layers::{Modal, ModalHandle};
 use slotmap::new_key_type;
-use tracing::{debug, info,};
+use tracing::{debug, error, info, trace};
 use planner_app::{Arg, Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
 use planner_gui::action::Action;
 use crate::app_core::CoreService;
@@ -122,7 +123,8 @@ pub struct Project {
     core_service: CoreService,
     project_tree: Dynamic<Tree>,
     project_tree_path: Dynamic<ProjectPath>,
-    message: Dynamic<ProjectMessage>,
+    
+    sender: Sender<ProjectMessage>,
     
     phase_widgets: HashMap<Reference, PhaseWidgetState>,
     
@@ -133,7 +135,7 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn new(name: String, path: PathBuf, project_message: Dynamic<ProjectMessage>) -> (Self, ProjectMessage) {
+    pub fn new(name: String, path: PathBuf, project_message_sender: Sender<ProjectMessage>) -> (Self, ProjectMessage) {
         let project_tree = Dynamic::new(Tree::default());
         
         let core_service = CoreService::new();
@@ -143,7 +145,7 @@ impl Project {
             core_service,
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
-            message: project_message,
+            sender: project_message_sender,
             pile: Pile::default(),
             phase_widgets: HashMap::new(),
             default_content_handle: None,
@@ -153,7 +155,7 @@ impl Project {
         (instance, ProjectMessage::Create)
     }
 
-    pub fn from_path(path: PathBuf, project_message: Dynamic<ProjectMessage>) -> (Self, ProjectMessage) {
+    pub fn from_path(path: PathBuf, project_message_sender: Sender<ProjectMessage>) -> (Self, ProjectMessage) {
         let project_tree = Dynamic::new(Tree::default());
         let core_service = CoreService::new();
         let instance = Self {
@@ -162,7 +164,7 @@ impl Project {
             core_service,
             project_tree,
             project_tree_path: Dynamic::new(ProjectPath("/".to_string())),
-            message: project_message,
+            sender: project_message_sender,
             pile: Pile::default(),
             phase_widgets: HashMap::new(),
             default_content_handle: None,
@@ -199,19 +201,19 @@ impl Project {
         //      so we have to hold on to the handle, but doing so required changing this method to accept `&mut self` instead of `&self`
         self.default_content_handle.replace(default_content_handle);
         
-        let toolbar_message: Dynamic<ToolbarMessage> = Dynamic::default();
-        let toolbar_message_reader = toolbar_message.create_reader();
-        std::thread::spawn({
-            let message = self.message.clone();
-            move || loop {
-                let toolbar_message = toolbar_message_reader.get();
+        let (toolbar_message_sender, toolbar_message_receiver) = cushy::channel::build().finish();
+        
+        toolbar_message_receiver.on_receive({
+            let project_message_sender = self.sender.clone();
+            move |toolbar_message| {
                 debug!("project_toolbar_message: {:?}", toolbar_message);
-                message.force_set(ProjectMessage::ToolbarMessage(toolbar_message));
-                toolbar_message_reader.block_until_updated();
+                project_message_sender.send(ProjectMessage::ToolbarMessage(toolbar_message))
+                    .map_err(|message| error!("unable to forward toolbar message. message: {:?}", message))
+                    .ok();
             }
         });
-
-        let toolbar = make_toolbar(toolbar_message);
+        
+        let toolbar = make_toolbar(toolbar_message_sender);
         
         let content_pane = toolbar
             .and(self.pile.clone())
@@ -451,14 +453,13 @@ impl Project {
 
             |event| {
 
-                debug!("dfs. event: {:?}", event);
+                trace!("dfs. event: {:?}", event);
                 match event {
                     DfsEvent::Discover(node, _) => {
                         let item = &project_tree_view.tree[node];
                         
                         let path = ProjectPath(format!("/project{}", item.path).to_string());
                         
-                        let message = self.message.clone();
                         
                         let key = format!("project-explorer-node-{}", item.key);
 
@@ -471,11 +472,12 @@ impl Project {
                                 }
                             }
                         }
-                        
+
+                        let sender = self.sender.clone();
                         let node_widget = title
                             .to_button()
                             .on_click(move |_event|{
-                                message.force_set(ProjectMessage::Navigate(path.clone()));
+                                sender.send(ProjectMessage::Navigate(path.clone())).expect("sent");
                             })
                             .make_widget();
 
@@ -505,7 +507,6 @@ impl Project {
     fn on_toolbar_message(&self, message: ToolbarMessage) -> ProjectAction {
         
         match message {
-            ToolbarMessage::None => {}
             ToolbarMessage::AddPcb => {
                 self.display_add_pcb_modal();
             }
@@ -520,7 +521,7 @@ impl Project {
         handle
             .build_dialog(&form)
             .with_default_button(localize!("form-button-ok"), {
-                let message = self.message.clone();
+                let sender = self.sender.clone();
                 move || {
                     info!("Add pcb. Ok clicked");
                     let validations = form.validations();
@@ -531,7 +532,7 @@ impl Project {
                             let args = form.result().unwrap();
                             info!("Add pcb. name: {}, kind: {}", args.name, args.kind);
                             
-                            message.force_set(ProjectMessage::AddPcb(args));
+                            sender.send(ProjectMessage::AddPcb(args)).expect("sent");
                             
                             ShouldClose::Close
                         },

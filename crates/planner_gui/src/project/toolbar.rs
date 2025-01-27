@@ -1,26 +1,24 @@
+use cushy::channel::Sender;
 use cushy::figures::units::Lp;
 use cushy::localization::Localize;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::styles::Dimension;
-use cushy::value::{Destination, Dynamic};
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use cushy::widgets::Expand;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub enum ToolbarMessage {
-    #[default]
-    None,
     AddPcb,
 }
 
-pub fn make_toolbar(toolbar_message: Dynamic<ToolbarMessage>) -> WidgetInstance {
+pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
     let button_padding = Dimension::Lp(Lp::points(4));
 
     let add_pcb_button = Localize::new("project-toolbar-button-add-pcb")
         .into_button()
         .on_click({
-            let message = toolbar_message.clone();
-            move |_event| message.force_set(ToolbarMessage::AddPcb)
+            let toolbar_sender = toolbar_sender.clone();
+            move |_event| toolbar_sender.send(ToolbarMessage::AddPcb).expect("sent")
         })
         .with(&IntrinsicPadding, button_padding);
 
