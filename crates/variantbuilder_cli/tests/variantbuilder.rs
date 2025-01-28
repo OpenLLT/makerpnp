@@ -1,11 +1,6 @@
 #[macro_use]
 extern crate util;
 
-use std::fs::read_to_string;
-use std::path::PathBuf;
-
-use thiserror::__private::AsDisplay;
-
 #[cfg(test)]
 mod tests {
     use std::fs::read_to_string;

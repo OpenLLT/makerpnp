@@ -1,6 +1,6 @@
 //! The tabs for the application.
 
-use cushy::value::{Dynamic, Value};
+use cushy::value::Dynamic;
 use cushy::widget::WidgetInstance;
 use planner_gui::action::Action;
 use planner_gui::context::Context;

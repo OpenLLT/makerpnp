@@ -1,5 +1,5 @@
 use cushy::localization::Localize;
-use cushy::value::{IntoValue, Source, Value};
+use cushy::value::Source;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use planner_gui::action::Action;
 use planner_gui::context::Context;

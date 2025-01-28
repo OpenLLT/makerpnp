@@ -3,11 +3,10 @@ use std::future::Future;
 use std::marker::PhantomData;
 
 use cushy::channel::Sender;
-use cushy::value::{Destination, Dynamic};
 use futures::channel::mpsc;
 use futures::stream::{BoxStream, FusedStream};
 use futures::{select, Sink, Stream, StreamExt};
-use tracing::{debug, error, trace};
+use tracing::{error, trace};
 
 #[derive(Debug)]
 pub struct Executor;

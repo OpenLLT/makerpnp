@@ -1,6 +1,5 @@
 use crux_core::capability::{CapabilityContext, Operation};
 use crux_core::macros::Capability;
-use thiserror::Error;
 
 use crate::ProjectView;
 

@@ -4,7 +4,7 @@ use cushy::channel::Sender;
 use cushy::dialog::FilePicker;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Destination, Dynamic, IntoValue, Source, Validations, Value};
+use cushy::value::{Destination, Dynamic, Source, Validations};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::Displayable;

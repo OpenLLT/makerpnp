@@ -1,4 +1,4 @@
-use cushy::value::{Destination, Dynamic, Value};
+use cushy::value::Dynamic;
 use cushy::widget::WidgetInstance;
 use planner_gui::action::Action;
 use planner_gui::context::Context;

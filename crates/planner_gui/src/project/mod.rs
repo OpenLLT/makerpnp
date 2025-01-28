@@ -27,7 +27,6 @@ use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
 use crate::app_core::CoreService;
-use crate::app_tabs::project::ProjectTabMessage;
 use crate::project::dialogs::add_pcb::AddPcbForm;
 use crate::project::toolbar::{make_toolbar, ToolbarMessage};
 
