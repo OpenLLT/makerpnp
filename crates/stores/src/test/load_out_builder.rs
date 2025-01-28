@@ -10,11 +10,10 @@ pub struct TestLoadOutRecord {
 
 #[derive(Default)]
 pub struct LoadOutCSVBuilder<'a> {
-    records: Option<&'a [TestLoadOutRecord]>
+    records: Option<&'a [TestLoadOutRecord]>,
 }
 
 impl<'a> LoadOutCSVBuilder<'a> {
-    
     pub fn as_string(&mut self) -> String {
         let content: Vec<u8> = vec![];
 
@@ -27,19 +26,17 @@ impl<'a> LoadOutCSVBuilder<'a> {
                 writer.serialize(record).unwrap();
             }
         }
-        
+
         writer.flush().unwrap();
-                
+
         String::from_utf8(writer.into_inner().unwrap()).unwrap()
     }
     pub fn with_items(mut self, records: &'a [TestLoadOutRecord]) -> Self {
         self.records = Some(records);
         self
     }
-    
+
     pub fn new() -> Self {
         Default::default()
     }
-    
-    
 }

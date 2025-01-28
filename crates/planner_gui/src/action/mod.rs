@@ -4,13 +4,10 @@ pub struct Action<T>(T);
 
 impl<T> Action<T> {
     pub fn new(value: T) -> Action<T> {
-        Self (value)
+        Self(value)
     }
 
-    pub fn map<O>(
-        self,
-        mut f: impl FnMut(T) -> O
-    ) -> Action<O> {
+    pub fn map<O>(self, mut f: impl FnMut(T) -> O) -> Action<O> {
         let value = f(self.0);
         Action::new(value)
     }
@@ -33,5 +30,3 @@ impl<T> DerefMut for Action<T> {
         &mut self.0
     }
 }
-
-

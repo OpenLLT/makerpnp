@@ -1,12 +1,13 @@
+use pnp::pcb::PcbSide;
 use rust_decimal::Decimal;
 use thiserror::Error;
-use pnp::pcb::PcbSide;
+
 use crate::placement::{EdaPlacement, EdaPlacementField};
 
 #[derive(Error, Debug)]
 pub enum KiCadPlacementRecordError {
     #[error("Unknown")]
-    Unknown
+    Unknown,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -48,8 +49,14 @@ impl KiCadPlacementRecord {
             ref_des: self.ref_des.to_string(),
             place: true,
             fields: vec![
-                EdaPlacementField { name: "package".to_string(), value: self.package.to_string() },
-                EdaPlacementField { name: "val".to_string(), value: self.val.to_string() },
+                EdaPlacementField {
+                    name: "package".to_string(),
+                    value: self.package.to_string(),
+                },
+                EdaPlacementField {
+                    name: "val".to_string(),
+                    value: self.val.to_string(),
+                },
             ],
             pcb_side: PcbSide::from(&self.side),
             x: self.x,

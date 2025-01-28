@@ -21,12 +21,8 @@ const CONFIG_FILE_NAME: &'static str = "config.json";
 pub fn load() -> Config {
     let file = File::open(PathBuf::from(CONFIG_FILE_NAME));
     let config: Config = match file {
-        Ok(file) => {
-            serde_json::from_reader(file).unwrap()
-        }
-        Err(_) => {
-            Config::default()
-        }
+        Ok(file) => serde_json::from_reader(file).unwrap(),
+        Err(_) => Config::default(),
     };
     config
 }

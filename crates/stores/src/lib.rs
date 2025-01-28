@@ -1,3 +1,5 @@
+pub mod eda_placements;
+pub mod part_mappings;
 /// Stores are for loading/storing different kinds of data.
 ///
 /// Currently, all stores are just simple files, mostly CSV.
@@ -8,13 +10,11 @@
 /// * Databases.
 /// * Etc.
 pub mod parts;
-pub mod eda_placements;
 pub mod placements;
-pub mod part_mappings;
 
-pub mod substitutions;
-pub mod load_out;
 pub mod assembly_rules;
 pub mod csv;
+pub mod load_out;
+pub mod substitutions;
 
 pub mod test;

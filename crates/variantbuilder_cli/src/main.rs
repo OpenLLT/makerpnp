@@ -1,37 +1,32 @@
 use std::sync::Arc;
+
 use anyhow::{anyhow, bail};
 use clap::Parser;
-use crossbeam_channel::unbounded;
-use crate::core::Core;
-use tracing::{trace};
 use cli;
+use crossbeam_channel::unbounded;
+use tracing::trace;
 use variantbuilder_app::{Effect, Event};
+
+use crate::core::Core;
 use crate::opts::Opts;
 
 mod core;
 mod opts;
 
+fn main() -> anyhow::Result<()> {
+    let args = argfile::expand_args(argfile::parse_fromfile, argfile::PREFIX).unwrap();
 
-fn main() -> anyhow::Result<()>{
-    let args = argfile::expand_args(
-        argfile::parse_fromfile,
-        argfile::PREFIX,
-    ).unwrap();
-    
     let opts = Opts::parse_from(args);
 
     cli::tracing::configure_tracing(opts.trace.clone(), opts.verbose.clone())?;
 
-    let event = Event::try_from(opts).map_err(|error|{
-        anyhow!("{}", error)
-    })?;
+    let event = Event::try_from(opts).map_err(|error| anyhow!("{}", error))?;
 
     let core = core::new();
     run_loop(&core, event)?;
 
     Ok(())
 }
-
 
 fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
     let (tx, rx) = unbounded::<Effect>();
@@ -47,9 +42,8 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                 if let Some(error) = view.error {
                     bail!(error)
                 }
-            },
+            }
         }
     }
     Ok(())
 }
-

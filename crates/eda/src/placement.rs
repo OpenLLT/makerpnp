@@ -1,5 +1,5 @@
-use rust_decimal::Decimal;
 use pnp::pcb::PcbSide;
+use rust_decimal::Decimal;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EdaPlacementField {
@@ -25,7 +25,7 @@ pub struct EdaPlacement {
     pub place: bool,
     pub fields: Vec<EdaPlacementField>,
     pub pcb_side: PcbSide,
-    
+
     /// Positive = Right
     pub x: Decimal,
     /// Positive = Up

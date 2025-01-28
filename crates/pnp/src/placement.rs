@@ -1,6 +1,7 @@
 use rust_decimal::Decimal;
-use crate::pcb::PcbSide;
+
 use crate::part::Part;
+use crate::pcb::PcbSide;
 
 /// Uses right-handed cartesian coordinate system
 /// See https://en.wikipedia.org/wiki/Cartesian_coordinate_system
@@ -10,7 +11,7 @@ pub struct Placement {
     pub part: Part,
     pub place: bool,
     pub pcb_side: PcbSide,
-    
+
     /// Positive = Right
     pub x: Decimal,
     /// Positive = Up

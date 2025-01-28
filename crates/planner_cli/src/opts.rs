@@ -1,15 +1,16 @@
-use clap::{Parser, Subcommand, ArgGroup};
+use std::path::{Path, PathBuf};
+
+use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg, ProcessOperationSetArg};
 use planner_app::Event;
 use planning::design::DesignName;
-use planning::reference::Reference;
 use planning::placement::PlacementSortingItem;
 use planning::process::ProcessName;
+use planning::reference::Reference;
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
 use regex::Regex;
-use std::path::{Path, PathBuf};
 use stores::load_out::LoadOutSource;
 use thiserror::Error;
 
@@ -46,8 +47,7 @@ pub(crate) struct Opts {
 #[command(arg_required_else_help(true))]
 pub(crate) enum Command {
     /// Create a new job
-    Create {
-    },
+    Create {},
     /// Add a PCB
     AddPcb {
         /// PCB kind
@@ -140,14 +140,12 @@ pub(crate) enum Command {
 
         /// Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC')
         #[arg(long, num_args = 0.., value_delimiter = ',', value_parser = cli::parsers::PlacementSortingItemParser::default())]
-        placement_orderings: Vec<PlacementSortingItem>
+        placement_orderings: Vec<PlacementSortingItem>,
     },
 
     // FUTURE consider adding a command to allow the phase ordering to be changed, currently phase ordering is determined by the order of phase creation.
-
     /// Generate artifacts
-    GenerateArtifacts {
-    },
+    GenerateArtifacts {},
     /// Record phase operation
     RecordPhaseOperation {
         /// Phase reference (e.g. 'top_1')
@@ -173,8 +171,7 @@ pub(crate) enum Command {
         operation: PlacementOperationArg,
     },
     /// Reset operations
-    ResetOperations {
-    }
+    ResetOperations {},
 }
 
 // FUTURE consider merging the AssignProcessToParts and AssignLoadOutToParts commands
@@ -190,56 +187,100 @@ impl TryFrom<Opts> for Event {
     type Error = EventError;
 
     fn try_from(opts: Opts) -> Result<Self, Self::Error> {
-
         match opts.command {
-            Command::Create { } => {
-                let name = opts.project.ok_or(EventError::MissingProjectName)?;
+            Command::Create {} => {
+                let name = opts
+                    .project
+                    .ok_or(EventError::MissingProjectName)?;
                 let directory = opts.path.clone();
 
                 let path = build_project_file_path(&name, &directory);
 
-                Ok(Event::CreateProject { name, path })
-            },
-            Command::AddPcb { kind, name } => 
-                Ok(Event::AddPcb { kind: kind.into(), name: name.to_string() }),
-            Command::AssignVariantToUnit { design, variant, unit } => 
-                Ok(Event::AssignVariantToUnit { design, variant, unit }),
-            Command::AssignProcessToParts { process, manufacturer, mpn } =>
-                Ok(Event::AssignProcessToParts { process, manufacturer, mpn }),
-            Command::CreatePhase { process, reference, load_out, pcb_side } =>
-                Ok(Event::CreatePhase {
-                    process,
-                    reference,
-                    load_out,
-                    pcb_side: pcb_side.into(),
-                }),
-            Command::AssignPlacementsToPhase { phase, placements } =>
-                Ok(Event::AssignPlacementsToPhase {
-                    phase,
-                    placements,
-                }),
-            Command::SetPlacementOrdering { phase, placement_orderings } =>
-                Ok(Event::SetPlacementOrdering { phase, placement_orderings }),
-            Command::GenerateArtifacts { } => 
-                Ok(Event::GenerateArtifacts),
-            Command::AssignFeederToLoadOutItem { phase, feeder_reference, manufacturer, mpn } =>
-                Ok(Event::AssignFeederToLoadOutItem {
-                    phase,
-                    feeder_reference,
-                    manufacturer,
-                    mpn,
-                }),
-            
-            Command::RecordPhaseOperation { phase, operation, set } => 
-                Ok(Event::RecordPhaseOperation {
-                    phase,
-                    operation: operation.into(),
-                    set: set.into(),
-                }),
-            Command::RecordPlacementsOperation { object_path_patterns, operation } =>
-                Ok(Event::RecordPlacementsOperation { object_path_patterns, operation: operation.into() }),
-            Command::ResetOperations { } => 
-                Ok(Event::ResetOperations {} ),
+                Ok(Event::CreateProject {
+                    name,
+                    path,
+                })
+            }
+            Command::AddPcb {
+                kind,
+                name,
+            } => Ok(Event::AddPcb {
+                kind: kind.into(),
+                name: name.to_string(),
+            }),
+            Command::AssignVariantToUnit {
+                design,
+                variant,
+                unit,
+            } => Ok(Event::AssignVariantToUnit {
+                design,
+                variant,
+                unit,
+            }),
+            Command::AssignProcessToParts {
+                process,
+                manufacturer,
+                mpn,
+            } => Ok(Event::AssignProcessToParts {
+                process,
+                manufacturer,
+                mpn,
+            }),
+            Command::CreatePhase {
+                process,
+                reference,
+                load_out,
+                pcb_side,
+            } => Ok(Event::CreatePhase {
+                process,
+                reference,
+                load_out,
+                pcb_side: pcb_side.into(),
+            }),
+            Command::AssignPlacementsToPhase {
+                phase,
+                placements,
+            } => Ok(Event::AssignPlacementsToPhase {
+                phase,
+                placements,
+            }),
+            Command::SetPlacementOrdering {
+                phase,
+                placement_orderings,
+            } => Ok(Event::SetPlacementOrdering {
+                phase,
+                placement_orderings,
+            }),
+            Command::GenerateArtifacts {} => Ok(Event::GenerateArtifacts),
+            Command::AssignFeederToLoadOutItem {
+                phase,
+                feeder_reference,
+                manufacturer,
+                mpn,
+            } => Ok(Event::AssignFeederToLoadOutItem {
+                phase,
+                feeder_reference,
+                manufacturer,
+                mpn,
+            }),
+
+            Command::RecordPhaseOperation {
+                phase,
+                operation,
+                set,
+            } => Ok(Event::RecordPhaseOperation {
+                phase,
+                operation: operation.into(),
+                set: set.into(),
+            }),
+            Command::RecordPlacementsOperation {
+                object_path_patterns,
+                operation,
+            } => Ok(Event::RecordPlacementsOperation {
+                object_path_patterns,
+                operation: operation.into(),
+            }),
+            Command::ResetOperations {} => Ok(Event::ResetOperations {}),
         }
     }
 }

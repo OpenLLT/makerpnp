@@ -15,7 +15,6 @@ impl<Ev> Navigator<Ev> {
     }
 }
 impl<Ev: 'static> Navigator<Ev> {
-
     pub fn navigate<F>(&self, path: String, make_event: F)
     where
         F: FnOnce(Result<Option<String>, NavigationError>) -> Ev + Send + Sync + 'static,
@@ -30,17 +29,17 @@ impl<Ev: 'static> Navigator<Ev> {
     }
 }
 
-
 async fn navigate<Ev: 'static>(
     context: &CapabilityContext<NavigationOperation, Ev>,
     path: String,
 ) -> Result<Option<String>, NavigationError> {
     context
-        .request_from_shell(NavigationOperation::Navigate { path })
+        .request_from_shell(NavigationOperation::Navigate {
+            path,
+        })
         .await
         .unwrap_set()
 }
-
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub enum NavigationResult {
@@ -50,26 +49,32 @@ pub enum NavigationResult {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub enum NavigationResponse {
-    Navigate { previous: String }
+    Navigate { previous: String },
 }
 
 impl NavigationResult {
     fn unwrap_set(self) -> Result<Option<String>, NavigationError> {
         match self {
-            NavigationResult::Ok { response } => match response {
-                NavigationResponse::Navigate { previous } => Ok(previous.into()),
+            NavigationResult::Ok {
+                response,
+            } => match response {
+                NavigationResponse::Navigate {
+                    previous,
+                } => Ok(previous.into()),
                 // _ => {
                 //     panic!("attempt to convert NavigationResponse other than Ok to Option<String>")
                 // }
             },
-            NavigationResult::Err { error } => Err(error.clone()),
+            NavigationResult::Err {
+                error,
+            } => Err(error.clone()),
         }
     }
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub enum NavigationOperation {
-    Navigate { path: String }
+    Navigate { path: String },
 }
 
 impl Operation for NavigationOperation {

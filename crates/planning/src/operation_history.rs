@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+
 use anyhow::Error;
+use pnp::object_path::ObjectPath;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
@@ -9,23 +11,31 @@ use serde_with::DisplayFromStr;
 use time::serde::rfc3339;
 use time::OffsetDateTime;
 use tracing::info;
+
 use crate::placement::PlacementOperation;
 use crate::process::ProcessOperationStatus;
 use crate::reference::Reference;
-use pnp::object_path::ObjectPath;
 
 #[serde_as]
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum OperationHistoryKind {
-    LoadPcbs { status: ProcessOperationStatus },
-    AutomatedPnp { status: ProcessOperationStatus },
-    ReflowComponents { status: ProcessOperationStatus },
-    ManuallySolderComponents { status: ProcessOperationStatus },
+    LoadPcbs {
+        status: ProcessOperationStatus,
+    },
+    AutomatedPnp {
+        status: ProcessOperationStatus,
+    },
+    ReflowComponents {
+        status: ProcessOperationStatus,
+    },
+    ManuallySolderComponents {
+        status: ProcessOperationStatus,
+    },
     PlacementOperation {
         #[serde_as(as = "DisplayFromStr")]
         object_path: ObjectPath,
-        operation: PlacementOperation
+        operation: PlacementOperation,
     },
 }
 
@@ -37,7 +47,7 @@ pub struct OperationHistoryItem {
     pub operation: OperationHistoryKind,
 
     #[serde(flatten)]
-    pub extra: HashMap<String, Value>
+    pub extra: HashMap<String, Value>,
 }
 
 pub fn write(phase_log_path: PathBuf, operation_history: &Vec<OperationHistoryItem>) -> Result<(), Error> {

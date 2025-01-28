@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+
 use thiserror::Error;
+
 use crate::variant::VariantName;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,8 +1,8 @@
-use planner_app::{Effect, Event, Planner};
-
 use std::sync::Arc;
+
 use anyhow::anyhow;
 use crossbeam_channel::Sender;
+use planner_app::{Effect, Event, Planner};
 use tracing::debug;
 
 pub type Core = Arc<crux_core::Core<Effect, Planner>>;

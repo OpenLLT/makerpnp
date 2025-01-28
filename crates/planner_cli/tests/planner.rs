@@ -5,25 +5,36 @@ pub mod common;
 
 mod operation_sequence_1 {
     use std::collections::BTreeMap;
-    use std::fs::{File, read_to_string};
+    use std::fs::{read_to_string, File};
     use std::io::Write;
     use std::path::PathBuf;
+
     use assert_cmd::Command;
     use indoc::indoc;
     use rust_decimal_macros::dec;
-    use tempfile::tempdir;
     use stores::test::load_out_builder::{LoadOutCSVBuilder, TestLoadOutRecord};
+    use tempfile::tempdir;
     use util::test::{build_temp_file, prepare_args, print};
-    use crate::common::operation_history::{TestOperationHistoryItem, TestOperationHistoryKind, TestOperationHistoryPlacementOperation};
+
+    use crate::common::operation_history::{
+        TestOperationHistoryItem, TestOperationHistoryKind, TestOperationHistoryPlacementOperation,
+    };
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
-    use crate::common::project_builder::{TestProcessOperationStatus, TestPlacementsState, TestProcessOperationExtraState, TestProjectBuilder};
-    use crate::common::project_report_builder::{ProjectReportBuilder, TestIssue, TestIssueKind, TestIssueSeverity, TestPart, TestPcb, TestPcbUnitAssignment, TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationKind, TestPhaseOperationOverview, TestPhaseOverview, TestPhaseSpecification};
+    use crate::common::project_builder::{
+        TestPlacementsState, TestProcessOperationExtraState, TestProcessOperationStatus, TestProjectBuilder,
+    };
+    use crate::common::project_report_builder::{
+        ProjectReportBuilder, TestIssue, TestIssueKind, TestIssueSeverity, TestPart, TestPcb, TestPcbUnitAssignment,
+        TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationKind, TestPhaseOperationOverview,
+        TestPhaseOverview, TestPhaseSpecification,
+    };
 
     /// A context, which will be dropped when the tests are completed.
     mod context {
         use std::sync::{Mutex, MutexGuard};
         use std::thread::sleep;
         use std::time::Duration;
+
         use super::*;
 
         #[derive(Debug)]
@@ -47,9 +58,15 @@ mod operation_sequence_1 {
                 let path_arg = format!("--path {}", temp_dir.path().to_str().unwrap());
 
                 let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
-                let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
+                let trace_log_arg = format!(
+                    "--trace {}",
+                    test_trace_log_file_name
+                        .to_str()
+                        .unwrap()
+                );
 
-                let (test_project_path, _test_project_file_name) = build_temp_file(&temp_dir, "project-job1", "mpnp.json");
+                let (test_project_path, _test_project_file_name) =
+                    build_temp_file(&temp_dir, "project-job1", "mpnp.json");
 
                 let project_arg = "--project job1".to_string();
 
@@ -78,7 +95,10 @@ mod operation_sequence_1 {
 
         impl Drop for Context {
             fn drop(&mut self) {
-                println!("destroying context. temp_dir: {}", self.temp_dir.path().to_str().unwrap());
+                println!(
+                    "destroying context. temp_dir: {}",
+                    self.temp_dir.path().to_str().unwrap()
+                );
             }
         }
 
@@ -90,10 +110,12 @@ mod operation_sequence_1 {
         /// interact with each other causing unexpected results and test failures.
         pub fn aquire(sequence: usize) -> MutexGuard<'static, (usize, Option<Context>)> {
             let mut lock = loop {
-                let mut lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                if lock.0 == sequence-1 {
+                let mut lock = LOCK
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if lock.0 == sequence - 1 {
                     lock.0 += 1;
-                    break lock
+                    break lock;
                 }
                 drop(lock);
 
@@ -145,9 +167,7 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        assert_contains_inorder!(trace_content, [
-            "Created project successfully",
-        ]);
+        assert_contains_inorder!(trace_content, ["Created project successfully",]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
@@ -157,7 +177,7 @@ mod operation_sequence_1 {
 
         Ok(())
     }
-    
+
     #[test]
     fn sequence_02_add_pcb() -> Result<(), anyhow::Error> {
         // given
@@ -171,9 +191,7 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
             .content();
 
         // and
@@ -199,9 +217,7 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        assert_contains_inorder!(trace_content, [
-            "Added panel PCB. name: 'panel_a'\n",
-        ]);
+        assert_contains_inorder!(trace_content, ["Added panel PCB. name: 'panel_a'\n",]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
@@ -235,7 +251,7 @@ mod operation_sequence_1 {
         placements_path.push("design_a_variant_a_placements.csv");
 
         println!("creating placements, path: {:?}", &placements_path);
-        
+
         let mut placments_file = File::create(placements_path)?;
         let _written = placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
         placments_file.flush()?;
@@ -244,18 +260,11 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CAP_MFR1", "CAP1"), &[]),
                 (("CONN_MFR1", "CONN1"), &[]),
@@ -273,7 +282,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(40), dec!(140), dec!(-90)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(40),
+                        dec!(140),
+                        dec!(-90),
+                    ),
                     false,
                     "Known",
                     None,
@@ -368,18 +386,11 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &[]),
@@ -397,7 +408,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -485,36 +505,31 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &[]),
                 (("RES_MFR2", "RES2"), &[]),
             ])
-            .with_phases(
-                &[
-                    ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[])
-                ]
-            )
-            .with_phase_orderings(
-                &["top_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("top_1", &[("LoadPcbs", TestProcessOperationStatus::Pending, None), ("AutomatedPnp", TestProcessOperationStatus::Pending, None), ("ReflowComponents", TestProcessOperationStatus::Pending, None)])
-                ]
-            )
+            .with_phases(&[(
+                "top_1",
+                "pnp",
+                ctx.phase_1_load_out_path
+                    .to_str()
+                    .unwrap(),
+                "top",
+                &[],
+            )])
+            .with_phase_orderings(&["top_1"])
+            .with_phase_states(&[("top_1", &[
+                ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                ("AutomatedPnp", TestProcessOperationStatus::Pending, None),
+                ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+            ])])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -527,7 +542,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -560,7 +584,12 @@ mod operation_sequence_1 {
             .content();
 
         // and
-        let phase_1_load_out_arg = format!("--load-out {}", ctx.phase_1_load_out_path.to_str().unwrap());
+        let phase_1_load_out_arg = format!(
+            "--load-out {}",
+            ctx.phase_1_load_out_path
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let args = prepare_args(vec![
@@ -586,7 +615,12 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let load_out_creation_message = format!("Created load-out. source: '{}'", ctx.phase_1_load_out_path.to_str().unwrap());
+        let load_out_creation_message = format!(
+            "Created load-out. source: '{}'",
+            ctx.phase_1_load_out_path
+                .to_str()
+                .unwrap()
+        );
 
         assert_contains_inorder!(trace_content, [
             &load_out_creation_message,
@@ -603,11 +637,10 @@ mod operation_sequence_1 {
         Ok(())
     }
 
-
     #[test]
     fn sequence_06_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire( 6);
+        let mut ctx_guard = context::aquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
 
         // and
@@ -617,38 +650,48 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &[]),
                 (("RES_MFR2", "RES2"), &[]),
             ])
-            .with_phases(
-                &[
-                    ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                    ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[]),
-                ]
-            )
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[("LoadPcbs", TestProcessOperationStatus::Pending, None), ("ManuallySolderComponents", TestProcessOperationStatus::Pending, None)]),
-                    ("top_1", &[("LoadPcbs", TestProcessOperationStatus::Pending, None), ("AutomatedPnp", TestProcessOperationStatus::Pending, None), ("ReflowComponents", TestProcessOperationStatus::Pending, None)]),
-                ]
-            )
+            .with_phases(&[
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[],
+                ),
+            ])
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    ("ManuallySolderComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    ("AutomatedPnp", TestProcessOperationStatus::Pending, None),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -661,7 +704,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -694,7 +746,12 @@ mod operation_sequence_1 {
             .content();
 
         // and
-        let phase_2_load_out_arg = format!("--load-out {}", ctx.phase_2_load_out_path.to_str().unwrap());
+        let phase_2_load_out_arg = format!(
+            "--load-out {}",
+            ctx.phase_2_load_out_path
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let args = prepare_args(vec![
@@ -720,7 +777,12 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let load_out_creation_message = format!("Created load-out. source: '{}'", ctx.phase_2_load_out_path.to_str().unwrap());
+        let load_out_creation_message = format!(
+            "Created load-out. source: '{}'",
+            ctx.phase_2_load_out_path
+                .to_str()
+                .unwrap()
+        );
 
         assert_contains_inorder!(trace_content, [
             &load_out_creation_message,
@@ -750,45 +812,66 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &["pnp"]),
                 (("RES_MFR2", "RES2"), &["pnp"]),
             ])
-            .with_phases(
-                &[
-                    ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                    ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[]),
-                ]
-            )
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("ManuallySolderComponents", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 0 }}))
-                    ]),
-                    ("top_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("AutomatedPnp", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 3 }})),
-                        ("ReflowComponents", TestProcessOperationStatus::Pending, None)
-                    ]),
-                ]
-            )
+            .with_phases(&[
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[],
+                ),
+            ])
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "ManuallySolderComponents",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 0,
+                            },
+                        }),
+                    ),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "AutomatedPnp",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 3,
+                            },
+                        }),
+                    ),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -801,7 +884,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -841,7 +933,6 @@ mod operation_sequence_1 {
             "-vv",
             "assign-placements-to-phase",
             "--phase top_1",
-
             // By placement path pattern
             //"--placements panel=1::unit=1::ref_des=R1"
             "--placements panel=1::unit=1::ref_des=R.*",
@@ -855,12 +946,20 @@ mod operation_sequence_1 {
             // "--manufacturer RES_MFR.*",
             // "--mpn .*"
         ]);
-        
+
         // and
         let expected_phase_1_load_out_content = LoadOutCSVBuilder::new()
             .with_items(&[
-                TestLoadOutRecord { reference: "".to_string(), manufacturer: "RES_MFR1".to_string(), mpn: "RES1".to_string() },
-                TestLoadOutRecord { reference: "".to_string(), manufacturer: "RES_MFR2".to_string(), mpn: "RES2".to_string() },
+                TestLoadOutRecord {
+                    reference: "".to_string(),
+                    manufacturer: "RES_MFR1".to_string(),
+                    mpn: "RES1".to_string(),
+                },
+                TestLoadOutRecord {
+                    reference: "".to_string(),
+                    manufacturer: "RES_MFR2".to_string(),
+                    mpn: "RES2".to_string(),
+                },
             ])
             .as_string();
 
@@ -876,9 +975,19 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let loading_load_out_message = format!("Loading load-out. source: '{}'", ctx.phase_1_load_out_path.to_str().unwrap());
-        let storing_load_out_message = format!("Storing load-out. source: '{}'", ctx.phase_1_load_out_path.to_str().unwrap());
-        
+        let loading_load_out_message = format!(
+            "Loading load-out. source: '{}'",
+            ctx.phase_1_load_out_path
+                .to_str()
+                .unwrap()
+        );
+        let storing_load_out_message = format!(
+            "Storing load-out. source: '{}'",
+            ctx.phase_1_load_out_path
+                .to_str()
+                .unwrap()
+        );
+
         assert_contains_inorder!(trace_content, [
             // assignments should be made
             "Assigning placement to phase. phase: top_1, placement_path: panel=1::unit=1::ref_des=R1",
@@ -923,7 +1032,7 @@ mod operation_sequence_1 {
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-        
+
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
@@ -938,11 +1047,19 @@ mod operation_sequence_1 {
 
         let expected_phase_1_load_out_content = LoadOutCSVBuilder::new()
             .with_items(&[
-                TestLoadOutRecord { reference: "FEEDER_1".to_string(), manufacturer: "RES_MFR1".to_string(), mpn: "RES1".to_string() },
-                TestLoadOutRecord { reference: "".to_string(), manufacturer: "RES_MFR2".to_string(), mpn: "RES2".to_string() },
+                TestLoadOutRecord {
+                    reference: "FEEDER_1".to_string(),
+                    manufacturer: "RES_MFR1".to_string(),
+                    mpn: "RES1".to_string(),
+                },
+                TestLoadOutRecord {
+                    reference: "".to_string(),
+                    manufacturer: "RES_MFR2".to_string(),
+                    mpn: "RES2".to_string(),
+                },
             ])
             .as_string();
-        
+
         // when
         cmd.args(args)
             // then
@@ -982,43 +1099,66 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &["pnp"]),
                 (("RES_MFR2", "RES2"), &["pnp"]),
             ])
             .with_phases(&[
-                ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[("PcbUnit", "Asc"),("FeederReference", "Asc")]),
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                ),
             ])
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("ManuallySolderComponents", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 0 }}))
-                    ]),
-                    ("top_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("AutomatedPnp", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 3 }})),
-                        ("ReflowComponents", TestProcessOperationStatus::Pending, None)
-                    ]),
-                ]
-            )
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "ManuallySolderComponents",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 0,
+                            },
+                        }),
+                    ),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "AutomatedPnp",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 3,
+                            },
+                        }),
+                    ),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -1031,7 +1171,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -1063,7 +1212,6 @@ mod operation_sequence_1 {
             ])
             .content();
 
-
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
@@ -1072,7 +1220,6 @@ mod operation_sequence_1 {
             "set-placement-ordering",
             "--phase top_1",
             "--placement-orderings PCB_UNIT:ASC,FEEDER_REFERENCE:ASC",
-            
             // example for PnP machine placement
             //"--orderings PCB_UNIT:ASC,COST:ASC,AREA:ASC,HEIGHT;ASC,FEEDER_REFERENCE:ASC",
             // example for manual placement
@@ -1150,36 +1297,44 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_status("Incomplete")
             .with_phases_overview(&[
-                TestPhaseOverview { phase_name: "top_1".to_string(), status: "Incomplete".to_string(), process: "pnp".to_string(), operations_overview: vec![
-                    // TODO add Prepare/Load PCBs and ensure it's incomplete
-                    TestPhaseOperationOverview {
-                        operation: TestPhaseOperationKind::PlaceComponents, 
-                        message: "0/3 placements placed".to_string(),
-                        status: TestProcessOperationStatus::Pending,
-                    }
-                ]},
-                TestPhaseOverview { phase_name: "bottom_1".to_string(), status: "Incomplete".to_string(), process: "manual".to_string(), operations_overview: vec![
-                    TestPhaseOperationOverview { 
+                TestPhaseOverview {
+                    phase_name: "top_1".to_string(),
+                    status: "Incomplete".to_string(),
+                    process: "pnp".to_string(),
+                    operations_overview: vec![
+                        // TODO add Prepare/Load PCBs and ensure it's incomplete
+                        TestPhaseOperationOverview {
+                            operation: TestPhaseOperationKind::PlaceComponents,
+                            message: "0/3 placements placed".to_string(),
+                            status: TestProcessOperationStatus::Pending,
+                        },
+                    ],
+                },
+                TestPhaseOverview {
+                    phase_name: "bottom_1".to_string(),
+                    status: "Incomplete".to_string(),
+                    process: "manual".to_string(),
+                    operations_overview: vec![TestPhaseOperationOverview {
                         operation: TestPhaseOperationKind::ManuallySolderComponents,
                         message: "0/0 placements placed".to_string(),
                         status: TestProcessOperationStatus::Pending,
-                    }
-                ]},
+                    }],
+                },
             ])
             .with_phase_specification(&[
                 TestPhaseSpecification {
                     phase_name: "top_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs { pcbs: vec![
-                            TestPcb::Panel {
+                        TestPhaseOperation::PreparePcbs {
+                            pcbs: vec![TestPcb::Panel {
                                 name: "panel_a".to_string(),
                                 unit_assignments: vec![TestPcbUnitAssignment {
                                     unit_path: "panel=1::unit=1".to_string(),
                                     design_name: "design_a".to_string(),
                                     variant_name: "variant_a".to_string(),
-                                }]
-                            }
-                        ]},
+                                }],
+                            }],
+                        },
                         TestPhaseOperation::PlaceComponents {},
                         TestPhaseOperation::ReflowComponents {},
                     ],
@@ -1196,25 +1351,24 @@ mod operation_sequence_1 {
                             mpn: "RES2".to_string(),
                             quantity: 1,
                         },
-                    ]
+                    ],
                 },
                 TestPhaseSpecification {
                     phase_name: "bottom_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs { pcbs: vec![
-                            TestPcb::Panel {
+                        TestPhaseOperation::PreparePcbs {
+                            pcbs: vec![TestPcb::Panel {
                                 name: "panel_a".to_string(),
                                 unit_assignments: vec![TestPcbUnitAssignment {
                                     unit_path: "panel=1::unit=1".to_string(),
                                     design_name: "design_a".to_string(),
                                     variant_name: "variant_a".to_string(),
-                                }]
-                            }
-                        ]},
+                                }],
+                            }],
+                        },
                         TestPhaseOperation::ManuallySolderComponents {},
                     ],
-                    load_out_assignments: vec![
-                    ]
+                    load_out_assignments: vec![],
                 },
             ])
             .with_issues(&[
@@ -1232,12 +1386,12 @@ mod operation_sequence_1 {
                         part: TestPart {
                             manufacturer: "RES_MFR2".to_string(),
                             mpn: "RES2".to_string(),
-                        }
-                    }
+                        },
+                    },
                 },
             ])
             .as_string();
-        
+
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
@@ -1257,14 +1411,27 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let load_out_message_1 = format!("Loading load-out. source: '{}'", ctx.phase_1_load_out_path.to_str().unwrap());
+        let load_out_message_1 = format!(
+            "Loading load-out. source: '{}'",
+            ctx.phase_1_load_out_path
+                .to_str()
+                .unwrap()
+        );
 
-        assert_eq!(trace_content.clone().split('\n').collect::<Vec<&str>>().iter().fold(0, |mut count,&line|{
-            if line.contains(&load_out_message_1) {
-                count += 1;
-            }
-            count
-        }), 1);
+        assert_eq!(
+            trace_content
+                .clone()
+                .split('\n')
+                .collect::<Vec<&str>>()
+                .iter()
+                .fold(0, |mut count, &line| {
+                    if line.contains(&load_out_message_1) {
+                        count += 1;
+                    }
+                    count
+                }),
+            1
+        );
 
         // and
         let mut phase_1_placements_file_path = PathBuf::from(ctx.temp_dir.path());
@@ -1274,17 +1441,23 @@ mod operation_sequence_1 {
         let mut project_report_file_path = PathBuf::from(ctx.temp_dir.path());
         project_report_file_path.push("job1_report.json");
 
-        let phase_1_message = format!("Generated phase placements. phase: 'top_1', path: {:?}\n", phase_1_placements_file_path);
-        let phase_2_message = format!("Generated phase placements. phase: 'bottom_1', path: {:?}\n", phase_2_placements_file_path);
+        let phase_1_message = format!(
+            "Generated phase placements. phase: 'top_1', path: {:?}\n",
+            phase_1_placements_file_path
+        );
+        let phase_2_message = format!(
+            "Generated phase placements. phase: 'bottom_1', path: {:?}\n",
+            phase_2_placements_file_path
+        );
         let report_message = format!("Generated report. path: {:?}\n", project_report_file_path);
-        
+
         assert_contains_inorder!(trace_content, [
             &phase_1_message,
             &phase_2_message,
             &report_message,
             "Generated artifacts.\n",
         ]);
-        
+
         // and
         let phase_1_placements_content: String = read_to_string(phase_1_placements_file_path)?;
         println!("{}", phase_1_placements_content);
@@ -1293,7 +1466,6 @@ mod operation_sequence_1 {
 
         // and
         println!("expected:\n{}", expected_project_report_content);
-
 
         let project_report_content: String = read_to_string(project_report_file_path)?;
         println!("actual:\n{}", project_report_content);
@@ -1316,43 +1488,66 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &["pnp"]),
                 (("RES_MFR2", "RES2"), &["pnp"]),
             ])
             .with_phases(&[
-                ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[("PcbUnit", "Asc"),("FeederReference", "Asc")]),
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                ),
             ])
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("ManuallySolderComponents", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 0 }}))
-                    ]),
-                    ("top_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Complete, None),
-                        ("AutomatedPnp", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 3 }})),
-                        ("ReflowComponents", TestProcessOperationStatus::Pending, None)
-                    ]),
-                ]
-            )
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "ManuallySolderComponents",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 0,
+                            },
+                        }),
+                    ),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Complete, None),
+                    (
+                        "AutomatedPnp",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 3,
+                            },
+                        }),
+                    ),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -1365,7 +1560,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -1399,7 +1603,12 @@ mod operation_sequence_1 {
 
         // and
         let operation_expectations = vec![
-            ("require", Some(("top_1".to_string(), TestOperationHistoryKind::LoadPcbs { status: TestProcessOperationStatus::Complete }))),
+            (
+                "require",
+                Some(("top_1".to_string(), TestOperationHistoryKind::LoadPcbs {
+                    status: TestProcessOperationStatus::Complete,
+                })),
+            ),
             ("eof", None),
         ];
 
@@ -1411,9 +1620,9 @@ mod operation_sequence_1 {
             "record-phase-operation",
             "--phase top_1",
             "--operation loadpcbs",
-            "--set completed"
+            "--set completed",
         ]);
-        
+
         // when
         cmd.args(args)
             // then
@@ -1427,10 +1636,8 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         let log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
-        
-        assert_contains_inorder!(trace_content, [
-            &log_file_message,
-        ]);
+
+        assert_contains_inorder!(trace_content, [&log_file_message,]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
@@ -1446,7 +1653,7 @@ mod operation_sequence_1 {
 
         Ok(())
     }
-    
+
     #[test]
     fn sequence_12_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
@@ -1460,43 +1667,66 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &["pnp"]),
                 (("RES_MFR2", "RES2"), &["pnp"]),
             ])
             .with_phases(&[
-                ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[("PcbUnit", "Asc"),("FeederReference", "Asc")]),
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                ),
             ])
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("ManuallySolderComponents", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 0 }}))
-                    ]),
-                    ("top_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Complete, None),
-                        ("AutomatedPnp", TestProcessOperationStatus::Complete, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 3, total: 3 }})),
-                        ("ReflowComponents", TestProcessOperationStatus::Pending, None)
-                    ]),
-                ]
-            )
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "ManuallySolderComponents",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 0,
+                            },
+                        }),
+                    ),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Complete, None),
+                    (
+                        "AutomatedPnp",
+                        TestProcessOperationStatus::Complete,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 3,
+                                total: 3,
+                            },
+                        }),
+                    ),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -1509,7 +1739,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -1540,16 +1779,34 @@ mod operation_sequence_1 {
                 ),
             ])
             .content();
-        
+
         // and
         let operation_expectations = vec![
             ("ignore", None),
-            ("require", Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation { object_path: "panel=1::unit=1::ref_des=R1".to_string(), operation: TestOperationHistoryPlacementOperation::Placed}))),
-            ("require", Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation { object_path: "panel=1::unit=1::ref_des=R2".to_string(), operation: TestOperationHistoryPlacementOperation::Placed}))),
-            ("require", Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation { object_path: "panel=1::unit=1::ref_des=R3".to_string(), operation: TestOperationHistoryPlacementOperation::Placed}))),
+            (
+                "require",
+                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
+                    object_path: "panel=1::unit=1::ref_des=R1".to_string(),
+                    operation: TestOperationHistoryPlacementOperation::Placed,
+                })),
+            ),
+            (
+                "require",
+                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
+                    object_path: "panel=1::unit=1::ref_des=R2".to_string(),
+                    operation: TestOperationHistoryPlacementOperation::Placed,
+                })),
+            ),
+            (
+                "require",
+                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
+                    object_path: "panel=1::unit=1::ref_des=R3".to_string(),
+                    operation: TestOperationHistoryPlacementOperation::Placed,
+                })),
+            ),
             ("eof", None),
         ];
-        
+
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
@@ -1612,43 +1869,66 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[
-                ("panel", "panel_a"),
-            ])
-            .with_unit_assignments(&[
-                (
-                    "panel=1::unit=1",
-                    BTreeMap::from([
-                        ("design_name", "design_a"),
-                        ("variant_name", "variant_a"),
-                    ])
-                )
-            ])
+            .with_pcbs(&[("panel", "panel_a")])
+            .with_unit_assignments(&[(
+                "panel=1::unit=1",
+                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            )])
             .with_part_states(&[
                 (("CONN_MFR1", "CONN1"), &["manual"]),
                 (("RES_MFR1", "RES1"), &["pnp"]),
                 (("RES_MFR2", "RES2"), &["pnp"]),
             ])
             .with_phases(&[
-                ("bottom_1", "manual", ctx.phase_2_load_out_path.to_str().unwrap(), "bottom", &[]),
-                ("top_1", "pnp", ctx.phase_1_load_out_path.to_str().unwrap(), "top", &[("PcbUnit", "Asc"),("FeederReference", "Asc")]),
+                (
+                    "bottom_1",
+                    "manual",
+                    ctx.phase_2_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "bottom",
+                    &[],
+                ),
+                (
+                    "top_1",
+                    "pnp",
+                    ctx.phase_1_load_out_path
+                        .to_str()
+                        .unwrap(),
+                    "top",
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                ),
             ])
-            .with_phase_orderings(
-                &["top_1", "bottom_1"]
-            )
-            .with_phase_states(
-                &[
-                    ("bottom_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("ManuallySolderComponents", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 0 }}))
-                    ]),
-                    ("top_1", &[
-                        ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                        ("AutomatedPnp", TestProcessOperationStatus::Pending, Some(TestProcessOperationExtraState::PlacementOperation { placements_state: TestPlacementsState { placed: 0, total: 3 }})),
-                        ("ReflowComponents", TestProcessOperationStatus::Pending, None)
-                    ]),
-                ]
-            )
+            .with_phase_orderings(&["top_1", "bottom_1"])
+            .with_phase_states(&[
+                ("bottom_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "ManuallySolderComponents",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 0,
+                            },
+                        }),
+                    ),
+                ]),
+                ("top_1", &[
+                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
+                    (
+                        "AutomatedPnp",
+                        TestProcessOperationStatus::Pending,
+                        Some(TestProcessOperationExtraState::PlacementOperation {
+                            placements_state: TestPlacementsState {
+                                placed: 0,
+                                total: 3,
+                            },
+                        }),
+                    ),
+                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ]),
+            ])
             .with_placements(&[
                 (
                     "panel=1::unit=1::ref_des=C1",
@@ -1661,7 +1941,16 @@ mod operation_sequence_1 {
                 (
                     "panel=1::unit=1::ref_des=J1",
                     "panel=1::unit=1",
-                    ("J1", "CONN_MFR1", "CONN1", true, "bottom", dec!(130), dec!(1130), dec!(-179)),
+                    (
+                        "J1",
+                        "CONN_MFR1",
+                        "CONN1",
+                        true,
+                        "bottom",
+                        dec!(130),
+                        dec!(1130),
+                        dec!(-179),
+                    ),
                     false,
                     "Known",
                     None,
@@ -1726,26 +2015,37 @@ mod operation_sequence_1 {
 
         Ok(())
     }
-    fn assert_operation_history(mut operation_history: Vec<TestOperationHistoryItem>, operation_expectations: Vec<(&str, Option<(String, TestOperationHistoryKind)>)>) {
-        for (index, (&ref expectation_operation, expectation)) in operation_expectations.iter().enumerate() {
-
+    fn assert_operation_history(
+        mut operation_history: Vec<TestOperationHistoryItem>,
+        operation_expectations: Vec<(&str, Option<(String, TestOperationHistoryKind)>)>,
+    ) {
+        for (index, (&ref expectation_operation, expectation)) in operation_expectations
+            .iter()
+            .enumerate()
+        {
             match expectation_operation {
                 "eof" => {
                     assert!(operation_history.is_empty());
-                    break
-                },
+                    break;
+                }
                 _ => {}
             }
-            
+
             let (item, remaining_operation_history) = operation_history.split_first().unwrap();
-            println!("index: {}, expectation: {}, item: {:?}", index, expectation_operation, item);
-            
+            println!(
+                "index: {}, expectation: {}, item: {:?}",
+                index, expectation_operation, item
+            );
+
             match expectation_operation {
-                "ignore" => {},
+                "ignore" => {}
                 "require" => {
-                    assert_eq!(&(item.phase.clone(), item.operation.clone()), expectation.as_ref().unwrap());
+                    assert_eq!(
+                        &(item.phase.clone(), item.operation.clone()),
+                        expectation.as_ref().unwrap()
+                    );
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
 
             operation_history = Vec::from(remaining_operation_history);
@@ -2041,7 +2341,6 @@ mod help {
             .stderr(print("stderr"))
             .stdout(print("stdout").and(predicate::str::diff(expected_output)));
     }
-
 
     #[test]
     fn help_for_generate_artifacts() {

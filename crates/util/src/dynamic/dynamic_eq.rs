@@ -6,8 +6,8 @@ pub trait DynamicEq {
 
 impl<T: PartialEq + 'static> DynamicEq for T {
     fn dynamic_eq(&self, other: &dyn Any) -> bool {
-        other.downcast_ref().map_or(false, |other|
-            self == other
-        )
+        other
+            .downcast_ref()
+            .map_or(false, |other| self == other)
     }
 }

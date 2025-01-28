@@ -1,12 +1,12 @@
 use std::fs::File;
 use std::path::PathBuf;
+
 use clap_verbosity_flag::{LogLevel, Verbosity};
-use tracing_subscriber::fmt::Subscriber as FmtSubscriber;
-use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_log::AsTrace;
+use tracing_subscriber::fmt::format::FmtSpan;
+use tracing_subscriber::fmt::Subscriber as FmtSubscriber;
 
 pub fn configure_tracing<IL: LogLevel>(path: Option<PathBuf>, verbosity: Verbosity<IL>) -> anyhow::Result<()> {
-
     const SUBSCRIBER_FAILED_MESSAGE: &'static str = "setting default subscriber failed";
     match path {
         Some(path) => {
@@ -18,9 +18,8 @@ pub fn configure_tracing<IL: LogLevel>(path: Option<PathBuf>, verbosity: Verbosi
                 .with_max_level(verbosity.log_level_filter().as_trace())
                 .finish();
 
-            tracing::subscriber::set_global_default(file_subscriber)
-                .expect(SUBSCRIBER_FAILED_MESSAGE);
-        },
+            tracing::subscriber::set_global_default(file_subscriber).expect(SUBSCRIBER_FAILED_MESSAGE);
+        }
         _ => {
             //println!("using stdout_subscriber");
             let stdout_subscriber = FmtSubscriber::builder()
@@ -31,8 +30,7 @@ pub fn configure_tracing<IL: LogLevel>(path: Option<PathBuf>, verbosity: Verbosi
                 .with_max_level(verbosity.log_level_filter().as_trace())
                 .finish();
 
-            tracing::subscriber::set_global_default(stdout_subscriber)
-                .expect(SUBSCRIBER_FAILED_MESSAGE);
+            tracing::subscriber::set_global_default(stdout_subscriber).expect(SUBSCRIBER_FAILED_MESSAGE);
         }
     };
 

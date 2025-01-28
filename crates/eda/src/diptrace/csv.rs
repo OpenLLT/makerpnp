@@ -1,9 +1,11 @@
 use std::ops::{Add, Sub};
+
+use pnp::pcb::PcbSide;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use thiserror::Error;
+
 use crate::placement::{EdaPlacement, EdaPlacementField};
-use pnp::pcb::PcbSide;
 
 // TODO add tests for aliases
 
@@ -43,7 +45,7 @@ impl From<&DipTracePcbSide> for PcbSide {
 #[derive(Error, Debug)]
 pub enum DiptracePlacementRecordError {
     #[error("Unknown")]
-    Unknown
+    Unknown,
 }
 
 impl DiptracePlacementRecord {
@@ -52,8 +54,14 @@ impl DiptracePlacementRecord {
             ref_des: self.ref_des.to_string(),
             place: true,
             fields: vec![
-                EdaPlacementField { name: "name".to_string(), value: self.name.to_string() },
-                EdaPlacementField { name: "value".to_string(), value: self.value.to_string() },
+                EdaPlacementField {
+                    name: "name".to_string(),
+                    value: self.name.to_string(),
+                },
+                EdaPlacementField {
+                    name: "value".to_string(),
+                    value: self.value.to_string(),
+                },
             ],
             pcb_side: PcbSide::from(&self.side),
             x: self.x,
@@ -72,7 +80,7 @@ impl DipTraceRotationConverter {
             input = input.sub(dec!(360));
         }
         while input < dec!(0) {
-            input = input.add( dec!(360));
+            input = input.add(dec!(360));
         }
         if input > dec!(180) {
             input = input.sub(dec!(360));
@@ -87,6 +95,7 @@ mod rotation_conversion_tests {
     use rstest::rstest;
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
+
     use crate::diptrace::csv::DipTraceRotationConverter;
 
     #[rstest]

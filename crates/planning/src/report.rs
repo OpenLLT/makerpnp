@@ -1,19 +1,21 @@
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
-use std::path::{Path, PathBuf};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use tracing::{info, trace};
 use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
-use thiserror::Error;
-use anyhow::Error;
-use serde::Serialize;
 use std::io::Write;
-use pnp::pcb::{Pcb, PcbKind};
+use std::path::{Path, PathBuf};
+
+use anyhow::Error;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
+use pnp::pcb::{Pcb, PcbKind};
+use serde::Serialize;
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
+use thiserror::Error;
+use tracing::{info, trace};
 use util::sorting::SortOrder;
+
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, PlacementStatus};
 use crate::process::{ProcessOperationExtraState, ProcessOperationKind, ProcessOperationStatus};
@@ -30,8 +32,12 @@ pub enum ReportGenerationError {
 // FUTURE add a test to ensure that duplicate issues are not added to the report.
 //        currently a BTreeSet is used to prevent duplicate issues.
 
-pub fn project_generate_report(project: &Project, directory: &Path, phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>, issue_set: &mut BTreeSet<ProjectReportIssue>) -> Result<(), ReportGenerationError> {
-
+pub fn project_generate_report(
+    project: &Project,
+    directory: &Path,
+    phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
+    issue_set: &mut BTreeSet<ProjectReportIssue>,
+) -> Result<(), ReportGenerationError> {
     let mut report = ProjectReport::default();
 
     report.name.clone_from(&project.name);
@@ -46,56 +52,93 @@ pub fn project_generate_report(project: &Project, directory: &Path, phase_load_o
     let mut all_phases_complete = true;
 
     if !project.phases.is_empty() {
-        report.phase_overviews.extend(project.phase_orderings.iter().map(|reference| {
-            let phase = project.phases.get(reference).unwrap();
-            let phase_state = project.phase_states.get(reference).unwrap();
-            trace!("phase: {:?}, phase_state: {:?}", phase, phase_state);
-            
-            let mut operations_overview = vec![];
-            
-            let phase_status = phase_state.operation_state.iter()
-                .fold(PhaseStatus::Complete, |mut phase_status, (operation, operation_state) | {
-                let overview = match (operation, &operation_state.extra) {
+        report.phase_overviews.extend(
+            project
+                .phase_orderings
+                .iter()
+                .map(|reference| {
+                    let phase = project.phases.get(reference).unwrap();
+                    let phase_state = project
+                        .phase_states
+                        .get(reference)
+                        .unwrap();
+                    trace!("phase: {:?}, phase_state: {:?}", phase, phase_state);
 
-                    (ProcessOperationKind::AutomatedPnp, Some(ProcessOperationExtraState::PlacementOperation { placements_state })) => {
-                        if phase_status == PhaseStatus::Complete && operation_state.status != ProcessOperationStatus::Complete {
-                            phase_status = PhaseStatus::Incomplete;
-                        }
-                        
-                        let placements_message = format!("{}/{} placements placed", placements_state.placed, placements_state.total);
-                        
-                        Some(PhaseOperationOverview { operation: PhaseOperationKind::PlaceComponents, message: placements_message.clone(), status: operation_state.status.clone() })
-                    },
-                    (ProcessOperationKind::ManuallySolderComponents, Some(ProcessOperationExtraState::PlacementOperation { placements_state })) => {
-                        if phase_status == PhaseStatus::Complete && operation_state.status != ProcessOperationStatus::Complete {
-                            phase_status = PhaseStatus::Incomplete;
-                        }
+                    let mut operations_overview = vec![];
 
-                        let placements_message = format!("{}/{} placements placed", placements_state.placed, placements_state.total);
+                    let phase_status = phase_state.operation_state.iter().fold(
+                        PhaseStatus::Complete,
+                        |mut phase_status, (operation, operation_state)| {
+                            let overview = match (operation, &operation_state.extra) {
+                                (
+                                    ProcessOperationKind::AutomatedPnp,
+                                    Some(ProcessOperationExtraState::PlacementOperation {
+                                        placements_state,
+                                    }),
+                                ) => {
+                                    if phase_status == PhaseStatus::Complete
+                                        && operation_state.status != ProcessOperationStatus::Complete
+                                    {
+                                        phase_status = PhaseStatus::Incomplete;
+                                    }
 
-                        Some(PhaseOperationOverview { operation: PhaseOperationKind::ManuallySolderComponents, message: placements_message.clone(), status: operation_state.status.clone() })
-                    },
-                    (_, _) => None,
-                };
-                
-                if let Some(overview) = overview {
-                    operations_overview.push(overview)
-                }
-                
-                phase_status 
-            });
-            
-            if phase_status == PhaseStatus::Incomplete {
-                all_phases_complete = false
-            }
-            
-            PhaseOverview { 
-                phase_name: phase.reference.to_string(),
-                status: phase_status,
-                process: phase.process.to_string(),
-                operations_overview,
-            }
-        }));
+                                    let placements_message = format!(
+                                        "{}/{} placements placed",
+                                        placements_state.placed, placements_state.total
+                                    );
+
+                                    Some(PhaseOperationOverview {
+                                        operation: PhaseOperationKind::PlaceComponents,
+                                        message: placements_message.clone(),
+                                        status: operation_state.status.clone(),
+                                    })
+                                }
+                                (
+                                    ProcessOperationKind::ManuallySolderComponents,
+                                    Some(ProcessOperationExtraState::PlacementOperation {
+                                        placements_state,
+                                    }),
+                                ) => {
+                                    if phase_status == PhaseStatus::Complete
+                                        && operation_state.status != ProcessOperationStatus::Complete
+                                    {
+                                        phase_status = PhaseStatus::Incomplete;
+                                    }
+
+                                    let placements_message = format!(
+                                        "{}/{} placements placed",
+                                        placements_state.placed, placements_state.total
+                                    );
+
+                                    Some(PhaseOperationOverview {
+                                        operation: PhaseOperationKind::ManuallySolderComponents,
+                                        message: placements_message.clone(),
+                                        status: operation_state.status.clone(),
+                                    })
+                                }
+                                (_, _) => None,
+                            };
+
+                            if let Some(overview) = overview {
+                                operations_overview.push(overview)
+                            }
+
+                            phase_status
+                        },
+                    );
+
+                    if phase_status == PhaseStatus::Incomplete {
+                        all_phases_complete = false
+                    }
+
+                    PhaseOverview {
+                        phase_name: phase.reference.to_string(),
+                        status: phase_status,
+                        process: phase.process.to_string(),
+                        operations_overview,
+                    }
+                }),
+        );
     } else {
         issue_set.insert(ProjectReportIssue {
             message: "No phases have been created.".to_string(),
@@ -112,27 +155,34 @@ pub fn project_generate_report(project: &Project, directory: &Path, phase_load_o
     let invalid_unit_assignment_issues = generate_issues_for_invalid_unit_assignments(project);
     issue_set.extend(invalid_unit_assignment_issues);
 
-    let phase_specifications: Vec<PhaseSpecification>  = project.phase_orderings.iter().map(| reference | {
-        build_phase_specification(project, phase_load_out_items_map, reference)
-    }).collect();
+    let phase_specifications: Vec<PhaseSpecification> = project
+        .phase_orderings
+        .iter()
+        .map(|reference| build_phase_specification(project, phase_load_out_items_map, reference))
+        .collect();
 
-    report.phase_specifications.extend(phase_specifications);
+    report
+        .phase_specifications
+        .extend(phase_specifications);
 
     project_report_add_placement_issues(project, issue_set);
     let mut issues: Vec<ProjectReportIssue> = issue_set.iter().cloned().collect();
 
     project_report_sort_issues(&mut issues);
-    
+
     for issue in issues.iter() {
-        info!("Issue detected. severity: {:?}, message: '{}', kind: {:?}", issue.severity, issue.message, issue.kind );
+        info!(
+            "Issue detected. severity: {:?}, message: '{}', kind: {:?}",
+            issue.severity, issue.message, issue.kind
+        );
     }
-    
+
     report.issues = issues;
 
     let report_file_path = build_report_file_path(&project.name, directory);
 
-    project_report_save(&report, &report_file_path).map_err(|err|{
-        ReportGenerationError::UnableToSaveReport { reason: err }
+    project_report_save(&report, &report_file_path).map_err(|err| ReportGenerationError::UnableToSaveReport {
+        reason: err,
     })?;
 
     Ok(())
@@ -151,7 +201,9 @@ fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<P
                         Some(ProjectReportIssue {
                             message: "Invalid unit assignment, index out of range.".to_string(),
                             severity: IssueSeverity::Severe,
-                            kind: IssueKind::InvalidUnitAssignment { object_path: object_path.clone() },
+                            kind: IssueKind::InvalidUnitAssignment {
+                                object_path: object_path.clone(),
+                            },
                         })
                     } else {
                         None
@@ -160,8 +212,10 @@ fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<P
                 None => Some(ProjectReportIssue {
                     message: "Invalid unit assignment, no pcbs match the assignment.".to_string(),
                     severity: IssueSeverity::Severe,
-                    kind: IssueKind::InvalidUnitAssignment { object_path: object_path.clone() },
-                })
+                    kind: IssueKind::InvalidUnitAssignment {
+                        object_path: object_path.clone(),
+                    },
+                }),
             };
 
             if let Some(issue) = issue {
@@ -176,18 +230,28 @@ fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<P
 fn count_pcb_kinds(pcbs: &[Pcb]) -> HashMap<PcbKind, usize> {
     let mut pcb_kind_counts: HashMap<PcbKind, usize> = Default::default();
     for pcb in pcbs.iter() {
-        pcb_kind_counts.entry(pcb.kind.clone())
-            .and_modify(|e| { *e += 1 })
+        pcb_kind_counts
+            .entry(pcb.kind.clone())
+            .and_modify(|e| *e += 1)
             .or_insert(1);
     }
     pcb_kind_counts
 }
 
-fn build_phase_specification(project: &Project, phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>, reference: &Reference) -> PhaseSpecification {
+fn build_phase_specification(
+    project: &Project,
+    phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
+    reference: &Reference,
+) -> PhaseSpecification {
     let phase = project.phases.get(reference).unwrap();
-    let phase_state = project.phase_states.get(reference).unwrap();
+    let phase_state = project
+        .phase_states
+        .get(reference)
+        .unwrap();
 
-    let load_out_items = phase_load_out_items_map.get(reference).unwrap();
+    let load_out_items = phase_load_out_items_map
+        .get(reference)
+        .unwrap();
 
     let load_out_assignments = load_out_items.iter().map(|load_out_item| {
         let quantity = project.placements.iter()
@@ -209,14 +273,16 @@ fn build_phase_specification(project: &Project, phase_load_out_items_map: &BTree
         }
     }).collect();
 
-    let operations = phase_state.operation_state.keys().map(|operation| {
-        match operation {
+    let operations = phase_state
+        .operation_state
+        .keys()
+        .map(|operation| match operation {
             ProcessOperationKind::LoadPcbs => build_operation_load_pcbs(project),
             ProcessOperationKind::AutomatedPnp => PhaseOperation::PlaceComponents {},
             ProcessOperationKind::ReflowComponents => PhaseOperation::ReflowComponents {},
             ProcessOperationKind::ManuallySolderComponents => PhaseOperation::ManuallySolderComponents {},
-        }
-    }).collect();
+        })
+        .collect();
 
     PhaseSpecification {
         phase_name: phase.reference.to_string(),
@@ -228,147 +294,187 @@ fn build_phase_specification(project: &Project, phase_load_out_items_map: &BTree
 fn build_operation_load_pcbs(project: &Project) -> PhaseOperation {
     let unit_paths_with_placements = build_unit_paths_with_placements(&project.placements);
 
-    let pcbs: Vec<PcbReportItem> = unit_paths_with_placements.iter().find_map(|unit_path| {
-        if let Some((kind, mut index)) = unit_path.pcb_kind_and_index() {
+    let pcbs: Vec<PcbReportItem> = unit_paths_with_placements
+        .iter()
+        .find_map(|unit_path| {
+            if let Some((kind, mut index)) = unit_path.pcb_kind_and_index() {
+                // TODO consider if unit paths should use zero-based index
+                index -= 1;
 
-            // TODO consider if unit paths should use zero-based index
-            index -= 1;
+                // Note: the user may not have made any unit assignments yet.
+                let mut unit_assignments = find_unit_assignments(project, unit_path);
 
-            // Note: the user may not have made any unit assignments yet.
-            let mut unit_assignments = find_unit_assignments(project, unit_path);
+                match kind {
+                    PcbKind::Panel => {
+                        let pcb = project.pcbs.get(index).unwrap();
 
-            match kind {
-                PcbKind::Panel => {
-                    let pcb = project.pcbs.get(index).unwrap();
+                        Some(PcbReportItem::Panel {
+                            name: pcb.name.clone(),
+                            unit_assignments,
+                        })
+                    }
+                    PcbKind::Single => {
+                        let pcb = project.pcbs.get(index).unwrap();
 
+                        assert!(unit_assignments.len() <= 1);
 
-                    Some(PcbReportItem::Panel {
-                        name: pcb.name.clone(),
-                        unit_assignments,
-                    })
-                },
-                PcbKind::Single => {
-                    let pcb = project.pcbs.get(index).unwrap();
-
-                    assert!(unit_assignments.len() <= 1);
-
-                    Some(PcbReportItem::Single {
-                        name: pcb.name.clone(),
-                        unit_assignment: unit_assignments.pop()
-                    })
-                },
+                        Some(PcbReportItem::Single {
+                            name: pcb.name.clone(),
+                            unit_assignment: unit_assignments.pop(),
+                        })
+                    }
+                }
+            } else {
+                None
             }
-        } else {
-            None
-        }
-    }).into_iter().collect();
+        })
+        .into_iter()
+        .collect();
 
-    let operation = PhaseOperation::PreparePcbs { pcbs };
+    let operation = PhaseOperation::PreparePcbs {
+        pcbs,
+    };
     operation
 }
 
 fn build_unit_paths_with_placements(placement_states: &BTreeMap<ObjectPath, PlacementState>) -> BTreeSet<ObjectPath> {
-    placement_states.iter().fold(BTreeSet::<ObjectPath>::new(), |mut acc, (object_path, placement_state)| {
-        if placement_state.placement.place {
-            let pcb_unit = object_path.pcb_unit();
-            if acc.insert(pcb_unit) {
-                trace!("Phase pcb unit found.  object_path: {}", object_path);
+    placement_states.iter().fold(
+        BTreeSet::<ObjectPath>::new(),
+        |mut acc, (object_path, placement_state)| {
+            if placement_state.placement.place {
+                let pcb_unit = object_path.pcb_unit();
+                if acc.insert(pcb_unit) {
+                    trace!("Phase pcb unit found.  object_path: {}", object_path);
+                }
             }
-        }
-        acc
-    })
+            acc
+        },
+    )
 }
 
 fn project_report_add_placement_issues(project: &Project, issues: &mut BTreeSet<ProjectReportIssue>) {
-    for (object_path, _placement_state) in project.placements.iter().filter(|(_object_path, placement_state)| {
-        placement_state.phase.is_none() && placement_state.status == PlacementStatus::Known
-    }) {
+    for (object_path, _placement_state) in project
+        .placements
+        .iter()
+        .filter(|(_object_path, placement_state)| {
+            placement_state.phase.is_none() && placement_state.status == PlacementStatus::Known
+        })
+    {
         issues.insert(ProjectReportIssue {
             message: "A placement has not been assigned to a phase".to_string(),
             severity: IssueSeverity::Warning,
-            kind: IssueKind::UnassignedPlacement { object_path: object_path.clone() },
+            kind: IssueKind::UnassignedPlacement {
+                object_path: object_path.clone(),
+            },
         });
     }
 }
 
 fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
     issues.sort_by(|a, b| {
+        let sort_orderings = &[
+            ("severity", SortOrder::Desc),
+            ("kind", SortOrder::Asc),
+            ("message", SortOrder::Asc),
+        ];
 
-        let sort_orderings = &[("severity", SortOrder::Desc), ("kind", SortOrder::Asc), ("message", SortOrder::Asc)];
-        
-        sort_orderings.iter().fold( Ordering::Equal, | mut acc, (&ref mode, sort_order) | {
-            if !matches!(acc, Ordering::Equal) {
-                return acc
-            }
+        sort_orderings
+            .iter()
+            .fold(Ordering::Equal, |mut acc, (&ref mode, sort_order)| {
+                if !matches!(acc, Ordering::Equal) {
+                    return acc;
+                }
 
-            fn kind_ordinal(kind: &IssueKind) -> usize {
-                match kind {
-                    IssueKind::NoPcbsAssigned => 0,
-                    IssueKind::NoPhasesCreated => 1,
-                    IssueKind::InvalidUnitAssignment { .. } => 2,
-                    IssueKind::UnassignedPlacement { .. } => 3,
-                    IssueKind::UnassignedPartFeeder { .. } => 4,
-                }   
-            }
-            fn severity_ordinal(severity: &IssueSeverity) -> usize {
-                match severity {
-                    IssueSeverity::Warning => 0,
-                    IssueSeverity::Severe => 1,
-                }   
-            }
-            
-            acc = match mode {
-                "kind" => {
-                    let a_ordinal = kind_ordinal(&a.kind); 
-                    let b_ordinal = kind_ordinal(&b.kind);
-                    let ordinal_ordering = a_ordinal.cmp(&b_ordinal);
-                    
-                    match ordinal_ordering {
-                        Ordering::Less => ordinal_ordering,
-                        Ordering::Equal => {
-                            match (&a.kind, &b.kind) {
-                                (IssueKind::InvalidUnitAssignment { object_path: object_path_a }, IssueKind::InvalidUnitAssignment { object_path: object_path_b }) =>
-                                    object_path_a.cmp(object_path_b),
-                                (IssueKind::UnassignedPlacement { object_path: object_path_a }, IssueKind::UnassignedPlacement { object_path: object_path_b }) =>
-                                    object_path_a.cmp(object_path_b),
-                                (IssueKind::UnassignedPartFeeder { part: part_a }, IssueKind::UnassignedPartFeeder { part: part_b}) =>
-                                    part_a.cmp(part_b),
-                                _ => ordinal_ordering,
-                            }
-                        }
-                        Ordering::Greater => ordinal_ordering,
+                fn kind_ordinal(kind: &IssueKind) -> usize {
+                    match kind {
+                        IssueKind::NoPcbsAssigned => 0,
+                        IssueKind::NoPhasesCreated => 1,
+                        IssueKind::InvalidUnitAssignment {
+                            ..
+                        } => 2,
+                        IssueKind::UnassignedPlacement {
+                            ..
+                        } => 3,
+                        IssueKind::UnassignedPartFeeder {
+                            ..
+                        } => 4,
                     }
-                },
-                "message" => a.message.cmp(&b.message),
-                "severity" => {
-                    let a_ordinal = severity_ordinal(&a.severity);
-                    let b_ordinal = severity_ordinal(&b.severity);
-                    let ordinal_ordering = a_ordinal.cmp(&b_ordinal);
-                    ordinal_ordering
-                },
-                _ => unreachable!()
-            };
+                }
+                fn severity_ordinal(severity: &IssueSeverity) -> usize {
+                    match severity {
+                        IssueSeverity::Warning => 0,
+                        IssueSeverity::Severe => 1,
+                    }
+                }
 
-            match sort_order {
-                SortOrder::Asc => acc,
-                SortOrder::Desc => {
-                    acc.reverse()
-                },
-            }
-        })
+                acc = match mode {
+                    "kind" => {
+                        let a_ordinal = kind_ordinal(&a.kind);
+                        let b_ordinal = kind_ordinal(&b.kind);
+                        let ordinal_ordering = a_ordinal.cmp(&b_ordinal);
+
+                        match ordinal_ordering {
+                            Ordering::Less => ordinal_ordering,
+                            Ordering::Equal => match (&a.kind, &b.kind) {
+                                (
+                                    IssueKind::InvalidUnitAssignment {
+                                        object_path: object_path_a,
+                                    },
+                                    IssueKind::InvalidUnitAssignment {
+                                        object_path: object_path_b,
+                                    },
+                                ) => object_path_a.cmp(object_path_b),
+                                (
+                                    IssueKind::UnassignedPlacement {
+                                        object_path: object_path_a,
+                                    },
+                                    IssueKind::UnassignedPlacement {
+                                        object_path: object_path_b,
+                                    },
+                                ) => object_path_a.cmp(object_path_b),
+                                (
+                                    IssueKind::UnassignedPartFeeder {
+                                        part: part_a,
+                                    },
+                                    IssueKind::UnassignedPartFeeder {
+                                        part: part_b,
+                                    },
+                                ) => part_a.cmp(part_b),
+                                _ => ordinal_ordering,
+                            },
+                            Ordering::Greater => ordinal_ordering,
+                        }
+                    }
+                    "message" => a.message.cmp(&b.message),
+                    "severity" => {
+                        let a_ordinal = severity_ordinal(&a.severity);
+                        let b_ordinal = severity_ordinal(&b.severity);
+                        let ordinal_ordering = a_ordinal.cmp(&b_ordinal);
+                        ordinal_ordering
+                    }
+                    _ => unreachable!(),
+                };
+
+                match sort_order {
+                    SortOrder::Asc => acc,
+                    SortOrder::Desc => acc.reverse(),
+                }
+            })
     });
 }
 
 #[cfg(test)]
 mod report_issue_sorting {
     use std::str::FromStr;
+
     use pnp::object_path::ObjectPath;
     use pnp::part::Part;
-    use crate::report::{IssueKind, IssueSeverity, project_report_sort_issues, ProjectReportIssue};
+
+    use crate::report::{project_report_sort_issues, IssueKind, IssueSeverity, ProjectReportIssue};
 
     #[test]
     pub fn sort_by_severity_with_equal_message_and_kind() {
-        // given 
+        // given
         let issue1 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
@@ -380,12 +486,8 @@ mod report_issue_sorting {
             kind: IssueKind::NoPcbsAssigned,
         };
 
-        let mut issues: Vec<ProjectReportIssue> = vec![
-            issue2.clone(), issue1.clone(),
-        ];
-        let expected_issues: Vec<ProjectReportIssue> = vec![
-            issue1.clone(), issue2.clone(),
-        ];
+        let mut issues: Vec<ProjectReportIssue> = vec![issue2.clone(), issue1.clone()];
+        let expected_issues: Vec<ProjectReportIssue> = vec![issue1.clone(), issue2.clone()];
 
         // when
         project_report_sort_issues(&mut issues);
@@ -396,7 +498,7 @@ mod report_issue_sorting {
 
     #[test]
     pub fn sort_by_message_with_severity_and_kind() {
-        // given 
+        // given
         let issue1 = ProjectReportIssue {
             message: "MESSAGE_1".to_string(),
             severity: IssueSeverity::Severe,
@@ -408,12 +510,8 @@ mod report_issue_sorting {
             kind: IssueKind::NoPcbsAssigned,
         };
 
-        let mut issues: Vec<ProjectReportIssue> = vec![
-            issue2.clone(), issue1.clone(),
-        ];
-        let expected_issues: Vec<ProjectReportIssue> = vec![
-            issue1.clone(), issue2.clone(),
-        ];
+        let mut issues: Vec<ProjectReportIssue> = vec![issue2.clone(), issue1.clone()];
+        let expected_issues: Vec<ProjectReportIssue> = vec![issue1.clone(), issue2.clone()];
 
         // when
         project_report_sort_issues(&mut issues);
@@ -424,7 +522,7 @@ mod report_issue_sorting {
 
     #[test]
     pub fn sort_by_kind_with_equal_message_and_severity() {
-        // given 
+        // given
         let issue1 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
@@ -438,60 +536,95 @@ mod report_issue_sorting {
         let issue3 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::InvalidUnitAssignment { object_path: ObjectPath::from_str("panel=1").expect("always ok") },
+            kind: IssueKind::InvalidUnitAssignment {
+                object_path: ObjectPath::from_str("panel=1").expect("always ok"),
+            },
         };
         let issue4 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::InvalidUnitAssignment { object_path: ObjectPath::from_str("panel=2").expect("always ok") },
+            kind: IssueKind::InvalidUnitAssignment {
+                object_path: ObjectPath::from_str("panel=2").expect("always ok"),
+            },
         };
         let issue5 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPlacement { object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R1").expect("always ok") },
+            kind: IssueKind::UnassignedPlacement {
+                object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R1").expect("always ok"),
+            },
         };
         let issue6 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPlacement { object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R2").expect("always ok") },
+            kind: IssueKind::UnassignedPlacement {
+                object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R2").expect("always ok"),
+            },
         };
         let issue7 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPartFeeder { part: Part { manufacturer: "MFR1".to_string(), mpn: "MPN1".to_string() } },
+            kind: IssueKind::UnassignedPartFeeder {
+                part: Part {
+                    manufacturer: "MFR1".to_string(),
+                    mpn: "MPN1".to_string(),
+                },
+            },
         };
         let issue8 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPartFeeder { part: Part { manufacturer: "MFR1".to_string(), mpn: "MPN2".to_string() } },
+            kind: IssueKind::UnassignedPartFeeder {
+                part: Part {
+                    manufacturer: "MFR1".to_string(),
+                    mpn: "MPN2".to_string(),
+                },
+            },
         };
         let issue9 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPartFeeder { part: Part { manufacturer: "MFR2".to_string(), mpn: "MPN1".to_string() } },
+            kind: IssueKind::UnassignedPartFeeder {
+                part: Part {
+                    manufacturer: "MFR2".to_string(),
+                    mpn: "MPN1".to_string(),
+                },
+            },
         };
-        
+
         let mut issues: Vec<ProjectReportIssue> = vec![
-            issue9.clone(), issue8.clone(), issue7.clone(), 
-            issue6.clone(), issue5.clone(), issue4.clone(),
-            issue3.clone(), issue2.clone(), issue1.clone(),
+            issue9.clone(),
+            issue8.clone(),
+            issue7.clone(),
+            issue6.clone(),
+            issue5.clone(),
+            issue4.clone(),
+            issue3.clone(),
+            issue2.clone(),
+            issue1.clone(),
         ];
         let expected_issues: Vec<ProjectReportIssue> = vec![
-            issue1.clone(), issue2.clone(), issue3.clone(),
-            issue4.clone(), issue5.clone(), issue6.clone(),
-            issue7.clone(), issue8.clone(), issue9.clone(),
+            issue1.clone(),
+            issue2.clone(),
+            issue3.clone(),
+            issue4.clone(),
+            issue5.clone(),
+            issue6.clone(),
+            issue7.clone(),
+            issue8.clone(),
+            issue9.clone(),
         ];
-        
+
         // when
         project_report_sort_issues(&mut issues);
-        
+
         // then
         assert_eq!(&issues, &expected_issues);
     }
 
     #[test]
     pub fn sort_by_severity_kind_and_message() {
-        // given 
+        // given
         let issue1 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
@@ -507,7 +640,7 @@ mod report_issue_sorting {
             severity: IssueSeverity::Warning,
             kind: IssueKind::NoPcbsAssigned,
         };
-        
+
         let issue4 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
@@ -525,12 +658,20 @@ mod report_issue_sorting {
         };
 
         let mut issues: Vec<ProjectReportIssue> = vec![
-            issue1.clone(), issue2.clone(), issue3.clone(),
-            issue4.clone(), issue5.clone(), issue6.clone(),
+            issue1.clone(),
+            issue2.clone(),
+            issue3.clone(),
+            issue4.clone(),
+            issue5.clone(),
+            issue6.clone(),
         ];
         let expected_issues: Vec<ProjectReportIssue> = vec![
-            issue1.clone(), issue4.clone(), issue3.clone(),
-            issue2.clone(), issue6.clone(), issue5.clone(),
+            issue1.clone(),
+            issue4.clone(),
+            issue3.clone(),
+            issue2.clone(),
+            issue6.clone(),
+            issue5.clone(),
         ];
 
         // when
@@ -542,18 +683,30 @@ mod report_issue_sorting {
 }
 
 fn find_unit_assignments(project: &Project, unit_path: &ObjectPath) -> Vec<PcbUnitAssignmentItem> {
-    let unit_assignments = project.unit_assignments.iter().filter_map(|(assignment_unit_path, DesignVariant { design_name, variant_name })| {
-        let mut result = None;
+    let unit_assignments = project
+        .unit_assignments
+        .iter()
+        .filter_map(
+            |(
+                assignment_unit_path,
+                DesignVariant {
+                    design_name,
+                    variant_name,
+                },
+            )| {
+                let mut result = None;
 
-        if assignment_unit_path.eq(unit_path) {
-            result = Some(PcbUnitAssignmentItem {
-                unit_path: unit_path.clone(),
-                design_name: design_name.clone(),
-                variant_name: variant_name.clone(),
-            })
-        }
-        result
-    }).collect();
+                if assignment_unit_path.eq(unit_path) {
+                    result = Some(PcbUnitAssignmentItem {
+                        unit_path: unit_path.clone(),
+                        design_name: design_name.clone(),
+                        variant_name: variant_name.clone(),
+                    })
+                }
+                result
+            },
+        )
+        .collect();
 
     unit_assignments
 }
@@ -583,7 +736,7 @@ impl Default for ProjectStatus {
 
 #[derive(Clone, serde::Serialize, PartialEq)]
 pub enum PhaseStatus {
-    Incomplete, 
+    Incomplete,
     Complete,
 }
 
@@ -599,7 +752,7 @@ pub struct PhaseOverview {
 pub struct PhaseSpecification {
     pub phase_name: String,
     pub operations: Vec<PhaseOperation>,
-    pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>
+    pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -621,9 +774,15 @@ pub struct PcbUnitAssignmentItem {
 #[derive(Clone, serde::Serialize)]
 pub enum PcbReportItem {
     // there should be one or more assignments, but the assignment might not have been made yet.
-    Panel { name: String, unit_assignments: Vec<PcbUnitAssignmentItem> },
+    Panel {
+        name: String,
+        unit_assignments: Vec<PcbUnitAssignmentItem>,
+    },
     // there should be exactly one assignment, but the assignment might not have been made yet.
-    Single { name: String, unit_assignment: Option<PcbUnitAssignmentItem> },
+    Single {
+        name: String,
+        unit_assignment: Option<PcbUnitAssignmentItem>,
+    },
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -640,7 +799,6 @@ pub enum PhaseOperationKind {
     PlaceComponents,
     ManuallySolderComponents,
 }
-
 
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseLoadOutAssignmentItem {
@@ -671,13 +829,15 @@ pub enum IssueKind {
     NoPhasesCreated,
     InvalidUnitAssignment {
         #[serde_as(as = "DisplayFromStr")]
-        object_path: ObjectPath
+        object_path: ObjectPath,
     },
     UnassignedPlacement {
         #[serde_as(as = "DisplayFromStr")]
-        object_path: ObjectPath
+        object_path: ObjectPath,
     },
-    UnassignedPartFeeder { part: Part },
+    UnassignedPartFeeder {
+        part: Part,
+    },
 }
 
 fn build_report_file_path(name: &str, directory: &Path) -> PathBuf {
@@ -696,6 +856,6 @@ fn project_report_save(report: &ProjectReport, report_file_path: &PathBuf) -> an
     let _written = report_file.write(b"\n")?;
 
     info!("Generated report. path: {:?}", report_file_path);
-    
+
     Ok(())
 }

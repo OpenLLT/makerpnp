@@ -1,15 +1,16 @@
 use std::collections::HashMap;
-use thiserror::Error;
-use heck::ToUpperCamelCase;
-use regex::{Error, Regex};
+
 use assembly::rules::AssemblyRule;
-use criteria::{ExactMatchCriterion, GenericCriteria, RegexMatchCriterion, FieldCriterion};
-use eda::EdaTool;
+use criteria::{ExactMatchCriterion, FieldCriterion, GenericCriteria, RegexMatchCriterion};
 use eda::substitution::{EdaSubstitutionRule, EdaSubstitutionRuleTransformItem};
+use eda::EdaTool;
+use heck::ToUpperCamelCase;
 use part_mapper::criteria::PlacementMappingCriteria;
 use part_mapper::part_mapping::PartMapping;
-use pnp::part::Part;
 use pnp::load_out::LoadOutItem;
+use pnp::part::Part;
+use regex::{Error, Regex};
+use thiserror::Error;
 
 #[derive(Debug, serde::Deserialize)]
 enum CSVEdaToolValue {
@@ -36,66 +37,91 @@ pub enum PartMappingRecordError {
     MissingField { field: String },
 
     #[error("Invalid regular expression. reason: {error:?}")]
-    InvalidRegex { error: regex::Error }
+    InvalidRegex { error: regex::Error },
 }
 
 impl PartMappingRecord {
-    pub fn build_part_mapping<'part>(&self, parts: &'part [Part]) -> Result<PartMapping<'part>, PartMappingRecordError> {
-
+    pub fn build_part_mapping<'part>(
+        &self,
+        parts: &'part [Part],
+    ) -> Result<PartMapping<'part>, PartMappingRecordError> {
         // NOTE: Initially the PartMappingRecord had more properties and was using serde flatten on the fields but there was a bug;
         //       so we have to do some deserialization manually instead.
         //       See https://github.com/BurntSushi/rust-csv/issues/344#issuecomment-2286126491
 
         let fields = &self.0;
 
-        let eda = fields.get("Eda")
-            .ok_or(PartMappingRecordError::MissingField{ field: "Eda".to_string() })?;
-        let manufacturer = fields.get("Manufacturer")
-            .ok_or(PartMappingRecordError::MissingField{ field: "Manufacturer".to_string() })?;
-        let mpn = fields.get("Mpn")
-            .ok_or(PartMappingRecordError::MissingField{ field: "Mpn".to_string() })?;
+        let eda = fields
+            .get("Eda")
+            .ok_or(PartMappingRecordError::MissingField {
+                field: "Eda".to_string(),
+            })?;
+        let manufacturer = fields
+            .get("Manufacturer")
+            .ok_or(PartMappingRecordError::MissingField {
+                field: "Manufacturer".to_string(),
+            })?;
+        let mpn = fields
+            .get("Mpn")
+            .ok_or(PartMappingRecordError::MissingField {
+                field: "Mpn".to_string(),
+            })?;
 
-        let eda = csv_eda_tool_value_to_eda_tool(eda).ok_or(PartMappingRecordError::UnknownEda { eda: eda.clone() })?;
+        let eda = csv_eda_tool_value_to_eda_tool(eda).ok_or(PartMappingRecordError::UnknownEda {
+            eda: eda.clone(),
+        })?;
 
+        let part_criteria: Part = Part {
+            manufacturer: manufacturer.clone(),
+            mpn: mpn.clone(),
+        };
 
-        let part_criteria: Part = Part { manufacturer: manufacturer.clone(), mpn: mpn.clone() };
-
-        let matched_part_ref = parts.iter().find(|&part| {
-            part.eq(&part_criteria)
-        });
+        let matched_part_ref = parts
+            .iter()
+            .find(|&part| part.eq(&part_criteria));
 
         let part_ref = match matched_part_ref {
             Some(part) => Ok(part),
-            _ => Err(PartMappingRecordError::NoMatchingPart { criteria: part_criteria })
+            _ => Err(PartMappingRecordError::NoMatchingPart {
+                criteria: part_criteria,
+            }),
         }?;
 
         let fields_names = eda_fields_names(&eda);
 
         let mut mapping_criteria: Vec<Box<dyn PlacementMappingCriteria>> = vec![];
 
-        let mut matched_fields: Vec<(&String, &String)> = fields.iter().filter_map(|(key, value)|{
-            match fields_names.contains(&key.to_lowercase().as_str()) {
-                true => Some((key, value)),
-                false => None,
-            }
-        }).collect();
-        
+        let mut matched_fields: Vec<(&String, &String)> = fields
+            .iter()
+            .filter_map(
+                |(key, value)| match fields_names.contains(&key.to_lowercase().as_str()) {
+                    true => Some((key, value)),
+                    false => None,
+                },
+            )
+            .collect();
+
         matched_fields.sort();
 
-        let criteria_fields: Vec<Box<dyn FieldCriterion>> = matched_fields.iter().try_fold(vec![], |mut acc, (&ref key, &ref value)| {
-            let value_kind = build_value_kind(&value)
-                .map_err(|error| PartMappingRecordError::InvalidRegex { error })?;
+        let criteria_fields: Vec<Box<dyn FieldCriterion>> =
+            matched_fields
+                .iter()
+                .try_fold(vec![], |mut acc, (&ref key, &ref value)| {
+                    let value_kind =
+                        build_value_kind(&value).map_err(|error| PartMappingRecordError::InvalidRegex {
+                            error,
+                        })?;
 
-            let boxed_criterion: Box<dyn FieldCriterion> = match value_kind {
-                ValueKind::Regex(regex) => 
-                    Box::new(RegexMatchCriterion::new(key.to_lowercase(), regex)),
-                ValueKind::ExactMatch(value) => 
-                    Box::new(ExactMatchCriterion::new(key.to_lowercase(), value)),
-            };
-            acc.push(boxed_criterion);
-            Ok(acc)
-        })?;
-        let criteria = GenericCriteria { criteria: criteria_fields };
+                    let boxed_criterion: Box<dyn FieldCriterion> = match value_kind {
+                        ValueKind::Regex(regex) => Box::new(RegexMatchCriterion::new(key.to_lowercase(), regex)),
+                        ValueKind::ExactMatch(value) => Box::new(ExactMatchCriterion::new(key.to_lowercase(), value)),
+                    };
+                    acc.push(boxed_criterion);
+                    Ok(acc)
+                })?;
+        let criteria = GenericCriteria {
+            criteria: criteria_fields,
+        };
 
         mapping_criteria.push(Box::new(criteria));
 
@@ -107,7 +133,7 @@ impl PartMappingRecord {
 
 pub enum ValueKind {
     Regex(Regex),
-    ExactMatch(String)
+    ExactMatch(String),
 }
 
 pub fn build_value_kind(value: &str) -> Result<ValueKind, Error> {
@@ -174,22 +200,26 @@ pub enum SubstitutionRecordError {
     MissingField { field: String },
 
     #[error("Invalid regular expression. reason: {error:?}")]
-    InvalidRegex { error: regex::Error }
+    InvalidRegex { error: regex::Error },
 }
 
 impl SubstitutionRecord {
     pub fn build_eda_substitution(&self) -> anyhow::Result<EdaSubstitutionRule, SubstitutionRecordError> {
-
         // NOTE: Initially the SubstitutionRecord had more properties and was using serde flatten on the fields but there was a bug;
         //       so we have to do some deserialization manually instead.
         //       See https://github.com/BurntSushi/rust-csv/issues/344#issuecomment-2286126491
 
         let fields = &self.0;
 
-        let eda = fields.get("Eda")
-            .ok_or(SubstitutionRecordError::MissingField{ field: "Eda".to_string() })?;
+        let eda = fields
+            .get("Eda")
+            .ok_or(SubstitutionRecordError::MissingField {
+                field: "Eda".to_string(),
+            })?;
 
-        let eda = csv_eda_tool_value_to_eda_tool(eda).ok_or(SubstitutionRecordError::UnknownEda { eda: eda.clone() })?;
+        let eda = csv_eda_tool_value_to_eda_tool(eda).ok_or(SubstitutionRecordError::UnknownEda {
+            eda: eda.clone(),
+        })?;
 
         let fields_names = eda_fields_names(&eda);
 
@@ -206,24 +236,35 @@ impl SubstitutionRecord {
 
             match (fields.get(&name_field), fields.get(&pattern_field)) {
                 (Some(field_name_value), Some(pattern_value)) => {
-
-                    let value_kind = build_value_kind(&pattern_value)
-                        .map_err(|error| SubstitutionRecordError::InvalidRegex { error })?;
+                    let value_kind =
+                        build_value_kind(&pattern_value).map_err(|error| SubstitutionRecordError::InvalidRegex {
+                            error,
+                        })?;
 
                     let boxed_criterion: Box<dyn FieldCriterion> = match value_kind {
-                        ValueKind::Regex(regex) =>
-                            Box::new(RegexMatchCriterion { field_name: field_name.to_string(), field_pattern: regex }),
-                        ValueKind::ExactMatch(value) =>
-                            Box::new(ExactMatchCriterion { field_name: field_name.to_string(), field_pattern: value }),
+                        ValueKind::Regex(regex) => Box::new(RegexMatchCriterion {
+                            field_name: field_name.to_string(),
+                            field_pattern: regex,
+                        }),
+                        ValueKind::ExactMatch(value) => Box::new(ExactMatchCriterion {
+                            field_name: field_name.to_string(),
+                            field_pattern: value,
+                        }),
                     };
                     criteria.push(boxed_criterion);
-                    transforms.push(EdaSubstitutionRuleTransformItem { field_name: field_name.to_string(), field_value: field_name_value.to_string() } );
-                },
+                    transforms.push(EdaSubstitutionRuleTransformItem {
+                        field_name: field_name.to_string(),
+                        field_value: field_name_value.to_string(),
+                    });
+                }
                 _ => return Err(SubstitutionRecordError::FieldMismatch(vec![name_field, pattern_field])),
             }
         }
 
-        Ok(EdaSubstitutionRule { criteria, transforms })
+        Ok(EdaSubstitutionRule {
+            criteria,
+            transforms,
+        })
     }
 }
 
@@ -250,7 +291,7 @@ fn csv_eda_tool_value_to_eda_tool(eda: &String) -> Option<EdaTool> {
 #[derive(Error, Debug)]
 pub enum CSVSubstitutionRecordError {
     #[error("Unknown EDA: '{eda:}'")]
-    UnknownEDA { eda: String }
+    UnknownEDA { eda: String },
 }
 
 #[derive(Debug, serde::Deserialize)]

@@ -1,4 +1,5 @@
 use serde::Serialize;
+
 use crate::common::project_builder::TestProcessOperationStatus;
 
 #[derive(Default)]
@@ -33,20 +34,19 @@ impl ProjectReportBuilder {
     }
 
     pub fn as_string(&mut self) -> String {
-        
-        
         let mut buffer = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut buffer, formatter);
 
-        self.report.serialize(&mut ser).expect("ok");
+        self.report
+            .serialize(&mut ser)
+            .expect("ok");
 
         let mut content = String::from_utf8(buffer).unwrap();
         content.push('\n');
 
         content
     }
-    
 }
 
 #[derive(Clone, serde::Serialize, Default)]
@@ -83,7 +83,7 @@ pub enum TestPhaseOperationKind {
 pub struct TestPhaseSpecification {
     pub phase_name: String,
     pub operations: Vec<TestPhaseOperation>,
-    pub load_out_assignments: Vec<TestPhaseLoadOutAssignmentItem>
+    pub load_out_assignments: Vec<TestPhaseLoadOutAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -97,8 +97,14 @@ pub enum TestPhaseOperation {
 
 #[derive(Clone, serde::Serialize)]
 pub enum TestPcb {
-    Single { name: String, unit_assignment: TestPcbUnitAssignment },
-    Panel { name: String, unit_assignments: Vec<TestPcbUnitAssignment> },
+    Single {
+        name: String,
+        unit_assignment: TestPcbUnitAssignment,
+    },
+    Panel {
+        name: String,
+        unit_assignments: Vec<TestPcbUnitAssignment>,
+    },
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -110,8 +116,8 @@ pub struct TestPcbUnitAssignment {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseLoadOutAssignmentItem {
-    pub feeder_reference: String, 
-    pub manufacturer: String, 
+    pub feeder_reference: String,
+    pub manufacturer: String,
     pub mpn: String,
     pub quantity: u32,
     // FUTURE maybe add list of object paths?
@@ -119,7 +125,7 @@ pub struct TestPhaseLoadOutAssignmentItem {
 
 #[derive(Clone, serde::Serialize)]
 pub enum TestIssueSeverity {
-    Warning
+    Warning,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -136,7 +142,7 @@ pub struct TestPart {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestIssue {
-    pub message: String, 
+    pub message: String,
     pub severity: TestIssueSeverity,
     pub kind: TestIssueKind,
 }

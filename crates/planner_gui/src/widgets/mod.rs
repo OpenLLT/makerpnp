@@ -1,2 +1,2 @@
-pub mod tab_bar;
 pub mod properties;
+pub mod tab_bar;

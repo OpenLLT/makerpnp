@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use tracing::trace;
-use rust_decimal::Decimal;
+
 use anyhow::Context;
 use planning::design::DesignVariant;
-use pnp::pcb::PcbSide;
 use pnp::part::Part;
+use pnp::pcb::PcbSide;
 use pnp::placement::Placement;
+use rust_decimal::Decimal;
+use tracing::trace;
 
 /// See `EdaPlacement` for details of co-ordinate system
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -51,7 +52,10 @@ impl PlacementRecord {
     pub fn as_placement(&self) -> Placement {
         Placement {
             ref_des: self.ref_des.clone(),
-            part: Part { manufacturer: self.manufacturer.clone(), mpn: self.mpn.clone() },
+            part: Part {
+                manufacturer: self.manufacturer.clone(),
+                mpn: self.mpn.clone(),
+            },
             place: self.place,
             pcb_side: PcbSide::from(&self.pcb_side),
             x: self.x,
@@ -61,20 +65,21 @@ impl PlacementRecord {
     }
 }
 
-pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyhow::Error>{
+pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyhow::Error> {
     let mut csv_reader = csv::ReaderBuilder::new()
         .from_path(placements_path.clone())
         .with_context(|| format!("Error placements. file: {}", placements_path.to_str().unwrap()))?;
 
-    let records = csv_reader.deserialize()
+    let records = csv_reader
+        .deserialize()
         .inspect(|record| {
             trace!("{:?}", record);
         })
-        .filter_map(|record: Result<PlacementRecord, csv::Error> | {
+        .filter_map(|record: Result<PlacementRecord, csv::Error>| {
             // TODO report errors
             match record {
                 Ok(record) => Some(record.as_placement()),
-                _ => None
+                _ => None,
             }
         })
         .collect();
@@ -82,11 +87,17 @@ pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyho
     Ok(records)
 }
 
-pub fn load_all_placements(unique_design_variants: &[DesignVariant], directory: &Path) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
+pub fn load_all_placements(
+    unique_design_variants: &[DesignVariant],
+    directory: &Path,
+) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
     let mut all_placements: BTreeMap<DesignVariant, Vec<Placement>> = Default::default();
 
     for design_variant in unique_design_variants {
-        let DesignVariant { design_name: design, variant_name: variant } = design_variant;
+        let DesignVariant {
+            design_name: design,
+            variant_name: variant,
+        } = design_variant;
 
         let mut placements_path = PathBuf::from(directory);
         placements_path.push(format!("{}_{}_placements.csv", design, variant));

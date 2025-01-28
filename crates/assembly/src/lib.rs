@@ -1,9 +1,9 @@
-use thiserror::Error;
 use assembly_variant::AssemblyVariant;
 use eda::placement::EdaPlacement;
+use thiserror::Error;
 
-pub mod rules;
 pub mod assembly_variant;
+pub mod rules;
 
 #[cfg_attr(test, derive(PartialEq, Debug))]
 pub struct ProcessingResult {
@@ -13,7 +13,7 @@ pub struct ProcessingResult {
 impl ProcessingResult {
     pub fn new(placements: Vec<EdaPlacement>) -> Self {
         Self {
-            placements
+            placements,
         }
     }
 }
@@ -30,16 +30,23 @@ pub struct AssemblyVariantProcessor {}
 impl AssemblyVariantProcessor {
     pub fn process(placements: &[EdaPlacement], variant: AssemblyVariant) -> Result<ProcessingResult, ProcessingError> {
         if placements.is_empty() {
-            return Err(ProcessingError::NoPlacements)
+            return Err(ProcessingError::NoPlacements);
         }
 
-        let variant_placements: Vec<EdaPlacement> = placements.iter().filter_map(|placement| {
-            if variant.ref_des_list.is_empty() || variant.ref_des_list.contains(&placement.ref_des) {
-                Some(placement.clone())
-            } else {
-                None
-            }
-        }).collect();
+        let variant_placements: Vec<EdaPlacement> = placements
+            .iter()
+            .filter_map(|placement| {
+                if variant.ref_des_list.is_empty()
+                    || variant
+                        .ref_des_list
+                        .contains(&placement.ref_des)
+                {
+                    Some(placement.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         Ok(ProcessingResult::new(variant_placements))
     }
@@ -47,9 +54,10 @@ impl AssemblyVariantProcessor {
 
 #[cfg(test)]
 mod test {
-    use crate::{AssemblyVariantProcessor, ProcessingError, ProcessingResult};
-    use crate::assembly_variant::AssemblyVariant;
     use eda::placement::{EdaPlacement, EdaPlacementField};
+
+    use crate::assembly_variant::AssemblyVariant;
+    use crate::{AssemblyVariantProcessor, ProcessingError, ProcessingResult};
 
     #[test]
     fn process() {
@@ -120,9 +128,7 @@ mod test {
         };
 
         let all_placements = vec![
-            placement1, placement2, placement3,
-            placement4, placement5, placement6,
-            placement7, placement8
+            placement1, placement2, placement3, placement4, placement5, placement6, placement7, placement8,
         ];
 
         // and
@@ -133,17 +139,14 @@ mod test {
             String::from("J1"),
         ];
 
-        let variant = AssemblyVariant::new(
-            String::from("Variant 1"),
-            variant_refdes_list,
-        );
+        let variant = AssemblyVariant::new(String::from("Variant 1"), variant_refdes_list);
 
         // and
         let variant_placements = vec![
-            all_placements[1-1].clone(),
-            all_placements[4-1].clone(),
-            all_placements[7-1].clone(),
-            all_placements[8-1].clone(),
+            all_placements[1 - 1].clone(),
+            all_placements[4 - 1].clone(),
+            all_placements[7 - 1].clone(),
+            all_placements[8 - 1].clone(),
         ];
         let expected_result = Ok(ProcessingResult::new(variant_placements));
 
@@ -180,13 +183,9 @@ mod test {
             ..EdaPlacement::default()
         };
 
-        let all_placements = vec![
-            placement1
-        ];
+        let all_placements = vec![placement1];
 
-        let expected_variant_placements = vec![
-            all_placements[1-1].clone(),
-        ];
+        let expected_variant_placements = vec![all_placements[1 - 1].clone()];
 
         // and
         let expected_result = Ok(ProcessingResult::new(expected_variant_placements));

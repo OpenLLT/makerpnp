@@ -3,19 +3,24 @@ use std::default::Default;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
-use slotmap::{new_key_type, SlotMap};
+
 use cushy::channel::Sender;
 use cushy::define_components;
 use cushy::figures::units::Px;
-use cushy::styles::{Color, ContainerLevel, Edges};
 use cushy::styles::components::{ErrorColor, HighlightColor, IntrinsicPadding, OpaqueWidgetColor, WidgetBackground};
+use cushy::styles::{Color, ContainerLevel, Edges};
 use cushy::value::{Destination, Dynamic, Source, Switchable, Value};
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance, WidgetList};
+use cushy::widgets::button::{
+    ButtonActiveBackground, ButtonActiveForeground, ButtonBackground, ButtonForeground, ButtonHoverBackground,
+    ButtonHoverForeground,
+};
 use cushy::widgets::grid::Orientation;
-use cushy::widgets::{Expand, Space, Stack};
-use cushy::widgets::button::{ButtonActiveBackground, ButtonActiveForeground, ButtonBackground, ButtonForeground, ButtonHoverBackground, ButtonHoverForeground};
 use cushy::widgets::label::{Displayable, LabelOverflow};
+use cushy::widgets::{Expand, Space, Stack};
+use slotmap::{new_key_type, SlotMap};
 use tracing::{debug, trace};
+
 use crate::action::Action;
 use crate::context::Context;
 
@@ -45,8 +50,7 @@ struct TabState<TK> {
     label: Dynamic<String>,
 }
 
-pub struct TabBar<TK, TKM, TKA>
-{
+pub struct TabBar<TK, TKM, TKA> {
     /// holds the actual tab instances and activation state which includes the tab's content widget instance
     tabs: Dynamic<SlotMap<TabKey, TabState<TK>>>,
     /// tab bar buttons
@@ -62,7 +66,7 @@ pub struct TabBar<TK, TKM, TKA>
 
     /// a sender to use for interaction messages.
     sender: Sender<TabMessage<TKM>>,
-    _action: PhantomData<TKA>
+    _action: PhantomData<TKA>,
 }
 
 new_key_type! {
@@ -75,19 +79,17 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
         let active: Dynamic<Option<TabKey>> = Dynamic::new(None);
         let switcher = active.clone().switcher({
             let tabs = tabs.clone();
-            move |tab_key, _|{
-                match tab_key {
-                    None => {
-                        trace!("switcher changed, no tabs");
-                        Space::clear().make_widget()
-                    }
-                    Some(tab_key) => {
-                        trace!("switcher changed, tab_key: {:?}", tab_key);
-                        let tabs = tabs.lock();
-                        let state = tabs.get(*tab_key).unwrap();
+            move |tab_key, _| match tab_key {
+                None => {
+                    trace!("switcher changed, no tabs");
+                    Space::clear().make_widget()
+                }
+                Some(tab_key) => {
+                    trace!("switcher changed, tab_key: {:?}", tab_key);
+                    let tabs = tabs.lock();
+                    let state = tabs.get(*tab_key).unwrap();
 
-                        state.widget.get()
-                    }
+                    state.widget.get()
                 }
             }
         });
@@ -108,7 +110,9 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
         let mut tabs = self.tabs.lock();
         let tab_state = tabs.get_mut(tab_key).unwrap();
 
-        let tab_content_widget = tab.make_content(context, tab_key).make_widget();
+        let tab_content_widget = tab
+            .make_content(context, tab_key)
+            .make_widget();
         let tab_label = tab.label(context);
 
         tab_state.tab = tab;
@@ -130,33 +134,37 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
         }
     }
 
-    pub fn add_tab(&mut self, context: &Dynamic<Context>, tab: TK) -> TabKey
-    {
+    pub fn add_tab(&mut self, context: &Dynamic<Context>, tab: TK) -> TabKey {
+        let tab_key = self
+            .tabs
+            .lock()
+            .insert_with_key(|tab_key| {
+                let tab_label = tab.label(context);
 
-        let tab_key = self.tabs.lock().insert_with_key(|tab_key| {
-            let tab_label = tab.label(context);
+                let tab_content = tab.make_content(context, tab_key);
 
-            let tab_content = tab.make_content(context, tab_key);
+                let tab_state = TabState {
+                    tab,
+                    label: Dynamic::new(tab_label),
+                    widget: Dynamic::new(tab_content),
+                };
 
-            let tab_state = TabState {
-                tab,
-                label: Dynamic::new(tab_label),
-                widget: Dynamic::new(tab_content),
-            };
-
-            tab_state
-        });
+                tab_state
+            });
 
         debug!("adding tab. tab_key: {:?}", tab_key);
 
         let tabs = self.tabs.lock();
         let tab_state = tabs.get(tab_key).unwrap();
 
-        let close_button = "X".into_button()
+        let close_button = "X"
+            .into_button()
             .on_click({
                 let sender = self.sender.clone();
                 move |_event| {
-                    sender.send(TabMessage::CloseTab(tab_key)).expect("ok");
+                    sender
+                        .send(TabMessage::CloseTab(tab_key))
+                        .expect("ok");
                 }
             })
             .with(&ButtonBackground, Color::CLEAR_BLACK)
@@ -166,36 +174,39 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
             .with_dynamic(&ButtonActiveForeground, ErrorColor)
             .with_dynamic(&ButtonHoverForeground, ErrorColor);
 
-        let select_content = tab_state.label.clone()
+        let select_content = tab_state
+            .label
+            .clone()
             .into_label()
             .overflow(LabelOverflow::Clip)
             .centered()
             .and(close_button)
             .into_columns()
             .gutter(Px::new(5))
-            .pad_by(Edges::default().with_horizontal(Px::new(3)).with_top(Px::new(3)).with_bottom(Px::new(0)))
+            .pad_by(
+                Edges::default()
+                    .with_horizontal(Px::new(3))
+                    .with_top(Px::new(3))
+                    .with_bottom(Px::new(0)),
+            )
             .and(
-                self.active.clone().switcher(move |active, _|{
-                    match active {
-                        Some(active_tab_key) if active_tab_key.eq(&tab_key) => {
-                            Space::default()
-                                .height(Px::new(3))
-                                .with_dynamic(&WidgetBackground, TabBarActiveTabMarker)
-                                .make_widget()
-                    
-                        }
-                        _ => {
-                            Space::default()
-                                .height(Px::new(3))
-                                .make_widget()
-                        }
-                    }
-                })
+                self.active
+                    .clone()
+                    .switcher(move |active, _| match active {
+                        Some(active_tab_key) if active_tab_key.eq(&tab_key) => Space::default()
+                            .height(Px::new(3))
+                            .with_dynamic(&WidgetBackground, TabBarActiveTabMarker)
+                            .make_widget(),
+                        _ => Space::default()
+                            .height(Px::new(3))
+                            .make_widget(),
+                    }),
             )
             .into_rows()
             .gutter(Px::new(0));
 
-        let select = self.active
+        let select = self
+            .active
             .new_select(Some(tab_key), select_content)
             // NOTE any less than 3 here breaks the keyboard focus for the select button, 0 = not visible, < 3 = too small
             .with(&IntrinsicPadding, Px::new(3))
@@ -218,29 +229,33 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
     pub fn find_tab_by_label(&self, label: &str) -> Option<TabKey> {
         let tabs = self.tabs.lock();
 
-        tabs.iter().find_map(|(tab_key, tab_state)| {
-            if tab_state.label.get().eq(label) {
-                Some(tab_key)
-            } else {
-                None
-            }
-        })
+        tabs.iter()
+            .find_map(|(tab_key, tab_state)| {
+                if tab_state.label.get().eq(label) {
+                    Some(tab_key)
+                } else {
+                    None
+                }
+            })
     }
-
 
     pub fn close_all(&mut self) -> Vec<(TabKey, TK)> {
         self.active.set(None);
         self.tab_buttons.lock().clear();
         self.tab_button_keys.clear();
 
-        let closed_tabs = self.tabs.lock().drain().map(|(key,state)|(key, state.tab)).collect();
+        let closed_tabs = self
+            .tabs
+            .lock()
+            .drain()
+            .map(|(key, state)| (key, state.tab))
+            .collect();
         self.history.borrow_mut().clear();
 
         closed_tabs
     }
 
     pub fn close_tab(&mut self, tab_key: TabKey) -> TK {
-
         debug!("closing tab. tab_key: {:?}", tab_key);
 
         let mut history = self.history.borrow_mut();
@@ -259,23 +274,20 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
         }
 
         let tab_button_keys = &mut self.tab_button_keys;
-        let tab_key_index = tab_button_keys.iter().enumerate().find_map(|(i, key)| {
-            if *key == tab_key {
-                Some(i)
-            } else {
-                None
-            }
-        }).unwrap();
+        let tab_key_index = tab_button_keys
+            .iter()
+            .enumerate()
+            .find_map(|(i, key)| if *key == tab_key { Some(i) } else { None })
+            .unwrap();
 
         trace!("tab_key_index: {:?}", tab_key_index);
 
-        let widgets = self.tab_buttons
-            .take();
+        let widgets = self.tab_buttons.take();
         let new_widgets = WidgetList::from_iter(
             widgets
                 .iter()
                 .zip(tab_button_keys.iter())
-                .filter_map(|( widget, index_tab_key)|{
+                .filter_map(|(widget, index_tab_key)| {
                     trace!("index_tab_key: {:?}", index_tab_key);
                     if index_tab_key.eq(&tab_key) {
                         trace!("removing");
@@ -283,13 +295,17 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
                     } else {
                         Some(widget.clone())
                     }
-                })
+                }),
         );
         tab_button_keys.remove(tab_key_index);
 
         self.tab_buttons.replace(new_widgets);
 
-        let tk = self.tabs.lock().remove(tab_key).expect(format!("should be able to remove tab. key: {:?}", tab_key).as_str());
+        let tk = self
+            .tabs
+            .lock()
+            .remove(tab_key)
+            .expect(format!("should be able to remove tab. key: {:?}", tab_key).as_str());
 
         tk.tab
     }
@@ -297,8 +313,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
     pub fn make_widget(&self) -> WidgetInstance {
         let callback = self.active.for_each({
             let history = self.history.clone();
-            move |selected_tab_key|{
-
+            move |selected_tab_key| {
                 debug!("selected tab. tab_key: {:?}", selected_tab_key);
 
                 if let Some(tab_key) = selected_tab_key {
@@ -312,7 +327,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
 
         let widget = TabBarWidget {
             tab_buttons: self.tab_buttons.clone(),
-            content_switcher: self.content_switcher.clone()
+            content_switcher: self.content_switcher.clone(),
         };
 
         widget.make_widget()
@@ -320,7 +335,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
 
     pub fn with_tabs<R, F>(&self, f: F) -> R
     where
-        F: Fn(TabsIter<'_, TK, TKM, TKA>) -> R
+        F: Fn(TabsIter<'_, TK, TKM, TKA>) -> R,
     {
         let iter = self.into_iter();
         f(iter)
@@ -329,14 +344,14 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
     pub fn activate(&self, tab_key: TabKey) {
         let _previously_active = self.active.lock().replace(tab_key);
     }
-    
+
     pub fn active(&self) -> Option<TabKey> {
         self.active.get()
     }
-    
-    pub fn with_active<R, F>(&self, with_fn: F) -> Option<R> 
+
+    pub fn with_active<R, F>(&self, with_fn: F) -> Option<R>
     where
-        F: FnOnce(TabKey, &mut TK) -> R
+        F: FnOnce(TabKey, &mut TK) -> R,
     {
         self.active.get().map(|tab_key| {
             let mut tabs = self.tabs.lock();
@@ -350,13 +365,14 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
             TabMessage::CloseTab(tab_key) => {
                 let tab = self.close_tab(tab_key);
                 Action::new(TabAction::TabClosed(tab_key, tab))
-            },
+            }
             TabMessage::TabKindMessage(tab_key, tab_kind_message) => {
                 let mut guard = self.tabs.lock();
                 let tab_state = guard.get_mut(tab_key).unwrap();
-                let action = tab_state.tab
+                let action = tab_state
+                    .tab
                     .update(context, tab_key, tab_kind_message)
-                    .map(move |action|TabAction::TabAction(tab_key, action));
+                    .map(move |action| TabAction::TabAction(tab_key, action));
 
                 action
             }
@@ -364,7 +380,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
                 let mut guard = self.tabs.lock();
                 let tab_state = guard.get_mut(tab_key).unwrap();
                 tab_state.label.set(label);
-                
+
                 Action::new(TabAction::None)
             }
         }
@@ -399,12 +415,11 @@ impl<'a, TK: Clone, TKM, TKA> Iterator for TabsIter<'a, TK, TKM, TKA> {
             let binding = self.tab_bar.tabs.lock();
             let value = binding
                 .get(key)
-                .map(|tab_state | (key, tab_state.tab.clone()) );
+                .map(|tab_state| (key, tab_state.tab.clone()));
 
             self.index += 1;
 
             value
-
         } else {
             None
         }
@@ -416,9 +431,7 @@ impl<'a, TK: Clone, TKM, TKA> IntoIterator for &'a TabBar<TK, TKM, TKA> {
     type IntoIter = TabsIter<'a, TK, TKM, TKA>;
 
     fn into_iter(self) -> Self::IntoIter {
-        TabsIter::new(
-            self
-        )
+        TabsIter::new(self)
     }
 }
 
@@ -433,20 +446,17 @@ impl MakeWidget for TabBarWidget {
         let dyn_tab_buttons = self.tab_buttons.clone();
 
         let tab_bar_switcher = self.tab_buttons.switcher({
-
-            move |tab_buttons, _|{
+            move |tab_buttons, _| {
                 if tab_buttons.is_empty() {
                     Space::clear().make_widget()
                 } else {
                     let tab_bar = [
-                        Stack::new(Orientation::Column, dyn_tab_buttons.clone())
-                            .make_widget(),
-                        Expand::empty()
-                            .make_widget(),
+                        Stack::new(Orientation::Column, dyn_tab_buttons.clone()).make_widget(),
+                        Expand::empty().make_widget(),
                     ]
-                        .into_columns()
-                        .contain_level(ContainerLevel::High);
-                
+                    .into_columns()
+                    .contain_level(ContainerLevel::High);
+
                     tab_bar.make_widget()
                 }
             }

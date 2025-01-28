@@ -1,31 +1,37 @@
-use tracing::Level;
 use std::path::PathBuf;
+
 use anyhow::{Context, Error};
-use tracing::trace;
 use eda::substitution::EdaSubstitutionRule;
+use tracing::trace;
+use tracing::Level;
+
 use crate::csv::SubstitutionRecord;
 
 #[tracing::instrument(level = Level::DEBUG)]
 pub fn load_eda_substitutions(substitutions_source: &String) -> Result<Vec<EdaSubstitutionRule>, Error> {
     let substitutions_path_buf = PathBuf::from(substitutions_source);
     let substitutions_path = substitutions_path_buf.as_path();
-    let mut csv_reader = csv::ReaderBuilder::new().from_path(substitutions_path)
-        .with_context(|| format!("Error reading substitutions. file: {}", substitutions_path.to_str().unwrap()))?;
-
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .from_path(substitutions_path)
+        .with_context(|| {
+            format!(
+                "Error reading substitutions. file: {}",
+                substitutions_path.to_str().unwrap()
+            )
+        })?;
 
     let mut eda_substitutions: Vec<EdaSubstitutionRule> = vec![];
 
     for result in csv_reader.deserialize() {
-        let record: SubstitutionRecord = result
-            .with_context(|| "Deserializing substitution record".to_string())?;
+        let record: SubstitutionRecord = result.with_context(|| "Deserializing substitution record".to_string())?;
 
         trace!("{:?}", record);
 
-        let eda_substitution = record.build_eda_substitution()
+        let eda_substitution = record
+            .build_eda_substitution()
             .with_context(|| format!("Building substitution from record. record: {:?}", record))?;
 
         eda_substitutions.push(eda_substitution);
-
     }
     Ok(eda_substitutions)
 }
@@ -33,20 +39,24 @@ pub fn load_eda_substitutions(substitutions_source: &String) -> Result<Vec<EdaSu
 #[cfg(test)]
 pub mod csv_loading_tests {
     use assert_fs::TempDir;
-    use csv::QuoteStyle;
-    use regex::Regex;
     use criteria::{ExactMatchCriterion, RegexMatchCriterion};
+    use csv::QuoteStyle;
     use eda::substitution::{EdaSubstitutionRule, EdaSubstitutionRuleTransformItem};
+    use regex::Regex;
+
     use crate::substitutions::load_eda_substitutions;
     use crate::substitutions::test::TestEdaSubstitutionRecord;
 
     #[test]
-    pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()>{
+    pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()> {
         // given
         let temp_dir = TempDir::new()?;
         let mut test_eda_substitutions_path = temp_dir.path().to_path_buf();
         test_eda_substitutions_path.push("substitutions.csv");
-        let test_eda_substitutions_source = test_eda_substitutions_path.to_str().unwrap().to_string();
+        let test_eda_substitutions_source = test_eda_substitutions_path
+            .to_str()
+            .unwrap()
+            .to_string();
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -74,24 +84,48 @@ pub mod csv_loading_tests {
         let expected_result: Vec<EdaSubstitutionRule> = vec![
             EdaSubstitutionRule {
                 criteria: vec![
-                    Box::new(ExactMatchCriterion { field_name: "name".to_string(), field_pattern: "NAME1".to_string() }),
-                    Box::new(ExactMatchCriterion { field_name: "value".to_string(), field_pattern: "VALUE1".to_string() }),
+                    Box::new(ExactMatchCriterion {
+                        field_name: "name".to_string(),
+                        field_pattern: "NAME1".to_string(),
+                    }),
+                    Box::new(ExactMatchCriterion {
+                        field_name: "value".to_string(),
+                        field_pattern: "VALUE1".to_string(),
+                    }),
                 ],
                 transforms: vec![
-                    EdaSubstitutionRuleTransformItem { field_name: "name".to_string(), field_value: "SUBSTITUTED_NAME1".to_string() }, 
-                    EdaSubstitutionRuleTransformItem { field_name: "value".to_string(), field_value: "SUBSTITUTED_VALUE1".to_string() }
+                    EdaSubstitutionRuleTransformItem {
+                        field_name: "name".to_string(),
+                        field_value: "SUBSTITUTED_NAME1".to_string(),
+                    },
+                    EdaSubstitutionRuleTransformItem {
+                        field_name: "value".to_string(),
+                        field_value: "SUBSTITUTED_VALUE1".to_string(),
+                    },
                 ],
             },
             EdaSubstitutionRule {
                 criteria: vec![
-                    Box::new(RegexMatchCriterion { field_name: "name".to_string(), field_pattern: Regex::new("(NAME2)").unwrap() }),
-                    Box::new(RegexMatchCriterion { field_name: "value".to_string(), field_pattern: Regex::new("(VALUE2)").unwrap() }),
+                    Box::new(RegexMatchCriterion {
+                        field_name: "name".to_string(),
+                        field_pattern: Regex::new("(NAME2)").unwrap(),
+                    }),
+                    Box::new(RegexMatchCriterion {
+                        field_name: "value".to_string(),
+                        field_pattern: Regex::new("(VALUE2)").unwrap(),
+                    }),
                 ],
                 transforms: vec![
-                    EdaSubstitutionRuleTransformItem { field_name: "name".to_string(), field_value: "SUBSTITUTED_NAME2".to_string() },
-                    EdaSubstitutionRuleTransformItem { field_name: "value".to_string(), field_value: "SUBSTITUTED_VALUE2".to_string() }
+                    EdaSubstitutionRuleTransformItem {
+                        field_name: "name".to_string(),
+                        field_value: "SUBSTITUTED_NAME2".to_string(),
+                    },
+                    EdaSubstitutionRuleTransformItem {
+                        field_name: "value".to_string(),
+                        field_value: "SUBSTITUTED_VALUE2".to_string(),
+                    },
                 ],
-            }
+            },
         ];
 
         let csv_content = std::fs::read_to_string(test_eda_substitutions_source.clone())?;
@@ -107,11 +141,10 @@ pub mod csv_loading_tests {
     }
 }
 
-
 // FUTURE Ideally we want to include this module ONLY for integration tests or for unit tests
 //        but when compiling for integration tests, `test` is NOT defined so we cannot use
 //        just `#[cfg(test)]`
-#[cfg(any(test, feature="testing"))]
+#[cfg(any(test, feature = "testing"))]
 pub mod test {
     #[derive(Debug, Default, serde::Serialize)]
     #[serde(rename_all(serialize = "PascalCase"))]

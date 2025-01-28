@@ -3,12 +3,14 @@ extern crate util;
 
 use std::fs::read_to_string;
 use std::path::PathBuf;
+
 use thiserror::__private::AsDisplay;
 
 #[cfg(test)]
 mod tests {
     use std::fs::read_to_string;
     use std::process::Command;
+
     use assert_cmd::prelude::OutputAssertExt;
     use csv::QuoteStyle;
     use indoc::indoc;
@@ -16,14 +18,15 @@ mod tests {
     use predicates_tree::CaseTreeExt;
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
-    use tempfile::tempdir;
     use stores::part_mappings::test::TestPartMappingRecord;
-    use util::test::{build_temp_csv_file, build_temp_file, prepare_args, print};
     use stores::test::load_out_builder::TestLoadOutRecord;
+    use tempfile::tempdir;
+    use util::test::{build_temp_csv_file, build_temp_file, prepare_args, print};
+
     use crate::test_helpers::{dump_args, dump_file};
 
     /// This functional test tests the following:
-    /// 
+    ///
     /// * cli argument parsing
     /// * placement file parsing (diptrace)
     /// * global and assembly substitution file parsing and application order of substitutions
@@ -38,7 +41,7 @@ mod tests {
     /// Note: it was written before the migration to crux, arguably some of this test could be moved
     /// into the `variantbuilder_app` crate, leaving behind only the CLI specific tests; but then
     /// there would not be a full functional test of the CLI + Crux APP integration...
-    /// 
+    ///
     /// There are tests for other EDA tools which are similar, but they are essentially cut-down
     /// versions of this test, focussing only on the EDA tool differences.
     #[test]
@@ -64,7 +67,6 @@ mod tests {
             x: Decimal::from(10),
             y: Decimal::from(110),
             rotation: Decimal::from(0),
-
         })?;
         writer.serialize(TestDiptracePlacementRecord {
             ref_des: "R2".to_string(),
@@ -143,10 +145,16 @@ mod tests {
 
         dump_file("placements", test_placements_path.clone())?;
 
-        let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
+        let placements_arg = format!(
+            "--placements {}",
+            test_placements_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and per-assembly-variant substitutions
-        let (test_assembly_substitutions_path, test_assembly_substitutions_file_name) = build_temp_csv_file(&temp_dir, "assembly-substitutions");
+        let (test_assembly_substitutions_path, test_assembly_substitutions_file_name) =
+            build_temp_csv_file(&temp_dir, "assembly-substitutions");
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -164,9 +172,9 @@ mod tests {
 
         dump_file("assembly substitutions", test_assembly_substitutions_path.clone())?;
 
-
         // and global substitutions
-        let (test_global_substitutions_path, test_global_substitutions_file_name) = build_temp_csv_file(&temp_dir, "global-substitutions");
+        let (test_global_substitutions_path, test_global_substitutions_file_name) =
+            build_temp_csv_file(&temp_dir, "global-substitutions");
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -191,9 +199,14 @@ mod tests {
 
         dump_file("global substitutions", test_placements_path.clone())?;
 
-        let substitutions_arg = format!("--substitutions {},{}",
-                                        test_assembly_substitutions_file_name.to_str().unwrap(),
-                                        test_global_substitutions_file_name.to_str().unwrap(),
+        let substitutions_arg = format!(
+            "--substitutions {},{}",
+            test_assembly_substitutions_file_name
+                .to_str()
+                .unwrap(),
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap(),
         );
 
         // and load-out
@@ -225,7 +238,12 @@ mod tests {
 
         dump_file("load-out", test_load_out_path.clone())?;
 
-        let load_out_arg = format!("--load-out {}", test_load_out_file_name.to_str().unwrap());
+        let load_out_arg = format!(
+            "--load-out {}",
+            test_load_out_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and parts
         let (test_parts_path, test_parts_file_name) = build_temp_csv_file(&temp_dir, "parts");
@@ -370,7 +388,12 @@ mod tests {
 
         dump_file("part mappings", test_part_mappings_path.clone())?;
 
-        let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
+        let part_mappings_arg = format!(
+            "--part-mappings {}",
+            test_part_mappings_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and assembly-rules
         let (test_assembly_rule_path, test_assembly_rule_file_name) = build_temp_csv_file(&temp_dir, "assembly_rule");
@@ -389,7 +412,12 @@ mod tests {
 
         dump_file("assembly rules", test_assembly_rule_path.clone())?;
 
-        let assembly_rules_arg = format!("--assembly-rules {}", test_assembly_rule_file_name.to_str().unwrap());
+        let assembly_rules_arg = format!(
+            "--assembly-rules {}",
+            test_assembly_rule_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let expected_part_mapping_tree = indoc! {"
@@ -432,14 +460,25 @@ mod tests {
             "J1","CONN_MFR1","CONN1","true","Top","70","170","-135"
             "TP1","","","false","Top","80","180","-45"
             "TP2","","","false","Top","90","190","5"
-        "#}.to_string();
+        "#}
+        .to_string();
 
         let (test_csv_output_path, test_csv_output_file_name) = build_temp_csv_file(&temp_dir, "output");
-        let csv_output_arg = format!("--output {}", test_csv_output_file_name.to_str().unwrap());
+        let csv_output_arg = format!(
+            "--output {}",
+            test_csv_output_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
-        let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
+        let trace_log_arg = format!(
+            "--trace {}",
+            test_trace_log_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let args = prepare_args(vec![
@@ -459,7 +498,7 @@ mod tests {
             "--ref-des-disable-list TP1,TP2",
         ]);
         dump_args(&args);
-        
+
         // when
         cmd.args(args)
             // then
@@ -473,8 +512,18 @@ mod tests {
         println!("{}", trace_content);
 
         // and
-        let expected_substitutions_file_1_message = format!("Loaded 1 substitution rules from {}\n", test_assembly_substitutions_file_name.to_str().unwrap());
-        let expected_substitutions_file_2_message = format!("Loaded 2 substitution rules from {}\n", test_global_substitutions_file_name.to_str().unwrap());
+        let expected_substitutions_file_1_message = format!(
+            "Loaded 1 substitution rules from {}\n",
+            test_assembly_substitutions_file_name
+                .to_str()
+                .unwrap()
+        );
+        let expected_substitutions_file_2_message = format!(
+            "Loaded 2 substitution rules from {}\n",
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap()
+        );
 
         assert_contains_inorder!(trace_content, [
             "Loaded 9 placements\n",
@@ -500,7 +549,7 @@ mod tests {
 
         Ok(())
     }
-    
+
     fn assert_csv_content(csv_content: String, expected_csv_content: String) {
         if let Some(case) = predicate::str::diff(expected_csv_content).find_case(false, csv_content.as_str()) {
             panic!("Unexpected CSV content\n{}", case.tree());
@@ -530,17 +579,22 @@ mod tests {
             x: Decimal::from(10),
             y: Decimal::from(110),
             rotation: dec!(-179.999),
-
         })?;
 
         writer.flush()?;
 
         dump_file("placements", test_placements_path.clone())?;
 
-        let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
+        let placements_arg = format!(
+            "--placements {}",
+            test_placements_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and global substitutions
-        let (test_global_substitutions_path, test_global_substitutions_file_name) = build_temp_csv_file(&temp_dir, "global-substitutions");
+        let (test_global_substitutions_path, test_global_substitutions_file_name) =
+            build_temp_csv_file(&temp_dir, "global-substitutions");
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -556,11 +610,13 @@ mod tests {
 
         writer.flush()?;
 
-
         dump_file("global substitutions", test_placements_path.clone())?;
 
-        let substitutions_arg = format!("--substitutions {}",
-            test_global_substitutions_file_name.to_str().unwrap(),
+        let substitutions_arg = format!(
+            "--substitutions {}",
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap(),
         );
 
         // and parts
@@ -602,14 +658,29 @@ mod tests {
 
         dump_file("part mappings", test_part_mappings_path.clone())?;
 
-        let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
+        let part_mappings_arg = format!(
+            "--part-mappings {}",
+            test_part_mappings_file_name
+                .to_str()
+                .unwrap()
+        );
 
         let (test_csv_output_path, test_csv_output_file_name) = build_temp_csv_file(&temp_dir, "output");
-        let csv_output_arg = format!("--output {}", test_csv_output_file_name.to_str().unwrap());
+        let csv_output_arg = format!(
+            "--output {}",
+            test_csv_output_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
-        let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
+        let trace_log_arg = format!(
+            "--trace {}",
+            test_trace_log_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let expected_part_mapping_tree = indoc! {"
@@ -623,9 +694,10 @@ mod tests {
         let expected_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
             "R1","RES_MFR1","RES1","true","Top","10","110","-179.999"
-        "#}.to_string();
+        "#}
+        .to_string();
 
-        // and 
+        // and
         let args = prepare_args(vec![
             trace_log_arg.as_str(),
             "build",
@@ -650,7 +722,12 @@ mod tests {
         let trace_content: String = read_to_string(test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let expected_substitutions_file_1_message = format!("Loaded 1 substitution rules from {}\n", test_global_substitutions_file_name.to_str().unwrap());
+        let expected_substitutions_file_1_message = format!(
+            "Loaded 1 substitution rules from {}\n",
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap()
+        );
 
         assert_contains_inorder!(trace_content, [
             "Loaded 1 placements\n",
@@ -699,7 +776,7 @@ mod tests {
         })?;
 
         writer.flush()?;
-        
+
         dump_file("placements", test_placements_path.clone())?;
 
         // FIXME EasyESAPro doesn't quote the headers
@@ -713,10 +790,16 @@ mod tests {
         // FIXME EasyEDAPro adds spurious tab characters at the end of each non-header line.
         //       These need to be stripped before the CSV file is read.
 
-        let placements_arg = format!("--placements {}", test_placements_file_name.to_str().unwrap());
+        let placements_arg = format!(
+            "--placements {}",
+            test_placements_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and global substitutions
-        let (test_global_substitutions_path, test_global_substitutions_file_name) = build_temp_csv_file(&temp_dir, "global-substitutions");
+        let (test_global_substitutions_path, test_global_substitutions_file_name) =
+            build_temp_csv_file(&temp_dir, "global-substitutions");
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -734,8 +817,11 @@ mod tests {
 
         dump_file("global substitutions", test_placements_path.clone())?;
 
-        let substitutions_arg = format!("--substitutions {}",
-            test_global_substitutions_file_name.to_str().unwrap(),
+        let substitutions_arg = format!(
+            "--substitutions {}",
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap(),
         );
 
         // and parts
@@ -777,14 +863,29 @@ mod tests {
 
         dump_file("part mappings", test_part_mappings_path.clone())?;
 
-        let part_mappings_arg = format!("--part-mappings {}", test_part_mappings_file_name.to_str().unwrap());
+        let part_mappings_arg = format!(
+            "--part-mappings {}",
+            test_part_mappings_file_name
+                .to_str()
+                .unwrap()
+        );
 
         let (test_csv_output_path, test_csv_output_file_name) = build_temp_csv_file(&temp_dir, "output");
-        let csv_output_arg = format!("--output {}", test_csv_output_file_name.to_str().unwrap());
+        let csv_output_arg = format!(
+            "--output {}",
+            test_csv_output_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let (test_trace_log_path, test_trace_log_file_name) = build_temp_file(&temp_dir, "trace", "log");
-        let trace_log_arg = format!("--trace {}", test_trace_log_file_name.to_str().unwrap());
+        let trace_log_arg = format!(
+            "--trace {}",
+            test_trace_log_file_name
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let expected_part_mapping_tree = indoc! {"
@@ -798,7 +899,8 @@ mod tests {
         let expected_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
             "R1","RES_MFR1","RES1","true","Top","10","110","-0.001"
-        "#}.to_string();
+        "#}
+        .to_string();
 
         // and
         let args = prepare_args(vec![
@@ -825,7 +927,12 @@ mod tests {
         let trace_content: String = read_to_string(test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        let expected_substitutions_file_1_message = format!("Loaded 1 substitution rules from {}\n", test_global_substitutions_file_name.to_str().unwrap());
+        let expected_substitutions_file_1_message = format!(
+            "Loaded 1 substitution rules from {}\n",
+            test_global_substitutions_file_name
+                .to_str()
+                .unwrap()
+        );
 
         assert_contains_inorder!(trace_content, [
             "Loaded 1 placements\n",
@@ -846,7 +953,7 @@ mod tests {
 
         Ok(())
     }
-    
+
     #[test]
     fn version() {
         // given
@@ -872,7 +979,7 @@ mod tests {
         y: Decimal,
         /// Positive values indicate anti-clockwise rotation
         /// Range is 0 - < 360
-        /// Rounding occurs on the 3rd decimal, e.g. 359.991 rounds to 359.99, 359.995 rounds to 360, then gets converted to 0. 
+        /// Rounding occurs on the 3rd decimal, e.g. 359.991 rounds to 359.99, 359.995 rounds to 360, then gets converted to 0.
         rotation: Decimal,
     }
 
@@ -912,7 +1019,6 @@ mod tests {
         /// Rounding occurs on the 4th decimal, e.g. 359.9994 rounds to 359.999 and 359.995 rounds to 360, then gets converted to 0.
         rotation: Decimal,
     }
-
 
     #[derive(Debug, serde::Serialize)]
     #[serde(rename_all(serialize = "PascalCase"))]
@@ -963,6 +1069,7 @@ mod tests {
 #[cfg(test)]
 mod help {
     use std::process::Command;
+
     use assert_cmd::prelude::OutputAssertExt;
     use indoc::indoc;
     use predicates::prelude::*;
@@ -1066,11 +1173,17 @@ mod help {
 mod test_helpers {
     use std::fs::read_to_string;
     use std::path::PathBuf;
+
     use thiserror::__private::AsDisplay;
 
     pub fn dump_file(title: &str, path: PathBuf) -> Result<(), std::io::Error> {
         let content: String = read_to_string(path.clone())?;
-        println!("file: {}\npath: {}\ncontent:\n{}", title, path.clone().as_display(), content);
+        println!(
+            "file: {}\npath: {}\ncontent:\n{}",
+            title,
+            path.clone().as_display(),
+            content
+        );
 
         Ok(())
     }

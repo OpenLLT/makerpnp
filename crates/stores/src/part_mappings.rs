@@ -1,28 +1,38 @@
-use tracing::Level;
-use anyhow::{Context, Error};
 use std::path::PathBuf;
-use tracing::trace;
-use crate::csv::PartMappingRecord;
-use pnp::part::Part;
+
+use anyhow::{Context, Error};
 use part_mapper::part_mapping::PartMapping;
+use pnp::part::Part;
+use tracing::trace;
+use tracing::Level;
+
+use crate::csv::PartMappingRecord;
 
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load_part_mappings<'part>(parts: &'part Vec<Part>, part_mappings_source: &String) -> Result<Vec<PartMapping<'part>>, Error> {
+pub fn load_part_mappings<'part>(
+    parts: &'part Vec<Part>,
+    part_mappings_source: &String,
+) -> Result<Vec<PartMapping<'part>>, Error> {
     let part_mappings_path_buf = PathBuf::from(part_mappings_source);
     let part_mappings_path = part_mappings_path_buf.as_path();
     let mut csv_reader = csv::ReaderBuilder::new()
         .from_path(part_mappings_path)
-        .with_context(|| format!("Error reading part mappings. file: {}", part_mappings_path.to_str().unwrap()))?;
+        .with_context(|| {
+            format!(
+                "Error reading part mappings. file: {}",
+                part_mappings_path.to_str().unwrap()
+            )
+        })?;
 
     let mut part_mappings: Vec<PartMapping> = vec![];
 
     for result in csv_reader.deserialize() {
-        let record: PartMappingRecord = result
-            .with_context(|| "Deserializing part mapping record".to_string())?;
+        let record: PartMappingRecord = result.with_context(|| "Deserializing part mapping record".to_string())?;
 
         trace!("{:?}", record);
 
-        let part_mapping = record.build_part_mapping(parts)
+        let part_mapping = record
+            .build_part_mapping(parts)
             .with_context(|| format!("Building part mapping from record. record: {:?}", record))?;
 
         part_mappings.push(part_mapping);
@@ -33,26 +43,33 @@ pub fn load_part_mappings<'part>(parts: &'part Vec<Part>, part_mappings_source: 
 #[cfg(test)]
 pub mod csv_loading_tests {
     use assert_fs::TempDir;
-    use csv::QuoteStyle;
-    use regex::Regex;
     use criteria::{ExactMatchCriterion, GenericCriteria, RegexMatchCriterion};
+    use csv::QuoteStyle;
     use part_mapper::part_mapping::PartMapping;
     use pnp::part::Part;
+    use regex::Regex;
+
     use crate::part_mappings::load_part_mappings;
     use crate::part_mappings::test::TestPartMappingRecord;
 
     /// Regression test for workaround to the serde flatten issue.
     /// See https://github.com/BurntSushi/rust-csv/issues/344#issuecomment-2286126491
     #[test]
-    pub fn ensure_fields_containing_integers_can_be_loaded() -> anyhow::Result<()>{
+    pub fn ensure_fields_containing_integers_can_be_loaded() -> anyhow::Result<()> {
         // given
-        let parts: Vec<Part> = vec![Part{ manufacturer: "424242".to_string(), mpn: "696969".to_string() }];
+        let parts: Vec<Part> = vec![Part {
+            manufacturer: "424242".to_string(),
+            mpn: "696969".to_string(),
+        }];
 
         // and
         let temp_dir = TempDir::new()?;
         let mut test_part_mappings_path = temp_dir.path().to_path_buf();
         test_part_mappings_path.push("part-mappings.csv");
-        let test_part_mappings_source = test_part_mappings_path.to_str().unwrap().to_string();
+        let test_part_mappings_source = test_part_mappings_path
+            .to_str()
+            .unwrap()
+            .to_string();
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -82,15 +99,21 @@ pub mod csv_loading_tests {
     }
 
     #[test]
-    pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()>{
+    pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()> {
         // given
-        let parts: Vec<Part> = vec![Part{ manufacturer: "424242".to_string(), mpn: "696969".to_string() }];
+        let parts: Vec<Part> = vec![Part {
+            manufacturer: "424242".to_string(),
+            mpn: "696969".to_string(),
+        }];
 
         // and
         let temp_dir = TempDir::new()?;
         let mut test_part_mappings_path = temp_dir.path().to_path_buf();
         test_part_mappings_path.push("part-mappings.csv");
-        let test_part_mappings_source = test_part_mappings_path.to_str().unwrap().to_string();
+        let test_part_mappings_source = test_part_mappings_path
+            .to_str()
+            .unwrap()
+            .to_string();
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
@@ -118,20 +141,38 @@ pub mod csv_loading_tests {
 
         // and
         let expected_result: Vec<PartMapping> = vec![
-            PartMapping { part: parts.get(0).unwrap(), criteria: vec![
-                Box::new(GenericCriteria { criteria: vec![
-                    Box::new(ExactMatchCriterion { field_name: "name".to_string(), field_pattern: "12345".to_string() }),
-                    Box::new(ExactMatchCriterion { field_name: "value".to_string(), field_pattern: "54321".to_string() }),
-                ] })
-            ] },
-            PartMapping { part: parts.get(0).unwrap(), criteria: vec![
-                Box::new(GenericCriteria { criteria: vec![
-                    Box::new(ExactMatchCriterion { field_name: "name".to_string(), field_pattern: "12345".to_string() }),
-                    Box::new(RegexMatchCriterion { field_name: "value".to_string(), field_pattern: Regex::new(".*").unwrap() }),
-                ] })
-            ] },
+            PartMapping {
+                part: parts.get(0).unwrap(),
+                criteria: vec![Box::new(GenericCriteria {
+                    criteria: vec![
+                        Box::new(ExactMatchCriterion {
+                            field_name: "name".to_string(),
+                            field_pattern: "12345".to_string(),
+                        }),
+                        Box::new(ExactMatchCriterion {
+                            field_name: "value".to_string(),
+                            field_pattern: "54321".to_string(),
+                        }),
+                    ],
+                })],
+            },
+            PartMapping {
+                part: parts.get(0).unwrap(),
+                criteria: vec![Box::new(GenericCriteria {
+                    criteria: vec![
+                        Box::new(ExactMatchCriterion {
+                            field_name: "name".to_string(),
+                            field_pattern: "12345".to_string(),
+                        }),
+                        Box::new(RegexMatchCriterion {
+                            field_name: "value".to_string(),
+                            field_pattern: Regex::new(".*").unwrap(),
+                        }),
+                    ],
+                })],
+            },
         ];
-        
+
         let csv_content = std::fs::read_to_string(test_part_mappings_source.clone())?;
         println!("{csv_content:}");
 
@@ -148,7 +189,7 @@ pub mod csv_loading_tests {
 // FUTURE Ideally we want to include this module ONLY for integration tests or for unit tests
 //        but when compiling for integration tests, `test` is NOT defined so we cannot use
 //        just `#[cfg(test)]`
-#[cfg(any(test, feature="testing"))]
+#[cfg(any(test, feature = "testing"))]
 pub mod test {
     #[derive(Debug, Default, serde::Serialize)]
     #[serde(rename_all(serialize = "PascalCase"))]
@@ -156,7 +197,6 @@ pub mod test {
         //
         // From
         //
-
         pub eda: String,
 
         // DipTrace specific

@@ -8,5 +8,6 @@ static LOCK: Mutex<bool> = Mutex::new(false);
 /// interact with each other causing unexpected results and test failures.
 #[allow(dead_code)]
 pub fn aquire() -> MutexGuard<'static, bool> {
-    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    LOCK.lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }

@@ -1,12 +1,13 @@
-use std::str::FromStr;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
+
 use thiserror::Error;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProcessName(pub String);
 
 #[derive(Debug, Error)]
-#[error("Process name error")] 
+#[error("Process name error")]
 pub struct ProcessNameError;
 
 impl FromStr for ProcessName {
@@ -46,13 +47,13 @@ impl Process {
 #[derive(Error, Debug)]
 pub enum ProcessError {
     #[error("Unused process. processes: {:?}, process: '{}'", processes, process)]
-    UndefinedProcessError { processes: Vec<Process>, process: String }
+    UndefinedProcessError { processes: Vec<Process>, process: String },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
 pub struct ProcessOperationState {
     pub status: ProcessOperationStatus,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extra: Option<ProcessOperationExtraState>,
 }
@@ -61,7 +62,7 @@ pub struct ProcessOperationState {
 pub enum ProcessOperationStatus {
     Pending,
     Incomplete,
-    Complete
+    Complete,
 }
 
 impl Default for ProcessOperationStatus {
@@ -89,5 +90,5 @@ impl PlacementsState {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ProcessOperationSetItem {
-    Completed
+    Completed,
 }

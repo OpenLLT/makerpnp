@@ -9,8 +9,8 @@ pub enum SortOrder {
 impl Display for SortOrder {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Asc=> write!(f, "Asc"),
-            Self::Desc=> write!(f, "Desc"),
+            Self::Asc => write!(f, "Asc"),
+            Self::Desc => write!(f, "Desc"),
         }
     }
 }

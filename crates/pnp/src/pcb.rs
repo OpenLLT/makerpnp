@@ -13,7 +13,17 @@ pub struct Pcb {
     pub name: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
 #[serde(rename_all = "lowercase")]
 pub enum PcbKind {
     Single,
@@ -27,7 +37,7 @@ impl TryFrom<&String> for PcbKind {
         match value.to_lowercase().as_str() {
             "single" => Ok(PcbKind::Single),
             "panel" => Ok(PcbKind::Panel),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

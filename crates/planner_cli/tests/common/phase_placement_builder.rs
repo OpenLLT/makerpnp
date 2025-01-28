@@ -15,11 +15,10 @@ pub struct TestPhasePlacementRecord {
 
 #[derive(Default)]
 pub struct PhasePlacementsCSVBuilder<'a> {
-    records: Option<&'a [TestPhasePlacementRecord]>
+    records: Option<&'a [TestPhasePlacementRecord]>,
 }
 
 impl<'a> PhasePlacementsCSVBuilder<'a> {
-    
     pub fn as_string(&mut self) -> String {
         let content: Vec<u8> = vec![];
 
@@ -32,16 +31,16 @@ impl<'a> PhasePlacementsCSVBuilder<'a> {
                 writer.serialize(record).unwrap();
             }
         }
-        
+
         writer.flush().unwrap();
-                
+
         String::from_utf8(writer.into_inner().unwrap()).unwrap()
     }
     pub fn with_items(mut self, records: &'a [TestPhasePlacementRecord]) -> Self {
         self.records = Some(records);
         self
     }
-    
+
     pub fn new() -> Self {
         Default::default()
     }

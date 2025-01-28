@@ -16,14 +16,18 @@ pub mod ordered {
 
     #[macro_export]
     macro_rules! assert_inorder {
-    ($content:expr, $expected:expr) => {
-        {
+        ($content:expr, $expected:expr) => {{
             let remainder = $content;
             let expected = $expected;
-            let (_, remainder) = remainder.split_once(expected).expect(format!("expected string not found, expected: '{}', remaining content: '{}'", expected, remainder).as_str());
+            let (_, remainder) = remainder.split_once(expected).expect(
+                format!(
+                    "expected string not found, expected: '{}', remaining content: '{}'",
+                    expected, remainder
+                )
+                .as_str(),
+            );
 
             remainder.to_string()
-        }
-    };
-}
+        }};
+    }
 }

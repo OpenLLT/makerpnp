@@ -1,8 +1,10 @@
 use std::ffi::{OsStr, OsString};
+
 use clap::builder::TypedValueParser;
-use clap::{Arg, Command, Error, value_parser};
 use clap::error::ErrorKind;
+use clap::{value_parser, Arg, Command, Error};
 use planning::placement::PlacementSortingItem;
+
 use crate::args::{PlacementSortingModeArg, SortOrderArg};
 
 #[derive(Clone, Default)]
@@ -13,7 +15,6 @@ impl TypedValueParser for PlacementSortingItemParser {
 
     /// Parses a value in the format '<MODE>:<SORT_ORDER>' with values in SCREAMING_SNAKE_CASE, e.g. 'FEEDER_REFERENCE:ASC'
     fn parse_ref(&self, cmd: &Command, _arg: Option<&Arg>, value: &OsStr) -> Result<Self::Value, Error> {
-
         let chunks_str = match value.to_str() {
             Some(str) => Ok(str),
             // TODO create a test for this edge case, how to invoke this code path, is the message helpful to the user, how is it displayed by clap?
@@ -22,7 +23,13 @@ impl TypedValueParser for PlacementSortingItemParser {
 
         let mut chunks: Vec<_> = chunks_str.split(':').collect();
         if chunks.len() != 2 {
-            return Err(Error::raw(ErrorKind::InvalidValue, format!("Invalid argument. Required format: '<MODE>:<SORT_ORDER>', found: '{}'", chunks_str)))
+            return Err(Error::raw(
+                ErrorKind::InvalidValue,
+                format!(
+                    "Invalid argument. Required format: '<MODE>:<SORT_ORDER>', found: '{}'",
+                    chunks_str
+                ),
+            ));
         }
 
         let sort_order_str = chunks.pop().unwrap();

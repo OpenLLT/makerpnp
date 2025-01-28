@@ -1,5 +1,5 @@
 pub mod criteria;
-pub mod part_mapping;
 mod part_mapper;
+pub mod part_mapping;
 
 pub use part_mapper::*;

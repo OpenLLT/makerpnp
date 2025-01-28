@@ -18,14 +18,15 @@ pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
         .into_button()
         .on_click({
             let toolbar_sender = toolbar_sender.clone();
-            move |_event| toolbar_sender.send(ToolbarMessage::AddPcb).expect("sent")
+            move |_event| {
+                toolbar_sender
+                    .send(ToolbarMessage::AddPcb)
+                    .expect("sent")
+            }
         })
         .with(&IntrinsicPadding, button_padding);
 
-    let toolbar_widgets: [WidgetInstance; 2] = [
-        add_pcb_button.make_widget(),
-        Expand::empty().make_widget(),
-    ];
+    let toolbar_widgets: [WidgetInstance; 2] = [add_pcb_button.make_widget(), Expand::empty().make_widget()];
 
     let toolbar = toolbar_widgets
         .into_columns()

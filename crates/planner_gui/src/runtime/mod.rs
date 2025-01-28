@@ -1,11 +1,12 @@
 use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
+
 use cushy::channel::Sender;
-use futures::channel::mpsc;
-use futures::{select, Sink, Stream, StreamExt};
-use futures::stream::{BoxStream, FusedStream};
 use cushy::value::{Destination, Dynamic};
+use futures::channel::mpsc;
+use futures::stream::{BoxStream, FusedStream};
+use futures::{select, Sink, Stream, StreamExt};
 use tracing::{debug, error, trace};
 
 #[derive(Debug)]
@@ -29,11 +30,7 @@ pub struct RunTime<S, M> {
 
 impl<S, M> RunTime<S, M>
 where
-    S: Sink<M, Error = mpsc::SendError>
-    + Unpin
-    + Send
-    + Clone
-    + 'static,
+    S: Sink<M, Error = mpsc::SendError> + Unpin + Send + Clone + 'static,
     M: Send + Debug + 'static,
 {
     pub fn new(executor: Executor, sender: S) -> Self {
@@ -48,11 +45,13 @@ where
         use futures::{FutureExt, StreamExt};
 
         let message = self.sender.clone();
-        let future =
-            stream.map(move |message| {
+        let future = stream
+            .map(move |message| {
                 //trace!("stream message: {:?}", message);
                 Ok(message)
-            }).forward(message).map(|result| match result {
+            })
+            .forward(message)
+            .map(|result| match result {
                 Ok(()) => (),
                 Err(error) => {
                     println!("Stream unable to complete, cause: {error}");
@@ -63,11 +62,13 @@ where
     }
 }
 
-
 pub struct MessageDispatcher {}
 
 impl MessageDispatcher {
-    pub async fn dispatch<T: Send + Debug + 'static>(mut receiver: impl Stream<Item = T> + FusedStream + Unpin, sender: Sender<T>) {
+    pub async fn dispatch<T: Send + Debug + 'static>(
+        mut receiver: impl Stream<Item = T> + FusedStream + Unpin,
+        sender: Sender<T>,
+    ) {
         loop {
             select! {
                 received_message = receiver.select_next_some() => {
@@ -84,7 +85,6 @@ impl MessageDispatcher {
         }
     }
 }
-
 
 pub fn boxed_stream<T, S>(stream: S) -> BoxStream<'static, T>
 where

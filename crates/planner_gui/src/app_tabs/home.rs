@@ -1,11 +1,12 @@
 use cushy::localization::Localize;
 use cushy::value::{IntoValue, Source, Value};
-use crate::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use planner_gui::action::Action;
-use crate::config::Config;
 use planner_gui::context::Context;
 use planner_gui::widgets::tab_bar::{Tab, TabKey};
+
+use crate::config::Config;
+use crate::Dynamic;
 
 #[derive(Clone, Debug)]
 pub enum HomeTabMessage {
@@ -20,7 +21,7 @@ impl Default for HomeTabMessage {
 
 #[derive(Debug)]
 pub enum HomeTabAction {
-    None
+    None,
 }
 
 #[derive(Clone, Default)]
@@ -32,46 +33,52 @@ impl Tab<HomeTabMessage, HomeTabAction> for HomeTab {
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
+        context
+            .lock()
+            .with_context::<Dynamic<Config>, _, _>(|config| {
+                let config_guard = config.lock();
+                let show_on_startup_value = Dynamic::new(config_guard.show_home_on_startup);
+                // FIXME why is an explicit drop required since cushy commit 4501558b0f
+                //       without this, the callback panics when `config_binding.lock()`is called in the closure
+                drop(config_guard);
 
-        context.lock().with_context::<Dynamic<Config>, _, _>(|config|{
-            let config_guard = config.lock();
-            let show_on_startup_value = Dynamic::new(config_guard.show_home_on_startup);
-            // FIXME why is an explicit drop required since cushy commit 4501558b0f
-            //       without this, the callback panics when `config_binding.lock()`is called in the closure
-            drop(config_guard);
-            
-            let callback = show_on_startup_value.for_each_cloned({
-                let config_binding = config.clone();
+                let callback = show_on_startup_value.for_each_cloned({
+                    let config_binding = config.clone();
 
-                move |value|{
-                    println!("updating config, show_home_on_startup: {}", value);
-                    let mut config_guard = config_binding.lock();
-                    config_guard.show_home_on_startup = value;
-                }
-            });
+                    move |value| {
+                        println!("updating config, show_home_on_startup: {}", value);
+                        let mut config_guard = config_binding.lock();
+                        config_guard.show_home_on_startup = value;
+                    }
+                });
 
-            callback.persist();
+                callback.persist();
 
-            let home_label = Localize::new("home-banner")
-                .xxxx_large()
-                .centered()
-                .make_widget();
+                let home_label = Localize::new("home-banner")
+                    .xxxx_large()
+                    .centered()
+                    .make_widget();
 
-            let show_on_startup_button= Localize::new("home-checkbox-label-show-on-startup")
-                .into_checkbox(show_on_startup_value)
-                .centered()
-                .make_widget();
+                let show_on_startup_button = Localize::new("home-checkbox-label-show-on-startup")
+                    .into_checkbox(show_on_startup_value)
+                    .centered()
+                    .make_widget();
 
-            [home_label, show_on_startup_button]
-                .into_rows()
-                // center all the children, not individually
-                .centered()
-                .make_widget()
-
-        }).unwrap()
+                [home_label, show_on_startup_button]
+                    .into_rows()
+                    // center all the children, not individually
+                    .centered()
+                    .make_widget()
+            })
+            .unwrap()
     }
 
-    fn update(&mut self, _context: &Dynamic<Context>, _tab_key: TabKey, message: HomeTabMessage) -> Action<HomeTabAction> {
+    fn update(
+        &mut self,
+        _context: &Dynamic<Context>,
+        _tab_key: TabKey,
+        message: HomeTabMessage,
+    ) -> Action<HomeTabAction> {
         match message {
             HomeTabMessage::None => {}
         }

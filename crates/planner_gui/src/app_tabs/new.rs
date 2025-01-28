@@ -1,13 +1,14 @@
 use std::path::PathBuf;
+
 use cushy::channel::Sender;
 use cushy::dialog::FilePicker;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::value::{Destination, Dynamic, IntoValue, Source, Validations, Value};
 use cushy::widget::{MakeWidget, WidgetInstance};
-use cushy::widgets::{Button, Grid, Input, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::Displayable;
+use cushy::widgets::{Button, Grid, Input, Space};
 use cushy::window::WindowHandle;
 use planner_gui::action::Action;
 use planner_gui::context::Context;
@@ -53,14 +54,14 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
         let validations = self.validations.clone();
 
-        let window = context.lock().with_context::<WindowHandle, _, _>(|window_handle| {
-            window_handle.clone()
-        }).unwrap();
-        
+        let window = context
+            .lock()
+            .with_context::<WindowHandle, _, _>(|window_handle| window_handle.clone())
+            .unwrap();
+
         // TODO use translations
-        
-        let name_label = "Name".into_label()
-            .align_left();
+
+        let name_label = "Name".into_label().align_left();
         let name_input = Input::new(self.name.clone())
             .placeholder("Name without extension")
             .validation(validations.validate(&self.name.clone(), |name: &String| {
@@ -75,48 +76,46 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
         let name_row = (name_label, name_input);
 
         // FIXME remove this workaround for lack of grid gutter support.
-        let gutter_row_1 = (
-            Space::clear().height(Px::new(5)),
-            Space::clear().height(Px::new(5))
-        );
+        let gutter_row_1 = (Space::clear().height(Px::new(5)), Space::clear().height(Px::new(5)));
 
         let directory_label = "Directory".into_label();
-        let directory_input = Input::new(self.directory.clone().map_each(|path|{
-            path.to_str().unwrap().to_string()
+        let directory_input = Input::new(
+            self.directory
+                .clone()
+                .map_each(|path| path.to_str().unwrap().to_string()),
+        )
+        .placeholder("Choose a directory")
+        .validation(validations.validate(&self.directory.clone(), |path| {
+            if !(path.is_dir() && path.exists()) {
+                Err("Must be a valid directory")
+            } else {
+                Ok(())
+            }
         }))
-            .placeholder("Choose a directory")
-            .validation(validations.validate(&self.directory.clone(), |path| {
-                if !(path.is_dir() && path.exists())  {
-                    Err("Must be a valid directory")
-                } else {
-                    Ok(())
-                }
-            }))
-            .hint("* required")
-            .expand_horizontally();
+        .hint("* required")
+        .expand_horizontally();
 
-        let directory_button = Button::new("...")
-            .on_click({
-                let directory = self.directory.clone();
+        let directory_button = Button::new("...").on_click({
+            let directory = self.directory.clone();
 
-                move |_event| {
-                    println!("on_click");
+            move |_event| {
+                println!("on_click");
 
-                    FilePicker::new()
-                        .with_title("Choose folder")
-                        .pick_folder(&window,{
-                            // NOTE: Nested callbacks require a second clone
-                            let directory = directory.clone();
+                FilePicker::new()
+                    .with_title("Choose folder")
+                    .pick_folder(&window, {
+                        // NOTE: Nested callbacks require a second clone
+                        let directory = directory.clone();
 
-                            move |path|{
-                                if let Some(path) = path {
-                                    println!("path: {:?}", path);
-                                    directory.set(path.clone());
-                                }
+                        move |path| {
+                            if let Some(path) = path {
+                                println!("path: {:?}", path);
+                                directory.set(path.clone());
                             }
-                        });
-                }
-            });
+                        }
+                    });
+            }
+        });
 
         let directory_input_and_button = directory_input
             .and(directory_button)
@@ -129,40 +128,41 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
             .and(directory_row);
 
         let grid = Grid::from_rows(grid_widgets)
-            .dimensions([
-                GridDimension::FitContent,
-                GridDimension::Fractional { weight: 1 },
-            ])
+            .dimensions([GridDimension::FitContent, GridDimension::Fractional {
+                weight: 1,
+            }])
             // FIXME failing to set a gutter between the rows
             .with(&IntrinsicPadding, Px::new(5)); // no visible effect.
 
-        let ok_button = "Ok".into_button()
-            .on_click({
-                let sender = self.sender.clone();
-                move |_event| sender.send(NewTabMessage::OkClicked).expect("sent")
-            });
+        let ok_button = "Ok".into_button().on_click({
+            let sender = self.sender.clone();
+            move |_event| {
+                sender
+                    .send(NewTabMessage::OkClicked)
+                    .expect("sent")
+            }
+        });
 
-        let form = grid
-            .and(ok_button)
-            .into_rows();
+        let form = grid.and(ok_button).into_rows();
 
         Space::clear()
             .expand_weighted(1)
-            .and(form
-                .expand_horizontally()
-                .expand_weighted(8)
+            .and(
+                form.expand_horizontally()
+                    .expand_weighted(8),
             )
-            .and(Space::clear()
-                .expand_weighted(1)
-            )
+            .and(Space::clear().expand_weighted(1))
             .into_columns()
             .centered()
-
             .make_widget()
     }
 
-    fn update(&mut self, _context: &Dynamic<Context>, _tab_key: TabKey, message: NewTabMessage) -> Action<NewTabAction> {
-
+    fn update(
+        &mut self,
+        _context: &Dynamic<Context>,
+        _tab_key: TabKey,
+        message: NewTabMessage,
+    ) -> Action<NewTabAction> {
         let action = match message {
             NewTabMessage::OkClicked => {
                 if self.validations.is_valid() {

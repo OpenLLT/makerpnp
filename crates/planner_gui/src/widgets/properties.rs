@@ -1,10 +1,11 @@
 use std::fmt::Debug;
+
 use cushy::styles::ContainerLevel;
 use cushy::value::{Dynamic, Switchable};
 use cushy::widget::{MakeWidget, WidgetInstance};
-use cushy::widgets::{Grid, Space};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::DynamicDisplay;
+use cushy::widgets::{Grid, Space};
 
 pub struct PropertiesItem {
     label: WidgetInstance,
@@ -13,7 +14,7 @@ pub struct PropertiesItem {
 
 pub struct Properties {
     items: Vec<PropertiesItem>,
-    grid_dimensions: Dynamic<[GridDimension;2]>,
+    grid_dimensions: Dynamic<[GridDimension; 2]>,
     header: WidgetInstance,
     footer: WidgetInstance,
     expand_vertically: bool,
@@ -32,7 +33,6 @@ impl Default for Properties {
 }
 
 impl Properties {
-
     pub fn with_items(mut self, items: Vec<PropertiesItem>) -> Self {
         self.items = items;
         self
@@ -60,7 +60,7 @@ impl Properties {
         self.header = properties_header.make_widget();
         self
     }
-    
+
     pub fn expand_vertically(mut self) -> Self {
         self.expand_vertically = true;
         self
@@ -85,13 +85,11 @@ impl Properties {
     }
 
     pub fn make_widget(&self) -> WidgetInstance {
-
-        let grid_rows: Vec<(WidgetInstance, WidgetInstance)> = self.items.iter().map(|item|{
-            (
-                item.label.clone(),
-                item.field.clone()
-            )
-        }).collect();
+        let grid_rows: Vec<(WidgetInstance, WidgetInstance)> = self
+            .items
+            .iter()
+            .map(|item| (item.label.clone(), item.field.clone()))
+            .collect();
 
         let grid_row_widgets = GridWidgets::from(grid_rows);
 
@@ -106,31 +104,30 @@ impl Properties {
         let scrollable_content = grid_widget
             .vertical_scroll()
             .contain_level(ContainerLevel::High);
-        
+
         let scrollable_content = if self.expand_vertically {
             scrollable_content
                 .expand_vertically()
                 .make_widget()
-            
         } else {
-            scrollable_content
-                .make_widget()
+            scrollable_content.make_widget()
         };
-        
-        let properties_widget = self.header.clone()
+
+        let properties_widget = self
+            .header
+            .clone()
             .and(scrollable_content)
             .and(self.footer.clone())
             .into_rows();
-        
+
         let properties_widget = if self.expand_vertically {
             properties_widget
                 .expand_vertically()
                 .make_widget()
         } else {
-            properties_widget
-                .make_widget()
+            properties_widget.make_widget()
         };
-        
+
         properties_widget
     }
 }
@@ -144,19 +141,14 @@ impl PropertiesItem {
     }
 
     pub fn from_optional_value(label: impl MakeWidget, value: Dynamic<Option<String>>) -> Self {
-        let field = value.clone().switcher({
-            move |value, _| {
-                match value.clone() {
-                    Some(value) =>
-                        value
-                            .make_widget()
-                    ,
-                    None =>
-                        Space::clear()
-                            .make_widget(),
+        let field = value
+            .clone()
+            .switcher({
+                move |value, _| match value.clone() {
+                    Some(value) => value.make_widget(),
+                    None => Space::clear().make_widget(),
                 }
-            }
-        })
+            })
             .align_left()
             .make_widget();
 
@@ -166,4 +158,3 @@ impl PropertiesItem {
         }
     }
 }
-

@@ -1,11 +1,12 @@
-
 use std::fmt::{Display, Formatter};
+
 use assembly::rules::AssemblyRule;
 use eda::placement::EdaPlacement;
-use crate::part_mapping::PartMapping;
-use crate::PartMappingError::{ConflictingRules, NoRulesApplied};
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
+
+use crate::part_mapping::PartMapping;
+use crate::PartMappingError::{ConflictingRules, NoRulesApplied};
 
 pub struct PartMapper {}
 
@@ -14,9 +15,8 @@ impl PartMapper {
         eda_placements: &'placement [EdaPlacement],
         part_mappings: &'mapping [PartMapping<'mapping>],
         load_out_items: &[LoadOutItem],
-        assembly_rules: &[AssemblyRule]
+        assembly_rules: &[AssemblyRule],
     ) -> Result<Vec<PlacementPartMappingResult<'placement, 'mapping>>, PartMapperError<'placement, 'mapping>> {
-
         let mut error_count: usize = 0;
         let mut mappings = vec![];
 
@@ -26,20 +26,36 @@ impl PartMapper {
             for part_mapping in part_mappings.iter() {
                 for criteria in part_mapping.criteria.iter() {
                     if criteria.matches(eda_placement) {
-                        part_mapping_results.push(PartMappingResult { part_mapping, applied_rule: None });
+                        part_mapping_results.push(PartMappingResult {
+                            part_mapping,
+                            applied_rule: None,
+                        });
                     }
                 }
             }
 
-            apply_rules(&eda_placement.ref_des, &mut part_mapping_results, load_out_items, assembly_rules);
+            apply_rules(
+                &eda_placement.ref_des,
+                &mut part_mapping_results,
+                load_out_items,
+                assembly_rules,
+            );
 
-            let applied_rule_count = part_mapping_results.iter().filter(|pmr|pmr.applied_rule.is_some()).count();
+            let applied_rule_count = part_mapping_results
+                .iter()
+                .filter(|pmr| pmr.applied_rule.is_some())
+                .count();
 
             let (mapping_result, part) = match (part_mapping_results.len(), applied_rule_count) {
                 (_, 1) => {
-                    let part = part_mapping_results.iter().find(|it|it.applied_rule.is_some()).unwrap().part_mapping.part;
+                    let part = part_mapping_results
+                        .iter()
+                        .find(|it| it.applied_rule.is_some())
+                        .unwrap()
+                        .part_mapping
+                        .part;
                     (Ok(part_mapping_results), Some(part))
-                },
+                }
                 (0, _) => (Err(PartMappingError::NoMappings), None),
                 (1.., 0) => (Err(NoRulesApplied(part_mapping_results)), None),
                 (_, 2..) => (Err(ConflictingRules(part_mapping_results)), None),
@@ -49,29 +65,38 @@ impl PartMapper {
                 error_count += 1
             }
 
-            let result = PlacementPartMappingResult { part, eda_placement, mapping_result };
+            let result = PlacementPartMappingResult {
+                part,
+                eda_placement,
+                mapping_result,
+            };
             mappings.push(result);
         }
 
         match error_count {
             0 => Ok(mappings),
-            1.. => Err(PartMapperError::MappingErrors(mappings))
+            1.. => Err(PartMapperError::MappingErrors(mappings)),
         }
     }
 }
 
-fn apply_rules<'mapping>(ref_des: &String, mapping_results: &mut [PartMappingResult<'mapping>], load_out_items: &[LoadOutItem], assembly_rules: &[AssemblyRule]) {
+fn apply_rules<'mapping>(
+    ref_des: &String,
+    mapping_results: &mut [PartMappingResult<'mapping>],
+    load_out_items: &[LoadOutItem],
+    assembly_rules: &[AssemblyRule],
+) {
     for mapping_result in mapping_results.iter_mut() {
         let maybe_assembly_rule = assembly_rules.iter().find(|rule| {
             let mapped_part = mapping_result.part_mapping;
-            *ref_des == rule.ref_des &&
-                mapped_part.part.manufacturer == rule.manufacturer &&
-                mapped_part.part.mpn == rule.mpn
+            *ref_des == rule.ref_des
+                && mapped_part.part.manufacturer == rule.manufacturer
+                && mapped_part.part.mpn == rule.mpn
         });
 
         if let Some(_rule) = maybe_assembly_rule {
             mapping_result.applied_rule = Some(AppliedMappingRule::AssemblyRule);
-            return
+            return;
         }
     }
 
@@ -83,15 +108,15 @@ fn apply_rules<'mapping>(ref_des: &String, mapping_results: &mut [PartMappingRes
             for mapping_result in mapping_results.iter_mut() {
                 let maybe_load_out_item = load_out_items.iter().find(|item| {
                     let mapped_part = mapping_result.part_mapping;
-                    (item.mpn == mapped_part.part.mpn)
-                        && (item.manufacturer == mapped_part.part.manufacturer)
+                    (item.mpn == mapped_part.part.mpn) && (item.manufacturer == mapped_part.part.manufacturer)
                 });
 
                 if let Some(load_out_item) = maybe_load_out_item {
-                    mapping_result.applied_rule = Some(AppliedMappingRule::FoundInLoadOut(load_out_item.reference.clone()));
+                    mapping_result.applied_rule =
+                        Some(AppliedMappingRule::FoundInLoadOut(load_out_item.reference.clone()));
                 }
             }
-        },
+        }
         _ => (),
     }
 }
@@ -143,18 +168,22 @@ pub struct PartMappingResult<'mapping> {
 pub struct PlacementPartMappingResult<'placement, 'mapping> {
     pub eda_placement: &'placement EdaPlacement,
     pub mapping_result: Result<Vec<PartMappingResult<'mapping>>, PartMappingError<'mapping>>,
-    pub part: Option<&'mapping Part>
+    pub part: Option<&'mapping Part>,
 }
 
 #[cfg(test)]
 mod tests {
     use assembly::rules::AssemblyRule;
     use criteria::{ExactMatchCriterion, GenericCriteria};
-    use pnp::part::Part;
-    use pnp::load_out::LoadOutItem;
     use eda::placement::{EdaPlacement, EdaPlacementField};
+    use pnp::load_out::LoadOutItem;
+    use pnp::part::Part;
+
     use crate::part_mapping::PartMapping;
-    use crate::{AppliedMappingRule, PartMapper, PartMapperError, PartMappingError, PartMappingResult, PlacementPartMappingResult};
+    use crate::{
+        AppliedMappingRule, PartMapper, PartMapperError, PartMappingError, PartMappingResult,
+        PlacementPartMappingResult,
+    };
 
     #[test]
     fn map_parts() {
@@ -194,29 +223,56 @@ mod tests {
         let parts = [part1, part2, part3];
 
         // and
-        let criteria1 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria1 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping1 = PartMapping::new(&parts[1 - 1], vec![Box::new(criteria1)]);
-        let criteria2 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME2".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE2".to_string() )),
-        ]};
+        let criteria2 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME2".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE2".to_string())),
+            ],
+        };
         let part_mapping2 = PartMapping::new(&parts[2 - 1], vec![Box::new(criteria2)]);
-        let criteria3 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME3".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE3".to_string() )),
-        ]};
+        let criteria3 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME3".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE3".to_string())),
+            ],
+        };
         let part_mapping3 = PartMapping::new(&parts[3 - 1], vec![Box::new(criteria3)]);
 
         let part_mappings = vec![part_mapping1, part_mapping2, part_mapping3];
 
         // and
         let expected_results = Ok(vec![
-            PlacementPartMappingResult { part: Some(&parts[0]), eda_placement: &eda_placements[0], mapping_result: Ok(vec![PartMappingResult { part_mapping: &part_mappings[0], applied_rule: Some(AppliedMappingRule::AutoSelected) }]) },
-            PlacementPartMappingResult { part: Some(&parts[1]), eda_placement: &eda_placements[1], mapping_result: Ok(vec![PartMappingResult { part_mapping: &part_mappings[1], applied_rule: Some(AppliedMappingRule::AutoSelected) }]) },
-            PlacementPartMappingResult { part: Some(&parts[2]), eda_placement: &eda_placements[2], mapping_result: Ok(vec![PartMappingResult { part_mapping: &part_mappings[2], applied_rule: Some(AppliedMappingRule::AutoSelected) }]) },
+            PlacementPartMappingResult {
+                part: Some(&parts[0]),
+                eda_placement: &eda_placements[0],
+                mapping_result: Ok(vec![PartMappingResult {
+                    part_mapping: &part_mappings[0],
+                    applied_rule: Some(AppliedMappingRule::AutoSelected),
+                }]),
+            },
+            PlacementPartMappingResult {
+                part: Some(&parts[1]),
+                eda_placement: &eda_placements[1],
+                mapping_result: Ok(vec![PartMappingResult {
+                    part_mapping: &part_mappings[1],
+                    applied_rule: Some(AppliedMappingRule::AutoSelected),
+                }]),
+            },
+            PlacementPartMappingResult {
+                part: Some(&parts[2]),
+                eda_placement: &eda_placements[2],
+                mapping_result: Ok(vec![PartMappingResult {
+                    part_mapping: &part_mappings[2],
+                    applied_rule: Some(AppliedMappingRule::AutoSelected),
+                }]),
+            },
         ]);
 
         // when
@@ -247,30 +303,38 @@ mod tests {
         let parts = [part1, part2];
 
         // and
-        let criteria1 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria1 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping1 = PartMapping::new(&parts[1 - 1], vec![Box::new(criteria1)]);
-        let criteria2 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria2 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping2 = PartMapping::new(&parts[2 - 1], vec![Box::new(criteria2)]);
 
         let part_mappings = vec![part_mapping1, part_mapping2];
 
         // and
-        let expected_results = Err(PartMapperError::MappingErrors(vec![
-            PlacementPartMappingResult {
-                part: None,
-                eda_placement: &eda_placements[0],
-                mapping_result: Err(PartMappingError::NoRulesApplied(vec![
-                    PartMappingResult { part_mapping: &part_mappings[0], applied_rule: None },
-                    PartMappingResult { part_mapping: &part_mappings[1], applied_rule: None },
-                ]))
-            },
-        ]));
+        let expected_results = Err(PartMapperError::MappingErrors(vec![PlacementPartMappingResult {
+            part: None,
+            eda_placement: &eda_placements[0],
+            mapping_result: Err(PartMappingError::NoRulesApplied(vec![
+                PartMappingResult {
+                    part_mapping: &part_mappings[0],
+                    applied_rule: None,
+                },
+                PartMappingResult {
+                    part_mapping: &part_mappings[1],
+                    applied_rule: None,
+                },
+            ])),
+        }]));
 
         // when
         let matched_mappings = PartMapper::process(&eda_placements, &part_mappings, &[], &[]);
@@ -296,13 +360,11 @@ mod tests {
         let part_mappings = vec![];
 
         // and
-        let expected_results = Err(PartMapperError::MappingErrors(vec![
-            PlacementPartMappingResult {
-                part: None,
-                eda_placement: &eda_placements[0],
-                mapping_result: Err(PartMappingError::NoMappings)
-            },
-        ]));
+        let expected_results = Err(PartMapperError::MappingErrors(vec![PlacementPartMappingResult {
+            part: None,
+            eda_placement: &eda_placements[0],
+            mapping_result: Err(PartMappingError::NoMappings),
+        }]));
 
         // when
         let matched_mappings = PartMapper::process(&eda_placements, &part_mappings, &[], &[]);
@@ -333,15 +395,19 @@ mod tests {
         let parts = [part1, part2, part3];
 
         // and
-        let criteria1 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria1 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping1 = PartMapping::new(&parts[1 - 1], vec![Box::new(criteria1)]);
-        let criteria2 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria2 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping2 = PartMapping::new(&parts[2 - 1], vec![Box::new(criteria2)]);
 
         let part_mappings = vec![part_mapping1, part_mapping2];
@@ -353,16 +419,20 @@ mod tests {
         ];
 
         // and
-        let expected_results = Ok(vec![
-            PlacementPartMappingResult {
-                part: Some(&parts[2 - 1]),
-                eda_placement: &eda_placements[0],
-                mapping_result: Ok(vec![
-                    PartMappingResult { part_mapping: &part_mappings[0], applied_rule: None },
-                    PartMappingResult { part_mapping: &part_mappings[1], applied_rule: Some(AppliedMappingRule::FoundInLoadOut("REFERENCE_2".to_string())) },
-                ])
-            },
-        ]);
+        let expected_results = Ok(vec![PlacementPartMappingResult {
+            part: Some(&parts[2 - 1]),
+            eda_placement: &eda_placements[0],
+            mapping_result: Ok(vec![
+                PartMappingResult {
+                    part_mapping: &part_mappings[0],
+                    applied_rule: None,
+                },
+                PartMappingResult {
+                    part_mapping: &part_mappings[1],
+                    applied_rule: Some(AppliedMappingRule::FoundInLoadOut("REFERENCE_2".to_string())),
+                },
+            ]),
+        }]);
 
         // when
         let matched_mappings = PartMapper::process(&eda_placements, &part_mappings, &load_out_items, &[]);
@@ -393,15 +463,19 @@ mod tests {
         let parts = [part1, part2, part3];
 
         // and
-        let criteria1 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria1 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping1 = PartMapping::new(&parts[1 - 1], vec![Box::new(criteria1)]);
-        let criteria2 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria2 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping2 = PartMapping::new(&parts[2 - 1], vec![Box::new(criteria2)]);
 
         let part_mappings = vec![part_mapping1, part_mapping2];
@@ -420,16 +494,20 @@ mod tests {
         let assembly_rules = &[assembly_rule1, assembly_rule2];
 
         // and
-        let expected_results = Ok(vec![
-            PlacementPartMappingResult {
-                part: Some(&parts[2-1]),
-                eda_placement: &eda_placements[0],
-                mapping_result: Ok(vec![
-                    PartMappingResult { part_mapping: &part_mappings[0], applied_rule: None },
-                    PartMappingResult { part_mapping: &part_mappings[1], applied_rule: Some(AppliedMappingRule::AssemblyRule) },
-                ])
-            },
-        ]);
+        let expected_results = Ok(vec![PlacementPartMappingResult {
+            part: Some(&parts[2 - 1]),
+            eda_placement: &eda_placements[0],
+            mapping_result: Ok(vec![
+                PartMappingResult {
+                    part_mapping: &part_mappings[0],
+                    applied_rule: None,
+                },
+                PartMappingResult {
+                    part_mapping: &part_mappings[1],
+                    applied_rule: Some(AppliedMappingRule::AssemblyRule),
+                },
+            ]),
+        }]);
 
         // when
         let matched_mappings = PartMapper::process(&eda_placements, &part_mappings, &[], assembly_rules);
@@ -459,23 +537,29 @@ mod tests {
         let parts = [part1, part2];
 
         // and
-        let criteria1 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria1 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping1 = PartMapping::new(&parts[1 - 1], vec![Box::new(criteria1)]);
-        let criteria2 = GenericCriteria { criteria: vec![
-            Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string() )),
-            Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string() )),
-        ]};
+        let criteria2 = GenericCriteria {
+            criteria: vec![
+                Box::new(ExactMatchCriterion::new("name".to_string(), "NAME1".to_string())),
+                Box::new(ExactMatchCriterion::new("value".to_string(), "VALUE1".to_string())),
+            ],
+        };
         let part_mapping2 = PartMapping::new(&parts[2 - 1], vec![Box::new(criteria2)]);
 
         let part_mappings = vec![part_mapping1, part_mapping2];
 
         // and
-        let load_out_items = vec![
-            LoadOutItem::new("REFERENCE_1".to_string(), "MFR1".to_string(), "PART1".to_string()),
-        ];
+        let load_out_items = vec![LoadOutItem::new(
+            "REFERENCE_1".to_string(),
+            "MFR1".to_string(),
+            "PART1".to_string(),
+        )];
 
         // and
         let assembly_rule1 = AssemblyRule {
@@ -486,16 +570,20 @@ mod tests {
         let assembly_rules = &[assembly_rule1];
 
         // and
-        let expected_results = Ok(vec![
-            PlacementPartMappingResult {
-                part: Some(&parts[2-1]),
-                eda_placement: &eda_placements[0],
-                mapping_result: Ok(vec![
-                    PartMappingResult { part_mapping: &part_mappings[0], applied_rule: None },
-                    PartMappingResult { part_mapping: &part_mappings[1], applied_rule: Some(AppliedMappingRule::AssemblyRule) },
-                ])
-            },
-        ]);
+        let expected_results = Ok(vec![PlacementPartMappingResult {
+            part: Some(&parts[2 - 1]),
+            eda_placement: &eda_placements[0],
+            mapping_result: Ok(vec![
+                PartMappingResult {
+                    part_mapping: &part_mappings[0],
+                    applied_rule: None,
+                },
+                PartMappingResult {
+                    part_mapping: &part_mappings[1],
+                    applied_rule: Some(AppliedMappingRule::AssemblyRule),
+                },
+            ]),
+        }]);
 
         // when
         let matched_mappings = PartMapper::process(&eda_placements, &part_mappings, &load_out_items, assembly_rules);

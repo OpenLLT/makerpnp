@@ -1,13 +1,14 @@
 //! The tabs for the application.
 
 use cushy::value::{Dynamic, Value};
-use cushy::widget::{WidgetInstance};
+use cushy::widget::WidgetInstance;
 use planner_gui::action::Action;
+use planner_gui::context::Context;
+use planner_gui::widgets::tab_bar::{Tab, TabKey};
+
 use crate::app_tabs::home::{HomeTab, HomeTabAction, HomeTabMessage};
 use crate::app_tabs::new::{NewTab, NewTabAction, NewTabMessage};
 use crate::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabMessage};
-use planner_gui::context::Context;
-use planner_gui::widgets::tab_bar::{Tab, TabKey};
 
 pub mod home;
 pub mod new;
@@ -17,7 +18,7 @@ pub mod project;
 pub enum TabKind {
     Home(HomeTab),
     New(NewTab),
-    Project(ProjectTab)
+    Project(ProjectTab),
 }
 
 #[derive(Clone, Debug)]
@@ -51,32 +52,25 @@ impl Tab<TabKindMessage, TabKindAction> for TabKind {
         }
     }
 
-    fn update(&mut self, context: &Dynamic<Context>, tab_key: TabKey, message: TabKindMessage) -> Action<TabKindAction> {
+    fn update(
+        &mut self,
+        context: &Dynamic<Context>,
+        tab_key: TabKey,
+        message: TabKindMessage,
+    ) -> Action<TabKindAction> {
         match (self, message) {
-            (TabKind::Home(tab), TabKindMessage::HomeTabMessage(message)) => {
-                tab
-                    .update(context, tab_key, message)
-                    .map(|action|{
-                        TabKindAction::HomeTabAction(tab_key, action)
-                    })
-            },
-            (TabKind::New(tab), TabKindMessage::NewTabMessage(message)) => {
-                tab
-                    .update(context, tab_key, message)
-                    .map(|action|{
-                        TabKindAction::NewTabAction(tab_key, action)
-                    })
-            },
-            (TabKind::Project(tab), TabKindMessage::ProjectTabMessage(message)) => {
-                tab
-                    .update(context, tab_key, message)
-                    .map(|action|{
-                        TabKindAction::ProjectTabAction(tab_key, action)
-                    })
-            },
+            (TabKind::Home(tab), TabKindMessage::HomeTabMessage(message)) => tab
+                .update(context, tab_key, message)
+                .map(|action| TabKindAction::HomeTabAction(tab_key, action)),
+            (TabKind::New(tab), TabKindMessage::NewTabMessage(message)) => tab
+                .update(context, tab_key, message)
+                .map(|action| TabKindAction::NewTabAction(tab_key, action)),
+            (TabKind::Project(tab), TabKindMessage::ProjectTabMessage(message)) => tab
+                .update(context, tab_key, message)
+                .map(|action| TabKindAction::ProjectTabAction(tab_key, action)),
             (_, _) => {
                 unreachable!()
-            },
+            }
         }
     }
 }

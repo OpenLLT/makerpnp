@@ -1,25 +1,25 @@
-use tracing::Level;
-use termtree::Tree;
 use std::path::PathBuf;
-use anyhow::Error;
-use crux_core::App;
-use crux_core::macros::Effect;
-use crux_core::render::Render;
-use serde_with::serde_as;
 
-pub use crux_core::Core;
-use csv::QuoteStyle;
-use thiserror::Error;
-use tracing::{error, info, trace};
+use anyhow::Error;
 pub use assembly::assembly_variant::AssemblyVariant;
 use assembly::AssemblyVariantProcessor;
-pub use eda::EdaTool;
+use crux_core::macros::Effect;
+use crux_core::render::Render;
+use crux_core::App;
+pub use crux_core::Core;
+use csv::QuoteStyle;
 use eda::placement::{EdaPlacement, EdaPlacementField};
 use eda::substitution::{EdaSubstitutionResult, EdaSubstitutionRule, EdaSubstitutor};
+pub use eda::EdaTool;
 use part_mapper::{PartMapper, PartMapperError, PartMappingError, PartMappingResult, PlacementPartMappingResult};
-use stores::{assembly_rules, eda_placements, load_out, part_mappings, parts, substitutions};
+use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
 use stores::placements::PlacementRecord;
+use stores::{assembly_rules, eda_placements, load_out, part_mappings, parts, substitutions};
+use termtree::Tree;
+use thiserror::Error;
+use tracing::Level;
+use tracing::{error, info, trace};
 
 extern crate serde_regex;
 
@@ -28,12 +28,12 @@ pub struct VariantBuilder;
 
 #[derive(Default)]
 pub struct Model {
-    error: Option<String>
+    error: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct OperationViewModel {
-    pub error: Option<String>
+    pub error: Option<String>,
 }
 
 #[derive(Effect)]
@@ -57,7 +57,6 @@ pub enum Event {
         output: String,
         ref_des_disable_list: Vec<String>,
     },
-
     //
     // Views
     //
@@ -84,10 +83,9 @@ impl App for VariantBuilder {
                 load_out,
                 assembly_rules,
                 output,
-                ref_des_disable_list
+                ref_des_disable_list,
             } => {
                 let try_fn = |_model: &mut Model| -> Result<(), AppError> {
-
                     let result = build_assembly_variant(
                         eda_tool,
                         &placements,
@@ -98,10 +96,9 @@ impl App for VariantBuilder {
                         &load_out,
                         &assembly_rules,
                         &output,
-                        &ref_des_disable_list
+                        &ref_des_disable_list,
                     )
-                        .map_err(|cause|AppError::OperationError(cause.into()))
-                        ?;
+                    .map_err(|cause| AppError::OperationError(cause.into()))?;
 
                     Ok(result)
                 };
@@ -131,7 +128,6 @@ enum AppError {
     OperationError(anyhow::Error),
 }
 
-
 #[tracing::instrument(level = Level::DEBUG)]
 fn build_assembly_variant(
     eda_tool: EdaTool,
@@ -143,25 +139,32 @@ fn build_assembly_variant(
     load_out_source: &Option<LoadOutSource>,
     assembly_rules_source: &Option<String>,
     output: &String,
-    ref_des_disable_list: &Vec<String>
+    ref_des_disable_list: &Vec<String>,
 ) -> Result<(), Error> {
-
     let mut original_eda_placements = eda_placements::load_eda_placements(eda_tool, placements_source)?;
     info!("Loaded {} placements", original_eda_placements.len());
 
-    let eda_substitution_rules = eda_substitutions_sources.iter().try_fold(vec![], |mut rules, source| {
-        let source_rules = substitutions::load_eda_substitutions(source)?;
-        info!("Loaded {} substitution rules from {}", source_rules.len(), source);
-        rules.extend(source_rules);
+    let eda_substitution_rules = eda_substitutions_sources
+        .iter()
+        .try_fold(vec![], |mut rules, source| {
+            let source_rules = substitutions::load_eda_substitutions(source)?;
+            info!("Loaded {} substitution rules from {}", source_rules.len(), source);
+            rules.extend(source_rules);
 
-        Ok::<Vec<EdaSubstitutionRule>, anyhow::Error>(rules)
-    })?;
+            Ok::<Vec<EdaSubstitutionRule>, anyhow::Error>(rules)
+        })?;
 
-    let eda_substitution_results = EdaSubstitutor::substitute(original_eda_placements.as_mut_slice(), eda_substitution_rules.as_slice());
+    let eda_substitution_results = EdaSubstitutor::substitute(
+        original_eda_placements.as_mut_slice(),
+        eda_substitution_rules.as_slice(),
+    );
     trace!("eda_substitution_results: {:?}", eda_substitution_results);
 
     info!("disabling placements: {:?}", ref_des_disable_list);
-    let mut eda_placements: Vec<EdaPlacement> = eda_substitution_results.iter().map(|esr| esr.resulting_placement.clone()).collect();
+    let mut eda_placements: Vec<EdaPlacement> = eda_substitution_results
+        .iter()
+        .map(|esr| esr.resulting_placement.clone())
+        .collect();
 
     for eda_placement in eda_placements.iter_mut() {
         if ref_des_disable_list.contains(&eda_placement.ref_des) {
@@ -223,8 +226,10 @@ fn build_assembly_variant(
     Ok(())
 }
 
-fn write_output_csv(output_file_name: &String, matched_mappings: &Vec<PlacementPartMappingResult>) -> anyhow::Result<()> {
-
+fn write_output_csv(
+    output_file_name: &String,
+    matched_mappings: &Vec<PlacementPartMappingResult>,
+) -> anyhow::Result<()> {
     let output_path = PathBuf::from(output_file_name);
 
     let mut writer = csv::WriterBuilder::new()
@@ -233,13 +238,16 @@ fn write_output_csv(output_file_name: &String, matched_mappings: &Vec<PlacementP
 
     for matched_mapping in matched_mappings.iter() {
         match matched_mapping {
-            PlacementPartMappingResult { eda_placement, part, .. } => {
-
+            PlacementPartMappingResult {
+                eda_placement,
+                part,
+                ..
+            } => {
                 let empty_value = "".to_string();
                 let record = PlacementRecord {
                     ref_des: eda_placement.ref_des.clone(),
-                    manufacturer: part.map_or_else(||empty_value.clone(),|part| part.manufacturer.clone()),
-                    mpn: part.map_or_else(||empty_value.clone(),|part| part.mpn.clone()),
+                    manufacturer: part.map_or_else(|| empty_value.clone(), |part| part.manufacturer.clone()),
+                    mpn: part.map_or_else(|| empty_value.clone(), |part| part.mpn.clone()),
                     place: eda_placement.place,
                     pcb_side: (&eda_placement.pcb_side).into(),
                     x: eda_placement.x,
@@ -248,7 +256,7 @@ fn write_output_csv(output_file_name: &String, matched_mappings: &Vec<PlacementP
                 };
 
                 writer.serialize(record)?;
-            },
+            }
         }
     }
 
@@ -257,28 +265,53 @@ fn write_output_csv(output_file_name: &String, matched_mappings: &Vec<PlacementP
     Ok(())
 }
 
-fn build_mapping_tree(matched_mappings: &Vec<PlacementPartMappingResult>, eda_substitution_results: Vec<EdaSubstitutionResult>) -> Tree<String> {
+fn build_mapping_tree(
+    matched_mappings: &Vec<PlacementPartMappingResult>,
+    eda_substitution_results: Vec<EdaSubstitutionResult>,
+) -> Tree<String> {
     let mut tree = Tree::new("Mapping Result".to_string());
 
-    for PlacementPartMappingResult { eda_placement, mapping_result: part_mappings_result, .. } in matched_mappings.iter() {
-
+    for PlacementPartMappingResult {
+        eda_placement,
+        mapping_result: part_mappings_result,
+        ..
+    } in matched_mappings.iter()
+    {
         fn add_error_node(placement_node: &mut Tree<String>, reason: &str) {
             let placement_error_node = Tree::new(format!("ERROR: Unresolved mapping - {}.", reason).to_string());
-            placement_node.leaves.push(placement_error_node);
+            placement_node
+                .leaves
+                .push(placement_error_node);
         }
 
-        if let Some(substitution_result) = eda_substitution_results.iter().find(|candidate|{
-            candidate.original_placement.ref_des.eq(&eda_placement.ref_des)
-        }) {
-            let placement_label = format!("{} ({})", eda_placement.ref_des, EdaPlacementTreeFormatter::format(&substitution_result.original_placement.fields.as_slice()));
+        if let Some(substitution_result) = eda_substitution_results
+            .iter()
+            .find(|candidate| {
+                candidate
+                    .original_placement
+                    .ref_des
+                    .eq(&eda_placement.ref_des)
+            })
+        {
+            let placement_label = format!(
+                "{} ({})",
+                eda_placement.ref_des,
+                EdaPlacementTreeFormatter::format(
+                    &substitution_result
+                        .original_placement
+                        .fields
+                        .as_slice()
+                )
+            );
             let mut placement_node = Tree::new(placement_label);
 
             let mut parent = &mut placement_node;
 
             for chain_entry in substitution_result.chain.iter() {
-                let substitution_label = format!("Substituted ({}), by ({})",
-                                                 chain_entry.rule.format_transform(),
-                                                 chain_entry.rule.format_criteria(),
+                let substitution_label = format!(
+                    "Substituted ({}), by ({})",
+                    chain_entry.rule.format_transform(),
+                    chain_entry.rule.format_criteria(),
                 );
 
                 let substitution_node = Tree::new(substitution_label);
@@ -293,27 +326,33 @@ fn build_mapping_tree(matched_mappings: &Vec<PlacementPartMappingResult>, eda_su
                 Err(PartMappingError::ConflictingRules(part_mapping_results)) => {
                     add_mapping_nodes(part_mapping_results, parent);
                     add_error_node(parent, "Conflicting rules");
-                },
+                }
                 Err(PartMappingError::NoRulesApplied(part_mapping_results)) => {
                     add_mapping_nodes(part_mapping_results, parent);
                     add_error_node(parent, "No rules applied");
-                },
+                }
                 Err(PartMappingError::NoMappings) => {
                     add_error_node(parent, "No mappings found");
-                },
+                }
             }
 
             tree.leaves.push(placement_node)
         };
-
     }
 
     tree
 }
 
 fn add_mapping_nodes(part_mapping_results: &Vec<PartMappingResult>, placement_node: &mut Tree<String>) {
-    for PartMappingResult { part_mapping, applied_rule } in part_mapping_results.iter() {
-        let part_chunk = format!("manufacturer: '{}', mpn: '{}'", part_mapping.part.manufacturer, part_mapping.part.mpn);
+    for PartMappingResult {
+        part_mapping,
+        applied_rule,
+    } in part_mapping_results.iter()
+    {
+        let part_chunk = format!(
+            "manufacturer: '{}', mpn: '{}'",
+            part_mapping.part.manufacturer, part_mapping.part.mpn
+        );
         let mut chunks = vec![part_chunk];
 
         if let Some(rule) = applied_rule {
@@ -332,16 +371,19 @@ struct EdaPlacementTreeFormatter {}
 
 impl EdaPlacementTreeFormatter {
     fn format(fields: &[EdaPlacementField]) -> String {
-        let chunks: Vec<String> = fields.iter().map(|field|format!("{}: '{}'", field.name, field.value)).collect();
+        let chunks: Vec<String> = fields
+            .iter()
+            .map(|field| format!("{}: '{}'", field.name, field.value))
+            .collect();
         format!("{}", chunks.join(", "))
     }
 }
 
-
 #[cfg(test)]
 mod app_tests {
-    use super::*;
     use crux_core::{assert_effect, testing::AppTester};
+
+    use super::*;
 
     #[test]
     fn minimal() {

@@ -1,9 +1,9 @@
 use clap::ValueEnum;
 use eda::EdaTool;
-use pnp::pcb::{PcbKind, PcbSide};
-use util::sorting::SortOrder;
 use planning::placement::{PlacementOperation, PlacementSortingMode};
 use planning::process::{ProcessOperationKind, ProcessOperationSetItem};
+use pnp::pcb::{PcbKind, PcbSide};
+use util::sorting::SortOrder;
 
 /// Args decouple of CLI arg handling requirements from the internal data structures
 
@@ -30,7 +30,6 @@ impl SortOrderArg {
 pub enum PlacementSortingModeArg {
     FeederReference,
     PcbUnit,
-
     // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, DESIGN_X, DESIGN_Y, PANEL_X, PANEL_Y, DESCRIPTION
 }
 
@@ -137,17 +136,21 @@ impl From<ProcessOperationArg> for ProcessOperationKind {
 
 #[cfg(test)]
 mod from_process_operation_arg_for_process_operation_kind_tests {
-    use rstest::rstest;
-    use super::ProcessOperationArg;
     use planning::process::ProcessOperationKind;
+    use rstest::rstest;
+
+    use super::ProcessOperationArg;
 
     #[rstest]
     #[case(ProcessOperationArg::LoadPcbs, ProcessOperationKind::LoadPcbs)]
     #[case(ProcessOperationArg::AutomatedPnp, ProcessOperationKind::AutomatedPnp)]
     #[case(ProcessOperationArg::ReflowComponents, ProcessOperationKind::ReflowComponents)]
-    #[case(ProcessOperationArg::ManuallySolderComponents, ProcessOperationKind::ManuallySolderComponents)]
+    #[case(
+        ProcessOperationArg::ManuallySolderComponents,
+        ProcessOperationKind::ManuallySolderComponents
+    )]
     pub fn from(#[case] arg: ProcessOperationArg, #[case] expected_kind: ProcessOperationKind) {
-        // expect 
+        // expect
         assert_eq!(ProcessOperationKind::from(arg), expected_kind)
     }
 }
@@ -162,7 +165,7 @@ pub enum ProcessOperationSetArg {
 impl From<ProcessOperationSetArg> for ProcessOperationSetItem {
     fn from(value: ProcessOperationSetArg) -> Self {
         match value {
-            ProcessOperationSetArg::Completed => ProcessOperationSetItem::Completed
+            ProcessOperationSetArg::Completed => ProcessOperationSetItem::Completed,
         }
     }
 }

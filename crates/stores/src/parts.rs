@@ -1,8 +1,10 @@
-use tracing::Level;
-use anyhow::{Context, Error};
 use std::path::PathBuf;
-use tracing::trace;
+
+use anyhow::{Context, Error};
 use pnp::part::Part;
+use tracing::trace;
+use tracing::Level;
+
 use crate::csv::PartRecord;
 
 #[tracing::instrument(level = Level::DEBUG)]
@@ -16,12 +18,12 @@ pub fn load_parts(parts_source: &String) -> Result<Vec<Part>, Error> {
     let mut parts: Vec<Part> = vec![];
 
     for result in csv_reader.deserialize() {
-        let record: PartRecord = result
-            .with_context(|| "Deserializing part record".to_string())?;
+        let record: PartRecord = result.with_context(|| "Deserializing part record".to_string())?;
 
         trace!("{:?}", record);
 
-        let part = record.build_part()
+        let part = record
+            .build_part()
             .with_context(|| format!("Building part from record. record: {:?}", record))?;
 
         parts.push(part);
