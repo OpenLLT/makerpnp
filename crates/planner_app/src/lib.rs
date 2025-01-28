@@ -816,7 +816,17 @@ impl App for Planner {
                             .tree
                             .add_node(ProjectTreeItem {
                                 key: "unit-assignment".to_string(),
-                                args: HashMap::from([("name".to_string(), Arg::String(path.to_string()))]),
+                                args: HashMap::from([
+                                    ("name".to_string(), Arg::String(path.to_string())),
+                                    (
+                                        "design_name".to_string(),
+                                        Arg::String(design_variant.design_name.to_string()),
+                                    ),
+                                    (
+                                        "variant_name".to_string(),
+                                        Arg::String(design_variant.variant_name.to_string()),
+                                    ),
+                                ]),
                                 path: format!("/units/{}", index).to_string(),
                             });
 
