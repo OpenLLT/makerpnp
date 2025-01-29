@@ -9,6 +9,7 @@ side-bar-footer = Pie de página de la barra lateral
 side-bar-item-path = Ruta
 
 project-toolbar-button-add-pcb = Añadir placa
+project-toolbar-button-create-unit-assignment = Crear asignacion de unidad
 
 tab-label-home = Inicio
 
@@ -42,11 +43,22 @@ form-button-cancel = Cancelar
 form-add-pcb-input-name = Nombre
 form-add-pcb-input-name-placeholder = Nombre de PCB (por ejemplo, 'predeterminado')
 
-form-add-pcb-choice-kind = Tipo
-form-add-pcb-choice-kind-single = Individual
-form-add-pcb-choice-kind-panel = Panel
+form-create-unit-assignment-input-design-name = Nombre del diseño
+form-create-unit-assignment-input-design-name-placeholder = Nombre del diseño (por ejemplo, 'mi diseño')
+form-create-unit-assignment-input-variant-name = Nombre de la variante
+form-create-unit-assignment-input-variant-name-placeholder = Nombre de la variante (por ejemplo, 'default')
+form-create-unit-assignment-input-pcb-instance = Instancia PCB
+form-create-unit-assignment-input-pcb-instance-placeholder = Un número > 0
+form-create-unit-assignment-input-pcb-unit = Unidad PCB
+form-create-unit-assignment-input-pcb-unit-placeholder = Un número > 0
+
+form-common-choice-pcb-kind = Tipo
+form-common-choice-pcb-kind-single = Individual
+form-common-choice-pcb-kind-panel = Panel
 
 form-field-required = * Obligatorio
 
 form-input-error-empty = No puede estar vacío
 form-input-choice-empty = Elija una opción
+form-input-number-require-greater-than-zero = Requiere un número mayor que cero
+form-input-number-require-positive-number = Requiere un número

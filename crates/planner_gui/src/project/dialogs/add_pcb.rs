@@ -6,27 +6,8 @@ use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::{Grid, Input, Space};
 use cushy::{localize, MaybeLocalized};
 
+use crate::project::dialogs::PcbKind;
 use crate::project::AddPcbArgs;
-
-#[derive(Default, Eq, PartialEq, Debug, Clone, Copy)]
-pub enum PcbKind {
-    #[default]
-    None,
-    Single,
-    Panel,
-}
-
-impl TryFrom<PcbKind> for planner_app::PcbKind {
-    type Error = ();
-
-    fn try_from(value: PcbKind) -> Result<Self, Self::Error> {
-        match value {
-            PcbKind::None => Err(()),
-            PcbKind::Single => Ok(planner_app::PcbKind::Single),
-            PcbKind::Panel => Ok(planner_app::PcbKind::Panel),
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct AddPcbForm {
@@ -85,16 +66,16 @@ impl MakeWidget for &AddPcbForm {
         // FIXME remove this workaround for lack of grid gutter support.
         let gutter_row_1 = (Space::clear().height(Px::new(5)), Space::clear().height(Px::new(5)));
 
-        let kind_label = localize!("form-add-pcb-choice-kind").align_left();
+        let kind_label = localize!("form-common-choice-pcb-kind").align_left();
 
         let kind_choices = self
             .kind
             .new_radio(PcbKind::Single)
-            .labelled_by(localize!("form-add-pcb-choice-kind-single"))
+            .labelled_by(localize!("form-common-choice-pcb-kind-single"))
             .and(
                 self.kind
                     .new_radio(PcbKind::Panel)
-                    .labelled_by(localize!("form-add-pcb-choice-kind-panel")),
+                    .labelled_by(localize!("form-common-choice-pcb-kind-panel")),
             )
             .into_columns()
             .validation(

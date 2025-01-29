@@ -9,6 +9,7 @@ use cushy::widgets::Expand;
 #[derive(Clone, Debug)]
 pub enum ToolbarMessage {
     AddPcb,
+    CreateUnitAssignment,
 }
 
 pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
@@ -26,7 +27,23 @@ pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
         })
         .with(&IntrinsicPadding, button_padding);
 
-    let toolbar_widgets: [WidgetInstance; 2] = [add_pcb_button.make_widget(), Expand::empty().make_widget()];
+    let create_unit_assignment_button = Localize::new("project-toolbar-button-create-unit-assignment")
+        .into_button()
+        .on_click({
+            let toolbar_sender = toolbar_sender.clone();
+            move |_event| {
+                toolbar_sender
+                    .send(ToolbarMessage::CreateUnitAssignment)
+                    .expect("sent")
+            }
+        })
+        .with(&IntrinsicPadding, button_padding);
+
+    let toolbar_widgets: [WidgetInstance; 3] = [
+        add_pcb_button.make_widget(),
+        create_unit_assignment_button.make_widget(),
+        Expand::empty().make_widget(),
+    ];
 
     let toolbar = toolbar_widgets
         .into_columns()

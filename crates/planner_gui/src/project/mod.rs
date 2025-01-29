@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use cushy::channel::Sender;
 use cushy::dialog::ShouldClose;
@@ -18,7 +19,10 @@ use cushy::widgets::Space;
 use fluent_bundle::types::FluentNumber;
 use fluent_bundle::FluentValue;
 use petgraph::visit::{depth_first_search, Control, DfsEvent};
-use planner_app::{Arg, Event, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView, Reference};
+use planner_app::{
+    Arg, DesignName, Event, ObjectPath, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView,
+    Reference, VariantName,
+};
 use planner_gui::action::Action;
 use planner_gui::task::Task;
 use planner_gui::widgets::properties::{Properties, PropertiesItem};
@@ -28,6 +32,7 @@ use tracing::{debug, error, info, trace};
 
 use crate::app_core::CoreService;
 use crate::project::dialogs::add_pcb::AddPcbForm;
+use crate::project::dialogs::create_unit_assignment::CreateUnitAssignmentForm;
 use crate::project::toolbar::{make_toolbar, ToolbarMessage};
 
 mod dialogs;
@@ -68,6 +73,13 @@ pub struct AddPcbArgs {
 }
 
 #[derive(Debug, Clone)]
+pub struct CreateUnitAssignmentArgs {
+    pub design_name: String,
+    pub variant_name: String,
+    pub object_path: ObjectPath,
+}
+
+#[derive(Debug, Clone)]
 pub enum ProjectMessage {
     None,
 
@@ -91,6 +103,7 @@ pub enum ProjectMessage {
     Save,
     Saved,
     ToolbarMessage(ToolbarMessage),
+    CreateUnitAssignment(CreateUnitAssignmentArgs),
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +144,7 @@ pub struct Project {
     pile: Pile,
 
     add_pcb_modal: Option<ModalHandle>,
+    create_unit_assignments_modal: Option<ModalHandle>,
 }
 
 impl Project {
@@ -149,6 +163,7 @@ impl Project {
             phase_widgets: HashMap::new(),
             default_content_handle: None,
             add_pcb_modal: None,
+            create_unit_assignments_modal: None,
         };
 
         (instance, ProjectMessage::Create)
@@ -168,6 +183,7 @@ impl Project {
             phase_widgets: HashMap::new(),
             default_content_handle: None,
             add_pcb_modal: None,
+            create_unit_assignments_modal: None,
         };
 
         (instance, ProjectMessage::Load)
@@ -176,6 +192,8 @@ impl Project {
     pub fn make_widget(&mut self) -> WidgetInstance {
         let modal = Modal::new();
         self.add_pcb_modal
+            .replace(modal.new_handle());
+        self.create_unit_assignments_modal
             .replace(modal.new_handle());
 
         let project_tree_widget = self.project_tree.lock().make_widget();
@@ -387,6 +405,19 @@ impl Project {
                     .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
                 ProjectAction::Task(task)
             }
+            ProjectMessage::CreateUnitAssignment(args) => {
+                debug!("Create unit assignment. args: {:?}", args);
+
+                let task = self
+                    .core_service
+                    .update(Event::AssignVariantToUnit {
+                        design: DesignName::from_str(&args.design_name).unwrap(),
+                        variant: VariantName::from_str(&args.variant_name).unwrap(),
+                        unit: args.object_path,
+                    })
+                    .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
+                ProjectAction::Task(task)
+            }
         };
 
         Action::new(action)
@@ -539,9 +570,53 @@ impl Project {
             ToolbarMessage::AddPcb => {
                 self.display_add_pcb_modal();
             }
+            ToolbarMessage::CreateUnitAssignment => {
+                self.display_create_unit_assignment_modal();
+            }
         }
 
         ProjectAction::None
+    }
+
+    fn display_create_unit_assignment_modal(&self) {
+        let handle = self
+            .create_unit_assignments_modal
+            .as_ref()
+            .unwrap();
+        let form = CreateUnitAssignmentForm::default();
+        handle
+            .build_dialog(&form)
+            .with_default_button(localize!("form-button-ok"), {
+                let sender = self.sender.clone();
+                move || {
+                    info!("Create unit assignment. Ok clicked");
+
+                    let validations = form.validations();
+                    match validations.is_valid() {
+                        false => ShouldClose::Remain,
+                        true => {
+                            let args = form.result().unwrap();
+                            info!(
+                                "Create unit assignment. design name: {}, variant name: {}, object path: {}",
+                                args.design_name, args.variant_name, args.object_path
+                            );
+
+                            sender
+                                .send(ProjectMessage::CreateUnitAssignment(args))
+                                .expect("sent");
+
+                            ShouldClose::Close
+                        }
+                    }
+                }
+            })
+            .with_cancel_button(localize!("form-button-cancel"), {
+                || {
+                    info!("Create unit assignment. Cancel clicked");
+                    ShouldClose::Close
+                }
+            })
+            .show();
     }
 
     fn display_add_pcb_modal(&self) {

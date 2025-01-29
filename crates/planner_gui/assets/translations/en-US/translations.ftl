@@ -9,6 +9,7 @@ side-bar-footer = Sidebar footer
 side-bar-item-path = Path
 
 project-toolbar-button-add-pcb = Add PCB
+project-toolbar-button-create-unit-assignment = Create unit assignment
 
 tab-label-home = Home
 
@@ -42,11 +43,22 @@ form-button-cancel = Cancel
 form-add-pcb-input-name = Name
 form-add-pcb-input-name-placeholder = PCB name (e.g. 'default')
 
-form-add-pcb-choice-kind = Kind
-form-add-pcb-choice-kind-single = Single
-form-add-pcb-choice-kind-panel = Panel
+form-create-unit-assignment-input-design-name = Design name
+form-create-unit-assignment-input-design-name-placeholder = Design name (e.g. 'my design')
+form-create-unit-assignment-input-variant-name = Variant name
+form-create-unit-assignment-input-variant-name-placeholder = Variant name (e.g. 'default')
+form-create-unit-assignment-input-pcb-instance = PCB instance
+form-create-unit-assignment-input-pcb-instance-placeholder = A number > 0
+form-create-unit-assignment-input-pcb-unit = PCB unit
+form-create-unit-assignment-input-pcb-unit-placeholder = A number > 0
+
+form-common-choice-pcb-kind = PCB Kind
+form-common-choice-pcb-kind-single = Single
+form-common-choice-pcb-kind-panel = Panel
 
 form-field-required = * Required
 
 form-input-error-empty = Cannot be empty
 form-input-choice-empty = Choose an option
+form-input-number-require-greater-than-zero = Require a number greater than zero
+form-input-number-require-positive-number = Require a number
