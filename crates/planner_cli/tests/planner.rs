@@ -252,9 +252,9 @@ mod operation_sequence_1 {
 
         println!("creating placements, path: {:?}", &placements_path);
 
-        let mut placments_file = File::create(placements_path)?;
-        let _written = placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
-        placments_file.flush()?;
+        let mut placements_file = File::create(placements_path)?;
+        let _written = placements_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
+        placements_file.flush()?;
 
         // and
         let expected_project_content = TestProjectBuilder::new()
