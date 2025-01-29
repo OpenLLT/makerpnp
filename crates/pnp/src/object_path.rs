@@ -72,6 +72,20 @@ pub struct ObjectPath {
 }
 
 impl ObjectPath {
+    pub fn set_pcb_kind_and_instance(&mut self, pcb_kind: PcbKind, pcb_instance: usize) {
+        self.set_chunk(ObjectPathChunk {
+            key: pcb_kind.to_string(),
+            value: pcb_instance.to_string(),
+        })
+    }
+
+    pub fn set_pcb_unit(&mut self, pcb_instance: usize) {
+        self.set_chunk(ObjectPathChunk {
+            key: "unit".to_string(),
+            value: pcb_instance.to_string(),
+        })
+    }
+
     pub fn set_ref_des(&mut self, ref_des: String) {
         self.set_chunk(ObjectPathChunk {
             key: "ref_des".to_string(),
@@ -196,6 +210,53 @@ mod pcb_unit_tests {
         let expected_result = ObjectPath::from_str("panel=1::unit=1::ref_des=R1").expect("always ok");
 
         // when
+        object_path.set_ref_des("R1".to_string());
+
+        // then
+        assert_eq!(object_path, expected_result);
+    }
+
+    #[test]
+    pub fn set_pcb_kind_and_instance() {
+        // given
+        let mut object_path = ObjectPath::default();
+
+        // and
+        let expected_result = ObjectPath::from_str("panel=1").expect("always ok");
+
+        // when
+        object_path.set_pcb_kind_and_instance(PcbKind::Panel, 1);
+
+        // then
+        assert_eq!(object_path, expected_result);
+    }
+
+    #[test]
+    pub fn set_pcb_unit() {
+        // given
+        let mut object_path = ObjectPath::default();
+
+        // and
+        let expected_result = ObjectPath::from_str("unit=1").expect("always ok");
+
+        // when
+        object_path.set_pcb_unit(1);
+
+        // then
+        assert_eq!(object_path, expected_result);
+    }
+
+    #[test]
+    pub fn append_chunks() {
+        // given
+        let mut object_path = ObjectPath::default();
+
+        // and
+        let expected_result = ObjectPath::from_str("panel=1::unit=1::ref_des=R1").expect("always ok");
+
+        // when
+        object_path.set_pcb_kind_and_instance(PcbKind::Panel, 1);
+        object_path.set_pcb_unit(1);
         object_path.set_ref_des("R1".to_string());
 
         // then
