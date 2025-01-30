@@ -4,7 +4,7 @@ use cushy::channel::Sender;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::value::{Destination, Dynamic, IntoValue, Source, Validations, Value};
-use cushy::widget::{EventHandling, EventIgnored, MakeWidget, WidgetInstance};
+use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::Displayable;
 use cushy::widgets::{Grid, Input, Space};
