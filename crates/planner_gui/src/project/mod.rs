@@ -32,7 +32,7 @@ use tracing::{debug, error, info, trace};
 
 use crate::app_core::CoreService;
 use crate::project::dialogs::add_pcb::AddPcbForm;
-use crate::project::dialogs::create_unit_assignment::CreateUnitAssignmentForm;
+use crate::project::dialogs::create_unit_assignment::{CreateUnitAssignmentForm, CreateUnitAssignmentFormMessage};
 use crate::project::toolbar::{make_toolbar, ToolbarMessage};
 
 mod dialogs;
@@ -104,6 +104,8 @@ pub enum ProjectMessage {
     Saved,
     ToolbarMessage(ToolbarMessage),
     CreateUnitAssignment(CreateUnitAssignmentArgs),
+    CreateUnitAssignmentFormMessage(CreateUnitAssignmentFormMessage),
+    CreateUnitAssignmentFormIsValid,
 }
 
 #[derive(Debug, Clone)]
@@ -144,7 +146,10 @@ pub struct Project {
     pile: Pile,
 
     add_pcb_modal: Option<ModalHandle>,
+
     create_unit_assignments_modal: Option<ModalHandle>,
+    create_unit_assignments_sender: Option<Sender<CreateUnitAssignmentFormMessage>>,
+    create_unit_assignments_form: Option<CreateUnitAssignmentForm>,
 }
 
 impl Project {
@@ -163,7 +168,10 @@ impl Project {
             phase_widgets: HashMap::new(),
             default_content_handle: None,
             add_pcb_modal: None,
+
             create_unit_assignments_modal: None,
+            create_unit_assignments_sender: None,
+            create_unit_assignments_form: None,
         };
 
         (instance, ProjectMessage::Create)
@@ -184,6 +192,8 @@ impl Project {
             default_content_handle: None,
             add_pcb_modal: None,
             create_unit_assignments_modal: None,
+            create_unit_assignments_sender: None,
+            create_unit_assignments_form: None,
         };
 
         (instance, ProjectMessage::Load)
@@ -195,6 +205,20 @@ impl Project {
             .replace(modal.new_handle());
         self.create_unit_assignments_modal
             .replace(modal.new_handle());
+
+        let (create_unit_assignments_sender, create_unit_assignments_receiver) = cushy::channel::build().finish();
+        self.create_unit_assignments_sender
+            .replace(create_unit_assignments_sender);
+
+        create_unit_assignments_receiver.on_receive({
+            let project_message_sender = self.sender.clone();
+            move |form_message| {
+                project_message_sender
+                    .send(ProjectMessage::CreateUnitAssignmentFormMessage(form_message))
+                    .map_err(|message| error!("Could not forward form message: {:?}", message))
+                    .ok();
+            }
+        });
 
         let project_tree_widget = self.project_tree.lock().make_widget();
         let project_explorer = "Project Explorer"
@@ -418,6 +442,32 @@ impl Project {
                     .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
                 ProjectAction::Task(task)
             }
+            ProjectMessage::CreateUnitAssignmentFormMessage(message) => {
+                if let Some(form) = &mut self.create_unit_assignments_form {
+                    form.update(message);
+                    ProjectAction::None
+                } else {
+                    unreachable!("received form message without form. message: {:?}", message);
+                }
+            }
+            ProjectMessage::CreateUnitAssignmentFormIsValid => {
+                let form = self
+                    .create_unit_assignments_form
+                    .take()
+                    .unwrap();
+
+                let args = form.result().unwrap();
+                info!(
+                    "Create unit assignment. design name: {}, variant name: {}, object path: {}",
+                    args.design_name, args.variant_name, args.object_path
+                );
+
+                self.sender
+                    .send(ProjectMessage::CreateUnitAssignment(args))
+                    .expect("sent");
+
+                ProjectAction::None
+            }
         };
 
         Action::new(action)
@@ -565,7 +615,7 @@ impl Project {
         });
     }
 
-    fn on_toolbar_message(&self, message: ToolbarMessage) -> ProjectAction {
+    fn on_toolbar_message(&mut self, message: ToolbarMessage) -> ProjectAction {
         match message {
             ToolbarMessage::AddPcb => {
                 self.display_add_pcb_modal();
@@ -578,33 +628,42 @@ impl Project {
         ProjectAction::None
     }
 
-    fn display_create_unit_assignment_modal(&self) {
+    fn directory(&self) -> PathBuf {
+        let path = self.path.clone();
+        let directory = path.parent().unwrap();
+
+        directory.to_path_buf()
+    }
+
+    fn display_create_unit_assignment_modal(&mut self) {
         let handle = self
             .create_unit_assignments_modal
             .as_ref()
             .unwrap();
-        let form = CreateUnitAssignmentForm::default();
+
+        let project_path = self.directory();
+
+        let form = CreateUnitAssignmentForm::new(
+            self.create_unit_assignments_sender
+                .as_ref()
+                .unwrap()
+                .clone(),
+            project_path,
+        );
+        let validations = form.validations().clone();
         handle
             .build_dialog(&form)
             .with_default_button(localize!("form-button-ok"), {
                 let sender = self.sender.clone();
+                let validations = validations.clone();
                 move || {
                     info!("Create unit assignment. Ok clicked");
-
-                    let validations = form.validations();
                     match validations.is_valid() {
                         false => ShouldClose::Remain,
                         true => {
-                            let args = form.result().unwrap();
-                            info!(
-                                "Create unit assignment. design name: {}, variant name: {}, object path: {}",
-                                args.design_name, args.variant_name, args.object_path
-                            );
-
                             sender
-                                .send(ProjectMessage::CreateUnitAssignment(args))
+                                .send(ProjectMessage::CreateUnitAssignmentFormIsValid)
                                 .expect("sent");
-
                             ShouldClose::Close
                         }
                     }
@@ -617,6 +676,9 @@ impl Project {
                 }
             })
             .show();
+
+        self.create_unit_assignments_form
+            .replace(form);
     }
 
     fn display_add_pcb_modal(&self) {
@@ -628,6 +690,10 @@ impl Project {
                 let sender = self.sender.clone();
                 move || {
                     info!("Add pcb. Ok clicked");
+
+                    // FIXME if the file didn't exist, and then the user placed the file
+                    //       in the right place, then clicked OK, the form should be force-revalidated here.
+
                     let validations = form.validations();
                     match validations.is_valid() {
                         false => ShouldClose::Remain,

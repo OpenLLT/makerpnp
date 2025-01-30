@@ -51,6 +51,7 @@ form-create-unit-assignment-input-pcb-instance = PCB instance
 form-create-unit-assignment-input-pcb-instance-placeholder = A number > 0
 form-create-unit-assignment-input-pcb-unit = PCB unit
 form-create-unit-assignment-input-pcb-unit-placeholder = A number > 0
+form-create-unit-assignment-input-placements-filename = Placements filename
 
 form-common-choice-pcb-kind = PCB Kind
 form-common-choice-pcb-kind-single = Single
@@ -62,3 +63,4 @@ form-input-error-empty = Cannot be empty
 form-input-choice-empty = Choose an option
 form-input-number-require-greater-than-zero = Require a number greater than zero
 form-input-number-require-positive-number = Require a number
+form-file-not-found = File not found
