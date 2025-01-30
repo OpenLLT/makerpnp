@@ -108,7 +108,7 @@ impl CreateUnitAssignmentFormState {
         }
     }
 
-    fn update_placements_filename(&mut self) {
+    fn update_placements_filename(&self) {
         let filename = format!("{}_{}_placements.csv", self.design_name.get(), self.variant_name.get()).to_string();
         self.placements_filename.set(filename);
     }
