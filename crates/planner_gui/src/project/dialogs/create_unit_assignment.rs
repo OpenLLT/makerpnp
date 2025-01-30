@@ -168,17 +168,20 @@ impl MakeWidget for &CreateUnitAssignmentForm {
     fn make_widget(self) -> WidgetInstance {
         let validations = self.state.validations.clone();
 
-        let design_name_label = localize!("form-create-unit-assignment-input-design-name").align_left();
-        let design_name_input = Input::new(self.state.design_name.clone())
-            .on_key({
+        self.state
+            .design_name
+            .for_each({
                 let sender = self.sender.clone();
-                move |_key| {
+                move |_design_name| {
                     sender
                         .send(CreateUnitAssignmentFormMessage::UpdatePlacementsFilename)
                         .expect("sent");
-                    EventHandling::Continue(EventIgnored)
                 }
             })
+            .persist();
+
+        let design_name_label = localize!("form-create-unit-assignment-input-design-name").align_left();
+        let design_name_input = Input::new(self.state.design_name.clone())
             .placeholder(localize!("form-create-unit-assignment-input-design-name-placeholder"))
             .validation(validations.validate(
                 &self.state.design_name.clone(),
@@ -191,17 +194,20 @@ impl MakeWidget for &CreateUnitAssignmentForm {
         // FIXME remove this workaround for lack of grid gutter support.
         let design_name_row_gutter = (Space::clear().height(Px::new(5)), Space::clear().height(Px::new(5)));
 
-        let variant_name_label = localize!("form-create-unit-assignment-input-variant-name").align_left();
-        let variant_name_input = Input::new(self.state.variant_name.clone())
-            .on_key({
+        self.state
+            .variant_name
+            .for_each({
                 let sender = self.sender.clone();
-                move |_key| {
+                move |_variant_name| {
                     sender
                         .send(CreateUnitAssignmentFormMessage::UpdatePlacementsFilename)
                         .expect("sent");
-                    EventHandling::Continue(EventIgnored)
                 }
             })
+            .persist();
+
+        let variant_name_label = localize!("form-create-unit-assignment-input-variant-name").align_left();
+        let variant_name_input = Input::new(self.state.variant_name.clone())
             .placeholder(localize!("form-create-unit-assignment-input-variant-name-placeholder"))
             .validation(validations.validate(
                 &self.state.variant_name.clone(),
