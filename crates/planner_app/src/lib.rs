@@ -407,7 +407,10 @@ impl App for Planner {
                         .model_project
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
+
                     let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
+
                     *modified |= refresh_result.modified;
 
                     Ok(())
