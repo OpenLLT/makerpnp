@@ -357,7 +357,7 @@ impl App for Planner {
                     project::add_pcb(project, kind.clone().into(), name)
                         .map_err(|cause| AppError::PcbError(cause.into()))?;
 
-                    *modified = true;
+                    *modified |= true;
 
                     Ok(())
                 };
@@ -387,7 +387,7 @@ impl App for Planner {
                             variant_name: variant.clone(),
                         })
                         .map_err(|cause| AppError::OperationError(cause.into()))?;
-                    *modified = true;
+                    *modified |= true;
                     let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
                     Ok(())
                 };
@@ -408,7 +408,7 @@ impl App for Planner {
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
                     let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified = refresh_result.modified;
+                    *modified |= refresh_result.modified;
 
                     Ok(())
                 };
@@ -438,7 +438,7 @@ impl App for Planner {
                         .clone();
 
                     let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified = true;
+                    *modified |= true;
 
                     project::update_applicable_processes(
                         project,
@@ -477,7 +477,7 @@ impl App for Planner {
                     project
                         .ensure_process(&process)
                         .map_err(AppError::OperationError)?;
-                    *modified = true;
+                    *modified |= true;
 
                     stores::load_out::ensure_load_out(&load_out).map_err(AppError::OperationError)?;
 
@@ -507,7 +507,7 @@ impl App for Planner {
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
                     let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified = true;
+                    *modified |= true;
 
                     let phase = project
                         .phases
@@ -599,7 +599,7 @@ impl App for Planner {
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
                     let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified = true;
+                    *modified |= true;
 
                     *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
                         .map_err(AppError::OperationError)?;
@@ -623,7 +623,7 @@ impl App for Planner {
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
 
-                    *modified = project::update_phase_operation_states(project);
+                    *modified |= project::update_phase_operation_states(project);
 
                     let phase_load_out_item_map = project
                         .phases
@@ -667,7 +667,7 @@ impl App for Planner {
                         .ok_or(AppError::OperationRequiresProject)?;
 
                     let directory = path.parent().unwrap();
-                    *modified = project::update_phase_operation(project, directory, &reference, operation, set)
+                    *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
                         .map_err(AppError::OperationError)?;
                     Ok(())
                 };
@@ -691,7 +691,7 @@ impl App for Planner {
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
                     let directory = path.parent().unwrap();
-                    *modified =
+                    *modified |=
                         project::update_placements_operation(project, directory, object_path_patterns, operation)
                             .map_err(AppError::OperationError)?;
                     Ok(())
@@ -713,7 +713,7 @@ impl App for Planner {
                         .ok_or(AppError::OperationRequiresProject)?;
                     project::reset_operations(project).map_err(AppError::OperationError)?;
 
-                    *modified = true;
+                    *modified |= true;
                     Ok(())
                 };
                 if let Err(e) = try_fn(model) {
