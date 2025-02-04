@@ -106,6 +106,9 @@ pub enum ProjectMessage {
     CreateUnitAssignment(CreateUnitAssignmentArgs),
     CreateUnitAssignmentFormMessage(CreateUnitAssignmentFormMessage),
     CreateUnitAssignmentFormIsValid,
+    RefreshFromVariants,
+    RefreshedFromVariants,
+    SetModifiedState(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -123,6 +126,7 @@ pub enum ProjectAction {
     Task(Task<ProjectMessage>),
     ShowError(String),
     NameChanged(String),
+    SetModifiedState(bool),
 }
 
 struct PhaseWidgetState {
@@ -282,6 +286,7 @@ impl Project {
     pub fn update(&mut self, message: ProjectMessage) -> Action<ProjectAction> {
         let action = match message {
             ProjectMessage::None => ProjectAction::None,
+            ProjectMessage::SetModifiedState(modified) => ProjectAction::SetModifiedState(modified),
             ProjectMessage::Load => {
                 let task = self
                     .core_service
@@ -325,6 +330,25 @@ impl Project {
             ProjectMessage::Saved => {
                 info!("Saved project. path: {:?}", self.path);
                 ProjectAction::None
+            }
+            ProjectMessage::RefreshFromVariants => {
+                let task = self
+                    .core_service
+                    .update(Event::Load {
+                        path: self.path.clone(),
+                    })
+                    .chain(Task::done(ProjectMessage::RefreshedFromVariants));
+                ProjectAction::Task(task)
+            }
+            ProjectMessage::RefreshedFromVariants => {
+                // TODO if the current panel depends on the design variants, then it needs to be refreshed.
+                //      e.g. status, placements, parts, etc.
+                //      maybe solve by just navigating to the same path again?
+                let task = self
+                    .core_service
+                    .update(Event::RefreshFromDesignVariants)
+                    .chain(Task::done(ProjectMessage::RequestView(ProjectViewRequest::ProjectTree)));
+                ProjectAction::Task(task)
             }
             ProjectMessage::RequestView(view) => {
                 let event = match view {
@@ -617,6 +641,9 @@ impl Project {
 
     fn on_toolbar_message(&mut self, message: ToolbarMessage) -> ProjectAction {
         match message {
+            ToolbarMessage::RefreshFromVariants => {
+                return ProjectAction::Task(Task::done(ProjectMessage::RefreshFromVariants))
+            }
             ToolbarMessage::AddPcb => {
                 self.display_add_pcb_modal();
             }

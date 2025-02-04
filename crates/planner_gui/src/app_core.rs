@@ -41,10 +41,12 @@ fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
     match effect {
         ref _render @ Effect::Render(ref _request) => {
             let mut view = core.view();
-            match view.error.take() {
+            let task = match view.error.take() {
                 Some(error) => Task::done(ProjectMessage::Error(error)),
-                None => Task::done(ProjectMessage::None),
-            }
+                None => Task::done(ProjectMessage::SetModifiedState(view.modified)),
+            };
+
+            task
         }
         Effect::Navigator(request) => match request.operation {
             NavigationOperation::Navigate {

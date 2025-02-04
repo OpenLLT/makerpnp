@@ -10,10 +10,23 @@ use cushy::widgets::Expand;
 pub enum ToolbarMessage {
     AddPcb,
     CreateUnitAssignment,
+    RefreshFromVariants,
 }
 
 pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
     let button_padding = Dimension::Lp(Lp::points(4));
+
+    let refresh_from_variants_button = Localize::new("project-toolbar-button-refresh-from-variants")
+        .into_button()
+        .on_click({
+            let toolbar_sender = toolbar_sender.clone();
+            move |_event| {
+                toolbar_sender
+                    .send(ToolbarMessage::RefreshFromVariants)
+                    .expect("sent")
+            }
+        })
+        .with(&IntrinsicPadding, button_padding);
 
     let add_pcb_button = Localize::new("project-toolbar-button-add-pcb")
         .into_button()
@@ -39,7 +52,8 @@ pub fn make_toolbar(toolbar_sender: Sender<ToolbarMessage>) -> WidgetInstance {
         })
         .with(&IntrinsicPadding, button_padding);
 
-    let toolbar_widgets: [WidgetInstance; 3] = [
+    let toolbar_widgets: [WidgetInstance; 4] = [
+        refresh_from_variants_button.make_widget(),
         add_pcb_button.make_widget(),
         create_unit_assignment_button.make_widget(),
         Expand::empty().make_widget(),

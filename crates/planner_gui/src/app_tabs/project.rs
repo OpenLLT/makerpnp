@@ -19,6 +19,7 @@ pub enum ProjectTabAction {
     None,
     Task(Task<ProjectMessage>),
     RenameTab(String),
+    SetModifiedState(bool),
 }
 
 #[derive(Clone)]
@@ -26,6 +27,7 @@ pub struct ProjectTab {
     pub project_key: ProjectKey,
 
     pub label: String,
+    pub modified: bool,
 }
 
 impl ProjectTab {
@@ -33,6 +35,7 @@ impl ProjectTab {
         Self {
             project_key,
             label: "Loading...".to_string(),
+            modified: false,
         }
     }
 }
@@ -40,6 +43,10 @@ impl ProjectTab {
 impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
     fn label(&self, _context: &Dynamic<Context>) -> String {
         self.label.clone()
+    }
+
+    fn modified(&self, _context: &Dynamic<Context>) -> bool {
+        self.modified
     }
 
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
@@ -80,6 +87,12 @@ impl Tab<ProjectTabMessage, ProjectTabAction> for ProjectTab {
                                 self.label = name.clone();
                                 ProjectTabAction::RenameTab(name)
                             }
+                            ProjectAction::SetModifiedState(modified) => {
+                                info!("Modified state changed. modified: {:?}", modified);
+                                self.modified = modified;
+                                ProjectTabAction::SetModifiedState(modified)
+                            }
+
                             ProjectAction::Task(task) => {
                                 info!("ProjectAction::Task.");
                                 ProjectTabAction::Task(task)

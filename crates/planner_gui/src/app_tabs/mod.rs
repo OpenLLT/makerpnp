@@ -44,6 +44,14 @@ impl Tab<TabKindMessage, TabKindAction> for TabKind {
         }
     }
 
+    fn modified(&self, context: &Dynamic<Context>) -> bool {
+        match self {
+            TabKind::Home(tab) => tab.modified(context),
+            TabKind::New(tab) => tab.modified(context),
+            TabKind::Project(tab) => tab.modified(context),
+        }
+    }
+
     fn make_content(&self, context: &Dynamic<Context>, tab_key: TabKey) -> WidgetInstance {
         match self {
             TabKind::Home(tab) => tab.make_content(context, tab_key),

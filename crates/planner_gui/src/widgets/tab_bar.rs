@@ -29,6 +29,7 @@ pub enum TabMessage<TKM> {
     CloseTab(TabKey),
     TabKindMessage(TabKey, TKM),
     RenameTab(TabKey, String),
+    SetModifiedFlag(TabKey, bool),
 }
 
 pub enum TabAction<TKA, TK> {
@@ -40,6 +41,7 @@ pub enum TabAction<TKA, TK> {
 
 pub trait Tab<TKM, TKA> {
     fn label(&self, context: &Dynamic<Context>) -> String;
+    fn modified(&self, context: &Dynamic<Context>) -> bool;
     fn make_content(&self, context: &Dynamic<Context>, tab_key: TabKey) -> WidgetInstance;
     fn update(&mut self, context: &Dynamic<Context>, tab_key: TabKey, message: TKM) -> Action<TKA>;
 }
@@ -48,6 +50,7 @@ struct TabState<TK> {
     tab: TK,
     widget: Dynamic<WidgetInstance>,
     label: Dynamic<String>,
+    modified: Dynamic<bool>,
 }
 
 pub struct TabBar<TK, TKM, TKA> {
@@ -114,10 +117,12 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
             .make_content(context, tab_key)
             .make_widget();
         let tab_label = tab.label(context);
+        let tab_modified = tab.modified(context);
 
         tab_state.tab = tab;
         tab_state.widget.set(tab_content_widget);
         tab_state.label.replace(tab_label);
+        tab_state.modified.replace(tab_modified);
 
         // prevent deadlock in the switcher closure
         drop(tabs);
@@ -140,12 +145,14 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
             .lock()
             .insert_with_key(|tab_key| {
                 let tab_label = tab.label(context);
+                let tab_modified = tab.modified(context);
 
                 let tab_content = tab.make_content(context, tab_key);
 
                 let tab_state = TabState {
                     tab,
                     label: Dynamic::new(tab_label),
+                    modified: Dynamic::new(tab_modified),
                     widget: Dynamic::new(tab_content),
                 };
 
@@ -174,12 +181,23 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
             .with_dynamic(&ButtonActiveForeground, ErrorColor)
             .with_dynamic(&ButtonHoverForeground, ErrorColor);
 
-        let select_content = tab_state
+        let modified_indicator = tab_state
+            .modified
+            .map_each(|modified| match *modified {
+                true => "*".to_string(),
+                false => "".to_string(),
+            })
+            .into_label();
+
+        let name_label = tab_state
             .label
             .clone()
             .into_label()
             .overflow(LabelOverflow::Clip)
-            .centered()
+            .centered();
+
+        let select_content = modified_indicator
+            .and(name_label)
             .and(close_button)
             .into_columns()
             .gutter(Px::new(5))
@@ -380,6 +398,13 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
                 let mut guard = self.tabs.lock();
                 let tab_state = guard.get_mut(tab_key).unwrap();
                 tab_state.label.set(label);
+
+                Action::new(TabAction::None)
+            }
+            TabMessage::SetModifiedFlag(tab_key, modified) => {
+                let mut guard = self.tabs.lock();
+                let tab_state = guard.get_mut(tab_key).unwrap();
+                tab_state.modified.set(modified);
 
                 Action::new(TabAction::None)
             }

@@ -8,6 +8,7 @@ side-bar-header = Encabezado de la barra lateral
 side-bar-footer = Pie de página de la barra lateral
 side-bar-item-path = Ruta
 
+project-toolbar-button-refresh-from-variants = Actualizar desde variantes
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-create-unit-assignment = Crear asignacion de unidad
 

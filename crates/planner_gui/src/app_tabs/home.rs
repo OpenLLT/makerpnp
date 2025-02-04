@@ -32,6 +32,10 @@ impl Tab<HomeTabMessage, HomeTabAction> for HomeTab {
         "Home".to_string()
     }
 
+    fn modified(&self, _context: &Dynamic<Context>) -> bool {
+        false
+    }
+
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
         context
             .lock()

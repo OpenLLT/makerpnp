@@ -51,6 +51,10 @@ impl Tab<NewTabMessage, NewTabAction> for NewTab {
         "New".to_string()
     }
 
+    fn modified(&self, _context: &Dynamic<Context>) -> bool {
+        false
+    }
+
     fn make_content(&self, context: &Dynamic<Context>, _tab_key: TabKey) -> WidgetInstance {
         let validations = self.validations.clone();
 

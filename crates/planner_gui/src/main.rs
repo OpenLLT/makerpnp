@@ -426,6 +426,9 @@ impl AppState {
                         ProjectTabAction::RenameTab(label) => {
                             Task::done(AppMessage::TabMessage(TabMessage::RenameTab(tab_key, label)))
                         }
+                        ProjectTabAction::SetModifiedState(modified) => {
+                            Task::done(AppMessage::TabMessage(TabMessage::SetModifiedFlag(tab_key, modified)))
+                        }
                     },
                 }
             }
