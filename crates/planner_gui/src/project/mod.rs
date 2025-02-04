@@ -266,16 +266,18 @@ impl Project {
 
         let toolbar = make_toolbar(toolbar_message_sender);
 
-        let content_pane = toolbar
-            .and(self.pile.clone())
-            .into_rows()
+        let content_pane = self.pile.clone()
             .expand()
             .contain();
 
-        let project_ui = project_explorer
+        let columns = project_explorer
             .and(content_pane)
             .into_columns()
             .expand_horizontally();
+
+        let project_ui = toolbar
+            .and(columns)
+            .into_rows();
 
         project_ui
             .and(modal)
