@@ -105,6 +105,5 @@ pub fn load_all_placements(
         let placements = load_placements(placements_path)?;
         let _ = all_placements.insert(design_variant.clone(), placements);
     }
-
     Ok(all_placements)
 }

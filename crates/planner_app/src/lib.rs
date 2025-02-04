@@ -11,12 +11,11 @@ pub use planning::design::{DesignName, DesignVariant};
 use planning::placement::{PlacementOperation, PlacementSortingItem, PlacementState};
 use planning::process::{ProcessName, ProcessOperationKind, ProcessOperationSetItem};
 use planning::project;
-use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project};
+use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
 pub use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
-use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
 use pnp::placement::Placement;
 use regex::Regex;
@@ -389,7 +388,7 @@ impl App for Planner {
                         })
                         .map_err(|cause| AppError::OperationError(cause.into()))?;
                     *modified = true;
-                    let _all_parts = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
                     Ok(())
                 };
 
@@ -408,8 +407,8 @@ impl App for Planner {
                         .model_project
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
-                    let _all_parts = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified = true;
+                    let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    *modified = refresh_result.modified;
 
                     Ok(())
                 };
@@ -438,12 +437,12 @@ impl App for Planner {
                         .map_err(|cause| AppError::ProcessError(cause.into()))?
                         .clone();
 
-                    let all_parts = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
                     *modified = true;
 
                     project::update_applicable_processes(
                         project,
-                        all_parts.as_slice(),
+                        refresh_result.unique_parts.as_slice(),
                         process,
                         manufacturer_pattern,
                         mpn_pattern,
@@ -507,7 +506,7 @@ impl App for Planner {
                         .model_project
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
-                    let _all_parts = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
                     *modified = true;
 
                     let phase = project
@@ -599,7 +598,7 @@ impl App for Planner {
                         .model_project
                         .as_mut()
                         .ok_or(AppError::OperationRequiresProject)?;
-                    let _all_parts = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
                     *modified = true;
 
                     *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
@@ -1035,15 +1034,14 @@ enum AppError {
 }
 
 impl Planner {
-    fn refresh_project(project: &mut Project, path: &PathBuf) -> anyhow::Result<Vec<Part>> {
+    fn refresh_project(project: &mut Project, path: &PathBuf) -> anyhow::Result<ProjectRefreshResult> {
         let directory = path.parent().unwrap();
 
         let unique_design_variants = project.unique_design_variants();
         let design_variant_placement_map = stores::placements::load_all_placements(&unique_design_variants, directory)?;
-        let all_parts = project::refresh_from_design_variants(project, design_variant_placement_map);
+        let refresh_result = project::refresh_from_design_variants(project, design_variant_placement_map);
 
-        // TODO make this return a 'modified' flag too
-        Ok(all_parts)
+        Ok(refresh_result)
     }
 }
 

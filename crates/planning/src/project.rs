@@ -511,21 +511,35 @@ pub fn assign_placements_to_phase(project: &mut Project, phase: &Phase, placemen
     required_load_out_parts
 }
 
+pub struct ProjectRefreshResult {
+    pub modified: bool,
+    pub unique_parts: Vec<Part>,
+}
+
 pub fn refresh_from_design_variants(
     project: &mut Project,
     design_variant_placement_map: BTreeMap<DesignVariant, Vec<Placement>>,
-) -> Vec<Part> {
+) -> ProjectRefreshResult {
     let unique_parts = placement::build_unique_parts(&design_variant_placement_map);
 
-    refresh_parts(project, unique_parts.as_slice());
+    let mut modified = refresh_parts(project, unique_parts.as_slice());
 
-    refresh_placements(project, &design_variant_placement_map);
+    modified |= refresh_placements(project, &design_variant_placement_map);
 
-    unique_parts
+    ProjectRefreshResult {
+        modified,
+        unique_parts,
+    }
 }
 
-fn refresh_placements(project: &mut Project, design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>) {
+/// Returns 'true' if project is modified
+fn refresh_placements(
+    project: &mut Project,
+    design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
+) -> bool {
     let changes: Vec<(Change, ObjectPath, Placement)> = find_placement_changes(project, design_variant_placement_map);
+
+    let mut modified = false;
 
     for (change, unit_path, placement) in changes.iter() {
         let mut path: ObjectPath = unit_path.clone();
@@ -536,6 +550,7 @@ fn refresh_placements(project: &mut Project, design_variant_placement_map: &BTre
         match (change, placement) {
             (Change::New, placement) => {
                 info!("New placement. placement: {:?}", placement);
+                modified |= true;
 
                 let placement_state = PlacementState {
                     unit_path: unit_path.clone(),
@@ -551,12 +566,14 @@ fn refresh_placements(project: &mut Project, design_variant_placement_map: &BTre
                 placement_state_entry.and_modify(|ps| {
                     if !ps.placement.eq(placement) {
                         info!("Updating placement. old: {:?}, new: {:?}", ps.placement, placement);
+                        modified |= true;
                         ps.placement = placement.clone();
                     }
                 });
             }
             (Change::Unused, placement) => {
                 info!("Marking placement as unused. placement: {:?}", placement);
+                modified |= true;
 
                 placement_state_entry.and_modify(|ps| {
                     ps.status = PlacementStatus::Unknown;
@@ -564,6 +581,8 @@ fn refresh_placements(project: &mut Project, design_variant_placement_map: &BTre
             }
         }
     }
+
+    modified
 }
 
 fn find_placement_changes(
@@ -645,25 +664,32 @@ enum Change {
     Unused,
 }
 
-fn refresh_parts(project: &mut Project, all_parts: &[Part]) {
+/// Returns 'true' if any changes were made.
+fn refresh_parts(project: &mut Project, all_parts: &[Part]) -> bool {
     let changes = find_part_changes(project, all_parts);
+
+    let mut modified = false;
 
     for change_item in changes.iter() {
         match change_item {
             (Change::New, part) => {
                 info!("New part. part: {:?}", part);
+                modified = true;
                 let _ = project
                     .part_states
                     .entry(part.clone())
                     .or_default();
             }
-            (Change::Existing, _) => {}
+            (Change::Existing, _part) => {}
             (Change::Unused, part) => {
-                info!("Removing previously part. part: {:?}", part);
+                info!("Removing unused part. part: {:?}", part);
+                modified = true;
                 let _ = project.part_states.remove(&part);
             }
         }
     }
+
+    modified
 }
 
 fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, Part)> {
