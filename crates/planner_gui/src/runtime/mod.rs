@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
 
-use cushy::channel::Sender;
+use cushy::reactive::channel::Sender;
 use futures::channel::mpsc;
 use futures::stream::{BoxStream, FusedStream};
 use futures::{select, Sink, Stream, StreamExt};

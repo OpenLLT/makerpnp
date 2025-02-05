@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use cushy::styles::ContainerLevel;
-use cushy::value::{Dynamic, Switchable};
+use cushy::reactive::value::{Dynamic, Switchable};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::DynamicDisplay;

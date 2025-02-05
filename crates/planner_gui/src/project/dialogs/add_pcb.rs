@@ -1,6 +1,6 @@
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Dynamic, IntoValue, Source, Validations, Value};
+use cushy::reactive::value::{Dynamic, IntoValue, Source, Validations, Value};
 use cushy::widget::MakeWidget;
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::{Grid, Input, Space};

@@ -4,11 +4,11 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cushy::channel::Sender;
+use cushy::reactive::channel::Sender;
 use cushy::dialog::ShouldClose;
 use cushy::localization::Localize;
 use cushy::localize;
-use cushy::value::{Destination, Dynamic, Source};
+use cushy::reactive::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
 use cushy::widgets::layers::{Modal, ModalHandle};
@@ -210,7 +210,7 @@ impl Project {
         self.create_unit_assignments_modal
             .replace(modal.new_handle());
 
-        let (create_unit_assignments_sender, create_unit_assignments_receiver) = cushy::channel::build().finish();
+        let (create_unit_assignments_sender, create_unit_assignments_receiver) = cushy::reactive::channel::build().finish();
         self.create_unit_assignments_sender
             .replace(create_unit_assignments_sender);
 
@@ -222,7 +222,8 @@ impl Project {
                     .map_err(|message| error!("Could not forward form message: {:?}", message))
                     .ok();
             }
-        });
+        })
+            .persist();
 
         let project_tree_widget = self.project_tree.lock().make_widget();
         let project_explorer = "Project Explorer"
@@ -251,7 +252,7 @@ impl Project {
         self.default_content_handle
             .replace(default_content_handle);
 
-        let (toolbar_message_sender, toolbar_message_receiver) = cushy::channel::build().finish();
+        let (toolbar_message_sender, toolbar_message_receiver) = cushy::reactive::channel::build().finish();
 
         toolbar_message_receiver.on_receive({
             let project_message_sender = self.sender.clone();
@@ -262,7 +263,8 @@ impl Project {
                     .map_err(|message| error!("unable to forward toolbar message. message: {:?}", message))
                     .ok();
             }
-        });
+        })
+            .persist();
 
         let toolbar = make_toolbar(toolbar_message_sender);
 

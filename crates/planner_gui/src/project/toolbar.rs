@@ -1,4 +1,4 @@
-use cushy::channel::Sender;
+use cushy::reactive::channel::Sender;
 use cushy::figures::units::Lp;
 use cushy::localization::Localize;
 use cushy::styles::components::IntrinsicPadding;

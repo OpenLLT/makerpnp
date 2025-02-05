@@ -8,12 +8,12 @@ extern crate core;
 use std::path;
 use std::path::PathBuf;
 
-use cushy::channel::{Receiver, Sender};
+use cushy::reactive::channel::{Receiver, Sender};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::localization::Localization;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::Dynamic;
+use cushy::reactive::value::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::window::{PendingWindow, WindowHandle};
 use cushy::{App, Application};
@@ -103,7 +103,7 @@ fn main(app: &mut App) -> cushy::Result {
         .unwrap(),
     );
 
-    let (app_message_sender, app_message_receiver) = cushy::channel::build().finish();
+    let (app_message_sender, app_message_receiver) = cushy::reactive::channel::build().finish();
 
     let (mut sender, receiver) = futures::channel::mpsc::unbounded();
 
@@ -117,7 +117,7 @@ fn main(app: &mut App) -> cushy::Result {
     let config = Dynamic::new(config::load());
     let projects = Dynamic::new(SlotMap::default());
 
-    let tab_message_sender: Sender<TabMessage<TabKindMessage>> = cushy::channel::build()
+    let tab_message_sender: Sender<TabMessage<TabKindMessage>> = cushy::reactive::channel::build()
         .on_receive({
             let app_message_sender = app_message_sender.clone();
             move |tab_message| {
@@ -149,7 +149,7 @@ fn main(app: &mut App) -> cushy::Result {
         app_message_sender: app_message_sender.clone(),
     };
 
-    let toolbar_message_sender: Sender<ToolbarMessage> = cushy::channel::build()
+    let toolbar_message_sender: Sender<ToolbarMessage> = cushy::reactive::channel::build()
         .on_receive({
             let app_message_sender = app_message_sender.clone();
             move |toolbar_message| {
@@ -181,7 +181,8 @@ fn main(app: &mut App) -> cushy::Result {
                 runtime.run(stream);
             }
         }
-    });
+    })
+        .persist();
 
     let ui = pending
         .with_root(
@@ -364,7 +365,7 @@ impl AppState {
     }
 
     fn add_new_tab(&self) {
-        let (new_tab_message_sender, new_tab_message_receiver) = cushy::channel::build().finish();
+        let (new_tab_message_sender, new_tab_message_receiver) = cushy::reactive::channel::build().finish();
 
         let tab_key = self
             .tab_bar
@@ -383,7 +384,8 @@ impl AppState {
                     .map_err(|message| error!("unable to forward new tab message. message: {:?}", message))
                     .ok();
             }
-        });
+        })
+            .persist();
     }
 
     fn on_tab_action(&mut self, action: Action<TabAction<TabKindAction, TabKind>>) -> Task<AppMessage> {
@@ -451,12 +453,12 @@ impl AppState {
     }
 
     fn create_project(&self, tab_key: TabKey, name: String, directory: PathBuf) -> Task<AppMessage> {
-        let (project_tab_message_sender, project_tab_message_receiver) = cushy::channel::build().finish();
+        let (project_tab_message_sender, project_tab_message_receiver) = cushy::reactive::channel::build().finish();
 
         self.create_project_tab_mapping(project_tab_message_receiver, tab_key);
 
         let path = build_project_file_path(&name, directory);
-        let (project_message_sender, project_message_receiver) = cushy::channel::build().finish();
+        let (project_message_sender, project_message_receiver) = cushy::reactive::channel::build().finish();
 
         self.create_project_mapping(project_message_receiver, project_tab_message_sender);
 
@@ -486,9 +488,9 @@ impl AppState {
             })
         })?;
 
-        let (project_tab_message_sender, project_tab_message_receiver) = cushy::channel::build().finish();
+        let (project_tab_message_sender, project_tab_message_receiver) = cushy::reactive::channel::build().finish();
 
-        let (project_message_sender, project_message_receiver) = cushy::channel::build().finish();
+        let (project_message_sender, project_message_receiver) = cushy::reactive::channel::build().finish();
 
         self.create_project_mapping(project_message_receiver, project_tab_message_sender);
 
@@ -524,7 +526,8 @@ impl AppState {
                     .map_err(|message| error!("unable to forward project tab message. message: {:?}", message))
                     .ok();
             }
-        });
+        })
+            .persist();
     }
 
     fn create_project_mapping(
@@ -540,7 +543,8 @@ impl AppState {
                     .map_err(|message| error!("unable to forward project message, message: {:?}", message))
                     .ok();
             }
-        });
+        })
+            .persist();
     }
 
     fn save_active(&self) -> Option<Result<AppMessage, AppError>> {

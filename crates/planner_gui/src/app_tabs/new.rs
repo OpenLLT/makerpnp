@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use cushy::channel::Sender;
+use cushy::reactive::channel::Sender;
 use cushy::dialog::FilePicker;
 use cushy::figures::units::Px;
 use cushy::styles::components::IntrinsicPadding;
-use cushy::value::{Destination, Dynamic, Source, Validations};
+use cushy::reactive::value::{Destination, Dynamic, Source, Validations};
 use cushy::widget::{MakeWidget, WidgetInstance};
 use cushy::widgets::grid::{GridDimension, GridWidgets};
 use cushy::widgets::label::Displayable;

@@ -1193,7 +1193,7 @@ checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 [[package]]
 name = "cushy"
 version = "0.4.0"
-source = "git+https://github.com/makerpnp/cushy.git?tag=20250127-1147#43936c234174ad7d4b6b35cca6f47c2f89336c4f"
+source = "git+https://github.com/makerpnp/cushy.git?tag=20250205-2314#7756f410ea87311934bcb478d7905afcc53c6700"
 dependencies = [
  "ahash 0.8.11",
  "alot",
@@ -1214,6 +1214,7 @@ dependencies = [
  "parking_lot",
  "png",
  "pollster",
+ "regex",
  "rfd",
  "sys-locale",
  "tracing",
@@ -1225,7 +1226,7 @@ dependencies = [
 [[package]]
 name = "cushy-macros"
 version = "0.4.0"
-source = "git+https://github.com/makerpnp/cushy.git?tag=20250127-1147#43936c234174ad7d4b6b35cca6f47c2f89336c4f"
+source = "git+https://github.com/makerpnp/cushy.git?tag=20250205-2314#7756f410ea87311934bcb478d7905afcc53c6700"
 dependencies = [
  "attribute-derive",
  "manyhow",
