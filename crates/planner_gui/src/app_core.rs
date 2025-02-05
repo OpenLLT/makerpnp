@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use planner_app::capabilities::navigator::NavigationOperation;
 use planner_app::capabilities::view_renderer::ViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
 use planner_gui::task::Task;
 use tracing::debug;
 
-use crate::project::{ProjectMessage, ProjectPath};
+use crate::project::ProjectMessage;
 
 type Core = Arc<planner_app::Core<Effect, Planner>>;
 
@@ -48,12 +47,6 @@ fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
 
             task
         }
-        Effect::Navigator(request) => match request.operation {
-            NavigationOperation::Navigate {
-                path,
-            } => Task::done(ProjectMessage::Navigate(ProjectPath::new(path))),
-        },
-
         Effect::ViewRenderer(request) => {
             let ViewRendererOperation::View {
                 view,

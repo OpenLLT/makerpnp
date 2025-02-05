@@ -24,7 +24,6 @@ use stores::load_out::{LoadOutOperationError, LoadOutSource};
 use thiserror::Error;
 use tracing::{info, trace};
 
-use crate::capabilities::navigator::Navigator;
 use crate::capabilities::view_renderer::ViewRenderer;
 
 pub mod capabilities;
@@ -54,9 +53,6 @@ pub struct Capabilities {
     render: Render<Event>,
     view: ViewRenderer<Event>,
 
-    // TODO consider removing this as it's currently no-longer used.
-    #[allow(dead_code)]
-    navigate: Navigator<Event>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]

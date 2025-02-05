@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::bail;
 use clap::Parser;
 use crossbeam_channel::unbounded;
-use planner_app::capabilities::navigator::NavigationOperation;
 use planner_app::{Effect, Event};
 use tracing::{debug, trace};
 
@@ -66,17 +65,6 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                 // FUTURE: Maybe it would be useful to have a 'dry-run' flag that doesn't trigger a save.
                 if view.modified {
                     run_loop(core, Event::Save)?
-                }
-            }
-            Effect::Navigator(request) => {
-                let operation = request.operation;
-                match operation {
-                    NavigationOperation::Navigate {
-                        path,
-                    } => {
-                        // Currently, the CLI app cannot navigate anywhere and does not request views.
-                        debug!("navigate from run_loop. path: {}", path)
-                    }
                 }
             }
             Effect::ViewRenderer(_) => {
