@@ -52,7 +52,7 @@ pub struct Capabilities {
     /// the default render operation, see `ProjectOperationViewModel`
     render: Render<Event>,
     /// a custom capability for use with `ProjectView`
-    view: ProjectViewRenderer<Event>,
+    project_view: ProjectViewRenderer<Event>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -735,7 +735,7 @@ impl App for Planner {
                     let overview = ProjectOverview {
                         name: project.name.clone(),
                     };
-                    caps.view
+                    caps.project_view
                         .view(ProjectView::Overview(overview));
                     Ok(())
                 };
@@ -908,7 +908,7 @@ impl App for Planner {
                             .add_edge(root_node.clone(), test_node, ());
                     }
 
-                    caps.view
+                    caps.project_view
                         .view(ProjectView::ProjectTree(project_tree));
                     Ok(())
                 };
@@ -941,7 +941,7 @@ impl App for Planner {
                         pcb_side: phase.pcb_side.clone(),
                     };
 
-                    caps.view
+                    caps.project_view
                         .view(ProjectView::PhaseOverview(phase_overview));
                     Ok(())
                 };
@@ -981,7 +981,7 @@ impl App for Planner {
                         placements,
                     };
 
-                    caps.view
+                    caps.project_view
                         .view(ProjectView::PhasePlacements(phase_placements));
                     Ok(())
                 };
