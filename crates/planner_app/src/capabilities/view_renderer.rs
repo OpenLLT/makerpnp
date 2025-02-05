@@ -4,18 +4,18 @@ use crux_core::macros::Capability;
 use crate::ProjectView;
 
 #[derive(Capability)]
-pub struct ViewRenderer<Ev> {
-    context: CapabilityContext<ViewRendererOperation, Ev>,
+pub struct ProjectViewRenderer<Ev> {
+    context: CapabilityContext<ProjectViewRendererOperation, Ev>,
 }
 
-impl<Ev> ViewRenderer<Ev> {
-    pub fn new(context: CapabilityContext<ViewRendererOperation, Ev>) -> Self {
+impl<Ev> ProjectViewRenderer<Ev> {
+    pub fn new(context: CapabilityContext<ProjectViewRendererOperation, Ev>) -> Self {
         Self {
             context,
         }
     }
 }
-impl<Ev: 'static> ViewRenderer<Ev> {
+impl<Ev: 'static> ProjectViewRenderer<Ev> {
     pub fn view(&self, view: ProjectView) {
         self.context.spawn({
             let context = self.context.clone();
@@ -26,19 +26,19 @@ impl<Ev: 'static> ViewRenderer<Ev> {
     }
 }
 
-async fn run_view<Ev: 'static>(context: &CapabilityContext<ViewRendererOperation, Ev>, view: ProjectView) {
+async fn run_view<Ev: 'static>(context: &CapabilityContext<ProjectViewRendererOperation, Ev>, view: ProjectView) {
     context
-        .notify_shell(ViewRendererOperation::View {
+        .notify_shell(ProjectViewRendererOperation::View {
             view,
         })
         .await
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum ViewRendererOperation {
+pub enum ProjectViewRendererOperation {
     View { view: ProjectView },
 }
 
-impl Operation for ViewRendererOperation {
+impl Operation for ProjectViewRendererOperation {
     type Output = ();
 }

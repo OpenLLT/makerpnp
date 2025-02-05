@@ -24,7 +24,7 @@ use stores::load_out::{LoadOutOperationError, LoadOutSource};
 use thiserror::Error;
 use tracing::{info, trace};
 
-use crate::capabilities::view_renderer::ViewRenderer;
+use crate::capabilities::view_renderer::ProjectViewRenderer;
 
 pub mod capabilities;
 
@@ -49,10 +49,10 @@ pub struct Model {
 
 #[derive(Effect)]
 pub struct Capabilities {
-    // TODO remove 'render'? perhaps put the latest view enum in the Model?
+    /// the default render operation, see `ProjectOperationViewModel`
     render: Render<Event>,
-    view: ViewRenderer<Event>,
-
+    /// a custom capability for use with `ProjectView`
+    view: ProjectViewRenderer<Event>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]

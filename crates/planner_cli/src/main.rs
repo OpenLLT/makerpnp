@@ -4,7 +4,7 @@ use anyhow::bail;
 use clap::Parser;
 use crossbeam_channel::unbounded;
 use planner_app::{Effect, Event};
-use tracing::{debug, trace};
+use tracing::trace;
 
 use crate::core::Core;
 use crate::opts::{build_project_file_path, EventError, Opts};
@@ -67,7 +67,7 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                     run_loop(core, Event::Save)?
                 }
             }
-            Effect::ViewRenderer(_) => {
+            Effect::ProjectViewRenderer(_) => {
                 // Currently, the CLI app should not cause these effects.
                 unreachable!()
             }

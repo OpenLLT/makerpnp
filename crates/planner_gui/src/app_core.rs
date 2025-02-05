@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use planner_app::capabilities::view_renderer::ViewRendererOperation;
+use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
 use planner_gui::task::Task;
 use tracing::debug;
@@ -47,8 +47,8 @@ fn process_effect(core: &Core, effect: Effect) -> Task<ProjectMessage> {
 
             task
         }
-        Effect::ViewRenderer(request) => {
-            let ViewRendererOperation::View {
+        Effect::ProjectViewRenderer(request) => {
+            let ProjectViewRendererOperation::View {
                 view,
             } = request.operation;
             Task::done(ProjectMessage::UpdateView(view))
