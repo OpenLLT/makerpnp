@@ -1,13 +1,16 @@
 use std::mem::MaybeUninit;
-use egui_mobius::types::{Enqueue, Value};
+use std::path::PathBuf;
+use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use egui_dock::{DockArea, DockState, Style};
 use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
+use tracing::info;
 use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::app_core;
+use crate::file_picker::Picker;
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
@@ -17,6 +20,8 @@ pub mod app_tabs;
 pub struct PersistentUiState {
     tabs: Value<Tabs<TabKind>>,
     tree: DockState<TabKey>,
+    
+    
 }
 
 impl Default for PersistentUiState {
@@ -67,7 +72,6 @@ impl PersistentUiState {
         //       when programmatically closing all the tabs - reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1340993744941617233
         self.tree.retain_tabs(|_tab_key| false);
     }
-
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -80,44 +84,57 @@ pub struct UiApp {
 
     // state contains fields that cannot be initialized using 'Default'
     #[serde(skip)]
-    state: MaybeUninit<AppState>,
+    state: MaybeUninit<Value<AppState>>,
+
+    // the slot handler needs state, so slot can't be *in* state
+    #[serde(skip)]
+    slot: MaybeUninit<Slot<UiCommand>>,
 }
 
 pub struct AppState {
     // TODO find a better way of doing this that doesn't require this boolean
     startup_done: bool,
+    file_picker: Picker,
 
     command_sender: Enqueue<UiCommand>,
-    slot: Slot<UiCommand>,
 }
 
 impl AppState {
-    pub fn init(ui_state: Value<PersistentUiState>) -> Self {
-        let (signal, slot) = factory::create_signal_slot::<UiCommand>();
-
-        let core_service = Value::new(app_core::CoreService::new(ui_state.clone()));
-
-        // Define a handler function for the slot
-        let handler = {
-            let core_service = core_service.clone();
-            let command_sender = signal.sender.clone();
-            let ui_state = ui_state.clone();
-
-            move |command: UiCommand| {
-                handle_command(ui_state.clone(), command, core_service.clone(), command_sender.clone());
-            }
-        };
-
-        // Start the slot with the handler
-        slot.start(handler);
+    pub fn init(sender: Enqueue<UiCommand>) -> Self {
 
         Self {
             startup_done: false,
+            file_picker: Picker::default(),
 
-            command_sender: signal.sender.clone(),
-            slot
+            command_sender: sender,
         }
     }
+
+    pub(crate) fn pick_file(&mut self) {
+        if !self.file_picker.is_picking() {
+            self.file_picker.pick_file();
+        }
+    }
+
+    fn open_file(&mut self, ctx: &egui::Context, path: PathBuf) {
+        info!("open file. path: {:?}", path);
+        // 
+        // let title = path.file_name().unwrap().to_string_lossy().to_string();
+        // 
+        // let sender = self.state().sender.clone();
+        // 
+        // let document_key = self.state().documents.lock().unwrap().insert_with_key({
+        //     let sender = sender.clone();
+        // 
+        //     |new_key| {
+        //         Self::document_from_path(&path, ctx, sender, new_key)
+        //     }
+        // });
+        // let tab_kind = TabKind::Document(DocumentTab::new(title, path, document_key));
+        // 
+        // self.add_tab(tab_kind);
+    }
+
 }
 
 
@@ -130,6 +147,7 @@ impl Default for UiApp {
             ui_state: Default::default(),
             config,
             state: MaybeUninit::uninit(),
+            slot: MaybeUninit::uninit(),
         }
     }
 }
@@ -149,10 +167,36 @@ impl UiApp {
             Self::default()
         };
 
+        let (signal, slot) = factory::create_signal_slot::<UiCommand>();
+
+        let sender = signal.sender.clone();
+        
+        let state = Value::new(AppState::init(sender));
+
+        instance.state.write(state.clone());
+        // Safety: `Self::state()` is now safe to call.
+
         let ui_state = instance.ui_state.clone();
 
-        instance.state.write(AppState::init(ui_state));
-        // Safety: `Self::state()` is now safe to call.
+        let core_service = Value::new(app_core::CoreService::new(ui_state.clone()));
+
+        // Define a handler function for the slot
+        let handler = {
+            let core_service = core_service.clone();
+            let command_sender = signal.sender.clone();
+            let ui_state = ui_state.clone();
+
+            move |command: UiCommand| {
+                handle_command(state.clone(), ui_state.clone(), command, core_service.clone(), command_sender.clone());
+            }
+        };
+
+        // Start the slot with the handler
+        slot.start(handler);
+        
+        instance.slot.write(slot);
+        
+        
 
         instance
     }
@@ -160,11 +204,8 @@ impl UiApp {
     /// provide mutable access to the state.
     ///
     /// Safety: it's always safe, because `new` calls `state.write()`
-    ///
-    /// Note: it's either `self.state()` everywhere or `self.state.unwrap()` if `AppSate` was wrapped in an `Option`
-    /// instead if `MaybeUninit`, this is less verbose.
-    fn state(&mut self) -> &mut AppState {
-        unsafe { self.state.assume_init_mut() }
+    fn app_state(&mut self) -> ValueGuard<AppState> {
+        unsafe { self.state.assume_init_mut().lock().unwrap() }
     }
 
     /// Safety: call only once on startup, before the tabs are shown.
@@ -198,7 +239,6 @@ impl UiApp {
         let mut tabs = ui_state.tabs.lock().unwrap();
         tabs.retain_all(&known_tab_keys);
     }
-
 }
 
 impl eframe::App for UiApp {
@@ -226,32 +266,43 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
 
-            toolbar::show(ui, self.state().command_sender.clone());
+            toolbar::show(ui, self.app_state().command_sender.clone());
         });
 
-        if !self.state().startup_done {
-            self.state().startup_done = true;
+        if !self.app_state().startup_done {
+            self.app_state().startup_done = true;
 
             self.show_home_tab_on_startup();
         }
 
         // FIXME remove this when `on_close` bugs in egui_dock are fixed.
         self.cleanup_tabs();
+        
+        // in a block to limit the scope of the `ui_state` borrow/guard
+        {
+            let mut tab_context = TabContext {
+                config: &mut self.config,
+            };
 
-        let mut tab_context = TabContext {
-            config: &mut self.config,
-        };
+            let mut ui_state = self.ui_state.lock().unwrap();
 
-        let mut ui_state = self.ui_state.lock().unwrap();
+            let mut my_tab_viewer = AppTabViewer {
+                tabs: ui_state.tabs.clone(),
+                context: &mut tab_context,
+            };
 
-        let mut my_tab_viewer = AppTabViewer {
-            tabs: ui_state.tabs.clone(),
-            context: &mut tab_context,
-        };
+            DockArea::new(&mut ui_state.tree)
+                .style(Style::from_egui(ctx.style().as_ref()))
+                .show(ctx, &mut my_tab_viewer);
+        }
 
-        DockArea::new(&mut ui_state.tree)
-            .style(Style::from_egui(ctx.style().as_ref()))
-            .show(ctx, &mut my_tab_viewer);
+        let mut app_state = self.app_state();
+        
+        if let Ok(picked_file) = app_state.file_picker.picked() {
+            // FIXME this `update` method does not get called immediately after picking a file, instead update gets
+            //       called when the user moves the mouse or interacts with the window again.
+            app_state.open_file(ctx, picked_file);
+        }
 
     }
 }

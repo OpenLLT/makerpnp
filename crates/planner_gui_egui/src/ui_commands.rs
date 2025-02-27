@@ -10,15 +10,19 @@ pub enum UiCommand {
     None,
     ShowHomeTab,
     CloseAllTabs,
+    ChooseFile,
+    OpenClicked,
 }
 
 pub fn handle_command(
+    app_state: Value<AppState>,
     ui_state: Value<PersistentUiState>,
     command: UiCommand,
     core_service: Value<CoreService>,
     command_sender: Enqueue<UiCommand>,
 ) {
     let mut ui_state = ui_state.lock().unwrap();
+    let mut app_state = app_state.lock().unwrap();
     
     trace!("Handling command: {:?}", command);
     
@@ -32,6 +36,12 @@ pub fn handle_command(
         }
         UiCommand::CloseAllTabs => {
             ui_state.close_all_tabs();
+        }
+        UiCommand::ChooseFile => {
+            
+        }
+        UiCommand::OpenClicked => {
+            app_state.pick_file();
         }
     }
 }

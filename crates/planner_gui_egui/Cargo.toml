@@ -29,6 +29,7 @@ egui_dock = { version = "0.16.0", features = ["serde"]}
 #egui_mobius = { path = "../../../../../libraries/rust/egui/mobius_egui/crates/egui_mobius", features = ["serde"] }
 egui_mobius = { workspace = true, features = ["serde"] }
 egui_material_icons = { workspace = true }
+rfd = { workspace = true }
 
 # i18n
 i18n = { path = "../i18n" }
