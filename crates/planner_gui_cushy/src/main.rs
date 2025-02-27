@@ -1,5 +1,5 @@
 /// Run as follows:
-/// `cargo run --package planner_gui --bin planner_gui`
+/// `cargo run --package planner_gui_cushy --bin planner_gui_cushy`
 ///
 /// To enable logging, set the environment variable appropriately, for example:
 /// `RUST_LOG=debug,selectors::matching=info`
@@ -17,12 +17,12 @@ use cushy::reactive::value::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::window::{PendingWindow, WindowHandle};
 use cushy::{App, Application};
-use planner_gui::action::Action;
-use planner_gui::context::Context;
-use planner_gui::runtime::{Executor, MessageDispatcher, RunTime};
-use planner_gui::task;
-use planner_gui::task::Task;
-use planner_gui::widgets::tab_bar::{TabAction, TabBar, TabKey, TabMessage};
+use planner_gui_cushy::action::Action;
+use planner_gui_cushy::context::Context;
+use planner_gui_cushy::runtime::{Executor, MessageDispatcher, RunTime};
+use planner_gui_cushy::task;
+use planner_gui_cushy::task::Task;
+use planner_gui_cushy::widgets::tab_bar::{TabAction, TabBar, TabKey, TabMessage};
 use slotmap::SlotMap;
 use thiserror::Error;
 use tracing::{debug, error, info, trace};
@@ -39,7 +39,7 @@ use crate::config::Config;
 use crate::project::{Project, ProjectKey, ProjectMessage};
 use crate::toolbar::ToolbarMessage;
 
-extern crate planner_gui;
+extern crate planner_gui_cushy;
 
 mod app_core;
 mod app_tabs;

@@ -1,5 +1,5 @@
 [package]
-name = "planner_gui"
+name = "planner_gui_cushy"
 version = "0.1.0"
 edition = "2021"
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
-use planner_gui::task::Task;
+use planner_gui_cushy::task::Task;
 use tracing::debug;
 
 use crate::project::ProjectMessage;

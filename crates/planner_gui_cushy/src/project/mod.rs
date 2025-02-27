@@ -23,9 +23,9 @@ use planner_app::{
     Arg, DesignName, Event, ObjectPath, PcbSide, PhaseOverview, PhasePlacements, ProjectTreeView, ProjectView,
     Reference, VariantName,
 };
-use planner_gui::action::Action;
-use planner_gui::task::Task;
-use planner_gui::widgets::properties::{Properties, PropertiesItem};
+use planner_gui_cushy::action::Action;
+use planner_gui_cushy::task::Task;
+use planner_gui_cushy::widgets::properties::{Properties, PropertiesItem};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
@@ -231,6 +231,8 @@ impl Project {
             .and(project_tree_widget.contain())
             .into_rows()
             .contain()
+            .vertical_scroll()
+            .fit_vertically()
             .make_widget();
 
         let default_content = "content-pane"
