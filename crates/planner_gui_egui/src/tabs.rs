@@ -3,6 +3,7 @@ use egui_dock::TabViewer;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::{Iter, IterMut};
 use std::collections::BTreeMap;
+use egui_mobius::types::Value;
 use tracing::{debug, info};
 
 #[derive(Debug, Clone, Hash, Copy, Ord, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
@@ -93,7 +94,7 @@ pub trait Tab {
 }
 
 pub struct AppTabViewer<'a, TabContext, TabKind: Tab> {
-    pub tabs: &'a mut Tabs<TabKind>,
+    pub tabs: Value<Tabs<TabKind>>,
     pub context: &'a mut TabContext,
 }
 
@@ -105,13 +106,17 @@ impl<'a, 'b, TabContext, TabKind: Tab<Context<'b> = TabContext>> TabViewer for A
     }
 
     fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
-        let tab_instance = self.tabs.tabs.get_mut(tab).unwrap();
+        let mut tabs = self.tabs.lock().unwrap();
+
+        let tab_instance = tabs.tabs.get_mut(tab).unwrap();
         tab_instance.label()
     }
 
     fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
+        let mut tabs = self.tabs.lock().unwrap();
+
         // see the api docs for `on_close`, if the active tab was just closed, we still arrive here.
-        if let Some(tab_instance) = self.tabs.tabs.get_mut(tab) {
+        if let Some(tab_instance) = tabs.tabs.get_mut(tab) {
             tab_instance.ui(ui, tab, self.context);
         }
     }
@@ -121,10 +126,12 @@ impl<'a, 'b, TabContext, TabKind: Tab<Context<'b> = TabContext>> TabViewer for A
         //       reported to maintainer - https://discord.com/channels/900275882684477440/1075333382290026567/1339624259697246348
         debug!("closing tab, id: {:?}", tab);
 
-        let tab_instance = self.tabs.tabs.get_mut(tab).unwrap();
+        let mut tabs = self.tabs.lock().unwrap();
+
+        let tab_instance = tabs.tabs.get_mut(tab).unwrap();
         let allow_close = tab_instance.on_close(tab, self.context);
         if allow_close {
-            let _removed = self.tabs.tabs.remove(tab);
+            let _removed = tabs.tabs.remove(tab);
         }
 
         allow_close

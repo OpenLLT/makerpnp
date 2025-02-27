@@ -15,14 +15,14 @@ use crate::ui_app::app_tabs::{TabContext, TabKind};
 pub mod app_tabs;
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct UiState {
-    tabs: Tabs<TabKind>,
+    tabs: Value<Tabs<TabKind>>,
     tree: DockState<TabKey>,
 }
 
 impl Default for UiState {
     fn default() -> Self {
         Self {
-            tabs: Tabs::new(),
+            tabs: Value::new(Tabs::new()),
             tree: DockState::new(vec![]),
         }
     }
@@ -39,7 +39,8 @@ impl UiState {
             self.tree.set_active_tab(find_result);
         } else {
             // create a new home tab
-            let tab_id = self.tabs.add(TabKind::Home(HomeTab::default()));
+            let mut tabs = self.tabs.lock().unwrap();
+            let tab_id = tabs.add(TabKind::Home(HomeTab::default()));
             self.tree.push_to_focused_leaf(tab_id);
         }
     }
@@ -50,7 +51,8 @@ impl UiState {
             .tree
             .iter_all_tabs()
             .find_map(|(_surface_and_node, tab_key)| {
-                let tab_kind = self.tabs.get(tab_key).unwrap();
+                let mut tabs = self.tabs.lock().unwrap();
+                let tab_kind = tabs.get(tab_key).unwrap();
 
                 match tab_kind {
                     TabKind::Home(_) => Some(tab_key),
@@ -193,7 +195,8 @@ impl UiApp {
             .map(|(_surface_and_node, tab_key)| tab_key.clone())
             .collect::<Vec<_>>();
 
-        ui_state.tabs.retain_all(&known_tab_keys);
+        let mut tabs = ui_state.tabs.lock().unwrap();
+        tabs.retain_all(&known_tab_keys);
     }
 
 }

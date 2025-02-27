@@ -1,5 +1,6 @@
 use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
+use tracing::trace;
 use crate::app_core::CoreService;
 use crate::ui_app::{AppState, UiApp, UiState};
 
@@ -18,6 +19,8 @@ pub fn handle_command(
     command_sender: Enqueue<UiCommand>,
 ) {
     let mut ui_state = ui_state.lock().unwrap();
+    
+    trace!("Handling command: {:?}", command);
     
     match command {
         UiCommand::None => {
