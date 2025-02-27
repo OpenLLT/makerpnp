@@ -5,7 +5,7 @@ pub use assembly::assembly_variant::AssemblyVariant;
 use assembly::AssemblyVariantProcessor;
 use crux_core::macros::Effect;
 use crux_core::render::Render;
-use crux_core::App;
+use crux_core::{render, App, Command};
 pub use crux_core::Core;
 use csv::QuoteStyle;
 use eda::placement::{EdaPlacement, EdaPlacementField};
@@ -67,12 +67,13 @@ impl App for VariantBuilder {
     type Model = Model;
     type ViewModel = OperationViewModel;
     type Capabilities = Capabilities;
+    type Effect = Effect;
 
-    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
-        #[allow(unused_mut)]
-        let mut default_render = true;
+    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
-            Event::None => {}
+            Event::None => {
+                render::render()
+            }
             Event::Build {
                 eda_tool,
                 placements,
@@ -85,8 +86,8 @@ impl App for VariantBuilder {
                 output,
                 ref_des_disable_list,
             } => {
-                let try_fn = |_model: &mut Model| -> Result<(), AppError> {
-                    let result = build_assembly_variant(
+                let try_fn = |_model: &mut Model| -> Result<Command<Self::Effect, Self::Event>, AppError> {
+                    build_assembly_variant(
                         eda_tool,
                         &placements,
                         assembly_variant,
@@ -100,18 +101,17 @@ impl App for VariantBuilder {
                     )
                     .map_err(|cause| AppError::OperationError(cause.into()))?;
 
-                    Ok(result)
+                    Ok(render::render())
                 };
 
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                match try_fn(model) {
+                    Ok(command) => command,
+                    Err(e) => {
+                        model.error.replace(format!("{:?}", e));
+                        render::render()
+                    }
+                }
             }
-        }
-
-        if default_render {
-            // This causes the shell to request the view, via `view()`
-            caps.render.render();
         }
     }
 

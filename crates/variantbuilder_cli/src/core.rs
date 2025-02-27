@@ -5,7 +5,7 @@ use crossbeam_channel::Sender;
 use tracing::debug;
 use variantbuilder_app::{Effect, Event, VariantBuilder};
 
-pub type Core = Arc<crux_core::Core<Effect, VariantBuilder>>;
+pub type Core = Arc<crux_core::Core<VariantBuilder>>;
 
 pub fn new() -> Core {
     Arc::new(crux_core::Core::new())
