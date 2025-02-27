@@ -13,8 +13,6 @@ async-std =  { workspace = true }
 
 # serialization
 serde = { workspace = true, features = ["derive"] }
-# Required for form validation (!)
-serde_json = { workspace = true }
 
 # gui
 egui = { workspace = true }
@@ -28,6 +26,7 @@ egui-i18n = { workspace = true }
 egui_mobius = { workspace = true }
 
 # i18n
+i18n = { path = "../i18n" }
 unic-langid = { workspace = true, features = ["macros"]}
 fluent = { workspace = true }
 fluent-bundle = { workspace = true }
