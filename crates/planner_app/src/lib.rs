@@ -168,6 +168,13 @@ pub enum ProjectView {
     PhasePlacementOrderings(PhasePlacementOrderings),
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum ProjectViewRequest {
+    // TODO add all the views and use this
+    ToDo,
+}
+
+
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct ProjectOperationViewModel {
     pub modified: bool,

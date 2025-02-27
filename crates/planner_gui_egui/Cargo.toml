@@ -18,8 +18,14 @@ serde_json = { workspace = true }
 
 # gui
 egui = { workspace = true }
+eframe = { workspace = true, default-features = false, features = [
+    "default_fonts",
+    "glow",
+    "wayland",
+] }
 egui_taffy = {  workspace = true }
 egui-i18n = { workspace = true }
+egui_mobius = { workspace = true }
 
 # i18n
 unic-langid = { workspace = true, features = ["macros"]}
