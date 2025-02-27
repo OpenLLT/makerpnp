@@ -1,3 +1,6 @@
+menu-top-level-file = Archivo
+menu-item-quit = Salir
+
 toolbar-button-home = Inicio
 toolbar-button-new = Nuevo
 toolbar-button-open = Abrir

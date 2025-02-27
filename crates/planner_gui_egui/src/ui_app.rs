@@ -2,6 +2,7 @@ use std::mem::MaybeUninit;
 use egui_mobius::types::{Enqueue, Value};
 use crate::ui_commands::{handle_command, UiCommand};
 use egui_dock::{DockArea, DockState, Style};
+use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
 use planner_gui_egui::config::Config;
@@ -187,6 +188,42 @@ impl eframe::App for UiApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            // The top panel is often a good place for a menu bar:
+
+            egui::menu::bar(ui, |ui| {
+                // NOTE: no File->Quit on web pages!
+                let is_web = cfg!(target_arch = "wasm32");
+                if !is_web {
+                    ui.menu_button(tr!("menu-top-level-file"), |ui| {
+                        if ui.button(tr!("menu-item-quit")).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                    });
+                    ui.add_space(16.0);
+                }
+
+                egui::widgets::global_theme_preference_buttons(ui);
+            });
+
+            egui::Frame::new().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let home_button = ui.button(tr!("toolbar-button-home"));
+                    let close_all_button = ui.button(tr!("toolbar-button-close-all"));
+
+                    if home_button.clicked() {
+                        self.show_home_tab();
+                    }
+                    
+                    if close_all_button.clicked() {
+                        // FIXME there's a bug in `egui_dock` where the `on_close` handler is not called
+                        //       when programmatically closing all the tabs - reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1340993744941617233
+                        self.tree.retain_tabs(|_tab_key| false);
+                    }
+                });
+            });
+        });
 
         if !self.state().startup_done {
             self.state().startup_done = true;
