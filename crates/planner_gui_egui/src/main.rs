@@ -28,8 +28,8 @@ fn main() {
     i18n::init(
         I18nConfig {
             languages: vec![
+                String::from("es-ES"),
                 String::from("en-US"),
-                String::from("es-ES")
             ],
             default: "en-US".to_string(),
             fallback: "en-US".to_string(),
