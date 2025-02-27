@@ -19,6 +19,7 @@ members = [
     "crates/planner_app",
     "crates/planner_cli",
     "crates/planner_gui_cushy",
+    "crates/planner_gui_egui",
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
 ]
@@ -29,6 +30,7 @@ anyhow = { version = "1.0.86" }
 regex = { version = "1.10.6" }
 time = { version = "0.3.36" }
 indexmap = { version = "2.4.0" }
+slotmap = { version = "1.0.7" }
 heck = { version = "0.5.0" }
 futures = "0.3.31"
 async-std = "1.13.0"
@@ -36,7 +38,6 @@ petgraph = { version = "0.6.5"}
 csv = { version = "1.3.0" }
 base64 = { version = "0.22.1"}
 termtree = { version = "0.5.1"}
-crossbeam-channel = { version = "0.5.13" }
 rust_decimal = { version = "1.35.0"}
 rust_decimal_macros = { version = "1.35"}
 
@@ -60,12 +61,21 @@ serde_regex = { version = "1.1.0" }
 # crux app
 crux_core = { version = "0.10.0" }
 
-#gui
+# gui (cushy)
 cushy = { git = "https://github.com/makerpnp/cushy.git", tag = "20250205-2314", default-features = false }
 
-#i18n
+# gui (egui)
+egui = { version = "0.31.0", features = ["serde"]}
+egui_taffy = "0.7.0"
+egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d545a715529ac80415f49d675756", features = ["fluent"] }
+
+# validation
+validator = { version = "0.20.0", features = ["derive"] }
+
+# i18n
 unic-langid = "0.9.5"
-fluent-bundle = "0.15"
+fluent = "0.16"
+fluent-bundle = "0.15.3"
 
 # testing
 rstest = { version = "0.23.0" }
@@ -76,3 +86,6 @@ indoc = { version = "2.0.5" }
 predicates = { version = "3.1.0" }
 predicates-tree = { version = "1.0.11" }
 
+# tasks/async
+tokio = { version = "1.43.0", features = ["full"]}
+crossbeam-channel = { version = "0.5.13" }
