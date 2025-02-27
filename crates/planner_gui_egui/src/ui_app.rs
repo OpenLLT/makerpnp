@@ -92,10 +92,8 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn init() -> Self {
+    pub fn init(ui_state: Value<UiState>) -> Self {
         let (signal, slot) = factory::create_signal_slot::<UiCommand>();
-
-        let ui_state = Value::new(UiState::default());
 
         let core_service = Value::new(app_core::CoreService::new(ui_state.clone()));
 
@@ -151,7 +149,9 @@ impl UiApp {
             Self::default()
         };
 
-        instance.state.write(AppState::init());
+        let ui_state = instance.ui_state.clone();
+        
+        instance.state.write(AppState::init(ui_state));
         // Safety: `Self::state()` is now safe to call.
 
         instance
