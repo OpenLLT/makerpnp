@@ -2,7 +2,7 @@ use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
 use tracing::trace;
 use crate::app_core::CoreService;
-use crate::ui_app::{AppState, UiApp, UiState};
+use crate::ui_app::{AppState, UiApp, PersistentUiState};
 
 #[derive(Debug, Clone)]
 pub enum UiCommand {
@@ -13,7 +13,7 @@ pub enum UiCommand {
 }
 
 pub fn handle_command(
-    ui_state: Value<UiState>,
+    ui_state: Value<PersistentUiState>,
     command: UiCommand,
     core_service: Value<CoreService>,
     command_sender: Enqueue<UiCommand>,

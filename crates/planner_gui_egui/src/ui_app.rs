@@ -14,12 +14,12 @@ use crate::ui_app::app_tabs::{TabContext, TabKind};
 
 pub mod app_tabs;
 #[derive(serde::Deserialize, serde::Serialize)]
-pub struct UiState {
+pub struct PersistentUiState {
     tabs: Value<Tabs<TabKind>>,
     tree: DockState<TabKey>,
 }
 
-impl Default for UiState {
+impl Default for PersistentUiState {
     fn default() -> Self {
         Self {
             tabs: Value::new(Tabs::new()),
@@ -28,7 +28,7 @@ impl Default for UiState {
     }
 }
 
-impl UiState {
+impl PersistentUiState {
     pub fn show_home_tab(&mut self) {
         let home_tab = self.find_home_tab();
 
@@ -74,7 +74,7 @@ impl UiState {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct UiApp {
-    ui_state: Value<UiState>,
+    ui_state: Value<PersistentUiState>,
 
     config: Config,
 
@@ -92,7 +92,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn init(ui_state: Value<UiState>) -> Self {
+    pub fn init(ui_state: Value<PersistentUiState>) -> Self {
         let (signal, slot) = factory::create_signal_slot::<UiCommand>();
 
         let core_service = Value::new(app_core::CoreService::new(ui_state.clone()));
@@ -150,7 +150,7 @@ impl UiApp {
         };
 
         let ui_state = instance.ui_state.clone();
-        
+
         instance.state.write(AppState::init(ui_state));
         // Safety: `Self::state()` is now safe to call.
 
