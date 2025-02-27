@@ -1,6 +1,6 @@
 use egui::{Ui, WidgetText};
 use serde::{Deserialize, Serialize};
-use planner_gui_egui::config::Config;
+use crate::config::Config;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_app::app_tabs::home::HomeTab;
 

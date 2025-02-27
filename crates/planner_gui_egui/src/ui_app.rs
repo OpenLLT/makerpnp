@@ -1,28 +1,124 @@
 use std::mem::MaybeUninit;
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, Mutex};
 use egui_mobius::types::{Enqueue, Value};
-use crate::ui_commands::{handle_command, UiCommand};
-use egui_dock::{DockArea, DockState, Style};
+use egui_dock::{DockArea, DockState, Style, Tree};
 use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
-use planner_gui_egui::config::Config;
-use planner_gui_egui::fonts;
+use serde::Deserializer;
+use serde::ser::SerializeStruct;
+use crate::config::Config;
+use crate::{fonts, toolbar};
+use crate::ui_commands::{handle_command, UiCommand};
 use crate::app_core;
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
 
 pub mod app_tabs;
-#[derive(Default)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct UiState {
+    tabs: Tabs<TabKind>,
+    tree: DockState<TabKey>,
+}
+
+impl Default for UiState {
+    fn default() -> Self {
+        Self {
+            tabs: Tabs::new(),
+            tree: DockState::new(vec![]),
+        }
+    }
+}
+
+impl UiState {
+    pub fn show_home_tab(&mut self) {
+        let home_tab = self.find_home_tab();
+
+        if let Some(home_tab_key) = &home_tab {
+            // although we have the tab, we don't know the tab_index, which is required for the call to `set_active_tab`,
+            // so we have to call `find_tab`
+            let find_result = self.tree.find_tab(home_tab_key).unwrap();
+            self.tree.set_active_tab(find_result);
+        } else {
+            // create a new home tab
+            let tab_id = self.tabs.add(TabKind::Home(HomeTab::default()));
+            self.tree.push_to_focused_leaf(tab_id);
+        }
+    }
+
+
+    fn find_home_tab(&self) -> Option<&TabKey> {
+        let home_tab = self
+            .tree
+            .iter_all_tabs()
+            .find_map(|(_surface_and_node, tab_key)| {
+                let tab_kind = self.tabs.get(tab_key).unwrap();
+
+                match tab_kind {
+                    TabKind::Home(_) => Some(tab_key),
+                    _ => None,
+                }
+            });
+        home_tab
+    }
+
+    pub fn close_all_tabs(&mut self) {
+        // FIXME there's a bug in `egui_dock` where the `on_close` handler is not called
+        //       when programmatically closing all the tabs - reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1340993744941617233
+        self.tree.retain_tabs(|_tab_key| false);
+    }
+
+}
+
+// currently we have to wrap the value in a NewType so we can serialize it, which is a PITA.
+// need mobius to have a 'serde' feature or something.
+#[derive(Default)]
+struct SerdeUiState(Value<UiState>);
+
+impl<'de> serde::Deserialize<'de> for SerdeUiState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        todo!();
+        // let state: UiState = ::serde::Deserialize::deserialize(deserializer)?;
+        // Ok(SerdeUiState(Value::new(state)))
+    }
+}
+
+
+impl Deref for SerdeUiState {
+    type Target = Value<UiState>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for SerdeUiState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl serde::Serialize for SerdeUiState {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut ui_state = serializer.serialize_struct("UiState", 2)?;
+        let guard = self.0.lock().unwrap();
+        ui_state.serialize_field("tabs", &guard.tabs)?;
+        ui_state.serialize_field("tree", &guard.tree)?;
+
+        ui_state.end()
+    }
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct UiApp {
-    tabs: Tabs<TabKind>,
-    tree: DockState<TabKey>,
+    ui_state: SerdeUiState,
 
     config: Config,
 
@@ -31,12 +127,11 @@ pub struct UiApp {
     state: MaybeUninit<AppState>,
 }
 
-struct AppState {
+pub struct AppState {
     // TODO find a better way of doing this that doesn't require this boolean
     startup_done: bool,
 
     command_sender: Enqueue<UiCommand>,
-    ui_state: Value<UiState>,
     slot: Slot<UiCommand>,
 }
 
@@ -52,9 +147,10 @@ impl AppState {
         let handler = {
             let core_service = core_service.clone();
             let command_sender = signal.sender.clone();
+            let ui_state = ui_state.clone();
 
             move |command: UiCommand| {
-                handle_command(command, core_service.clone(), command_sender.clone());
+                handle_command(ui_state.clone(), command, core_service.clone(), command_sender.clone());
             }
         };
 
@@ -64,7 +160,6 @@ impl AppState {
         Self {
             startup_done: false,
 
-            ui_state: ui_state.clone(),
             command_sender: signal.sender.clone(),
             slot
         }
@@ -77,17 +172,8 @@ impl Default for UiApp {
     fn default() -> Self {
         let config = Config::default();
 
-        let mut tabs = Tabs::new();
-
-        let _home_tab_id = tabs.add(TabKind::Home(HomeTab::default()));
-
-        let initial_tab_ids = tabs.ids();
-
-        let tree = DockState::new(initial_tab_ids);
-
         Self {
-            tabs,
-            tree,
+            ui_state: Default::default(),
             config,
             state: MaybeUninit::uninit(),
         }
@@ -124,45 +210,18 @@ impl UiApp {
     fn state(&mut self) -> &mut AppState {
         unsafe { self.state.assume_init_mut() }
     }
-    
-    fn show_home_tab(&mut self) {
-        let home_tab = self.find_home_tab();
-
-        if let Some(home_tab_key) = &home_tab {
-            // although we have the tab, we don't know the tab_index, which is required for the call to `set_active_tab`,
-            // so we have to call `find_tab`
-            let find_result = self.tree.find_tab(home_tab_key).unwrap();
-            self.tree.set_active_tab(find_result);
-        } else {
-            // create a new home tab
-            let tab_id = self.tabs.add(TabKind::Home(HomeTab::default()));
-            self.tree.push_to_focused_leaf(tab_id);
-        }
-    }
-
-    fn find_home_tab(&self) -> Option<&TabKey> {
-        let home_tab = self
-            .tree
-            .iter_all_tabs()
-            .find_map(|(_surface_and_node, tab_key)| {
-                let tab_kind = self.tabs.get(tab_key).unwrap();
-
-                match tab_kind {
-                    TabKind::Home(_) => Some(tab_key),
-                    _ => None,
-                }
-            });
-        home_tab
-    }
 
     /// Safety: call only once on startup, before the tabs are shown.
     fn show_home_tab_on_startup(&mut self) {
+        // TODO consider moving this method into `UiState`
+        let mut ui_state = self.ui_state.lock().unwrap();
+
         if self.config.show_home_tab_on_startup {
-            self.show_home_tab();
+            ui_state.show_home_tab();
         } else {
-            if let Some(home_tab_key) = self.find_home_tab() {
-                let find_result = self.tree.find_tab(home_tab_key).unwrap();
-                self.tree.remove_tab(find_result);
+            if let Some(home_tab_key) = ui_state.find_home_tab() {
+                let find_result = ui_state.tree.find_tab(home_tab_key).unwrap();
+                ui_state.tree.remove_tab(find_result);
             }
         }
     }
@@ -171,13 +230,16 @@ impl UiApp {
     /// and the dock tree are out of sync.  `on_close` should be removing elements from `self.tabs` corresponding to the
     /// tab being closed, but because it is not called there can be orphaned elements, we need to find and remove them.
     pub fn cleanup_tabs(&mut self) {
-        let known_tab_keys = self
+        // TODO consider moving this method into `UiState`
+        let mut ui_state = self.ui_state.lock().unwrap();
+
+        let known_tab_keys = ui_state
             .tree
             .iter_all_tabs()
             .map(|(_surface_and_node, tab_key)| tab_key.clone())
             .collect::<Vec<_>>();
 
-        self.tabs.retain_all(&known_tab_keys);
+        ui_state.tabs.retain_all(&known_tab_keys);
     }
 
 }
@@ -207,22 +269,7 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
 
-            egui::Frame::new().show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    let home_button = ui.button(tr!("toolbar-button-home"));
-                    let close_all_button = ui.button(tr!("toolbar-button-close-all"));
-
-                    if home_button.clicked() {
-                        self.show_home_tab();
-                    }
-                    
-                    if close_all_button.clicked() {
-                        // FIXME there's a bug in `egui_dock` where the `on_close` handler is not called
-                        //       when programmatically closing all the tabs - reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1340993744941617233
-                        self.tree.retain_tabs(|_tab_key| false);
-                    }
-                });
-            });
+            toolbar::show(ui, self.state().command_sender.clone());
         });
 
         if !self.state().startup_done {
@@ -237,13 +284,15 @@ impl eframe::App for UiApp {
         let mut tab_context = TabContext {
             config: &mut self.config,
         };
+        
+        let mut ui_state = self.ui_state.lock().unwrap();
 
         let mut my_tab_viewer = AppTabViewer {
-            tabs: &mut self.tabs,
+            tabs: ui_state.tabs.clone(),
             context: &mut tab_context,
         };
 
-        DockArea::new(&mut self.tree)
+        DockArea::new(&mut ui_state.tree)
             .style(Style::from_egui(ctx.style().as_ref()))
             .show(ctx, &mut my_tab_viewer);
 

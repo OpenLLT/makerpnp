@@ -9,13 +9,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use i18n::I18nConfig;
-use crate::ui_app::UiApp;
-
-mod app_core;
-mod ui_app;
-mod ui_commands;
-
-mod tabs;
+use planner_gui_egui::ui_app::UiApp;
 
 fn main() {
     tracing_subscriber::registry()

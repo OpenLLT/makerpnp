@@ -8,7 +8,7 @@ use tracing::{debug, info};
 #[derive(Debug, Clone, Hash, Copy, Ord, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct TabKey(usize);
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct Tabs<TabKind> {
     next_id: usize,
     tabs: BTreeMap<TabKey, TabKind>,
