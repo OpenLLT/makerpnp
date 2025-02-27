@@ -59,7 +59,7 @@ serde_with = { version = "3.9.0" }
 serde_regex = { version = "1.1.0" }
 
 # crux app
-crux_core = { version = "0.10.0" }
+crux_core = { version = "0.12.0" }
 
 # gui (cushy)
 cushy = { git = "https://github.com/makerpnp/cushy.git", tag = "20250205-2314", default-features = false }

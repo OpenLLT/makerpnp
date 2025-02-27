@@ -1,4 +1,5 @@
 use crux_core::capability::{CapabilityContext, Operation};
+use crux_core::{Command, Request};
 use crux_core::macros::Capability;
 
 use crate::ProjectView;
@@ -41,4 +42,12 @@ pub enum ProjectViewRendererOperation {
 
 impl Operation for ProjectViewRendererOperation {
     type Output = ();
+}
+
+pub fn view<Effect, Event>(view: ProjectView) -> Command<Effect, Event>
+where
+    Effect: From<Request<ProjectViewRendererOperation>> + Send + 'static,
+    Event: Send + 'static,
+{
+    Command::notify_shell(ProjectViewRendererOperation::View { view })
 }

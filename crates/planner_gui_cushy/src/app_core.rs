@@ -7,7 +7,7 @@ use tracing::debug;
 
 use crate::project::ProjectMessage;
 
-type Core = Arc<planner_app::Core<Effect, Planner>>;
+type Core = Arc<planner_app::Core<Planner>>;
 
 pub struct CoreService {
     core: Core,

@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crux_core::macros::Effect;
 use crux_core::render::Render;
-use crux_core::App;
+use crux_core::{render, App, Command};
 pub use crux_core::Core;
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
@@ -23,7 +23,7 @@ use serde_with::serde_as;
 use stores::load_out::{LoadOutOperationError, LoadOutSource};
 use thiserror::Error;
 use tracing::{info, trace};
-
+use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 
 pub mod capabilities;
@@ -48,6 +48,7 @@ pub struct Model {
 }
 
 #[derive(Effect)]
+#[allow(unused)]
 pub struct Capabilities {
     /// the default render operation, see `ProjectOperationViewModel`
     render: Render<Event>,
@@ -260,37 +261,36 @@ pub enum Event {
     },
 }
 
-impl App for Planner {
-    type Event = Event;
-    type Model = Model;
-    type ViewModel = ProjectOperationViewModel;
-    type Capabilities = Capabilities;
-
-    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) {
-        let mut default_render = true;
+impl Planner {
+    fn update_inner(&self, event: <Planner as App>::Event) -> Box<dyn FnOnce(&mut <Planner as App>::Model) -> Result<Command<<Planner as App>::Effect, <Planner as App>::Event>, AppError>> {
         match event {
-            Event::None => {}
+            Event::None => {
+                Box::new(| _model: &mut Model | Ok(render::render()))
+            }
             Event::CreateProject {
                 name,
                 path,
             } => {
-                info!("Creating project. path: {:?}", &path);
+                Box::new(| model: &mut Model | {
+                    info!("Creating project. path: {:?}", &path);
 
-                let project = Project::new(name);
-                model
-                    .model_project
-                    .replace(ModelProject {
-                        path,
-                        project,
-                        modified: true,
-                    });
+                    let project = Project::new(name);
+                    model
+                        .model_project
+                        .replace(ModelProject {
+                            path,
+                            project,
+                            modified: true,
+                        });
 
-                info!("Created project successfully.");
+                    info!("Created project successfully.");
+                    Ok(render::render())
+                })
             }
             Event::Load {
                 path,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     info!("Load project. path: {:?}", &path);
 
                     let project = project::load(&path).map_err(AppError::IoError)?;
@@ -303,15 +303,11 @@ impl App for Planner {
                             modified: false,
                         });
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::Save => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -329,18 +325,14 @@ impl App for Planner {
                     info!("Saved. path: {:?}", path);
                     *modified = false;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::AddPcb {
                 kind,
                 name,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         modified,
@@ -355,19 +347,15 @@ impl App for Planner {
 
                     *modified |= true;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::AssignVariantToUnit {
                 design,
                 variant,
                 unit,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -385,15 +373,11 @@ impl App for Planner {
                         .map_err(|cause| AppError::OperationError(cause.into()))?;
                     *modified |= true;
                     let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::RefreshFromDesignVariants => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -409,19 +393,15 @@ impl App for Planner {
 
                     *modified |= refresh_result.modified;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::AssignProcessToParts {
                 process: process_name,
                 manufacturer: manufacturer_pattern,
                 mpn: mpn_pattern,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -447,12 +427,8 @@ impl App for Planner {
                         mpn_pattern,
                     );
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::CreatePhase {
                 process: process_name,
@@ -460,7 +436,7 @@ impl App for Planner {
                 load_out,
                 pcb_side,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         modified,
@@ -484,18 +460,14 @@ impl App for Planner {
                         .update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)
                         .map_err(AppError::OperationError)?;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::AssignPlacementsToPhase {
                 phase: phase_reference,
                 placements: placements_pattern,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -535,14 +507,10 @@ impl App for Planner {
                         &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
                         parts,
                     )
-                    .map_err(AppError::LoadoutError)?;
+                        .map_err(AppError::LoadoutError)?;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::AssignFeederToLoadOutItem {
                 phase: phase_reference,
@@ -550,7 +518,7 @@ impl App for Planner {
                 manufacturer,
                 mpn,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project, ..
                     } = model
@@ -575,19 +543,15 @@ impl App for Planner {
                         manufacturer,
                         mpn,
                     )
-                    .map_err(AppError::OperationError)?;
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                        .map_err(AppError::OperationError)?;
+                    Ok(render::render())
+                })
             }
             Event::SetPlacementOrdering {
                 phase: reference,
                 placement_orderings,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -603,15 +567,11 @@ impl App for Planner {
                     *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
                         .map_err(AppError::OperationError)?;
 
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::GenerateArtifacts => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -642,19 +602,15 @@ impl App for Planner {
                     let directory = path.parent().unwrap();
                     project::generate_artifacts(project, directory, phase_load_out_item_map)
                         .map_err(|cause| AppError::OperationError(cause.into()))?;
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
                 set,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -668,18 +624,14 @@ impl App for Planner {
                     let directory = path.parent().unwrap();
                     *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
                         .map_err(AppError::OperationError)?;
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::RecordPlacementsOperation {
                 object_path_patterns,
                 operation,
             } => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project,
                         path,
@@ -693,15 +645,11 @@ impl App for Planner {
                     *modified |=
                         project::update_placements_operation(project, directory, object_path_patterns, operation)
                             .map_err(AppError::OperationError)?;
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
             Event::ResetOperations {} => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project,
                         modified,
@@ -713,18 +661,15 @@ impl App for Planner {
                     project::reset_operations(project).map_err(AppError::OperationError)?;
 
                     *modified |= true;
-                    Ok(())
-                };
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(render::render())
+                })
             }
 
             //
             // Views
             //
             Event::RequestOverviewView {} => {
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project, ..
                     } = model
@@ -735,19 +680,11 @@ impl App for Planner {
                     let overview = ProjectOverview {
                         name: project.name.clone(),
                     };
-                    caps.project_view
-                        .view(ProjectView::Overview(overview));
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(view_renderer::view(ProjectView::Overview(overview)))
+                })
             }
             Event::RequestProjectTreeView {} => {
-                default_render = false;
-
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project, ..
                     } = model
@@ -908,21 +845,13 @@ impl App for Planner {
                             .add_edge(root_node.clone(), test_node, ());
                     }
 
-                    caps.project_view
-                        .view(ProjectView::ProjectTree(project_tree));
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
+                })
             }
             Event::RequestPhaseOverviewView {
                 phase_reference,
             } => {
-                default_render = false;
-
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(|model: &mut Model| {
                     let ModelProject {
                         project, ..
                     } = model
@@ -941,21 +870,13 @@ impl App for Planner {
                         pcb_side: phase.pcb_side.clone(),
                     };
 
-                    caps.project_view
-                        .view(ProjectView::PhaseOverview(phase_overview));
-                    Ok(())
-                };
-
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+                    Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
+                })
             }
             Event::RequestPhasePlacementsView {
                 phase_reference,
             } => {
-                default_render = false;
-
-                let try_fn = |model: &mut Model| -> Result<(), AppError> {
+                Box::new(move |model: &mut Model| {
                     let ModelProject {
                         project, ..
                     } = model
@@ -980,22 +901,33 @@ impl App for Planner {
                         phase_reference,
                         placements,
                     };
+                    Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
+                })
+            }
+        }
+    }
+}
 
-                    caps.project_view
-                        .view(ProjectView::PhasePlacements(phase_placements));
-                    Ok(())
-                };
+impl App for Planner {
+    type Event = Event;
+    type Model = Model;
+    type ViewModel = ProjectOperationViewModel;
+    type Capabilities = Capabilities;
+    type Effect = Effect;
 
-                if let Err(e) = try_fn(model) {
-                    model.error.replace(format!("{:?}", e));
-                };
+    fn update(&self, event: Self::Event, model: &mut Self::Model, _caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
+        let try_fn = self.update_inner(event);
+
+        match try_fn(model) {
+            Err(e) => {
+                model.error.replace(format!("{:?}", e));
+                render::render()
+            }
+            Ok(command) => {
+                command
             }
         }
 
-        if default_render {
-            // This causes the shell to request the view, via `view()`
-            caps.render.render();
-        }
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
@@ -1052,7 +984,7 @@ mod app_tests {
 
     #[test]
     fn minimal() {
-        let hello = AppTester::<Planner, _>::default();
+        let hello = AppTester::<Planner>::default();
         let mut model = Model::default();
 
         // Call 'update' and request effects

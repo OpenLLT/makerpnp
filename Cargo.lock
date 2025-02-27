@@ -1170,9 +1170,9 @@ checksum = "43da5946c66ffcc7745f48db692ffbb10a83bfe0afd96235c5c2a4fb23994929"
 
 [[package]]
 name = "crux_core"
-version = "0.10.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf90d32e58a431f3eb115f96bb2675db74d37ec8a3f03ec07930d779c7c5caf"
+checksum = "698fd9872826b070544cf8304306af17fa3b6454dc82238188ad910eb392fd88"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1183,7 +1183,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slab",
- "thiserror 1.0.69",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
