@@ -17,13 +17,17 @@ serde = { workspace = true, features = ["derive"] }
 # gui
 egui = { workspace = true }
 eframe = { workspace = true, default-features = false, features = [
+    "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
     "default_fonts",
     "glow",
+    "persistence",   # Enable restoring app state when restarting the app.
     "wayland",
 ] }
 egui_taffy = {  workspace = true }
 egui-i18n = { workspace = true }
+egui_dock = { version = "0.16.0", features = ["serde"]}
 egui_mobius = { workspace = true }
+egui_material_icons = { workspace = true }
 
 # i18n
 i18n = { path = "../i18n" }

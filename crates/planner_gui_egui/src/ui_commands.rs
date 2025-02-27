@@ -1,6 +1,5 @@
 use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
-use tracing::debug;
 use crate::app_core::CoreService;
 
 #[derive(Debug, Clone)]
