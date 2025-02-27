@@ -5,7 +5,7 @@ use crossbeam_channel::Sender;
 use planner_app::{Effect, Event, Planner};
 use tracing::debug;
 
-pub type Core = Arc<crux_core::Core<Effect, Planner>>;
+pub type Core = Arc<crux_core::Core<Planner>>;
 
 pub fn new() -> Core {
     Arc::new(crux_core::Core::new())
