@@ -17,7 +17,7 @@ pub fn handle_command(
     core_service: Value<CoreService>,
     command_sender: Enqueue<UiCommand>,
 ) {
-    let ui_state = ui_state.lock().unwrap();
+    let mut ui_state = ui_state.lock().unwrap();
     
     match command {
         UiCommand::None => {

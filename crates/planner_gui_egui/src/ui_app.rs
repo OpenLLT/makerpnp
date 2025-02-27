@@ -1,13 +1,9 @@
 use std::mem::MaybeUninit;
-use std::ops::{Deref, DerefMut};
-use std::sync::{Arc, Mutex};
 use egui_mobius::types::{Enqueue, Value};
-use egui_dock::{DockArea, DockState, Style, Tree};
+use egui_dock::{DockArea, DockState, Style};
 use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
-use serde::Deserializer;
-use serde::ser::SerializeStruct;
 use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
@@ -72,53 +68,11 @@ impl UiState {
 
 }
 
-// currently we have to wrap the value in a NewType so we can serialize it, which is a PITA.
-// need mobius to have a 'serde' feature or something.
-#[derive(Default)]
-struct SerdeUiState(Value<UiState>);
-
-impl<'de> serde::Deserialize<'de> for SerdeUiState {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>
-    {
-        todo!();
-        // let state: UiState = ::serde::Deserialize::deserialize(deserializer)?;
-        // Ok(SerdeUiState(Value::new(state)))
-    }
-}
-
-
-impl Deref for SerdeUiState {
-    type Target = Value<UiState>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for SerdeUiState {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl serde::Serialize for SerdeUiState {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut ui_state = serializer.serialize_struct("UiState", 2)?;
-        let guard = self.0.lock().unwrap();
-        ui_state.serialize_field("tabs", &guard.tabs)?;
-        ui_state.serialize_field("tree", &guard.tree)?;
-
-        ui_state.end()
-    }
-}
-
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct UiApp {
-    ui_state: SerdeUiState,
+    ui_state: Value<UiState>,
 
     config: Config,
 
@@ -284,7 +238,7 @@ impl eframe::App for UiApp {
         let mut tab_context = TabContext {
             config: &mut self.config,
         };
-        
+
         let mut ui_state = self.ui_state.lock().unwrap();
 
         let mut my_tab_viewer = AppTabViewer {

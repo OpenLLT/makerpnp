@@ -357,7 +357,6 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 [[package]]
 name = "as_any_derive"
 version = "0.1.0"
-source = "git+https://github.com/saturn77/egui_mobius?rev=5d5f9880fbe222e21b087a2f2cc7531518ac9506#5d5f9880fbe222e21b087a2f2cc7531518ac9506"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1803,13 +1802,13 @@ dependencies = [
 [[package]]
 name = "egui_mobius"
 version = "0.1.0"
-source = "git+https://github.com/saturn77/egui_mobius?rev=5d5f9880fbe222e21b087a2f2cc7531518ac9506#5d5f9880fbe222e21b087a2f2cc7531518ac9506"
 dependencies = [
  "as_any_derive",
  "crossbeam-channel",
  "eframe",
  "egui",
  "rand 0.9.0",
+ "serde",
  "tokio",
  "winit",
 ]
