@@ -2392,6 +2392,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "i18n"
+version = "0.1.0"
+dependencies = [
+ "egui-i18n",
+ "fluent",
+ "fluent-bundle",
+ "serde_json",
+ "tracing",
+ "unic-langid",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3860,6 +3872,7 @@ dependencies = [
  "fluent",
  "fluent-bundle",
  "futures",
+ "i18n",
  "petgraph",
  "planner_app",
  "regex",

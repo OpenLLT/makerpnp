@@ -1,0 +1,19 @@
+[package]
+name = "i18n"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# logging
+tracing = { workspace = true }
+
+# gui
+egui-i18n = { workspace = true }
+
+# i18n
+unic-langid = { workspace = true, features = ["macros"]}
+fluent = { workspace = true }
+fluent-bundle = { workspace = true }
+
+# Required for form validation (!)
+serde_json = { workspace = true }

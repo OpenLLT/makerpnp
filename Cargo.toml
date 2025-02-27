@@ -9,6 +9,7 @@ members = [
     "crates/cli",
     "crates/pnp",
     "crates/cli",
+    "crates/i18n",
     "crates/planning",
     "crates/stores",
     "crates/part_mapper",
