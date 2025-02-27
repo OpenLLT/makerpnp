@@ -1,27 +1,29 @@
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use egui_dock::{DockArea, DockState, Style};
 use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
+use slotmap::SlotMap;
 use tracing::info;
 use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::app_core;
 use crate::file_picker::Picker;
+use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
+use crate::ui_app::app_tabs::project::ProjectTab;
 
 pub mod app_tabs;
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct PersistentUiState {
     tabs: Value<Tabs<TabKind>>,
     tree: DockState<TabKey>,
-    
-    
 }
 
 impl Default for PersistentUiState {
@@ -72,6 +74,12 @@ impl PersistentUiState {
         //       when programmatically closing all the tabs - reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1340993744941617233
         self.tree.retain_tabs(|_tab_key| false);
     }
+
+    fn add_tab(&mut self, tab_kind: TabKind) {
+        let mut tabs = self.tabs.lock().unwrap();
+        let tab_id = tabs.add(tab_kind);
+        self.tree.push_to_focused_leaf(tab_id);
+    }
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -97,6 +105,9 @@ pub struct AppState {
     file_picker: Picker,
 
     command_sender: Enqueue<UiCommand>,
+    
+    // TODO consider using `Value` here
+    projects: Arc<Mutex<SlotMap<ProjectKey, Project>>>,
 }
 
 impl AppState {
@@ -107,34 +118,34 @@ impl AppState {
             file_picker: Picker::default(),
 
             command_sender: sender,
+            projects: Arc::new(Mutex::new(SlotMap::default())),
         }
     }
 
-    pub(crate) fn pick_file(&mut self) {
+    pub fn pick_file(&mut self) {
         if !self.file_picker.is_picking() {
             self.file_picker.pick_file();
         }
     }
 
-    fn open_file(&mut self, ctx: &egui::Context, path: PathBuf) {
+    pub fn open_file(&mut self, path: PathBuf, ui_state: Value<PersistentUiState>) {
         info!("open file. path: {:?}", path);
-        // 
-        // let title = path.file_name().unwrap().to_string_lossy().to_string();
-        // 
-        // let sender = self.state().sender.clone();
-        // 
-        // let document_key = self.state().documents.lock().unwrap().insert_with_key({
-        //     let sender = sender.clone();
-        // 
-        //     |new_key| {
-        //         Self::document_from_path(&path, ctx, sender, new_key)
-        //     }
-        // });
-        // let tab_kind = TabKind::Document(DocumentTab::new(title, path, document_key));
-        // 
-        // self.add_tab(tab_kind);
+        
+        let label = path.file_name().unwrap().to_string_lossy().to_string();
+        
+        let sender = self.command_sender.clone();
+        
+        let project_key = self.projects.lock().unwrap().insert_with_key({
+            let sender = sender.clone();
+        
+            |new_key| {
+                Project::from_path(path, sender, new_key)
+            }
+        });
+        let tab_kind = TabKind::Project(ProjectTab::new(label, project_key));
+        
+        ui_state.lock().unwrap().add_tab(tab_kind);
     }
-
 }
 
 
@@ -178,16 +189,13 @@ impl UiApp {
 
         let ui_state = instance.ui_state.clone();
 
-        let core_service = Value::new(app_core::CoreService::new(ui_state.clone()));
-
         // Define a handler function for the slot
         let handler = {
-            let core_service = core_service.clone();
             let command_sender = signal.sender.clone();
             let ui_state = ui_state.clone();
 
             move |command: UiCommand| {
-                handle_command(state.clone(), ui_state.clone(), command, core_service.clone(), command_sender.clone());
+                handle_command(state.clone(), ui_state.clone(), command, command_sender.clone());
             }
         };
 
@@ -301,7 +309,7 @@ impl eframe::App for UiApp {
         if let Ok(picked_file) = app_state.file_picker.picked() {
             // FIXME this `update` method does not get called immediately after picking a file, instead update gets
             //       called when the user moves the mouse or interacts with the window again.
-            app_state.open_file(ctx, picked_file);
+            app_state.command_sender.send(UiCommand::OpenFile(picked_file)).ok();
         }
 
     }

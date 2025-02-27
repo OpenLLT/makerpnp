@@ -3,6 +3,7 @@ use planner_app::{Effect, Event, Planner, ProjectView};
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use egui_mobius::types::{Enqueue, Value};
 use tracing::debug;
+use crate::project::ProjectUiState;
 use crate::ui_app::PersistentUiState;
 use crate::ui_commands::UiCommand;
 
@@ -10,11 +11,11 @@ type Core = Arc<planner_app::Core<Planner>>;
 
 pub struct CoreService {
     core: Core,
-    ui_state: Value<PersistentUiState>,
+    ui_state: Value<ProjectUiState>,
 }
 
 impl CoreService {
-    pub fn new(ui_state: Value<PersistentUiState>) -> Self {
+    pub fn new(ui_state: Value<ProjectUiState>) -> Self {
         Self {
             core: Arc::new(planner_app::Core::new()),
             ui_state,
@@ -29,7 +30,7 @@ impl CoreService {
         }
     }
 
-    pub fn process_effect(core: &Core, effect: Effect, _sender: Enqueue<UiCommand>, ui_state: Value<PersistentUiState>) {
+    pub fn process_effect(core: &Core, effect: Effect, _sender: Enqueue<UiCommand>, ui_state: Value<ProjectUiState>) {
         debug!("effect: {:?}", effect);
 
         match effect {

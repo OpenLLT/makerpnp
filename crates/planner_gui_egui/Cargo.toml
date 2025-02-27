@@ -46,6 +46,6 @@ regex = { workspace = true }
 validator = { workspace = true }
 
 # other
-slotmap = { workspace = true }
+slotmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 petgraph = { workspace = true }
