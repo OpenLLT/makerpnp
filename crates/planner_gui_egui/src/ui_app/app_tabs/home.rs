@@ -14,13 +14,13 @@ pub struct HomeTab {
 }
 
 impl Tab for HomeTab {
-    type Context<'a> = TabContext<'a>;
+    type Context = TabContext;
 
     fn label(&self) -> WidgetText {
         egui::widget_text::WidgetText::from(tr!("tab-label-home"))
     }
 
-    fn ui(&mut self, ui: &mut Ui, _tab_key: &mut TabKey, context: &mut Self::Context<'_>) {
+    fn ui(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         ui.ctx().style_mut(|style| {
             // if this is not done, text in labels/checkboxes/etc wraps
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
@@ -65,7 +65,7 @@ impl Tab for HomeTab {
 
                 tui.ui(|ui| {
                     ui.add(Checkbox::new(
-                        &mut context.config.show_home_tab_on_startup,
+                        &mut context.config.lock().unwrap().show_home_tab_on_startup,
                         tr!("home-checkbox-label-show-on-startup"),
                     ));
                 });

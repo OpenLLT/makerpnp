@@ -26,8 +26,10 @@ eframe = { workspace = true, default-features = false, features = [
 egui_taffy = {  workspace = true }
 egui-i18n = { workspace = true }
 egui_dock = { version = "0.16.0", features = ["serde"]}
-egui_mobius = { workspace = true }
+#egui_mobius = { path = "../../../../../libraries/rust/egui/mobius_egui/crates/egui_mobius", features = ["serde"] }
+egui_mobius = { workspace = true, features = ["serde"] }
 egui_material_icons = { workspace = true }
+rfd = { workspace = true }
 
 # i18n
 i18n = { path = "../i18n" }
@@ -44,6 +46,6 @@ regex = { workspace = true }
 validator = { workspace = true }
 
 # other
-slotmap = { workspace = true }
+slotmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 petgraph = { workspace = true }

@@ -3,18 +3,18 @@ use planner_app::{Effect, Event, Planner, ProjectView};
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use egui_mobius::types::{Enqueue, Value};
 use tracing::debug;
-use crate::ui_app::UiState;
+use crate::project::ProjectUiState;
 use crate::ui_commands::UiCommand;
 
 type Core = Arc<planner_app::Core<Planner>>;
 
-pub struct CoreService {
+pub struct PlannerCoreService {
     core: Core,
-    ui_state: Value<UiState>,
+    ui_state: Value<ProjectUiState>,
 }
 
-impl CoreService {
-    pub fn new(ui_state: Value<UiState>) -> Self {
+impl PlannerCoreService {
+    pub fn new(ui_state: Value<ProjectUiState>) -> Self {
         Self {
             core: Arc::new(planner_app::Core::new()),
             ui_state,
@@ -29,7 +29,7 @@ impl CoreService {
         }
     }
 
-    pub fn process_effect(core: &Core, effect: Effect, _sender: Enqueue<UiCommand>, ui_state: Value<UiState>) {
+    pub fn process_effect(core: &Core, effect: Effect, _sender: Enqueue<UiCommand>, ui_state: Value<ProjectUiState>) {
         debug!("effect: {:?}", effect);
 
         match effect {
@@ -44,7 +44,7 @@ impl CoreService {
                     view,
                 } = request.operation;
 
-                let mut ui_state = ui_state.lock().unwrap();
+                let mut project_ui_state = ui_state.lock().unwrap();
                 match view {
                     ProjectView::Overview(project_overview) => {
                         // todo - update ui state somehow...
