@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
+use tracing::debug;
 use crate::app_core::CoreService;
 use crate::ui_commands::UiCommand;
 
@@ -19,6 +20,9 @@ pub struct Project {
 
 impl Project {
     pub fn from_path(path: PathBuf, sender: Enqueue<UiCommand>, key: ProjectKey) -> Self {
+
+        debug!("Creating project from path. key: {:?}, path: {}", &key, &path.display());
+
         let project_ui_state = Value::new(ProjectUiState::default());
         
         let core_service = CoreService::new(project_ui_state.clone());

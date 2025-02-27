@@ -1,40 +1,49 @@
-use egui::{Checkbox, FontFamily, RichText, Ui, WidgetText};
-use egui_i18n::tr;
-use egui_material_icons::icons::ICON_HOME;
-use egui_taffy::taffy::prelude::{length, percent};
-use egui_taffy::taffy::Style;
-use egui_taffy::{taffy, tui, TuiBuilderLogic};
+use std::path::PathBuf;
+use egui::{Ui, WidgetText};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use crate::project::ProjectKey;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_app::app_tabs::TabContext;
+use crate::ui_commands::UiCommand;
 
+/// This is persisted between application restarts
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct ProjectTab {
     pub project_key: ProjectKey,
-
+    
+    // path is required here so the project can be loaded when the application restarts
+    pub path: PathBuf,
     pub label: String,
     pub modified: bool,
 }
 
 impl ProjectTab {
-    pub fn new(label: String, project_key: ProjectKey) -> Self {
+    pub fn new(label: String, path: PathBuf, project_key: ProjectKey) -> Self {
+        debug!("Creating project tab. key: {:?}, path: {}", &project_key, &path.display());
         Self {
-            label,
             project_key,
+            path,
+            label,
             modified: false,
         }
     }
 }
 
 impl Tab for ProjectTab {
-    type Context<'a> = TabContext<'a>;
+    type Context = TabContext;
 
     fn label(&self) -> WidgetText {
         egui::widget_text::WidgetText::from(self.label.clone())
     }
 
-    fn ui(&mut self, ui: &mut Ui, _tab_key: &mut TabKey, context: &mut Self::Context<'_>) {
+    fn ui(&mut self, ui: &mut Ui, _tab_key: &TabKey, _tab_context: &mut Self::Context) {
         ui.label("project tab");
+    }
+
+    fn on_close(&mut self, _tab_key: &TabKey, tab_context: &mut Self::Context) -> bool {
+        tab_context.sender.send(UiCommand::ProjectClosed(self.project_key)).ok();
+
+        true
     }
 }

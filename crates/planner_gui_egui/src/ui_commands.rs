@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
-use tracing::trace;
+use tracing::{debug, trace};
 use crate::app_core::CoreService;
+use crate::project::ProjectKey;
 use crate::ui_app::{AppState, UiApp, PersistentUiState};
 
 #[derive(Debug, Clone)]
@@ -13,6 +14,7 @@ pub enum UiCommand {
     CloseAllTabs,
     OpenFile(PathBuf),
     OpenClicked,
+    ProjectClosed(ProjectKey),
 }
 
 pub fn handle_command(
@@ -41,6 +43,10 @@ pub fn handle_command(
         UiCommand::OpenClicked => {
             let mut app_state = app_state.lock().unwrap();
             app_state.pick_file();
+        }
+        UiCommand::ProjectClosed(project_key) => {
+            let mut app_state = app_state.lock().unwrap();
+            app_state.close_project(project_key);
         }
     }
 }

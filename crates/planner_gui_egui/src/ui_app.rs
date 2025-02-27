@@ -7,7 +7,7 @@ use egui_i18n::tr;
 use egui_mobius::factory;
 use egui_mobius::slot::Slot;
 use slotmap::SlotMap;
-use tracing::info;
+use tracing::{debug, info};
 use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
@@ -22,7 +22,7 @@ use crate::ui_app::app_tabs::project::ProjectTab;
 pub mod app_tabs;
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct PersistentUiState {
-    tabs: Value<Tabs<TabKind>>,
+    tabs: Value<Tabs<TabKind, TabContext>>,
     tree: DockState<TabKey>,
 }
 
@@ -88,7 +88,7 @@ impl PersistentUiState {
 pub struct UiApp {
     ui_state: Value<PersistentUiState>,
 
-    config: Config,
+    config: Value<Config>,
 
     // state contains fields that cannot be initialized using 'Default'
     #[serde(skip)]
@@ -107,7 +107,7 @@ pub struct AppState {
     command_sender: Enqueue<UiCommand>,
     
     // TODO consider using `Value` here
-    projects: Arc<Mutex<SlotMap<ProjectKey, Project>>>,
+    pub(crate) projects: Arc<Mutex<SlotMap<ProjectKey, Project>>>,
 }
 
 impl AppState {
@@ -139,12 +139,17 @@ impl AppState {
             let sender = sender.clone();
         
             |new_key| {
-                Project::from_path(path, sender, new_key)
+                Project::from_path(path.clone(), sender, new_key)
             }
         });
-        let tab_kind = TabKind::Project(ProjectTab::new(label, project_key));
+        let tab_kind = TabKind::Project(ProjectTab::new(label, path, project_key));
         
         ui_state.lock().unwrap().add_tab(tab_kind);
+    }
+    
+    pub fn close_project(&mut self, project_key: ProjectKey) {
+        debug!("closing project. key: {:?}", project_key);
+        self.projects.lock().unwrap().remove(project_key);
     }
 }
 
@@ -156,7 +161,7 @@ impl Default for UiApp {
 
         Self {
             ui_state: Default::default(),
-            config,
+            config: Default::default(),
             state: MaybeUninit::uninit(),
             slot: MaybeUninit::uninit(),
         }
@@ -221,7 +226,7 @@ impl UiApp {
         // TODO consider moving this method into `UiState`
         let mut ui_state = self.ui_state.lock().unwrap();
 
-        if self.config.show_home_tab_on_startup {
+        if self.config.lock().unwrap().show_home_tab_on_startup {
             ui_state.show_home_tab();
         } else {
             if let Some(home_tab_key) = ui_state.find_home_tab() {
@@ -234,7 +239,7 @@ impl UiApp {
     /// Due to bugs in egui_dock where it doesn't call `on_close` when closing tabs, it's possible that the tabs
     /// and the dock tree are out of sync.  `on_close` should be removing elements from `self.tabs` corresponding to the
     /// tab being closed, but because it is not called there can be orphaned elements, we need to find and remove them.
-    pub fn cleanup_tabs(&mut self) {
+    pub fn cleanup_tabs(&mut self, tab_context: &mut TabContext) {
         // TODO consider moving this method into `UiState`
         let mut ui_state = self.ui_state.lock().unwrap();
 
@@ -245,8 +250,65 @@ impl UiApp {
             .collect::<Vec<_>>();
 
         let mut tabs = ui_state.tabs.lock().unwrap();
-        tabs.retain_all(&known_tab_keys);
+        
+        
+        tabs.retain_all(&known_tab_keys, tab_context);
     }
+
+
+    /// when the app starts up, the documents will be empty, and the document tabs will have keys that don't exist
+    /// in the documents list (because it's empty now).
+    /// we have to find these tabs, create documents, store them in the map and replace the tab's document key
+    /// with the new key generated when adding the key to the map
+    ///
+    /// Safety: call only once on startup, before the tabs are shown.
+    fn restore_documents_on_startup(&mut self) {
+        // we have to do this as a two-step process to above borrow-checker issues
+        // we also have to limit the scope of the access to ui_state and app_state
+
+        // step 1 - find the document tabs, return the tab keys and paths.
+        let tab_keys_and_paths = {
+            let mut ui_state = self.ui_state.lock().unwrap();
+            let mut tabs = ui_state.tabs.lock().unwrap();
+            
+            tabs
+                .iter_mut()
+                .filter_map(|(tab_key, tab_kind)| match tab_kind {
+                    TabKind::Project(project_tab) => {
+                        Some((tab_key.clone(), project_tab.path.clone()))
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // step 2 - store the documents and update the document key for the tab.
+        for (tab_key, path) in tab_keys_and_paths {
+
+            let new_key = {
+                let app_state = self.app_state();
+                let sender = app_state.command_sender.clone();
+
+                app_state.projects.lock().unwrap().insert_with_key({
+                    let sender = sender.clone();
+                    |new_key| {
+                        Project::from_path(path.clone(), sender, new_key)
+                    }
+                })
+            };
+            
+            {
+                let mut ui_state = self.ui_state.lock().unwrap();
+                let mut tabs = ui_state.tabs.lock().unwrap();
+                if let TabKind::Project(project_tab) = tabs.get_mut(&tab_key).unwrap() {
+                    project_tab.project_key = new_key;
+                } else {
+                    unreachable!()
+                }
+            }
+        }
+    }
+
 }
 
 impl eframe::App for UiApp {
@@ -281,16 +343,20 @@ impl eframe::App for UiApp {
             self.app_state().startup_done = true;
 
             self.show_home_tab_on_startup();
+            self.restore_documents_on_startup();
         }
 
-        // FIXME remove this when `on_close` bugs in egui_dock are fixed.
-        self.cleanup_tabs();
         
         // in a block to limit the scope of the `ui_state` borrow/guard
         {
+            let sender = self.app_state().command_sender.clone();
             let mut tab_context = TabContext {
-                config: &mut self.config,
+                config: self.config.clone(),
+                sender,
             };
+
+            // FIXME remove this when `on_close` bugs in egui_dock are fixed.
+            self.cleanup_tabs(&mut tab_context);
 
             let mut ui_state = self.ui_state.lock().unwrap();
 
