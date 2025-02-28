@@ -38,10 +38,10 @@ impl Tab for ProjectTab {
     }
 
     fn ui(&mut self, ui: &mut Ui, _tab_key: &TabKey, _tab_context: &mut Self::Context) {
-        
+
         let projects = _tab_context.projects.lock().unwrap();
         let project = projects.get(self.project_key).unwrap();
-        
+
         project.ui(ui, self.project_key);
     }
 
