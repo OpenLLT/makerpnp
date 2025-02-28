@@ -119,11 +119,11 @@ impl Project {
                 self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
                 }, key)
-                    .inspect_err(|err| { 
-                        error!("{:?}", err);
-                    })
-                    .and_then(move |(key, command)|{
-                        Task::done(Ok((key, ProjectUiCommand::Loaded)))
+                    .map(|result|{
+                        match result {
+                            Ok((key, _)) => Ok((key, ProjectUiCommand::Loaded)),
+                            Err(error) => Err(error)
+                        }
                     })
             }
             ProjectUiCommand::Loaded => {
