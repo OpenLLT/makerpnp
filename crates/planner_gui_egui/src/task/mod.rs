@@ -102,3 +102,20 @@ impl<T> Debug for Task<T> {
         f.write_str("Task<...>")
     }
 }
+
+impl<T, E> Task<Result<T, E>> {
+    /// Executes a new [`Task`] after this one, only when it succeeds with an `Ok` value.
+    ///
+    /// The success value is provided to the closure to create the subsequent [`Task`].
+    pub fn and_then<A>(
+        self,
+        f: impl Fn(T) -> Task<A> + Send + 'static,
+    ) -> Task<A>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        A: Send + 'static,
+    {
+        self.then(move |option| option.map_or_else(|_| Task::none(), &f))
+    }
+}
