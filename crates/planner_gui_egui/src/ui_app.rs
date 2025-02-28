@@ -108,8 +108,7 @@ pub struct AppState {
 
     command_sender: Enqueue<UiCommand>,
     
-    // TODO consider using `Value` here
-    pub(crate) projects: Arc<Mutex<SlotMap<ProjectKey, Project>>>,
+    projects: Value<SlotMap<ProjectKey, Project>>,
 }
 
 impl AppState {
@@ -120,7 +119,7 @@ impl AppState {
             file_picker: Picker::default(),
 
             command_sender: sender,
-            projects: Arc::new(Mutex::new(SlotMap::default())),
+            projects: Value::new(SlotMap::default()),
         }
     }
 
@@ -350,9 +349,11 @@ impl eframe::App for UiApp {
         // in a block to limit the scope of the `ui_state` borrow/guard
         {
             let sender = self.app_state().command_sender.clone();
+            let projects = self.app_state().projects.clone();
             let mut tab_context = TabContext {
                 config: self.config.clone(),
                 sender,
+                projects,
             };
 
             // FIXME remove this when `on_close` bugs in egui_dock are fixed.
