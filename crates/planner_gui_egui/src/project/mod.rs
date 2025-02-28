@@ -69,7 +69,8 @@ impl Project {
         Modal::new(errors_modal_id)
             .show(ui.ctx(), |ui| {
                 ui.set_width(ui.available_width() * 0.8);
-                ui.heading(tr!("modal-errors-title"));
+                let file_name = self.path.file_name().unwrap().to_str().unwrap();
+                ui.heading(tr!("modal-errors-title", {file: file_name}));
 
                 let mut table = TableBuilder::new(ui)
                     .striped(true)
