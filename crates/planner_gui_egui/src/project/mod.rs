@@ -120,7 +120,7 @@ impl Project {
                     path: self.path.clone(),
                 }, key)
                     .map(|result| {
-                        result.and_then(|(key, _)| Ok((key, ProjectUiCommand::Loaded)))
+                        result.map(|(key, _)| (key, ProjectUiCommand::Loaded))
                     })
             }
             ProjectUiCommand::Loaded => {
