@@ -59,11 +59,15 @@ impl Project {
         }
 
         if !self.errors.is_empty() {
+            self.show_errors_modal(ui, key);
+        }
+    }
 
-            let errors_modal_id = ui.id().with("errors");
+    fn show_errors_modal(&self, ui: &mut Ui, key: ProjectKey) {
+        let errors_modal_id = ui.id().with("errors");
 
-            Modal::new(errors_modal_id)
-                .show(ui.ctx(), |ui| {
+        Modal::new(errors_modal_id)
+            .show(ui.ctx(), |ui| {
                 ui.set_width(ui.available_width() * 0.8);
                 ui.heading(tr!("modal-errors-title"));
 
@@ -101,7 +105,6 @@ impl Project {
                     },
                 );
             });
-        }
     }
 
     pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<(ProjectKey, ProjectUiCommand)>{
