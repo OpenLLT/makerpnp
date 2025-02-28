@@ -1,7 +1,7 @@
 menu-top-level-file = File
 menu-item-quit = Quit
 
-modal-errors-title = Errors
+modal-errors-title = Errors - { $file }
 
 toolbar-button-home = Home
 toolbar-button-new = New
