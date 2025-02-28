@@ -37,6 +37,7 @@ pub struct OperationViewModel {
 }
 
 #[derive(Effect)]
+#[allow(unused)]
 pub struct Capabilities {
     render: Render<Event>,
 }
@@ -69,7 +70,7 @@ impl App for VariantBuilder {
     type Capabilities = Capabilities;
     type Effect = Effect;
 
-    fn update(&self, event: Self::Event, model: &mut Self::Model, caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
+    fn update(&self, event: Self::Event, model: &mut Self::Model, _caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
         match event {
             Event::None => {
                 render::render()
@@ -387,7 +388,7 @@ mod app_tests {
 
     #[test]
     fn minimal() {
-        let hello = AppTester::<VariantBuilder, _>::default();
+        let hello = AppTester::<VariantBuilder>::default();
         let mut model = Model::default();
 
         // Call 'update' and request effects
