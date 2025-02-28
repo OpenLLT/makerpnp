@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use egui::Ui;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
 use tracing::debug;
@@ -33,6 +34,10 @@ impl Project {
             planner_core_service: core_service,
             project_ui_state,
         }
+    }
+    
+    pub fn ui(&self, ui: &mut Ui) {
+        ui.label(format!("Project.  path: {}, key: {:?}", self.path.display(), self.key));
     }
 }
 

@@ -1,7 +1,9 @@
 use egui::{Ui, WidgetText};
 use egui_mobius::types::{Enqueue, Value};
 use serde::{Deserialize, Serialize};
+use slotmap::SlotMap;
 use crate::config::Config;
+use crate::project::{Project, ProjectKey};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::project::ProjectTab;
@@ -13,6 +15,8 @@ pub mod project;
 pub struct TabContext {
     pub config: Value<Config>,
     pub sender: Enqueue<UiCommand>,
+    pub projects: Value<SlotMap<ProjectKey, Project>>,
+
 }
 
 #[derive(Deserialize, Serialize)]
