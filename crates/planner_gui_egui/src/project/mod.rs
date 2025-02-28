@@ -1,5 +1,7 @@
 use std::path::PathBuf;
-use egui::Ui;
+use egui::{Modal, Ui};
+use egui_extras::{Column, TableBuilder};
+use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
@@ -20,6 +22,9 @@ pub struct Project {
     project_ui_state: Value<ProjectUiState>,
     project_slot: Slot<(ProjectKey, ProjectUiCommand)>,
     modified: bool,
+
+    // list of errors to show
+    errors: Vec<String>,
 }
 
 impl Project {
@@ -28,7 +33,7 @@ impl Project {
         debug!("Creating project instance from path. path: {}", &path.display());
 
         let project_ui_state = Value::new(ProjectUiState::default());
-        
+
         let core_service = PlannerCoreService::new();
         let instance = Self {
             sender,
@@ -37,12 +42,13 @@ impl Project {
             project_ui_state,
             project_slot,
             modified: false,
+            errors: Default::default(),
         };
 
         (instance, ProjectUiCommand::Load)
     }
-    
-    pub fn ui(&self, ui: &mut Ui) {
+
+    pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
         ui.label(format!("Project.  path: {}", self.path.display()));
 
         let state = self.project_ui_state.lock().unwrap();
@@ -51,9 +57,53 @@ impl Project {
         } else {
             ui.spinner();
         }
-        
+
+        if !self.errors.is_empty() {
+
+            let errors_modal_id = ui.id().with("errors");
+
+            Modal::new(errors_modal_id)
+                .show(ui.ctx(), |ui| {
+                ui.set_width(ui.available_width() * 0.8);
+                ui.heading(tr!("modal-errors-title"));
+
+                let mut table = TableBuilder::new(ui)
+                    .striped(true)
+                    .resizable(true)
+                    .column(Column::auto())
+                    .column(Column::remainder());
+
+                table.header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong(tr!("modal-errors-column-errors"));
+                    });
+                }).body(|mut body| {
+                    for (index, error) in self.errors.iter().enumerate() {
+                        body.row(18.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(format!("{}", index));
+                            });
+                            row.col(|ui| {
+                                ui.label(error);
+                            });
+                        })
+                    }
+                });
+
+
+                egui::Sides::new().show(
+                    ui,
+                    |_ui| {},
+                    |ui| {
+                        if ui.button(tr!("form-button-ok")).clicked() {
+                            self.sender.send((key, ProjectUiCommand::ClearErrors)).expect("sent")
+                        }
+                    },
+                );
+            });
+        }
     }
-    
+
     pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<(ProjectKey, ProjectUiCommand)>{
         match command {
             ProjectUiCommand::None => {
@@ -61,7 +111,7 @@ impl Project {
             }
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
-                
+
                 self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
                 }, key)
@@ -98,8 +148,13 @@ impl Project {
                 }
                 Task::none()
             }
-            ProjectUiCommand::Error(_) => {
-                todo!()
+            ProjectUiCommand::Error(error) => {
+                self.errors.push(error);
+                Task::none()
+            }
+            ProjectUiCommand::ClearErrors => {
+                self.errors.clear();
+                Task::none()
             }
             ProjectUiCommand::SetModifiedState(modified_state) => {
                 self.modified = modified_state;
@@ -124,4 +179,5 @@ pub enum ProjectUiCommand {
     Error(String),
     SetModifiedState(bool),
     RequestView(ProjectViewRequest),
+    ClearErrors,
 }
