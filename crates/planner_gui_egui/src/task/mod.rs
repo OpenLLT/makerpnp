@@ -118,4 +118,22 @@ impl<T, E> Task<Result<T, E>> {
     {
         self.then(move |option| option.map_or_else(|_| Task::none(), &f))
     }
+
+    pub fn inspect_err(
+        self, 
+        f: impl Fn(&E) + Send + 'static
+    ) -> Task<Result<T, E>>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+    {
+        let task = self.then(move |result| {
+            let result = result.inspect_err(|error|{
+                f(error)
+            });
+            Task::done(result)
+        });
+        
+        task
+    }
 }
