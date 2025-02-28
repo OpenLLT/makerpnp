@@ -27,6 +27,9 @@ pub struct PersistentUiState {
 
 impl Default for PersistentUiState {
     fn default() -> Self {
+        
+        // TODO dockstate needs translations, see https://docs.rs/egui_dock/latest/egui_dock/#translations
+        
         Self {
             tabs: Value::new(Tabs::new()),
             tree: DockState::new(vec![]),
