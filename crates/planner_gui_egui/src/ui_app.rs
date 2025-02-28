@@ -8,10 +8,11 @@ use egui_mobius::slot::Slot;
 use slotmap::SlotMap;
 use tracing::{debug, info};
 use crate::config::Config;
-use crate::{fonts, toolbar};
+use crate::{fonts, task, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
+use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
@@ -192,11 +193,19 @@ impl UiApp {
             Self::default()
         };
 
-        let (signal, slot) = factory::create_signal_slot::<UiCommand>();
 
-        let sender = signal.sender.clone();
-        
-        let state = Value::new(AppState::init(sender));
+        let (app_signal, app_slot) = factory::create_signal_slot::<UiCommand>();
+
+        let app_message_sender = app_signal.sender.clone();
+
+        let (mut sender, receiver) = futures::channel::mpsc::unbounded();
+
+        let executor = Executor::new().expect("should be able to create an executor");
+        executor.spawn(MessageDispatcher::dispatch(receiver, app_message_sender.clone()));
+        let mut runtime = RunTime::new(executor, sender.clone());
+
+
+        let state = Value::new(AppState::init(app_message_sender));
 
         instance.state.write(state.clone());
         // Safety: `Self::state()` is now safe to call.
@@ -205,18 +214,21 @@ impl UiApp {
 
         // Define a handler function for the slot
         let handler = {
-            let command_sender = signal.sender.clone();
             let ui_state = ui_state.clone();
 
             move |command: UiCommand| {
-                handle_command(state.clone(), ui_state.clone(), command, command_sender.clone());
+                let task = handle_command(state.clone(), ui_state.clone(), command);
+
+                if let Some(stream) = task::into_stream(task) {
+                    runtime.run(stream);
+                }
             }
         };
 
         // Start the slot with the handler
-        slot.start(handler);
+        app_slot.start(handler);
         
-        instance.slot.write(slot);
+        instance.slot.write(app_slot);
         
         
 

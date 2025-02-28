@@ -9,6 +9,7 @@ use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use i18n::I18nConfig;
+use planner_gui_egui::runtime::{Executor, MessageDispatcher};
 use planner_gui_egui::ui_app::UiApp;
 
 fn main() {
@@ -29,7 +30,7 @@ fn main() {
             fallback: "en-US".to_string(),
         }
     );
-
+    
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 440.0])

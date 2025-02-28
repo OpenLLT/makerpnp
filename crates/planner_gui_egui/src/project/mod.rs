@@ -4,8 +4,9 @@ use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
 use tracing::debug;
-use planner_app::{Event, ProjectView};
+use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
+use crate::task::Task;
 
 new_key_type! {
     /// A key for a project
@@ -17,8 +18,8 @@ pub struct Project {
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
     path: PathBuf,
     project_ui_state: Value<ProjectUiState>,
-
     project_slot: Slot<(ProjectKey, ProjectUiCommand)>,
+    modified: bool,
 }
 
 impl Project {
@@ -35,6 +36,7 @@ impl Project {
             planner_core_service: core_service,
             project_ui_state,
             project_slot,
+            modified: false,
         };
 
         (instance, ProjectUiCommand::Load)
@@ -52,19 +54,34 @@ impl Project {
         
     }
     
-    pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) {
+    pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<(ProjectKey, ProjectUiCommand)>{
         match command {
-            ProjectUiCommand::None => {}
+            ProjectUiCommand::None => {
+                Task::none()
+            }
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
                 
                 self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
-                }, key, self.sender.clone());
+                }, key)
+                    .chain(Task::done((key, ProjectUiCommand::Loaded)))
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 state.loaded = true;
+                self
+                    .planner_core_service
+                    .update(Event::RequestOverviewView {}, key)
+                    .chain(Task::done((key, ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))))
+            }
+            ProjectUiCommand::RequestView(view_request) => {
+                let event = match view_request {
+                    ProjectViewRequest::Overview => Event::RequestOverviewView {},
+                    ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
+                };
+
+                self.planner_core_service.update(event, key)
             }
             ProjectUiCommand::UpdateView(view) => {
                 match view {
@@ -79,6 +96,14 @@ impl Project {
                     ProjectView::PhasePlacements(_) => {}
                     ProjectView::PhasePlacementOrderings(_) => {}
                 }
+                Task::none()
+            }
+            ProjectUiCommand::Error(_) => {
+                todo!()
+            }
+            ProjectUiCommand::SetModifiedState(modified_state) => {
+                self.modified = modified_state;
+                Task::none()
             }
         }
     }
@@ -96,4 +121,7 @@ pub enum ProjectUiCommand {
     Load,
     Loaded,
     UpdateView(ProjectView),
+    Error(String),
+    SetModifiedState(bool),
+    RequestView(ProjectViewRequest),
 }
