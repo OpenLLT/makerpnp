@@ -5,7 +5,7 @@ use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
-use tracing::debug;
+use tracing::{debug, error};
 use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
@@ -108,7 +108,7 @@ impl Project {
             });
     }
 
-    pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<(ProjectKey, ProjectUiCommand)>{
+    pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>>{
         match command {
             ProjectUiCommand::None => {
                 Task::none()
@@ -119,7 +119,12 @@ impl Project {
                 self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
                 }, key)
-                    .chain(Task::done((key, ProjectUiCommand::Loaded)))
+                    .inspect_err(|err| { 
+                        error!("{:?}", err);
+                    })
+                    .and_then(move |(key, command)|{
+                        Task::done(Ok((key, ProjectUiCommand::Loaded)))
+                    })
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
@@ -127,7 +132,7 @@ impl Project {
                 self
                     .planner_core_service
                     .update(Event::RequestOverviewView {}, key)
-                    .chain(Task::done((key, ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))))
+                    .chain(Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))))
             }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
@@ -153,7 +158,11 @@ impl Project {
                 Task::none()
             }
             ProjectUiCommand::Error(error) => {
-                self.errors.push(error);
+                match error {
+                    ProjectError::CoreError(message) => {
+                        self.errors.push(message);
+                    }
+                }
                 Task::none()
             }
             ProjectUiCommand::ClearErrors => {
@@ -180,8 +189,13 @@ pub enum ProjectUiCommand {
     Load,
     Loaded,
     UpdateView(ProjectView),
-    Error(String),
+    Error(ProjectError),
     SetModifiedState(bool),
     RequestView(ProjectViewRequest),
     ClearErrors,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProjectError {
+    CoreError(String),
 }
