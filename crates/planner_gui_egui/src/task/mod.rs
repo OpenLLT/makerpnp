@@ -105,6 +105,7 @@ impl<T> Debug for Task<T> {
 
 impl<T, E> Task<Result<T, E>> {
     /// Executes a new [`Task`] after this one, only when it succeeds with an `Ok` value.
+    /// If the task returns an `Err` then the `Err` value is consumed.
     ///
     /// The success value is provided to the closure to create the subsequent [`Task`].
     pub fn and_then<A>(
@@ -116,11 +117,47 @@ impl<T, E> Task<Result<T, E>> {
         E: Send + 'static,
         A: Send + 'static,
     {
-        self.then(move |option| option.map_or_else(|_| Task::none(), &f))
+        self.then(move |result| result.map_or_else(|_err: E| Task::none(), &f))
     }
 
+    pub fn map_err<O>(
+        self,
+        f: impl Fn(E) -> O + Send + 'static,
+    ) -> Task<Result<T, O>>
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+        O: Send + 'static,
+
+    {
+        self.map(move |result|{
+            let foo = match result {
+                Ok(value) => Ok(value),
+                Err(error) => Err(f(error)),
+            };
+            
+            foo
+        })
+    }
+
+    pub fn or_else(
+        self,
+        f: impl Fn(E) -> Self + Send + 'static,
+    ) -> Self
+    where
+        T: Send + 'static,
+        E: Send + 'static,
+    {
+        self.then(move |result|{
+            match result {
+                Ok(value) => Task::done(Ok(value)),
+                Err(error) => f(error), 
+            }
+        })
+    }
+    
     pub fn inspect_err(
-        self, 
+        self,
         f: impl Fn(&E) + Send + 'static
     ) -> Task<Result<T, E>>
     where
@@ -133,7 +170,7 @@ impl<T, E> Task<Result<T, E>> {
             });
             Task::done(result)
         });
-        
+
         task
     }
 }

@@ -119,12 +119,10 @@ impl Project {
                 self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
                 }, key)
-                    .map(|result|{
-                        match result {
-                            Ok((key, _)) => Ok((key, ProjectUiCommand::Loaded)),
-                            Err(error) => Err(error)
-                        }
+                    .map_err(move |error| {
+                        (key, ProjectUiCommand::Error(error))
                     })
+                    .and_then(|(key, _command)|Task::done(Ok((key, ProjectUiCommand::Loaded))))
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
