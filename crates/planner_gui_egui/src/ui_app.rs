@@ -11,7 +11,6 @@ use tracing::{debug, info};
 use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
-use crate::app_core;
 use crate::file_picker::Picker;
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};

@@ -9,12 +9,12 @@ use crate::ui_commands::UiCommand;
 
 type Core = Arc<planner_app::Core<Planner>>;
 
-pub struct CoreService {
+pub struct PlannerCoreService {
     core: Core,
     ui_state: Value<ProjectUiState>,
 }
 
-impl CoreService {
+impl PlannerCoreService {
     pub fn new(ui_state: Value<ProjectUiState>) -> Self {
         Self {
             core: Arc::new(planner_app::Core::new()),

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
 use tracing::{debug, trace};
-use crate::app_core::CoreService;
+use crate::planner_app_core::PlannerCoreService;
 use crate::project::ProjectKey;
 use crate::ui_app::{AppState, UiApp, PersistentUiState};
 

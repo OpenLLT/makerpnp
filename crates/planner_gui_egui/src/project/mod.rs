@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use egui_mobius::types::{Enqueue, Value};
 use slotmap::new_key_type;
 use tracing::debug;
-use crate::app_core::CoreService;
+use crate::planner_app_core::PlannerCoreService;
 use crate::ui_commands::UiCommand;
 
 new_key_type! {
@@ -12,7 +12,7 @@ new_key_type! {
 
 pub struct Project {
     key: ProjectKey,
-    core_service: CoreService,
+    planner_core_service: PlannerCoreService,
     sender: Enqueue<UiCommand>,
     path: PathBuf,
     project_ui_state: Value<ProjectUiState>,
@@ -25,12 +25,12 @@ impl Project {
 
         let project_ui_state = Value::new(ProjectUiState::default());
         
-        let core_service = CoreService::new(project_ui_state.clone());
+        let core_service = PlannerCoreService::new(project_ui_state.clone());
         Self {
             key,
             sender,
             path,
-            core_service,
+            planner_core_service: core_service,
             project_ui_state,
         }
         
