@@ -11,10 +11,12 @@ use crate::runtime::boxed_stream;
 pub struct Task<T>(Option<BoxStream<'static, T>>);
 
 impl<T> Task<T> {
+    /// Creates a [`Task`] that does nothing.
     pub fn none() -> Self {
         Self(None)
     }
 
+    /// Creates a new [`Task`] that instantly produces the given value.
     pub fn done(value: T) -> Self
     where
         T: Send + 'static,
@@ -22,6 +24,8 @@ impl<T> Task<T> {
         Self::future(future::ready(value))
     }
 
+    /// Creates a [`Task`] that runs the given [`Future`] to completion and maps its
+    /// output with the given closure.
     pub fn perform<O>(future: impl Future<Output = O> + Send + 'static, f: impl Fn(O) -> T + Send + 'static) -> Self
     where
         T: Send + 'static,
@@ -30,6 +34,20 @@ impl<T> Task<T> {
         Self::future(future.map(f))
     }
 
+    /// Creates a [`Task`] that runs the given [`Stream`] to completion and maps each
+    /// item with the given closure.
+    pub fn run<A>(
+        stream: impl Stream<Item = A> + Send + 'static,
+        f: impl Fn(A) -> T + Send + 'static,
+    ) -> Self
+    where
+        T: 'static,
+    {
+        Self::stream(stream.map(f))
+    }
+
+    /// Combines the given tasks and produces a single [`Task`] that will run all of them
+    /// in parallel.
     pub fn batch(tasks: impl IntoIterator<Item = Self>) -> Self
     where
         T: 'static,
@@ -41,6 +59,7 @@ impl<T> Task<T> {
         ))))
     }
 
+    /// Maps the output of a [`Task`] with the given closure.
     pub fn map<O>(self, mut f: impl FnMut(T) -> O + Send + 'static) -> Task<O>
     where
         T: Send + 'static,
@@ -49,6 +68,11 @@ impl<T> Task<T> {
         self.then(move |output| Task::done(f(output)))
     }
 
+    /// Performs a new [`Task`] for every output of the current [`Task`] using the
+    /// given closure.
+    ///
+    /// This is the monadic interface of [`Task`]—analogous to [`Future`] and
+    /// [`Stream`].
     pub fn then<O>(self, mut f: impl FnMut(T) -> Task<O> + Send + 'static) -> Task<O>
     where
         T: Send + 'static,
@@ -65,6 +89,7 @@ impl<T> Task<T> {
         })
     }
 
+    /// Chains a new [`Task`] to be performed once the current one finishes completely.
     pub fn chain(self, task: Self) -> Self
     where
         T: 'static,
@@ -78,6 +103,8 @@ impl<T> Task<T> {
         }
     }
 
+    /// Creates a new [`Task`] that runs the given [`Future`] and produces
+    /// its output.
     pub fn future(future: impl Future<Output = T> + Send + 'static) -> Self
     where
         T: 'static,
@@ -85,6 +112,8 @@ impl<T> Task<T> {
         Self::stream(stream::once(future))
     }
 
+    /// Creates a new [`Task`] that runs the given [`Stream`] and produces
+    /// each of its items.
     pub fn stream(stream: impl Stream<Item = T> + Send + 'static) -> Self
     where
         T: 'static,
@@ -135,7 +164,7 @@ impl<T, E> Task<Result<T, E>> {
                 Ok(value) => Ok(value),
                 Err(error) => Err(f(error)),
             };
-            
+
             foo
         })
     }
@@ -151,11 +180,11 @@ impl<T, E> Task<Result<T, E>> {
         self.then(move |result|{
             match result {
                 Ok(value) => Task::done(Ok(value)),
-                Err(error) => f(error), 
+                Err(error) => f(error),
             }
         })
     }
-    
+
     pub fn inspect_err(
         self,
         f: impl Fn(&E) + Send + 'static
