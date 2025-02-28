@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use egui_mobius::types::{Enqueue, Value};
 use tracing::trace;
-use crate::project::ProjectKey;
+use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::ui_app::{AppState, PersistentUiState};
 
 #[derive(Debug, Clone)]
@@ -13,6 +13,7 @@ pub enum UiCommand {
     OpenFile(PathBuf),
     OpenClicked,
     ProjectClosed(ProjectKey),
+    ProjectCommand { key: ProjectKey, command: ProjectUiCommand },
 }
 
 pub fn handle_command(
@@ -45,6 +46,13 @@ pub fn handle_command(
         UiCommand::ProjectClosed(project_key) => {
             let mut app_state = app_state.lock().unwrap();
             app_state.close_project(project_key);
+        }
+        UiCommand::ProjectCommand { key, command} => {
+            // TODO find project, call `handle_command` on it with the command
+            let app_state = app_state.lock().unwrap();
+            let mut guard = app_state.projects.lock().unwrap();
+            let project = guard.get_mut(key).unwrap();
+            project.update(key, command);
         }
     }
 }

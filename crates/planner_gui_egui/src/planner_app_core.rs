@@ -1,35 +1,32 @@
 use std::sync::Arc;
-use planner_app::{Effect, Event, Planner, ProjectView};
+use planner_app::{Effect, Event, Planner};
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
-use egui_mobius::types::{Enqueue, Value};
+use egui_mobius::types::{Enqueue};
 use tracing::debug;
-use crate::project::ProjectUiState;
-use crate::ui_commands::UiCommand;
+use crate::project::{ProjectKey, ProjectUiCommand};
 
 type Core = Arc<planner_app::Core<Planner>>;
 
 pub struct PlannerCoreService {
     core: Core,
-    ui_state: Value<ProjectUiState>,
 }
 
 impl PlannerCoreService {
-    pub fn new(ui_state: Value<ProjectUiState>) -> Self {
+    pub fn new() -> Self {
         Self {
             core: Arc::new(planner_app::Core::new()),
-            ui_state,
         }
     }
 
-    pub fn update(&mut self, event: Event, sender: Enqueue<UiCommand>) {
+    pub fn update(&mut self, event: Event, project_key: ProjectKey, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) {
         debug!("event: {:?}", event);
 
         for effect in self.core.process_event(event) {
-            Self::process_effect(&self.core, effect, sender.clone(), self.ui_state.clone());
+            Self::process_effect(&self.core, effect, project_key, sender.clone());
         }
     }
 
-    pub fn process_effect(core: &Core, effect: Effect, _sender: Enqueue<UiCommand>, ui_state: Value<ProjectUiState>) {
+    pub fn process_effect(core: &Core, effect: Effect, project_key: ProjectKey, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) {
         debug!("effect: {:?}", effect);
 
         match effect {
@@ -43,15 +40,8 @@ impl PlannerCoreService {
                 let ProjectViewRendererOperation::View {
                     view,
                 } = request.operation;
-
-                let mut project_ui_state = ui_state.lock().unwrap();
-                match view {
-                    ProjectView::Overview(project_overview) => {
-                        // todo - update ui state somehow...
-                    }
-                    _ => todo!()
-                }
-
+                
+                sender.send((project_key, ProjectUiCommand::UpdateView(view))).expect("sent");
             }
         }
     }

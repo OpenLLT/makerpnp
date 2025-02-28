@@ -1,6 +1,5 @@
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use egui_dock::{DockArea, DockState, Style};
 use egui_i18n::tr;
@@ -12,7 +11,7 @@ use crate::config::Config;
 use crate::{fonts, toolbar};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
-use crate::project::{Project, ProjectKey};
+use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
@@ -108,7 +107,7 @@ pub struct AppState {
 
     command_sender: Enqueue<UiCommand>,
     
-    projects: Value<SlotMap<ProjectKey, Project>>,
+    pub(crate) projects: Value<SlotMap<ProjectKey, Project>>,
 }
 
 impl AppState {
@@ -133,21 +132,32 @@ impl AppState {
         info!("open file. path: {:?}", path);
         
         let label = path.file_name().unwrap().to_string_lossy().to_string();
+
+        let (project_signal, project_slot) = factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
+
+        self.create_project_mapping(&project_slot, self.command_sender.clone());
+
+        let project_sender = project_signal.sender.clone();
+
+        let (project, project_command) = Project::from_path(path.clone(), project_sender, project_slot);
+        let project_key = self.projects.lock().unwrap().insert(project);
         
-        let sender = self.command_sender.clone();
-        
-        let project_key = self.projects.lock().unwrap().insert_with_key({
-            let sender = sender.clone();
-        
-            |new_key| {
-                Project::from_path(path.clone(), sender, new_key)
-            }
-        });
         let tab_kind = TabKind::Project(ProjectTab::new(label, path, project_key));
         
         ui_state.lock().unwrap().add_tab(tab_kind);
+        
+        self.command_sender.send(UiCommand::ProjectCommand { key: project_key, command: project_command }).expect("sent");
     }
-    
+
+    pub fn create_project_mapping(&self, project_slot: &Slot<(ProjectKey, ProjectUiCommand)>, sender: Enqueue<UiCommand>) {
+        project_slot.start({
+            move |(key, command)| {
+                debug!("project_command.  key: {:?}, command: {:?}", key, command);
+                sender.send(UiCommand::ProjectCommand { key, command }).expect("sent");
+            }
+        });
+    }
+
     pub fn close_project(&mut self, project_key: ProjectKey) {
         debug!("closing project. key: {:?}", project_key);
         self.projects.lock().unwrap().remove(project_key);
@@ -284,26 +294,34 @@ impl UiApp {
         // step 2 - store the documents and update the document key for the tab.
         for (tab_key, path) in tab_keys_and_paths {
 
-            let new_key = {
+            let (project_key, project_command) = {
                 let app_state = self.app_state();
-                let sender = app_state.command_sender.clone();
 
-                app_state.projects.lock().unwrap().insert_with_key({
-                    let sender = sender.clone();
-                    |new_key| {
-                        Project::from_path(path.clone(), sender, new_key)
-                    }
-                })
+                let (project_signal, project_slot) = factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
+                
+                app_state.create_project_mapping(&project_slot, app_state.command_sender.clone());
+
+                let project_sender = project_signal.sender.clone();
+
+                let (project, project_command) = Project::from_path(path.clone(), project_sender, project_slot);
+                let project_key = app_state.projects.lock().unwrap().insert(project);
+
+                (project_key, project_command)
             };
             
             {
                 let ui_state = self.ui_state.lock().unwrap();
                 let mut tabs = ui_state.tabs.lock().unwrap();
                 if let TabKind::Project(project_tab) = tabs.get_mut(&tab_key).unwrap() {
-                    project_tab.project_key = new_key;
+                    project_tab.project_key = project_key;
                 } else {
                     unreachable!()
                 }
+            }
+
+            {
+                let app_state = self.app_state();
+                app_state.command_sender.send(UiCommand::ProjectCommand { key: project_key, command: project_command }).expect("sent");
             }
         }
     }
