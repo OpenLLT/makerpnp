@@ -70,7 +70,7 @@ egui = { version = "0.31.0", features = ["serde"]}
 eframe = { version = "0.31.0", default-features = false}
 egui_taffy = "0.7.0"
 egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d545a715529ac80415f49d675756", features = ["fluent"] }
-egui_mobius = { git = "https://github.com/saturn77/egui_mobius", rev = "44661b82965858c30172c44b39af33598fb64f90" }
+egui_mobius = { git = "https://github.com/saturn77/egui_mobius", rev = "657c17fb1dd505c2451bdcf44785bc39339de585" }
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.8.0" }
 rfd = "0.15.2"
 
