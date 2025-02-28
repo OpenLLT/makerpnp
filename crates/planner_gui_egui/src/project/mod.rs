@@ -1,12 +1,15 @@
 use std::path::PathBuf;
-use egui::{Modal, Ui};
+use eframe::epaint::Margin;
+use egui::{frame, Modal, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value};
+use petgraph::Graph;
+use petgraph::prelude::NodeIndex;
 use slotmap::new_key_type;
 use tracing::{debug, error};
-use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
 
@@ -48,19 +51,52 @@ impl Project {
         (instance, ProjectUiCommand::Load)
     }
 
-    pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
-        ui.label(format!("Project.  path: {}", self.path.display()));
+    fn show_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex) {
+        let label = graph[node].path.to_string();
 
+        egui::CollapsingHeader::new(label)
+            .default_open(true)
+            .show(ui, |ui| {
+                for neighbor in graph.neighbors(node) {
+                    self.show_tree(ui, graph, neighbor);
+                }
+            });
+    }
+
+    pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
         let state = self.project_ui_state.lock().unwrap();
-        if let Some(name) = &state.name {
-            ui.label(format!("name: {}", name));
-        } else {
-            ui.spinner();
-        }
+
+        let mut frame = frame::Frame::new();
+        frame.outer_margin = Margin::same(0);
+        frame.inner_margin = Margin::same(0);
+
+        egui::SidePanel::left(ui.id().with("side-panel"))
+            .resizable(true)
+            .frame(frame)
+            .show_inside(ui, | ui: &mut Ui |{
+                egui::ScrollArea::both().show(ui, |ui| {
+                    ui.label("side panel");
+
+                    if let Some(tree) = &state.project_tree_view {
+                        self.show_tree(ui, &tree.tree, NodeIndex::new(0));
+                    }
+                });
+            });
+        
+        egui::CentralPanel::default().show_inside(ui, | ui: &mut Ui |{
+            ui.label(format!("Project.  path: {}", self.path.display()));
+
+            if let Some(name) = &state.name {
+                ui.label(format!("name: {}", name));
+            } else {
+                ui.spinner();
+            }
+        });
 
         if !self.errors.is_empty() {
             self.show_errors_modal(ui, key);
         }
+
     }
 
     fn show_errors_modal(&self, ui: &mut Ui, key: ProjectKey) {
@@ -146,7 +182,11 @@ impl Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         state.name = Some(project_overview.name);
                     }
-                    ProjectView::ProjectTree(_) => {}
+                    ProjectView::ProjectTree(project_tree) => {
+                        debug!("project tree: {:?}", project_tree);
+                        
+                        self.update_tree(project_tree)
+                    }
                     ProjectView::Placements(_) => {}
                     ProjectView::PhaseOverview(_) => {}
                     ProjectView::PhasePlacements(_) => {}
@@ -172,12 +212,18 @@ impl Project {
             }
         }
     }
+
+    fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
+        let mut state = self.project_ui_state.lock().unwrap();
+        state.project_tree_view.replace(project_tree_view);
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
+    project_tree_view: Option<ProjectTreeView>,
 }
 
 #[derive(Debug, Clone)]
