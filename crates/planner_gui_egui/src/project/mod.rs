@@ -33,7 +33,6 @@ impl Project {
             planner_core_service: core_service,
             project_ui_state,
         }
-        
     }
 }
 

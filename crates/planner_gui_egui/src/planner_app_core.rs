@@ -4,7 +4,6 @@ use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use egui_mobius::types::{Enqueue, Value};
 use tracing::debug;
 use crate::project::ProjectUiState;
-use crate::ui_app::PersistentUiState;
 use crate::ui_commands::UiCommand;
 
 type Core = Arc<planner_app::Core<Planner>>;
@@ -45,7 +44,7 @@ impl PlannerCoreService {
                     view,
                 } = request.operation;
 
-                let mut ui_state = ui_state.lock().unwrap();
+                let mut project_ui_state = ui_state.lock().unwrap();
                 match view {
                     ProjectView::Overview(project_overview) => {
                         // todo - update ui state somehow...

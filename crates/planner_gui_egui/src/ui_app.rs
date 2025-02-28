@@ -57,7 +57,7 @@ impl PersistentUiState {
             .tree
             .iter_all_tabs()
             .find_map(|(_surface_and_node, tab_key)| {
-                let mut tabs = self.tabs.lock().unwrap();
+                let tabs = self.tabs.lock().unwrap();
                 let tab_kind = tabs.get(tab_key).unwrap();
 
                 match tab_kind {
@@ -156,8 +156,6 @@ impl AppState {
 
 impl Default for UiApp {
     fn default() -> Self {
-        let config = Config::default();
-
         Self {
             ui_state: Default::default(),
             config: Default::default(),
@@ -240,7 +238,7 @@ impl UiApp {
     /// tab being closed, but because it is not called there can be orphaned elements, we need to find and remove them.
     pub fn cleanup_tabs(&mut self, tab_context: &mut TabContext) {
         // TODO consider moving this method into `UiState`
-        let mut ui_state = self.ui_state.lock().unwrap();
+        let ui_state = self.ui_state.lock().unwrap();
 
         let known_tab_keys = ui_state
             .tree
@@ -267,7 +265,7 @@ impl UiApp {
 
         // step 1 - find the document tabs, return the tab keys and paths.
         let tab_keys_and_paths = {
-            let mut ui_state = self.ui_state.lock().unwrap();
+            let ui_state = self.ui_state.lock().unwrap();
             let mut tabs = ui_state.tabs.lock().unwrap();
             
             tabs
@@ -297,7 +295,7 @@ impl UiApp {
             };
             
             {
-                let mut ui_state = self.ui_state.lock().unwrap();
+                let ui_state = self.ui_state.lock().unwrap();
                 let mut tabs = ui_state.tabs.lock().unwrap();
                 if let TabKind::Project(project_tab) = tabs.get_mut(&tab_key).unwrap() {
                     project_tab.project_key = new_key;

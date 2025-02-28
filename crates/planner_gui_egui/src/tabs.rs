@@ -62,7 +62,7 @@ impl<'b, Context, TabKind: Tab<Context = Context>> Tabs<TabKind, Context> {
 
     pub fn retain_all(&mut self, tab_keys: &[TabKey], tab_context: &mut Context) {
         self.tabs.retain(|tab_key, tab| {
-            let mut retain = tab_keys.contains(tab_key);
+            let retain = tab_keys.contains(tab_key);
             
             if !retain {
                 let can_close = tab.on_close(tab_key, tab_context);

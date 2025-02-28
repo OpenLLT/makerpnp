@@ -1,10 +1,8 @@
 use std::path::PathBuf;
-use planner_app::{Event};
 use egui_mobius::types::{Enqueue, Value};
-use tracing::{debug, trace};
-use crate::planner_app_core::PlannerCoreService;
+use tracing::trace;
 use crate::project::ProjectKey;
-use crate::ui_app::{AppState, UiApp, PersistentUiState};
+use crate::ui_app::{AppState, PersistentUiState};
 
 #[derive(Debug, Clone)]
 pub enum UiCommand {
@@ -21,7 +19,7 @@ pub fn handle_command(
     app_state: Value<AppState>,
     ui_state: Value<PersistentUiState>,
     command: UiCommand,
-    command_sender: Enqueue<UiCommand>,
+    _command_sender: Enqueue<UiCommand>,
 ) {
     trace!("Handling command: {:?}", command);
     
