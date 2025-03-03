@@ -11,11 +11,13 @@ use egui_mobius::types::{Enqueue, Value};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
-use planner_app::{Event, PhaseOverview, PhasePlacements, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
-use crate::project::project_explorer::ProjectTree;
+use crate::project::phase_ui::PhaseUiState;
+use crate::project::project_explorer_ui::ProjectTree;
 use crate::task::Task;
-mod project_explorer;
+mod project_explorer_ui;
+mod phase_ui;
 
 
 new_key_type! {
@@ -221,14 +223,14 @@ impl Project {
                         let phase = phase_overview.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
-                        phase_state.overview.replace(phase_overview);
+                        phase_state.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
-                        phase_state.placements.replace(phase_placements);
+                        phase_state.update_placements(phase_placements);
                     }
                     ProjectView::PhasePlacementOrderings(_) => {}
                 }
@@ -354,28 +356,6 @@ impl ProjectUiState {
 enum ProjectTab {
     ProjectExplorer,
     Phase(Reference),
-}
-
-#[derive(Debug)]
-pub struct PhaseUiState {
-    phase: Reference,
-    overview: Option<PhaseOverview>,
-    placements: Option<PhasePlacements>,
-}
-
-impl PhaseUiState {
-    
-    pub fn new(phase: Reference) -> Self {
-        Self {
-            phase,
-            overview: None,
-            placements: None,
-        }
-    }
-    
-    pub fn ui(&self, ui: &mut Ui, key: &ProjectKey) {
-        ui.label(format!("phase: {:?}, key: {:?}", self.phase, key));
-    }
 }
 
 #[derive(Debug, Clone)]
