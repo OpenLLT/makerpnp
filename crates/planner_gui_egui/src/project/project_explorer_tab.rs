@@ -100,4 +100,8 @@ impl Tab for ProjectExplorerTab {
             });
         }
     }
+
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
+        true
+    }
 }

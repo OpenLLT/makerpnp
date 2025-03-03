@@ -2,6 +2,7 @@ use egui::{Ui, WidgetText};
 use egui::scroll_area::ScrollBarVisibility;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
+use tracing::debug;
 use planner_app::{PhaseOverview, PhasePlacements, Reference};
 use crate::project::{ProjectTabContext};
 use crate::tabs::{Tab, TabKey};
@@ -131,7 +132,14 @@ impl Tab for PhaseTab {
                 }
             });
         }
+    }
 
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+        let mut state = context.state.lock().unwrap();
+        if let Some(phase) = state.phases.remove(&self.phase) {
+            debug!("removed orphaned phase: {:?}", &self.phase);
+        }
+        true
     }
 }
 

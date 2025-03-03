@@ -87,7 +87,7 @@ pub trait Tab {
     type Context;
     
     fn label(&self) -> WidgetText;
-    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, app: &mut Self::Context);
+    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context);
 
     // handle a tab being closed
     // this is where any per-tab clean-up code should be performed
@@ -95,7 +95,7 @@ pub trait Tab {
     // return 'true' to allow the tab to be closed, 'false' to prevent closing.
     // FIXME due to bugs in egui_dock, this is not always called, see related FIXMEs in the codebase
     //       do NOT rely on this method for now, workarounds are required.
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _app: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
         true
     }
 }
