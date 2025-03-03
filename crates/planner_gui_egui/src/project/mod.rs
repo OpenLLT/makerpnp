@@ -138,7 +138,23 @@ impl Project {
         (instance, ProjectUiCommand::Load)
     }
 
+    /// Due to bugs in egui_dock where it doesn't call `on_close` when closing tabs, it's possible that the tabs
+    /// and the dock tree are out of sync.  `on_close` should be removing elements from `self.tabs` corresponding to the
+    /// tab being closed, but because it is not called there can be orphaned elements, we need to find and remove them.
+    pub fn cleanup_tabs(&self, tab_context: &mut ProjectTabContext) {
+        // TODO consider moving this method into `UiState`
+        let mut pstate = self.persistent_state.lock().unwrap();
 
+        let known_tab_keys = pstate
+            .tree
+            .iter_all_tabs()
+            .map(|(_surface_and_node, tab_key)| tab_key.clone())
+            .collect::<Vec<_>>();
+
+        let mut tabs = pstate.tabs.lock().unwrap();
+        
+        tabs.retain_all(&known_tab_keys, tab_context);
+    }
 
     pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
 
@@ -153,11 +169,15 @@ impl Project {
             }
         });
 
-        let mut pstate = self.persistent_state.lock().unwrap();
         let mut tab_context = ProjectTabContext {
             key,
             state: self.project_ui_state.clone(),
         };
+
+        self.cleanup_tabs(&mut tab_context);
+
+        let mut pstate = self.persistent_state.lock().unwrap();
+
         let mut project_tab_viewer = AppTabViewer {
             tabs: pstate.tabs.clone(),
             context: &mut tab_context,
@@ -391,6 +411,13 @@ impl Tab for ProjectTabKind {
         match self {
             ProjectTabKind::ProjectExplorer(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
+        }
+    }
+
+    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
+        match self {
+            ProjectTabKind::ProjectExplorer(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
         }
     }
 }
