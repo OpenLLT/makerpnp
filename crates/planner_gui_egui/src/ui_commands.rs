@@ -1,7 +1,7 @@
 use std::path::PathBuf;
-use egui_mobius::types::{Enqueue, Value};
+use egui_mobius::types::Value;
 use tracing::trace;
-use crate::project::{ProjectError, ProjectKey, ProjectUiCommand};
+use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::task::Task;
 use crate::ui_app::{AppState, PersistentUiState};
 

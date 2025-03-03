@@ -198,7 +198,7 @@ impl UiApp {
 
         let app_message_sender = app_signal.sender.clone();
 
-        let (mut sender, receiver) = futures::channel::mpsc::unbounded();
+        let (sender, receiver) = futures::channel::mpsc::unbounded();
 
         let executor = Executor::new().expect("should be able to create an executor");
         executor.spawn(MessageDispatcher::dispatch(receiver, app_message_sender.clone()));
