@@ -251,7 +251,9 @@ impl Project {
 
                         self.update_tree(project_tree)
                     }
-                    ProjectView::Placements(_) => {}
+                    ProjectView::Placements(placements) => {
+                        todo!()
+                    }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
