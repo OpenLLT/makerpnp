@@ -326,6 +326,12 @@ impl<'a> TabViewer for ProjectTabViewer<'a> {
             ProjectTab::Phase(_) => true,
         }
     }
+
+    fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
+        // Disabling due to issues with nested tabs joining with popped-out outer tab windows
+        // Reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1346132037215584267
+        false
+    }
 }
 
 
