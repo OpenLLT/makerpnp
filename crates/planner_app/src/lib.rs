@@ -173,6 +173,8 @@ pub enum ProjectViewRequest {
     // TODO add all the views and use this
     ProjectTree,
     Overview,
+    PhaseOverview { phase: String },
+    PhasePlacements { phase: String },
 }
 
 
