@@ -14,11 +14,15 @@ use slotmap::new_key_type;
 use tracing::{debug, info};
 use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
-use crate::project::phase_ui::PhaseUi;
-use crate::project::project_explorer_ui::ProjectExplorerUi;
+use crate::project::phase_tab::{PhaseTab, PhaseUi};
+use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
+use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::task::Task;
-mod project_explorer_ui;
-mod phase_ui;
+use crate::ui_app::app_tabs::{TabContext, TabKind};
+use crate::ui_app::app_tabs::project::ProjectTab;
+
+mod project_explorer_tab;
+mod phase_tab;
 
 
 new_key_type! {
@@ -65,8 +69,44 @@ pub struct Project {
     // list of errors to show
     errors: Vec<String>,
 
-    // tree wrapped in a value because `ui` gives `&self` not `&mut self` and dock needs to modify itself. 
-    tree: Value<DockState<ProjectTab>>,
+    // FIXME actually persist this, currently it should be treated as 'persistable_state'.
+    persistent_state: Value<PersistentProjectUiState>,
+}
+
+pub struct PersistentProjectUiState {
+    tabs: Value<Tabs<ProjectTabKind, ProjectTabContext>>,
+    tree: DockState<TabKey>,
+}
+
+impl PersistentProjectUiState {
+    fn add_tab(&mut self, tab_kind: ProjectTabKind) {
+        let mut tabs = self.tabs.lock().unwrap();
+        let tab_id = tabs.add(tab_kind);
+        self.tree.push_to_focused_leaf(tab_id);
+    }
+    
+    fn show_tab<F>(&mut self, f: F) 
+    where
+        F: Fn(&ProjectTabKind) -> bool
+    {
+        let tab = self
+            .tree
+            .iter_all_tabs()
+            .find_map(|(_surface_and_node, tab_key)|{
+                let mut tabs = self.tabs.lock().unwrap();
+                let tab_kind = tabs.get(tab_key).unwrap();
+                
+                match f(tab_kind) {
+                    true => Some(tab_key),
+                    false => None,
+                } 
+            });
+        
+        if let Some(tab_key) = tab {
+            let find_result = self.tree.find_tab(tab_key).unwrap();
+            self.tree.set_active_tab(find_result);
+        } 
+    }
 }
 
 impl Project {
@@ -76,6 +116,13 @@ impl Project {
 
         let project_ui_state = Value::new(ProjectUiState::new(sender.clone()));
 
+        let persistent_state = Value::new(PersistentProjectUiState {
+            tabs: Value::new(Tabs::new()),
+            tree: DockState::new(vec![]),
+        });
+        
+        persistent_state.lock().unwrap().add_tab(ProjectTabKind::ProjectExplorer(ProjectExplorerTab::default()));
+        
         let core_service = PlannerCoreService::new();
         let instance = Self {
             sender,
@@ -85,7 +132,7 @@ impl Project {
             project_slot,
             modified: false,
             errors: Default::default(),
-            tree: Value::new(DockState::new(vec![ProjectTab::ProjectExplorer])),
+            persistent_state,
         };
 
         (instance, ProjectUiCommand::Load)
@@ -94,11 +141,11 @@ impl Project {
 
 
     pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
-        let state = self.project_ui_state.lock().unwrap();
 
         egui::TopBottomPanel::top(ui.id().with("top_panel")).show_inside(ui, |ui| {
             ui.label(format!("Project.  path: {}", self.path.display()));
 
+            let state = self.project_ui_state.lock().unwrap();
             if let Some(name) = &state.name {
                 ui.label(format!("name: {}", name));
             } else {
@@ -106,16 +153,19 @@ impl Project {
             }
         });
 
-        let mut project_tab_viewer = ProjectTabViewer {
-            state: &state,
-            key
+        let mut pstate = self.persistent_state.lock().unwrap();
+        let mut tab_context = ProjectTabContext {
+            key,
+            state: self.project_ui_state.clone(),
+        };
+        let mut project_tab_viewer = AppTabViewer {
+            tabs: pstate.tabs.clone(),
+            context: &mut tab_context,
         };
 
         let ctx = ui.ctx();
-
-        let mut tree = self.tree.lock().unwrap();
-
-        DockArea::new(&mut tree)
+        
+        DockArea::new(&mut pstate.tree)
             .id(ui.id().with("project-tabs"))
             .style(Style::from_egui(ctx.style().as_ref()))
             .show_inside(ui, &mut project_tab_viewer);
@@ -223,14 +273,14 @@ impl Project {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new(phase));
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new());
                         phase_state.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new(phase));
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new());
                         phase_state.update_placements(phase_placements);
                     }
                     ProjectView::PhasePlacementOrderings(_) => {}
@@ -273,7 +323,7 @@ impl Project {
                     debug!("phase_reference: {}", phase_reference);
 
                     self.show_phase(phase_reference.clone().into());
-                    
+
                     let tasks: Vec<_> = vec![
                         Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
                             phase: phase_reference.clone(),
@@ -303,18 +353,16 @@ impl Project {
             Entry::Vacant(entry) => {
                 debug!("phase not previously shown. phase: {:?}", phase);
 
-                (entry.insert(PhaseUi::new(phase.clone())), true)
+                (entry.insert(PhaseUi::new()), true)
             }
         };
 
-        let mut tree = self.tree.lock().unwrap();
-        let tab = ProjectTab::Phase(phase);
+        let mut pstate = self.persistent_state.lock().unwrap();
+        let tab = PhaseTab::new(phase);
         if is_new {
-            tree.push_to_focused_leaf(tab);
+            pstate.add_tab(ProjectTabKind::Phase(tab));
         } else {
-            let find_result = tree.find_tab(&tab).unwrap();
-
-            tree.set_active_tab(find_result);
+            pstate.show_tab(|candidate_tab|matches!(candidate_tab, ProjectTabKind::Phase(tab)));
         }
     }
 
@@ -325,47 +373,23 @@ struct ProjectTabViewer<'a> {
     key: ProjectKey,
 }
 
-impl<'a> TabViewer for ProjectTabViewer<'a> {
-    type Tab = ProjectTab;
+impl Tab for ProjectTabKind {
+    type Context = ProjectTabContext;
 
-    fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
-        let title = match tab {
-            ProjectTab::ProjectExplorer => tr!("project-explorer-tab-label"),
-            ProjectTab::Phase(reference) => format!("{}", reference).to_string(),
+    fn label(&self) -> WidgetText {
+        let title = match self {
+            ProjectTabKind::ProjectExplorer(tab) => tab.label(),
+            ProjectTabKind::Phase(tab) => tab.label(),
         };
 
         egui::widget_text::WidgetText::from(title)
     }
 
-    fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
-        let state = self.state;
-        match &tab {
-            ProjectTab::ProjectExplorer => {
-                state.project_tree.ui(ui, &self.key);
-            }
-            ProjectTab::Phase(phase) => {
-                let phase_ui = state.phases.get(phase).unwrap();
-                phase_ui.ui(ui, &self.key);
-            }
+    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
+        match self {
+            ProjectTabKind::ProjectExplorer(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
         }
-    }
-
-    fn closeable(&mut self, _tab: &mut Self::Tab) -> bool {
-        match _tab {
-            ProjectTab::ProjectExplorer => false,
-            ProjectTab::Phase(_) => true,
-        }
-    }
-
-    fn on_close(&mut self, _tab: &mut Self::Tab) -> bool {
-        // FIXME this isn't called by egui_dock, so implement a workaround to detect closed tabs.
-        true
-    }
-
-    fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
-        // Disabling due to issues with nested tabs joining with popped-out outer tab windows
-        // Reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1346132037215584267
-        false
     }
 }
 
@@ -394,10 +418,15 @@ impl ProjectUiState {
 }
 
 // these should not contain state
-#[derive(Debug, PartialEq)]
-enum ProjectTab {
-    ProjectExplorer,
-    Phase(Reference),
+#[derive(Debug)]
+enum ProjectTabKind {
+    ProjectExplorer(ProjectExplorerTab),
+    Phase(PhaseTab),
+}
+
+pub struct ProjectTabContext {
+    key: ProjectKey,
+    state: Value<ProjectUiState>,
 }
 
 #[derive(Debug, Clone)]

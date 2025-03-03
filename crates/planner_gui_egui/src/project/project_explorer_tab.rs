@@ -1,12 +1,13 @@
 use std::collections::HashMap;
-use egui_i18n::translate_fluent;
+use egui::{Ui, WidgetText};
+use egui_i18n::{tr, translate_fluent};
 use egui_mobius::types::Enqueue;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use planner_app::{ProjectTreeItem, ProjectTreeView};
-use crate::project::{project_path_from_view_path, view_path_from_project_path, ProjectKey, ProjectPath, ProjectUiCommand};
-
+use crate::project::{project_path_from_view_path, view_path_from_project_path, ProjectKey, ProjectPath, ProjectTabContext, ProjectUiCommand};
+use crate::tabs::{Tab, TabKey};
 
 #[derive(Debug)]
 pub struct ProjectExplorerUi {
@@ -21,11 +22,6 @@ impl ProjectExplorerUi {
             project_tree_view: None,
             project_tree_state: HashMap::new(),
             sender,
-        }
-    }
-    pub fn ui(&self, ui: &mut egui::Ui, project_key: &ProjectKey) {
-        if let Some(tree) = &self.project_tree_view {
-            self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &self.project_tree_state, project_key);
         }
     }
 
@@ -78,5 +74,30 @@ impl ProjectExplorerUi {
 
     pub fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
         self.project_tree_view.replace(project_tree_view);
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ProjectExplorerTab {
+}
+
+impl Tab for ProjectExplorerTab {
+    type Context = ProjectTabContext;
+
+    fn label(&self) -> WidgetText {
+        let title = tr!("project-explorer-tab-label");
+
+        egui::widget_text::WidgetText::from(title)
+    }
+
+    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
+        let state = context.state.lock().unwrap();
+        if let Some(tree) = &state.project_tree.project_tree_view {
+            state.project_tree.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree.project_tree_state, &context.key);
+        } else {
+            ui.centered_and_justified(|ui|{
+                ui.spinner();
+            });
+        }
     }
 }
