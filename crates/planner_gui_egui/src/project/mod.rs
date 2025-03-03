@@ -95,7 +95,7 @@ impl Project {
     pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
         let state = self.project_ui_state.lock().unwrap();
 
-        egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
+        egui::TopBottomPanel::top(ui.id().with("top_panel")).show_inside(ui, |ui| {
             ui.label(format!("Project.  path: {}", self.path.display()));
 
             if let Some(name) = &state.name {
