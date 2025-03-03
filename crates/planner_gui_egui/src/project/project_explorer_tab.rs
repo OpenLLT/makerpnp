@@ -90,7 +90,7 @@ impl Tab for ProjectExplorerTab {
         egui::widget_text::WidgetText::from(title)
     }
 
-    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
+    fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
         if let Some(tree) = &state.project_tree.project_tree_view {
             state.project_tree.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree.project_tree_state, &context.key);

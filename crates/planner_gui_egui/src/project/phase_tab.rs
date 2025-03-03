@@ -51,7 +51,7 @@ impl Tab for PhaseTab {
         egui::widget_text::WidgetText::from(title)
     }
 
-    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
+    fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         ui.label(format!("phase: {:?}, key: {:?}", self.phase, context.key));
 
         let state = context.state.lock().unwrap();
@@ -136,7 +136,7 @@ impl Tab for PhaseTab {
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
-        if let Some(phase) = state.phases.remove(&self.phase) {
+        if let Some(_phase) = state.phases.remove(&self.phase) {
             debug!("removed orphaned phase: {:?}", &self.phase);
         }
         true
