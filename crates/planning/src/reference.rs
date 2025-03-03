@@ -30,6 +30,12 @@ impl Display for Reference {
     }
 }
 
+impl From<String> for Reference {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("Reference error")]
 pub struct ReferenceError;

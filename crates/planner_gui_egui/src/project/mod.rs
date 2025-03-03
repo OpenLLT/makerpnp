@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use std::path::PathBuf;
 use eframe::epaint::Margin;
 use egui::{frame, Modal, Ui};
@@ -8,6 +10,7 @@ use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use petgraph::Graph;
 use petgraph::prelude::NodeIndex;
+use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
@@ -18,6 +21,30 @@ use crate::task::Task;
 new_key_type! {
     /// A key for a project
     pub struct ProjectKey;
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProjectPath(String);
+
+impl ProjectPath {
+    pub fn new(path: String) -> Self {
+        Self(path)
+    }
+}
+
+impl Deref for ProjectPath {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for ProjectPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 pub struct Project {
@@ -59,8 +86,8 @@ impl Project {
 
     fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
         let item = &graph[node];
-        
-        let path = item.path.clone();
+
+        let path = Self::project_path_from_view_path(&item.path);
 
         let key = format!("project-explorer-node-{}", item.key);
         let args = build_fluent_args(&item.args);
@@ -88,6 +115,16 @@ impl Project {
             });
     }
 
+    fn project_path_from_view_path(view_path: &String) -> ProjectPath {
+        let project_path = ProjectPath(format!("/project{}", view_path).to_string());
+        project_path
+    }
+
+    fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
+        let view_path = project_path.to_string().split("/project").collect::<Vec<&str>>().get(1)?.to_string();
+        Some(view_path)
+    }
+    
     pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
         let state = self.project_ui_state.lock().unwrap();
 
@@ -196,6 +233,8 @@ impl Project {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
+                    ProjectViewRequest::PhaseOverview { phase} => Event::RequestPhaseOverviewView { phase_reference: phase.into() },
+                    ProjectViewRequest::PhasePlacements { phase } => Event::RequestPhasePlacementsView { phase_reference: phase.into() },
                 };
 
                 self.planner_core_service.update(event, key)
@@ -244,21 +283,46 @@ impl Project {
                 // if the path starts with `/project/` then show/hide UI elements based on the path,
                 // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
                 info!("ProjectMessage::Navigate. path: {}", path);
-                Task::none()
+
+                let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
+                if let Some(captures) = phase_pattern.captures(&path) {
+                    let phase_reference: String = captures
+                        .name("phase")
+                        .unwrap()
+                        .as_str()
+                        .to_string();
+                    debug!("phase_reference: {}", phase_reference);
+
+                    let tasks: Vec<_> = vec![
+                        Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
+                            phase: phase_reference.clone(),
+                        })))),
+                            
+                        Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhasePlacements {
+                            phase: phase_reference.clone(),
+                        })))),
+                    ];
+                    
+                    Task::batch(tasks)
+                } else {
+                    Task::none()
+                }
             }
         }
     }
 
-    fn update_project_tree_view(path: &String, state: &mut ValueGuard<ProjectUiState>) {
+    fn update_project_tree_view(project_path: &ProjectPath, state: &mut ValueGuard<ProjectUiState>) {
+        // it's an error to be given a path without a corresponding tree view node that has the same path
+        let path = Self::view_path_from_project_path(project_path).unwrap();
+
         let graph = &state.project_tree_view.as_mut().unwrap().tree;
 
         if let Some(node) = graph.node_indices().find(|&index| {
-            graph[index].path.eq(path)
+            graph[index].path.eq(&path)
         }) {
             state.project_tree_state.clear();
             state.project_tree_state.insert(node, true);
         } else {
-            // it's an error to be given a path without a corresponding tree view node that has the same path
             unreachable!()
         }
     }
@@ -287,7 +351,7 @@ pub enum ProjectUiCommand {
     SetModifiedState(bool),
     RequestView(ProjectViewRequest),
     ClearErrors,
-    Navigate(String),
+    Navigate(ProjectPath),
 }
 
 #[derive(Debug, Clone)]
