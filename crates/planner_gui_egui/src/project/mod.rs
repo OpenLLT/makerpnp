@@ -5,18 +5,18 @@ use std::path::PathBuf;
 use egui::{ Modal, Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Style, TabViewer};
 use egui_extras::{Column, TableBuilder};
-use egui_i18n::{tr, translate_fluent};
+use egui_i18n::tr;
 use egui_mobius::slot::Slot;
-use egui_mobius::types::{Enqueue, Value, ValueGuard};
-use petgraph::Graph;
-use petgraph::prelude::NodeIndex;
+use egui_mobius::types::{Enqueue, Value};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
-use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
-use planner_app::{Event, PhaseOverview, PhasePlacements, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{Event, PhaseOverview, PhasePlacements, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
+use crate::project::project_explorer::ProjectTree;
 use crate::task::Task;
+mod project_explorer;
+
 
 new_key_type! {
     /// A key for a project
@@ -71,7 +71,7 @@ impl Project {
 
         debug!("Creating project instance from path. path: {}", &path.display());
 
-        let project_ui_state = Value::new(ProjectUiState::default());
+        let project_ui_state = Value::new(ProjectUiState::new(sender.clone()));
 
         let core_service = PlannerCoreService::new();
         let instance = Self {
@@ -105,7 +105,6 @@ impl Project {
 
         let mut project_tab_viewer = ProjectTabViewer {
             state: &state,
-            sender: self.sender.clone(),
             key
         };
 
@@ -211,8 +210,8 @@ impl Project {
                     }
                     ProjectView::ProjectTree(project_tree) => {
                         debug!("project tree: {:?}", project_tree);
-
-                        self.update_tree(project_tree)
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        state.project_tree.update_tree(project_tree)
                     }
                     ProjectView::Placements(placements) => {
                         todo!()
@@ -255,7 +254,7 @@ impl Project {
 
                 let mut state = self.project_ui_state.lock().unwrap();
 
-                Self::update_project_tree_view(&path, &mut state);
+                state.project_tree.select_path(&path);
 
                 // if the path starts with `/project/` then show/hide UI elements based on the path,
                 // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
@@ -287,32 +286,10 @@ impl Project {
             }
         }
     }
-
-    fn update_project_tree_view(project_path: &ProjectPath, state: &mut ValueGuard<ProjectUiState>) {
-        // it's an error to be given a path without a corresponding tree view node that has the same path
-        let path = view_path_from_project_path(project_path).unwrap();
-
-        let graph = &state.project_tree_view.as_mut().unwrap().tree;
-
-        if let Some(node) = graph.node_indices().find(|&index| {
-            graph[index].path.eq(&path)
-        }) {
-            state.project_tree_state.clear();
-            state.project_tree_state.insert(node, true);
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
-        let mut state = self.project_ui_state.lock().unwrap();
-        state.project_tree_view.replace(project_tree_view);
-    }
 }
 
 struct ProjectTabViewer<'a> {
     state: &'a ProjectUiState,
-    sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
     key: ProjectKey,
 }
 
@@ -332,9 +309,7 @@ impl<'a> TabViewer for ProjectTabViewer<'a> {
         let state = self.state;
         match &tab {
             ProjectTab::ProjectExplorer => {
-                if let Some(tree) = &state.project_tree_view {
-                    self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree_state, self.key);
-                }
+                state.project_tree.ui(ui, self.key);
             }
             ProjectTab::Phase(_) => {}
         }
@@ -348,37 +323,8 @@ impl<'a> TabViewer for ProjectTabViewer<'a> {
     }
 }
 
+
 impl<'a> ProjectTabViewer<'a> {
-    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
-        let item = &graph[node];
-
-        let path = project_path_from_view_path(&item.path);
-
-        let key = format!("project-explorer-node-{}", item.key);
-        let args = build_fluent_args(&item.args);
-
-        let label = translate_fluent(&key, &args);
-
-        let mut is_selected = if let Some(value) = selection_state.get(&node) {
-            *value
-        } else {
-            false
-        };
-
-        let id = ui.make_persistent_id(node);
-
-        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-            .show_header(ui, |ui| {
-                if ui.toggle_value(&mut is_selected, label).clicked() {
-                    self.sender.send((project_key, ProjectUiCommand::Navigate(path))).expect("sent");
-                }
-            })
-            .body(|ui| {
-                for neighbor in graph.neighbors(node) {
-                    self.show_project_tree(ui, graph, neighbor, selection_state, project_key);
-                }
-            });
-    }
 
 }
 
@@ -386,19 +332,17 @@ impl<'a> ProjectTabViewer<'a> {
 pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
-    project_tree_view: Option<ProjectTreeView>,
-    project_tree_state: HashMap<NodeIndex, bool>,
+    project_tree: ProjectTree,
     phases: HashMap<Reference, PhaseUiState>,
 }
 
-impl Default for ProjectUiState {
-    fn default() -> Self {
+impl ProjectUiState {
+    pub fn new(sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
         Self {
             loaded: false,
             name: None,
-            project_tree_view: None,
-            project_tree_state: HashMap::new(),
             phases: HashMap::default(),
+            project_tree: ProjectTree::new(sender),
         }
     }
 }
