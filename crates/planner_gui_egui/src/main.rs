@@ -9,7 +9,6 @@ use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use i18n::I18nConfig;
-use planner_gui_egui::runtime::{Executor, MessageDispatcher};
 use planner_gui_egui::ui_app::UiApp;
 
 fn main() {

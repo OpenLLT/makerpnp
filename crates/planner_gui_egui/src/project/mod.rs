@@ -9,8 +9,8 @@ use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use petgraph::Graph;
 use petgraph::prelude::NodeIndex;
 use slotmap::new_key_type;
-use tracing::{debug, error, info};
-use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest, Reference};
+use tracing::{debug, info};
+use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
 
@@ -24,7 +24,11 @@ pub struct Project {
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
     path: PathBuf,
     project_ui_state: Value<ProjectUiState>,
+    
+    // hold the project slot as long as the project exists, however we never read it so we need to avoid a warning.
+    #[allow(dead_code)]
     project_slot: Slot<(ProjectKey, ProjectUiCommand)>,
+    
     modified: bool,
 
     // list of errors to show
@@ -121,7 +125,7 @@ impl Project {
                 let file_name = self.path.file_name().unwrap().to_str().unwrap();
                 ui.heading(tr!("modal-errors-title", {file: file_name}));
 
-                let mut table = TableBuilder::new(ui)
+                let table = TableBuilder::new(ui)
                     .striped(true)
                     .resizable(true)
                     .column(Column::auto())
