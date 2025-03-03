@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use eframe::epaint::Margin;
 use egui::{frame, Modal, Ui};
 use egui_extras::{Column, TableBuilder};
-use egui_i18n::tr;
+use egui_i18n::{tr, translate_fluent};
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use petgraph::Graph;
 use petgraph::prelude::NodeIndex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
+use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
@@ -57,8 +58,15 @@ impl Project {
     }
 
     fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
-        let path = graph[node].path.clone();
-        let label = graph[node].path.to_string();
+        let item = &graph[node];
+        
+        let path = item.path.clone();
+
+        let key = format!("project-explorer-node-{}", item.key);
+        let args = build_fluent_args(&item.args);
+        
+        let label = translate_fluent(&key, &args);
+
         let mut is_selected = if let Some(value) = selection_state.get(&node) {
             *value
         } else {

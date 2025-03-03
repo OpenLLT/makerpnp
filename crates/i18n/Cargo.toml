@@ -3,7 +3,14 @@ name = "i18n"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+planner_app = ["dep:planner_app"]
+validator = ["json"]
+json = ["dep:serde_json"]
+
 [dependencies]
+planner_app = { path = "../planner_app", optional = true }
+
 # logging
 tracing = { workspace = true }
 
@@ -16,4 +23,4 @@ fluent = { workspace = true }
 fluent-bundle = { workspace = true }
 
 # Required for form validation (!)
-serde_json = { workspace = true }
+serde_json = { workspace = true, optional = true }

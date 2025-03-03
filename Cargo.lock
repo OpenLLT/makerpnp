@@ -2661,6 +2661,7 @@ dependencies = [
  "egui-i18n",
  "fluent",
  "fluent-bundle",
+ "planner_app",
  "serde_json",
  "tracing",
  "unic-langid",
