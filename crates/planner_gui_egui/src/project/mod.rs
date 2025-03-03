@@ -13,8 +13,8 @@ use slotmap::new_key_type;
 use tracing::{debug, info};
 use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
-use crate::project::phase_ui::PhaseUiState;
-use crate::project::project_explorer_ui::ProjectTree;
+use crate::project::phase_ui::PhaseUi;
+use crate::project::project_explorer_ui::ProjectExplorerUi;
 use crate::task::Task;
 mod project_explorer_ui;
 mod phase_ui;
@@ -222,14 +222,14 @@ impl Project {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new(phase));
                         phase_state.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUi::new(phase));
                         phase_state.update_placements(phase_placements);
                     }
                     ProjectView::PhasePlacementOrderings(_) => {}
@@ -337,8 +337,8 @@ impl<'a> ProjectTabViewer<'a> {
 pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
-    project_tree: ProjectTree,
-    phases: HashMap<Reference, PhaseUiState>,
+    project_tree: ProjectExplorerUi,
+    phases: HashMap<Reference, PhaseUi>,
 }
 
 impl ProjectUiState {
@@ -347,7 +347,7 @@ impl ProjectUiState {
             loaded: false,
             name: None,
             phases: HashMap::default(),
-            project_tree: ProjectTree::new(sender),
+            project_tree: ProjectExplorerUi::new(sender),
         }
     }
 }

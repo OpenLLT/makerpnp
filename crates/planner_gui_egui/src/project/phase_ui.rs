@@ -3,13 +3,13 @@ use planner_app::{PhaseOverview, PhasePlacements, Reference};
 use crate::project::ProjectKey;
 
 #[derive(Debug)]
-pub struct PhaseUiState {
+pub struct PhaseUi {
     phase: Reference,
     overview: Option<PhaseOverview>,
     placements: Option<PhasePlacements>,
 }
 
-impl PhaseUiState {
+impl PhaseUi {
 
     pub fn new(phase: Reference) -> Self {
         Self {
