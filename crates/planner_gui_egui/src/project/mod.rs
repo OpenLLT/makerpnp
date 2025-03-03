@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -253,10 +254,10 @@ impl Project {
                 Task::none()
             }
             ProjectUiCommand::Navigate(path) => {
-
-                let mut state = self.project_ui_state.lock().unwrap();
-
-                state.project_tree.select_path(&path);
+                {
+                    let mut state = self.project_ui_state.lock().unwrap();
+                    state.project_tree.select_path(&path);
+                }
 
                 // if the path starts with `/project/` then show/hide UI elements based on the path,
                 // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
@@ -271,6 +272,8 @@ impl Project {
                         .to_string();
                     debug!("phase_reference: {}", phase_reference);
 
+                    self.show_phase(phase_reference.clone().into());
+                    
                     let tasks: Vec<_> = vec![
                         Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
                             phase: phase_reference.clone(),
@@ -288,6 +291,33 @@ impl Project {
             }
         }
     }
+
+    pub fn show_phase(&mut self, phase: Reference) {
+        let mut state = self.project_ui_state.lock().unwrap();
+
+        let (_entry, is_new) = match state.phases.entry(phase.clone()) {
+            Entry::Occupied(entry) => {
+                debug!("phase previously shown. phase: {:?}", phase);
+                (entry.into_mut(), false)
+            }
+            Entry::Vacant(entry) => {
+                debug!("phase not previously shown. phase: {:?}", phase);
+
+                (entry.insert(PhaseUi::new(phase.clone())), true)
+            }
+        };
+
+        let mut tree = self.tree.lock().unwrap();
+        let tab = ProjectTab::Phase(phase);
+        if is_new {
+            tree.push_to_focused_leaf(tab);
+        } else {
+            let find_result = tree.find_tab(&tab).unwrap();
+
+            tree.set_active_tab(find_result);
+        }
+    }
+
 }
 
 struct ProjectTabViewer<'a> {
@@ -327,6 +357,11 @@ impl<'a> TabViewer for ProjectTabViewer<'a> {
         }
     }
 
+    fn on_close(&mut self, _tab: &mut Self::Tab) -> bool {
+        // FIXME this isn't called by egui_dock, so implement a workaround to detect closed tabs.
+        true
+    }
+
     fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
         // Disabling due to issues with nested tabs joining with popped-out outer tab windows
         // Reported via discord: https://discord.com/channels/900275882684477440/1075333382290026567/1346132037215584267
@@ -358,7 +393,8 @@ impl ProjectUiState {
     }
 }
 
-#[derive(Debug)]
+// these should not contain state
+#[derive(Debug, PartialEq)]
 enum ProjectTab {
     ProjectExplorer,
     Phase(Reference),
