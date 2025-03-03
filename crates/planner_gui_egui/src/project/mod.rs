@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
-use eframe::epaint::Margin;
-use egui::{frame, Modal, Ui};
+use egui::{ Modal, Ui, WidgetText};
+use egui_dock::{DockArea, DockState, Style, TabViewer};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::{tr, translate_fluent};
 use egui_mobius::slot::Slot;
@@ -52,15 +52,18 @@ pub struct Project {
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
     path: PathBuf,
     project_ui_state: Value<ProjectUiState>,
-    
+
     // hold the project slot as long as the project exists, however we never read it so we need to avoid a warning.
     #[allow(dead_code)]
     project_slot: Slot<(ProjectKey, ProjectUiCommand)>,
-    
+
     modified: bool,
 
     // list of errors to show
     errors: Vec<String>,
+
+    // tree wrapped in a value because `ui` gives `&self` not `&mut self` and dock needs to modify itself. 
+    tree: Value<DockState<ProjectTab>>,
 }
 
 impl Project {
@@ -79,73 +82,18 @@ impl Project {
             project_slot,
             modified: false,
             errors: Default::default(),
+            tree: Value::new(DockState::new(vec![ProjectTab::ProjectExplorer])),
         };
 
         (instance, ProjectUiCommand::Load)
     }
 
-    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
-        let item = &graph[node];
 
-        let path = Self::project_path_from_view_path(&item.path);
 
-        let key = format!("project-explorer-node-{}", item.key);
-        let args = build_fluent_args(&item.args);
-        
-        let label = translate_fluent(&key, &args);
-
-        let mut is_selected = if let Some(value) = selection_state.get(&node) {
-            *value
-        } else {
-            false
-        };
-
-        let id = ui.make_persistent_id(node);
-
-        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-            .show_header(ui, |ui| {
-                if ui.toggle_value(&mut is_selected, label).clicked() {
-                    self.sender.send((project_key, ProjectUiCommand::Navigate(path))).expect("sent");
-                }
-            })
-            .body(|ui| {
-                for neighbor in graph.neighbors(node) {
-                    self.show_project_tree(ui, graph, neighbor, selection_state, project_key);
-                }
-            });
-    }
-
-    fn project_path_from_view_path(view_path: &String) -> ProjectPath {
-        let project_path = ProjectPath(format!("/project{}", view_path).to_string());
-        project_path
-    }
-
-    fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
-        let view_path = project_path.to_string().split("/project").collect::<Vec<&str>>().get(1)?.to_string();
-        Some(view_path)
-    }
-    
     pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
         let state = self.project_ui_state.lock().unwrap();
 
-        let mut frame = frame::Frame::new();
-        frame.outer_margin = Margin::same(0);
-        frame.inner_margin = Margin::same(0);
-
-        egui::SidePanel::left(ui.id().with("side-panel"))
-            .resizable(true)
-            .frame(frame)
-            .show_inside(ui, | ui: &mut Ui |{
-                egui::ScrollArea::both().show(ui, |ui| {
-                    ui.label("side panel");
-
-                    if let Some(tree) = &state.project_tree_view {
-                        self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree_state, key);
-                    }
-                });
-            });
-
-        egui::CentralPanel::default().show_inside(ui, | ui: &mut Ui |{
+        egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
             ui.label(format!("Project.  path: {}", self.path.display()));
 
             if let Some(name) = &state.name {
@@ -154,6 +102,21 @@ impl Project {
                 ui.spinner();
             }
         });
+
+        let mut project_tab_viewer = ProjectTabViewer {
+            state: &state,
+            sender: self.sender.clone(),
+            key
+        };
+
+        let ctx = ui.ctx();
+
+        let mut tree = self.tree.lock().unwrap();
+
+        DockArea::new(&mut tree)
+            .id(ui.id().with("project-tabs"))
+            .style(Style::from_egui(ctx.style().as_ref()))
+            .show_inside(ui, &mut project_tab_viewer);
 
         if !self.errors.is_empty() {
             self.show_errors_modal(ui, key);
@@ -311,12 +274,12 @@ impl Project {
                         Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
                             phase: phase_reference.clone(),
                         })))),
-                            
+
                         Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::PhasePlacements {
                             phase: phase_reference.clone(),
                         })))),
                     ];
-                    
+
                     Task::batch(tasks)
                 } else {
                     Task::none()
@@ -327,7 +290,7 @@ impl Project {
 
     fn update_project_tree_view(project_path: &ProjectPath, state: &mut ValueGuard<ProjectUiState>) {
         // it's an error to be given a path without a corresponding tree view node that has the same path
-        let path = Self::view_path_from_project_path(project_path).unwrap();
+        let path = view_path_from_project_path(project_path).unwrap();
 
         let graph = &state.project_tree_view.as_mut().unwrap().tree;
 
@@ -347,13 +310,103 @@ impl Project {
     }
 }
 
-#[derive(Default, Debug)]
+struct ProjectTabViewer<'a> {
+    state: &'a ProjectUiState,
+    sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
+    key: ProjectKey,
+}
+
+impl<'a> TabViewer for ProjectTabViewer<'a> {
+    type Tab = ProjectTab;
+
+    fn title(&mut self, tab: &mut Self::Tab) -> WidgetText {
+        let title = match tab {
+            ProjectTab::ProjectExplorer => tr!("project-explorer-tab-label"),
+            ProjectTab::Phase(reference) => format!("{}", reference).to_string(),
+        };
+
+        egui::widget_text::WidgetText::from(title)
+    }
+
+    fn ui(&mut self, ui: &mut Ui, tab: &mut Self::Tab) {
+        let state = self.state;
+        match &tab {
+            ProjectTab::ProjectExplorer => {
+                if let Some(tree) = &state.project_tree_view {
+                    self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree_state, self.key);
+                }
+            }
+            ProjectTab::Phase(_) => {}
+        }
+    }
+
+    fn closeable(&mut self, _tab: &mut Self::Tab) -> bool {
+        match _tab {
+            ProjectTab::ProjectExplorer => false,
+            ProjectTab::Phase(_) => true,
+        }
+    }
+}
+
+impl<'a> ProjectTabViewer<'a> {
+    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
+        let item = &graph[node];
+
+        let path = project_path_from_view_path(&item.path);
+
+        let key = format!("project-explorer-node-{}", item.key);
+        let args = build_fluent_args(&item.args);
+
+        let label = translate_fluent(&key, &args);
+
+        let mut is_selected = if let Some(value) = selection_state.get(&node) {
+            *value
+        } else {
+            false
+        };
+
+        let id = ui.make_persistent_id(node);
+
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+            .show_header(ui, |ui| {
+                if ui.toggle_value(&mut is_selected, label).clicked() {
+                    self.sender.send((project_key, ProjectUiCommand::Navigate(path))).expect("sent");
+                }
+            })
+            .body(|ui| {
+                for neighbor in graph.neighbors(node) {
+                    self.show_project_tree(ui, graph, neighbor, selection_state, project_key);
+                }
+            });
+    }
+
+}
+
+#[derive(Debug)]
 pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
     project_tree_view: Option<ProjectTreeView>,
     project_tree_state: HashMap<NodeIndex, bool>,
     phases: HashMap<Reference, PhaseUiState>,
+}
+
+impl Default for ProjectUiState {
+    fn default() -> Self {
+        Self {
+            loaded: false,
+            name: None,
+            project_tree_view: None,
+            project_tree_state: HashMap::new(),
+            phases: HashMap::default(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ProjectTab {
+    ProjectExplorer,
+    Phase(Reference),
 }
 
 #[derive(Default, Debug)]
@@ -378,4 +431,14 @@ pub enum ProjectUiCommand {
 #[derive(Debug, Clone)]
 pub enum ProjectError {
     CoreError(String),
+}
+
+fn project_path_from_view_path(view_path: &String) -> ProjectPath {
+    let project_path = ProjectPath(format!("/project{}", view_path).to_string());
+    project_path
+}
+
+fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
+    let view_path = project_path.to_string().split("/project").collect::<Vec<&str>>().get(1)?.to_string();
+    Some(view_path)
 }

@@ -33,6 +33,8 @@ phase-process = Process
 pcb-side-top = Top
 pcb-side-bottom = Bottom
 
+project-explorer-tab-label = Project explorer
+
 project-explorer-node-root = Root
 project-explorer-node-phases = Phases
 project-explorer-node-phase = { $reference }
