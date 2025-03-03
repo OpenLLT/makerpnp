@@ -362,7 +362,9 @@ impl Project {
         if is_new {
             pstate.add_tab(ProjectTabKind::Phase(tab));
         } else {
-            pstate.show_tab(|candidate_tab|matches!(candidate_tab, ProjectTabKind::Phase(tab)));
+            pstate.show_tab(|candidate_tab| {
+                matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
+            });
         }
     }
 
