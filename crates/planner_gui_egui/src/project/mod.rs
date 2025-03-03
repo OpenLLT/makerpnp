@@ -14,7 +14,7 @@ use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
-use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest};
+use planner_app::{Event, PhaseOverview, PhasePlacements, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
 
@@ -252,8 +252,20 @@ impl Project {
                         self.update_tree(project_tree)
                     }
                     ProjectView::Placements(_) => {}
-                    ProjectView::PhaseOverview(_) => {}
-                    ProjectView::PhasePlacements(_) => {}
+                    ProjectView::PhaseOverview(phase_overview) => {
+                        debug!("phase overview: {:?}", phase_overview);
+                        let phase = phase_overview.phase_reference.clone();
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        let phase_state = state.phases.entry(phase).or_insert(PhaseUiState::default());
+                        phase_state.overview.replace(phase_overview);
+                    }
+                    ProjectView::PhasePlacements(phase_placements) => {
+                        debug!("phase placements: {:?}", phase_placements);
+                        let phase = phase_placements.phase_reference.clone();
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        let phase_state = state.phases.entry(phase).or_insert(PhaseUiState::default());
+                        phase_state.placements.replace(phase_placements);
+                    }
                     ProjectView::PhasePlacementOrderings(_) => {}
                 }
                 Task::none()
@@ -338,7 +350,14 @@ pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
     project_tree_view: Option<ProjectTreeView>,
-    project_tree_state: HashMap<NodeIndex, bool>
+    project_tree_state: HashMap<NodeIndex, bool>,
+    phases: HashMap<Reference, PhaseUiState>,
+}
+
+#[derive(Default, Debug)]
+pub struct PhaseUiState {
+    overview: Option<PhaseOverview>,
+    placements: Option<PhasePlacements>,
 }
 
 #[derive(Debug, Clone)]
