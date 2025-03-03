@@ -220,14 +220,14 @@ impl Project {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase).or_insert(PhaseUiState::default());
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
                         phase_state.overview.replace(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.entry(phase).or_insert(PhaseUiState::default());
+                        let phase_state = state.phases.entry(phase.clone()).or_insert(PhaseUiState::new(phase));
                         phase_state.placements.replace(phase_placements);
                     }
                     ProjectView::PhasePlacementOrderings(_) => {}
@@ -309,9 +309,12 @@ impl<'a> TabViewer for ProjectTabViewer<'a> {
         let state = self.state;
         match &tab {
             ProjectTab::ProjectExplorer => {
-                state.project_tree.ui(ui, self.key);
+                state.project_tree.ui(ui, &self.key);
             }
-            ProjectTab::Phase(_) => {}
+            ProjectTab::Phase(phase) => {
+                let phase_ui = state.phases.get(phase).unwrap();
+                phase_ui.ui(ui, &self.key);
+            }
         }
     }
 
@@ -353,10 +356,26 @@ enum ProjectTab {
     Phase(Reference),
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct PhaseUiState {
+    phase: Reference,
     overview: Option<PhaseOverview>,
     placements: Option<PhasePlacements>,
+}
+
+impl PhaseUiState {
+    
+    pub fn new(phase: Reference) -> Self {
+        Self {
+            phase,
+            overview: None,
+            placements: None,
+        }
+    }
+    
+    pub fn ui(&self, ui: &mut Ui, key: &ProjectKey) {
+        ui.label(format!("phase: {:?}, key: {:?}", self.phase, key));
+    }
 }
 
 #[derive(Debug, Clone)]
