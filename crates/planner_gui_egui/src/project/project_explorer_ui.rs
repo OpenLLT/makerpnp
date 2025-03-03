@@ -9,13 +9,13 @@ use crate::project::{project_path_from_view_path, view_path_from_project_path, P
 
 
 #[derive(Debug)]
-pub struct ProjectTree {
+pub struct ProjectExplorerUi {
     project_tree_view: Option<ProjectTreeView>,
     project_tree_state: HashMap<NodeIndex, bool>,
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
 }
 
-impl ProjectTree {
+impl ProjectExplorerUi {
     pub fn new(sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
         Self {
             project_tree_view: None,
