@@ -66,10 +66,10 @@ impl Tab for PhaseTab {
                 .column(Column::auto()) // refdes
                 .column(Column::auto()) // placed
                 .column(Column::auto()) // mfr
-                .column(Column::remainder()) // mpn
+                .column(Column::auto()) // mpn
                 .column(Column::auto()) // rotation
                 .column(Column::auto()) // x
-                .column(Column::auto());           // y
+                .column(Column::auto()); // y
 
             table.header(20.0, |mut header| {
                 header.col(|ui| {
