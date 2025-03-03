@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
 use egui::{ Modal, Ui, WidgetText};
-use egui_dock::{DockArea, DockState, Style, TabViewer};
+use egui_dock::{DockArea, DockState, Style};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
@@ -18,8 +18,6 @@ use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::task::Task;
-use crate::ui_app::app_tabs::{TabContext, TabKind};
-use crate::ui_app::app_tabs::project::ProjectTab;
 
 mod project_explorer_tab;
 mod phase_tab;
@@ -93,7 +91,7 @@ impl PersistentProjectUiState {
             .tree
             .iter_all_tabs()
             .find_map(|(_surface_and_node, tab_key)|{
-                let mut tabs = self.tabs.lock().unwrap();
+                let tabs = self.tabs.lock().unwrap();
                 let tab_kind = tabs.get(tab_key).unwrap();
                 
                 match f(tab_kind) {
@@ -143,7 +141,7 @@ impl Project {
     /// tab being closed, but because it is not called there can be orphaned elements, we need to find and remove them.
     pub fn cleanup_tabs(&self, tab_context: &mut ProjectTabContext) {
         // TODO consider moving this method into `UiState`
-        let mut pstate = self.persistent_state.lock().unwrap();
+        let pstate = self.persistent_state.lock().unwrap();
 
         let known_tab_keys = pstate
             .tree
@@ -390,11 +388,6 @@ impl Project {
 
 }
 
-struct ProjectTabViewer<'a> {
-    state: &'a ProjectUiState,
-    key: ProjectKey,
-}
-
 impl Tab for ProjectTabKind {
     type Context = ProjectTabContext;
 
@@ -420,11 +413,6 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
         }
     }
-}
-
-
-impl<'a> ProjectTabViewer<'a> {
-
 }
 
 #[derive(Debug)]
