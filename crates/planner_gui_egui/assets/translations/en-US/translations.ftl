@@ -73,5 +73,18 @@ form-input-number-require-greater-than-zero = Require a number greater than zero
 form-input-number-require-positive-number = Require a number
 form-file-not-found = File not found
 
+placement-placed = Placed
+placement-pending = Pending
+
+
 phase-placements-header = Placements
-placements-refdes = Ref. Des.
+phase-placements-column-index = # 
+phase-placements-column-refdes = Ref. Des.
+phase-placements-column-placed = Placed? 
+phase-placements-column-manufacturer = Manufacturer 
+phase-placements-column-mpn = MPN 
+phase-placements-column-rotation = Rotation 
+phase-placements-column-x = X 
+phase-placements-column-y = Y 
+
+
