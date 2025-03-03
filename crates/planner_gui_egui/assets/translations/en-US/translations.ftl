@@ -72,3 +72,6 @@ form-input-choice-empty = Choose an option
 form-input-number-require-greater-than-zero = Require a number greater than zero
 form-input-number-require-positive-number = Require a number
 form-file-not-found = File not found
+
+phase-placements-header = Placements
+placements-refdes = Ref. Des.
