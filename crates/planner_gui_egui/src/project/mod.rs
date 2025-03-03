@@ -1,14 +1,15 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use eframe::epaint::Margin;
 use egui::{frame, Modal, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
-use egui_mobius::types::{Enqueue, Value};
+use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use petgraph::Graph;
 use petgraph::prelude::NodeIndex;
 use slotmap::new_key_type;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 use planner_app::{Event, ProjectTreeItem, ProjectTreeView, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
@@ -51,14 +52,26 @@ impl Project {
         (instance, ProjectUiCommand::Load)
     }
 
-    fn show_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex) {
+    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
+        let path = graph[node].path.clone();
         let label = graph[node].path.to_string();
+        let mut is_selected = if let Some(value) = selection_state.get(&node) {
+            *value
+        } else {
+            false
+        };
 
-        egui::CollapsingHeader::new(label)
-            .default_open(true)
-            .show(ui, |ui| {
+        let id = ui.make_persistent_id(node);
+
+        egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
+            .show_header(ui, |ui| {
+                if ui.toggle_value(&mut is_selected, label).clicked() {
+                    self.sender.send((project_key, ProjectUiCommand::Navigate(path))).expect("sent");
+                }
+            })
+            .body(|ui| {
                 for neighbor in graph.neighbors(node) {
-                    self.show_tree(ui, graph, neighbor);
+                    self.show_project_tree(ui, graph, neighbor, selection_state, project_key);
                 }
             });
     }
@@ -78,11 +91,11 @@ impl Project {
                     ui.label("side panel");
 
                     if let Some(tree) = &state.project_tree_view {
-                        self.show_tree(ui, &tree.tree, NodeIndex::new(0));
+                        self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree_state, key);
                     }
                 });
             });
-        
+
         egui::CentralPanel::default().show_inside(ui, | ui: &mut Ui |{
             ui.label(format!("Project.  path: {}", self.path.display()));
 
@@ -184,7 +197,7 @@ impl Project {
                     }
                     ProjectView::ProjectTree(project_tree) => {
                         debug!("project tree: {:?}", project_tree);
-                        
+
                         self.update_tree(project_tree)
                     }
                     ProjectView::Placements(_) => {}
@@ -210,6 +223,31 @@ impl Project {
                 self.modified = modified_state;
                 Task::none()
             }
+            ProjectUiCommand::Navigate(path) => {
+
+                let mut state = self.project_ui_state.lock().unwrap();
+
+                Self::update_project_tree_view(&path, &mut state);
+
+                // if the path starts with `/project/` then show/hide UI elements based on the path,
+                // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
+                info!("ProjectMessage::Navigate. path: {}", path);
+                Task::none()
+            }
+        }
+    }
+
+    fn update_project_tree_view(path: &String, state: &mut ValueGuard<ProjectUiState>) {
+        let graph = &state.project_tree_view.as_mut().unwrap().tree;
+
+        if let Some(node) = graph.node_indices().find(|&index| {
+            graph[index].path.eq(path)
+        }) {
+            state.project_tree_state.clear();
+            state.project_tree_state.insert(node, true);
+        } else {
+            // it's an error to be given a path without a corresponding tree view node that has the same path
+            unreachable!()
         }
     }
 
@@ -224,6 +262,7 @@ pub struct ProjectUiState {
     loaded: bool,
     name: Option<String>,
     project_tree_view: Option<ProjectTreeView>,
+    project_tree_state: HashMap<NodeIndex, bool>
 }
 
 #[derive(Debug, Clone)]
@@ -236,6 +275,7 @@ pub enum ProjectUiCommand {
     SetModifiedState(bool),
     RequestView(ProjectViewRequest),
     ClearErrors,
+    Navigate(String),
 }
 
 #[derive(Debug, Clone)]
