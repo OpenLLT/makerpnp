@@ -23,13 +23,13 @@ impl ProjectTree {
             sender,
         }
     }
-    pub fn ui(&self, ui: &mut egui::Ui, project_key: ProjectKey) {
+    pub fn ui(&self, ui: &mut egui::Ui, project_key: &ProjectKey) {
         if let Some(tree) = &self.project_tree_view {
             self.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &self.project_tree_state, project_key);
         }
     }
 
-    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: ProjectKey) {
+    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: &ProjectKey) {
         let item = &graph[node];
 
         let path = project_path_from_view_path(&item.path);
@@ -50,7 +50,7 @@ impl ProjectTree {
         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
             .show_header(ui, |ui| {
                 if ui.toggle_value(&mut is_selected, label).clicked() {
-                    self.sender.send((project_key, ProjectUiCommand::Navigate(path))).expect("sent");
+                    self.sender.send((*project_key, ProjectUiCommand::Navigate(path))).expect("sent");
                 }
             })
             .body(|ui| {
