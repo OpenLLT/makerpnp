@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use egui_mobius::slot::Slot;
 use egui_mobius::types::Enqueue;
 use tracing::debug;
@@ -7,6 +7,13 @@ pub struct ComponentState<UiCommand> {
     pub sender: Enqueue<UiCommand>,
     #[allow(dead_code)]
     slot: Slot<UiCommand>,
+}
+
+impl<UiCommand> Debug for ComponentState<UiCommand> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentState")
+            .finish()
+    }
 }
 
 impl<UiCommand: Send + 'static> Default for ComponentState<UiCommand> {
@@ -47,7 +54,7 @@ pub trait UiComponent {
     
     fn ui<'context>(&self, ui: &mut egui::Ui, context: &mut Self::UiContext<'context>);
 
-    fn update(&mut self, _command: Self::UiCommand) -> Option<Self::UiAction> {
+    fn update<'context>(&mut self, _command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
         None
     }
 }

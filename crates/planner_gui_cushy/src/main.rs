@@ -401,7 +401,7 @@ impl AppState {
 
                 Task::none()
             }
-            TabAction::TabAction(tab_key, tab_action) => {
+            TabAction::TabKindAction(tab_key, tab_action) => {
                 println!("tab action. key: {:?}, action: {:?}", tab_key, tab_action);
                 match tab_action {
                     TabKindAction::HomeTabAction(_tab_key, action) => match action {

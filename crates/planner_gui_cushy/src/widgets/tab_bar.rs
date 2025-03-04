@@ -35,7 +35,7 @@ pub enum TabMessage<TKM> {
 pub enum TabAction<TKA, TK> {
     TabSelected(TabKey),
     TabClosed(TabKey, TK),
-    TabAction(TabKey, TKA),
+    TabKindAction(TabKey, TKA),
     None,
 }
 
@@ -390,7 +390,7 @@ impl<TK: Tab<TKM, TKA> + Send + Clone + 'static, TKM: Send + Debug + 'static, TK
                 let action = tab_state
                     .tab
                     .update(context, tab_key, tab_kind_message)
-                    .map(move |action| TabAction::TabAction(tab_key, action));
+                    .map(move |action| TabAction::TabKindAction(tab_key, action));
 
                 action
             }

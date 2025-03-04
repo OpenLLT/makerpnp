@@ -6,7 +6,8 @@ use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use planner_app::{ProjectTreeItem, ProjectTreeView};
-use crate::project::{project_path_from_view_path, view_path_from_project_path, ProjectKey, ProjectPath, ProjectTabContext, ProjectUiCommand};
+use crate::project::{project_path_from_view_path, view_path_from_project_path, ProjectKey, ProjectPath, ProjectUiCommand};
+use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 
 #[derive(Debug)]
@@ -77,7 +78,7 @@ impl ProjectExplorerUi {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ProjectExplorerTab {
 }
 

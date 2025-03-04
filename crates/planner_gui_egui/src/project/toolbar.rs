@@ -33,7 +33,7 @@ impl UiComponent for ProjectToolbar {
         });
     }
 
-    fn update(&mut self, command: Self::UiCommand) -> Option<Self::UiAction> {
+    fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
         }

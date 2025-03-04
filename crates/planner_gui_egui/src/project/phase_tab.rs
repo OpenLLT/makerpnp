@@ -4,7 +4,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use tracing::debug;
 use planner_app::{PhaseOverview, PhasePlacements, Reference};
-use crate::project::{ProjectTabContext};
+use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 
 #[derive(Debug)]
@@ -30,7 +30,7 @@ impl PhaseUi {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct PhaseTab {
     phase: Reference,
 }

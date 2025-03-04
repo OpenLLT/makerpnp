@@ -54,7 +54,7 @@ impl UiComponent for Toolbar {
         });
     }
 
-    fn update(&mut self, command: Self::UiCommand) -> Option<Self::UiAction> {
+    fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
         match command {
             ToolbarUiCommand::ShowHomeTabClicked => {
                 Some(ToolbarAction::ShowHomeTab)
