@@ -3,16 +3,15 @@ use egui_mobius::types::Value;
 use tracing::trace;
 use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::task::Task;
+use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::{AppState, PersistentUiState};
 
 #[derive(Debug, Clone)]
 pub enum UiCommand {
     #[allow(dead_code)]
     None,
-    ShowHomeTab,
-    CloseAllTabs,
+    ToolbarCommand(ToolbarUiCommand),
     OpenFile(PathBuf),
-    OpenClicked,
     ProjectClosed(ProjectKey),
     ProjectCommand { key: ProjectKey, command: ProjectUiCommand },
 }
@@ -21,31 +20,22 @@ pub fn handle_command(
     app_state: Value<AppState>,
     ui_state: Value<PersistentUiState>,
     command: UiCommand,
-) -> Task<UiCommand>{
+) -> Task<UiCommand> {
     trace!("Handling command: {:?}", command);
     
     match command {
         UiCommand::None => {
             Task::none()
         }
-        UiCommand::ShowHomeTab => {
-            let mut ui_state = ui_state.lock().unwrap();
-            ui_state.show_home_tab();
-            Task::none()
-        }
-        UiCommand::CloseAllTabs => {
-            let mut ui_state = ui_state.lock().unwrap();
-            ui_state.close_all_tabs();
-            Task::none()
+        UiCommand::ToolbarCommand(command) => {
+            let toolbar_action = app_state.lock().unwrap().toolbar.update(command);
+
+            let task = handle_toolbar_action(toolbar_action, &app_state, &ui_state);
+            task
         }
         UiCommand::OpenFile(picked_file) => {
             let mut app_state = app_state.lock().unwrap();
             app_state.open_file(picked_file, ui_state);
-            Task::none()
-        }
-        UiCommand::OpenClicked => {
-            let mut app_state = app_state.lock().unwrap();
-            app_state.pick_file();
             Task::none()
         }
         UiCommand::ProjectClosed(project_key) => {
@@ -70,6 +60,26 @@ pub fn handle_command(
                     }
                     
                 })
+        }
+    }
+}
+
+fn handle_toolbar_action(toolbar_action: ToolbarAction, app_state: &Value<AppState>, ui_state: &Value<PersistentUiState>) -> Task<UiCommand> {
+    match toolbar_action {
+        ToolbarAction::ShowHomeTab => {
+            let mut ui_state = ui_state.lock().unwrap();
+            ui_state.show_home_tab();
+            Task::none()
+        }
+        ToolbarAction::CloseAllTabs => {
+            let mut ui_state = ui_state.lock().unwrap();
+            ui_state.close_all_tabs();
+            Task::none()
+        }
+        ToolbarAction::PickFile => {
+            let mut app_state = app_state.lock().unwrap();
+            app_state.pick_file();
+            Task::none()
         }
     }
 }
