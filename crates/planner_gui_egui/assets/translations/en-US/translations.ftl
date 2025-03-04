@@ -13,6 +13,7 @@ side-bar-header = Sidebar header
 side-bar-footer = Sidebar footer
 side-bar-item-path = Path
 
+project-toolbar-button-show-explorer = Show explorer
 project-toolbar-button-refresh-from-variants = Refresh from variants
 project-toolbar-button-add-pcb = Add PCB
 project-toolbar-button-create-unit-assignment = Create unit assignment
