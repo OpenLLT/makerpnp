@@ -1,19 +1,19 @@
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
+use egui_mobius::slot::Slot;
 use egui_dock::{DockArea, DockState, Style};
 use egui_i18n::tr;
-use egui_mobius::factory;
-use egui_mobius::slot::Slot;
 use slotmap::SlotMap;
 use tracing::{debug, info};
 use crate::config::Config;
-use crate::{fonts, task, toolbar};
+use crate::{fonts, task};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
+use crate::toolbar::{Toolbar, ToolbarUiCommand};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
 use crate::ui_app::app_tabs::project::ProjectTab;
@@ -108,20 +108,38 @@ pub struct AppState {
 
     command_sender: Enqueue<UiCommand>,
     
-    pub(crate) projects: Value<SlotMap<ProjectKey, Project>>,
+    pub projects: Value<SlotMap<ProjectKey, Project>>,
+    
+    pub toolbar: Toolbar,
 }
 
 impl AppState {
     pub fn init(sender: Enqueue<UiCommand>) -> Self {
 
+        let (signal, toolbar_slot) = egui_mobius::factory::create_signal_slot::<ToolbarUiCommand>();
+        Self::create_toolbar_mapping(&toolbar_slot, sender.clone());
+        let toolbar = Toolbar::new(signal.sender.clone(), toolbar_slot);
+
+        
         Self {
             startup_done: false,
             file_picker: Picker::default(),
 
             command_sender: sender,
             projects: Value::new(SlotMap::default()),
+            toolbar,
         }
     }
+
+    pub fn create_toolbar_mapping(toolbar_slot: &Slot<ToolbarUiCommand>, sender: Enqueue<UiCommand>) {
+        toolbar_slot.start({
+            move |command| {
+                debug!("toolbar_command.  command: {:?}", command);
+                sender.send(UiCommand::ToolbarCommand(command)).expect("sent");
+            }
+        });
+    }
+
 
     pub fn pick_file(&mut self) {
         if !self.file_picker.is_picking() {
@@ -134,7 +152,7 @@ impl AppState {
         
         let label = path.file_name().unwrap().to_string_lossy().to_string();
 
-        let (project_signal, project_slot) = factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
+        let (project_signal, project_slot) = egui_mobius::factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
 
         self.create_project_mapping(&project_slot, self.command_sender.clone());
 
@@ -158,7 +176,7 @@ impl AppState {
             }
         });
     }
-
+    
     pub fn close_project(&mut self, project_key: ProjectKey) {
         debug!("closing project. key: {:?}", project_key);
         self.projects.lock().unwrap().remove(project_key);
@@ -194,7 +212,7 @@ impl UiApp {
         };
 
 
-        let (app_signal, app_slot) = factory::create_signal_slot::<UiCommand>();
+        let (app_signal, app_slot) = egui_mobius::factory::create_signal_slot::<UiCommand>();
 
         let app_message_sender = app_signal.sender.clone();
 
@@ -309,7 +327,7 @@ impl UiApp {
             let (project_key, project_command) = {
                 let app_state = self.app_state();
 
-                let (project_signal, project_slot) = factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
+                let (project_signal, project_slot) = egui_mobius::factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
                 
                 app_state.create_project_mapping(&project_slot, app_state.command_sender.clone());
 
@@ -365,7 +383,7 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
 
-            toolbar::show(ui, self.app_state().command_sender.clone());
+            self.app_state().toolbar.ui(ui);
         });
 
         if !self.app_state().startup_done {
