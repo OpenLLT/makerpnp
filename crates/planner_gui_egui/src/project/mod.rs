@@ -7,7 +7,6 @@ use egui::{ Modal, Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value};
 use regex::Regex;
 use slotmap::new_key_type;
@@ -18,6 +17,7 @@ use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::task::Task;
+use crate::ui_component::{ComponentState, UiComponent};
 
 mod project_explorer_tab;
 mod phase_tab;
@@ -52,16 +52,15 @@ impl Display for ProjectPath {
     }
 }
 
+pub enum ProjectAction {
+    Task(Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>>)
+}
+
 pub struct Project {
     planner_core_service: PlannerCoreService,
-    sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
     path: PathBuf,
     project_ui_state: Value<ProjectUiState>,
-
-    // hold the project slot as long as the project exists, however we never read it so we need to avoid a warning.
-    #[allow(dead_code)]
-    project_slot: Slot<(ProjectKey, ProjectUiCommand)>,
-
+    
     modified: bool,
 
     // list of errors to show
@@ -69,6 +68,8 @@ pub struct Project {
 
     // FIXME actually persist this, currently it should be treated as 'persistable_state'.
     persistent_state: Value<PersistentProjectUiState>,
+
+    pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 }
 
 pub struct PersistentProjectUiState {
@@ -108,29 +109,29 @@ impl PersistentProjectUiState {
 }
 
 impl Project {
-    pub fn from_path(path: PathBuf, sender: Enqueue<(ProjectKey, ProjectUiCommand)>, project_slot: Slot<(ProjectKey, ProjectUiCommand)>) -> (Self, ProjectUiCommand) {
-
+    pub fn from_path(path: PathBuf) -> (Self, ProjectUiCommand) {
         debug!("Creating project instance from path. path: {}", &path.display());
 
-        let project_ui_state = Value::new(ProjectUiState::new(sender.clone()));
+        let component = ComponentState::default();
+
+        let project_ui_state = Value::new(ProjectUiState::new(component.sender.clone()));
 
         let persistent_state = Value::new(PersistentProjectUiState {
             tabs: Value::new(Tabs::new()),
             tree: DockState::new(vec![]),
         });
-        
+
         persistent_state.lock().unwrap().add_tab(ProjectTabKind::ProjectExplorer(ProjectExplorerTab::default()));
-        
+
         let core_service = PlannerCoreService::new();
         let instance = Self {
-            sender,
             path,
             planner_core_service: core_service,
             project_ui_state,
-            project_slot,
             modified: false,
             errors: Default::default(),
             persistent_state,
+            component,
         };
 
         (instance, ProjectUiCommand::Load)
@@ -150,48 +151,34 @@ impl Project {
             .collect::<Vec<_>>();
 
         let mut tabs = pstate.tabs.lock().unwrap();
-        
+
         tabs.retain_all(&known_tab_keys, tab_context);
     }
 
-    pub fn ui(&self, ui: &mut Ui, key: ProjectKey) {
+    pub fn show_phase(&mut self, phase: Reference) {
+        let mut state = self.project_ui_state.lock().unwrap();
 
-        egui::TopBottomPanel::top(ui.id().with("top_panel")).show_inside(ui, |ui| {
-            ui.label(format!("Project.  path: {}", self.path.display()));
-
-            let state = self.project_ui_state.lock().unwrap();
-            if let Some(name) = &state.name {
-                ui.label(format!("name: {}", name));
-            } else {
-                ui.spinner();
+        let (_entry, is_new) = match state.phases.entry(phase.clone()) {
+            Entry::Occupied(entry) => {
+                debug!("phase previously shown. phase: {:?}", phase);
+                (entry.into_mut(), false)
             }
-        });
+            Entry::Vacant(entry) => {
+                debug!("phase not previously shown. phase: {:?}", phase);
 
-        let mut tab_context = ProjectTabContext {
-            key,
-            state: self.project_ui_state.clone(),
+                (entry.insert(PhaseUi::new()), true)
+            }
         };
-
-        self.cleanup_tabs(&mut tab_context);
 
         let mut pstate = self.persistent_state.lock().unwrap();
-
-        let mut project_tab_viewer = AppTabViewer {
-            tabs: pstate.tabs.clone(),
-            context: &mut tab_context,
-        };
-
-        let ctx = ui.ctx();
-        
-        DockArea::new(&mut pstate.tree)
-            .id(ui.id().with("project-tabs"))
-            .style(Style::from_egui(ctx.style().as_ref()))
-            .show_inside(ui, &mut project_tab_viewer);
-
-        if !self.errors.is_empty() {
-            self.show_errors_modal(ui, key);
+        let tab = PhaseTab::new(phase);
+        if is_new {
+            pstate.add_tab(ProjectTabKind::Phase(tab));
+        } else {
+            pstate.show_tab(|candidate_tab| {
+                matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
+            });
         }
-
     }
 
     fn show_errors_modal(&self, ui: &mut Ui, key: ProjectKey) {
@@ -232,35 +219,93 @@ impl Project {
                     |_ui| {},
                     |ui| {
                         if ui.button(tr!("form-button-ok")).clicked() {
-                            self.sender.send((key, ProjectUiCommand::ClearErrors)).expect("sent")
+                            self.component.send((key, ProjectUiCommand::ClearErrors))
                         }
                     },
                 );
             });
     }
+}
 
-    pub fn update(&mut self, key: ProjectKey, command: ProjectUiCommand) -> Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>>{
+pub struct ProjectContext {
+    pub key: ProjectKey,
+}
+
+impl UiComponent for Project {
+    type UiContext<'context> = ProjectContext;
+    type UiCommand = (ProjectKey, ProjectUiCommand);
+    type UiAction = ProjectAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
+        let ProjectContext {
+            key
+        } = context;
+        
+        egui::TopBottomPanel::top(ui.id().with("top_panel")).show_inside(ui, |ui| {
+            ui.label(format!("Project.  path: {}", self.path.display()));
+
+            let state = self.project_ui_state.lock().unwrap();
+            if let Some(name) = &state.name {
+                ui.label(format!("name: {}", name));
+            } else {
+                ui.spinner();
+            }
+        });
+
+        let mut tab_context = ProjectTabContext {
+            key: *key,
+            state: self.project_ui_state.clone(),
+        };
+
+        self.cleanup_tabs(&mut tab_context);
+
+        let mut pstate = self.persistent_state.lock().unwrap();
+
+        let mut project_tab_viewer = AppTabViewer {
+            tabs: pstate.tabs.clone(),
+            context: &mut tab_context,
+        };
+
+        let ctx = ui.ctx();
+        
+        DockArea::new(&mut pstate.tree)
+            .id(ui.id().with("project-tabs"))
+            .style(Style::from_egui(ctx.style().as_ref()))
+            .show_inside(ui, &mut project_tab_viewer);
+
+        if !self.errors.is_empty() {
+            self.show_errors_modal(ui, *key);
+        }
+
+    }
+
+    fn update(&mut self, command: Self::UiCommand) -> Option<Self::UiAction> {
+        
+        let (key, command) = command;
+        
         match command {
             ProjectUiCommand::None => {
-                Task::none()
+                None
             }
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
 
-                self.planner_core_service.update(Event::Load {
+                let task = self.planner_core_service.update(Event::Load {
                     path: self.path.clone(),
                 }, key)
                     .map(|result| {
                         result.map(|(key, _)| (key, ProjectUiCommand::Loaded))
-                    })
+                    });
+                Some(ProjectAction::Task(task))
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 state.loaded = true;
-                self
-                    .planner_core_service
-                    .update(Event::RequestOverviewView {}, key)
-                    .chain(Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))))
+                let task = self
+                        .planner_core_service
+                        .update(Event::RequestOverviewView {}, key)
+                        .chain(Task::done(Ok((key, ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))));
+                Some(ProjectAction::Task(task))
             }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
@@ -270,7 +315,8 @@ impl Project {
                     ProjectViewRequest::PhasePlacements { phase } => Event::RequestPhasePlacementsView { phase_reference: phase.into() },
                 };
 
-                self.planner_core_service.update(event, key)
+                let task = self.planner_core_service.update(event, key);
+                Some(ProjectAction::Task(task))
             }
             ProjectUiCommand::UpdateView(view) => {
                 match view {
@@ -303,7 +349,7 @@ impl Project {
                     }
                     ProjectView::PhasePlacementOrderings(_) => {}
                 }
-                Task::none()
+                None
             }
             ProjectUiCommand::Error(error) => {
                 match error {
@@ -311,15 +357,16 @@ impl Project {
                         self.errors.push(message);
                     }
                 }
-                Task::none()
+                None
             }
             ProjectUiCommand::ClearErrors => {
                 self.errors.clear();
-                Task::none()
+                None
             }
             ProjectUiCommand::SetModifiedState(modified_state) => {
                 self.modified = modified_state;
-                Task::none()
+                // TODO return an action so that the UI can mark the project's tab with an indicator
+                None
             }
             ProjectUiCommand::Navigate(path) => {
                 {
@@ -352,40 +399,13 @@ impl Project {
                         })))),
                     ];
 
-                    Task::batch(tasks)
+                    Some(ProjectAction::Task(Task::batch(tasks)))
                 } else {
-                    Task::none()
+                    None
                 }
             }
         }
     }
-
-    pub fn show_phase(&mut self, phase: Reference) {
-        let mut state = self.project_ui_state.lock().unwrap();
-
-        let (_entry, is_new) = match state.phases.entry(phase.clone()) {
-            Entry::Occupied(entry) => {
-                debug!("phase previously shown. phase: {:?}", phase);
-                (entry.into_mut(), false)
-            }
-            Entry::Vacant(entry) => {
-                debug!("phase not previously shown. phase: {:?}", phase);
-
-                (entry.insert(PhaseUi::new()), true)
-            }
-        };
-
-        let mut pstate = self.persistent_state.lock().unwrap();
-        let tab = PhaseTab::new(phase);
-        if is_new {
-            pstate.add_tab(ProjectTabKind::Phase(tab));
-        } else {
-            pstate.show_tab(|candidate_tab| {
-                matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
-            });
-        }
-    }
-
 }
 
 impl Tab for ProjectTabKind {

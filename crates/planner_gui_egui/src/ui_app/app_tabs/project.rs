@@ -2,10 +2,11 @@ use std::path::PathBuf;
 use egui::{Ui, WidgetText};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
-use crate::project::ProjectKey;
+use crate::project::{ProjectContext, ProjectKey};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_app::app_tabs::TabContext;
 use crate::ui_commands::UiCommand;
+use crate::ui_component::UiComponent;
 
 /// This is persisted between application restarts
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
@@ -41,8 +42,11 @@ impl Tab for ProjectTab {
 
         let projects = tab_context.projects.lock().unwrap();
         let project = projects.get(self.project_key).unwrap();
-
-        project.ui(ui, self.project_key);
+        
+        let mut project_context = ProjectContext {
+            key: self.project_key,
+        };
+        project.ui(ui, &mut project_context);
     }
 
     fn on_close(&mut self, _tab_key: &TabKey, tab_context: &mut Self::Context) -> bool {
