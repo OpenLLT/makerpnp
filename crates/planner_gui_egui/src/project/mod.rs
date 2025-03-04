@@ -1,4 +1,3 @@
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -82,10 +81,11 @@ pub struct PersistentProjectUiState {
 }
 
 impl PersistentProjectUiState {
-    fn add_tab(&mut self, tab_kind: ProjectTabKind) {
+    fn add_tab(&mut self, tab_kind: ProjectTabKind) -> TabKey {
         let mut tabs = self.tabs.lock().unwrap();
-        let tab_id = tabs.add(tab_kind);
-        self.tree.push_to_focused_leaf(tab_id);
+        let tab_key = tabs.add(tab_kind);
+        self.tree.push_to_focused_leaf(tab_key);
+        tab_key
     }
     
     fn show_tab<F>(&mut self, f: F) -> Result<TabKey, ()>
@@ -177,29 +177,18 @@ impl Project {
     }
     
     pub fn show_phase(&mut self, phase: Reference) {
-        let mut state = self.project_ui_state.lock().unwrap();
-
-        let (_entry, is_new) = match state.phases.entry(phase.clone()) {
-            Entry::Occupied(entry) => {
-                debug!("phase previously shown. phase: {:?}", phase);
-                (entry.into_mut(), false)
-            }
-            Entry::Vacant(entry) => {
-                debug!("phase not previously shown. phase: {:?}", phase);
-
-                (entry.insert(PhaseUi::new()), true)
-            }
-        };
-
         let mut pstate = self.persistent_state.lock().unwrap();
-        let tab = PhaseTab::new(phase);
-        if is_new {
-            pstate.add_tab(ProjectTabKind::Phase(tab));
-        } else {
-            pstate.show_tab(|candidate_tab| {
-                matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
-            }).ok();
-        }
+        let tab = PhaseTab::new(phase.clone());
+        pstate.show_tab(|candidate_tab| {
+            matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
+        }).inspect(|tab_key|{
+            debug!("showing existing phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
+        }).inspect_err(|_|{
+            let mut state = self.project_ui_state.lock().unwrap();
+            state.phases.insert(phase.clone(), PhaseUi::new());
+            let tab_key = pstate.add_tab(ProjectTabKind::Phase(tab));
+            debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
+        }).ok();
     }
 
     fn show_errors_modal(&self, ui: &mut Ui, key: ProjectKey) {
