@@ -15,12 +15,14 @@ use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use crate::planner_app_core::PlannerCoreService;
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
+use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod project_explorer_tab;
 mod phase_tab;
+mod toolbar;
 
 
 new_key_type! {
@@ -68,7 +70,9 @@ pub struct Project {
 
     // FIXME actually persist this, currently it should be treated as 'persistable_state'.
     persistent_state: Value<PersistentProjectUiState>,
-
+    
+    toolbar: ProjectToolbar,
+    
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 }
 
@@ -84,7 +88,7 @@ impl PersistentProjectUiState {
         self.tree.push_to_focused_leaf(tab_id);
     }
     
-    fn show_tab<F>(&mut self, f: F) 
+    fn show_tab<F>(&mut self, f: F) -> Result<TabKey, ()>
     where
         F: Fn(&ProjectTabKind) -> bool
     {
@@ -102,19 +106,27 @@ impl PersistentProjectUiState {
             });
         
         if let Some(tab_key) = tab {
-            let find_result = self.tree.find_tab(tab_key).unwrap();
+            let tab_key = *tab_key;
+            let find_result = self.tree.find_tab(&tab_key).unwrap();
             self.tree.set_active_tab(find_result);
-        } 
+            Ok(tab_key)
+        } else {
+            Err(())
+        }
     }
 }
 
 impl Project {
-    pub fn from_path(path: PathBuf) -> (Self, ProjectUiCommand) {
+    pub fn from_path(path: PathBuf, key: ProjectKey) -> (Self, ProjectUiCommand) {
         debug!("Creating project instance from path. path: {}", &path.display());
 
-        let component = ComponentState::default();
+        let component: ComponentState<(ProjectKey, ProjectUiCommand)> = ComponentState::default();
+        let component_sender = component.sender.clone(); 
+        
+        let mut toolbar = ProjectToolbar::default();
+        toolbar.component.configure_mapper(component_sender.clone(), move |command|(key, ProjectUiCommand::ToolbarCommand(command)));
 
-        let project_ui_state = Value::new(ProjectUiState::new(component.sender.clone()));
+        let project_ui_state = Value::new(ProjectUiState::new(component_sender));
 
         let persistent_state = Value::new(PersistentProjectUiState {
             tabs: Value::new(Tabs::new()),
@@ -131,6 +143,7 @@ impl Project {
             modified: false,
             errors: Default::default(),
             persistent_state,
+            toolbar,
             component,
         };
 
@@ -155,6 +168,14 @@ impl Project {
         tabs.retain_all(&known_tab_keys, tab_context);
     }
 
+    pub fn show_explorer(&mut self) {
+        let mut pstate = self.persistent_state.lock().unwrap();
+        let result = pstate.show_tab(|candidate_tab|matches!(candidate_tab, ProjectTabKind::ProjectExplorer(_)));
+        if result.is_err() {
+            pstate.add_tab(ProjectTabKind::ProjectExplorer(ProjectExplorerTab::default()));
+        }
+    }
+    
     pub fn show_phase(&mut self, phase: Reference) {
         let mut state = self.project_ui_state.lock().unwrap();
 
@@ -177,7 +198,7 @@ impl Project {
         } else {
             pstate.show_tab(|candidate_tab| {
                 matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab))
-            });
+            }).ok();
         }
     }
 
@@ -250,6 +271,8 @@ impl UiComponent for Project {
             } else {
                 ui.spinner();
             }
+            
+            self.toolbar.ui(ui, &mut ());
         });
 
         let mut tab_context = ProjectTabContext {
@@ -404,6 +427,16 @@ impl UiComponent for Project {
                     None
                 }
             }
+            ProjectUiCommand::ToolbarCommand(command) => {
+                let action = self.toolbar.update(command);
+                match action {
+                    None => {}
+                    Some(ProjectToolbarAction::ShowProjectExplorer) => {
+                        self.show_explorer();
+                    }
+                }
+                None
+            }
         }
     }
 }
@@ -477,6 +510,7 @@ pub enum ProjectUiCommand {
     RequestView(ProjectViewRequest),
     ClearErrors,
     Navigate(ProjectPath),
+    ToolbarCommand(ProjectToolbarUiCommand),
 }
 
 #[derive(Debug, Clone)]

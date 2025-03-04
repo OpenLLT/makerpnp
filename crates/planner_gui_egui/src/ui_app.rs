@@ -1,5 +1,6 @@
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use egui_mobius::slot::Slot;
 use egui_dock::{DockArea, DockState, Style};
@@ -10,7 +11,7 @@ use crate::config::Config;
 use crate::{fonts, task};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
-use crate::project::{Project, ProjectKey};
+use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::toolbar::{Toolbar, ToolbarUiCommand};
@@ -28,9 +29,9 @@ pub struct PersistentUiState {
 
 impl Default for PersistentUiState {
     fn default() -> Self {
-        
+
         // TODO dockstate needs translations, see https://docs.rs/egui_dock/latest/egui_dock/#translations
-        
+
         Self {
             tabs: Value::new(Tabs::new()),
             tree: DockState::new(vec![]),
@@ -142,17 +143,18 @@ impl AppState {
         
         let label = path.file_name().unwrap().to_string_lossy().to_string();
 
-        let (mut project, project_command) = Project::from_path(path.clone());
-        project.component.configure_mapper(self.command_sender.clone(), |(key, command)|UiCommand::ProjectCommand { key, command });
-        let project_key = self.projects.lock().unwrap().insert(project);
-        
+        let app_command_sender = self.command_sender.clone();
+        let mut projects = self.projects.lock().unwrap();
+
+        let (project_command, project_key) = project_from_path(path.clone(), app_command_sender, &mut projects);
+
         let tab_kind = TabKind::Project(ProjectTab::new(label, path, project_key));
         
         ui_state.lock().unwrap().add_tab(tab_kind);
-        
-        self.command_sender.send(UiCommand::ProjectCommand { key: project_key, command: project_command }).expect("sent");
+
+        self.command_sender.send(UiCommand::ProjectCommand { key: project_key, command: project_command.unwrap() }).expect("sent");
     }
-    
+
     pub fn close_project(&mut self, project_key: ProjectKey) {
         debug!("closing project. key: {:?}", project_key);
         self.projects.lock().unwrap().remove(project_key);
@@ -302,13 +304,13 @@ impl UiApp {
 
             let (project_key, project_command) = {
                 let app_state = self.app_state();
+                let app_command_sender = app_state.command_sender.clone();
+                let mut projects = app_state.projects.lock().unwrap();
 
-                let (mut project, project_command) = Project::from_path(path.clone());
-                project.component.configure_mapper(app_state.command_sender.clone(), |(key, command)|UiCommand::ProjectCommand { key, command });
-                
-                let project_key = app_state.projects.lock().unwrap().insert(project);
+                let (project_command, project_key) = project_from_path(path, app_command_sender, &mut projects);
 
-                (project_key, project_command)
+
+                (project_key, project_command.unwrap())
             };
             
             {
@@ -327,7 +329,6 @@ impl UiApp {
             }
         }
     }
-
 }
 
 impl eframe::App for UiApp {
@@ -400,4 +401,18 @@ impl eframe::App for UiApp {
         }
 
     }
+}
+
+
+fn project_from_path(path: PathBuf, app_command_sender: Sender<UiCommand>, projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>) -> (Option<ProjectUiCommand>, ProjectKey) {
+    let mut project_command = None;
+    let project_key = projects.insert_with_key(|key| {
+        let (mut project, project_command_to_issue) = Project::from_path(path.clone(), key);
+        project.component.configure_mapper(app_command_sender, |(key, command)| UiCommand::ProjectCommand { key, command });
+
+        project_command.replace(project_command_to_issue);
+
+        project
+    });
+    (project_command, project_key)
 }
