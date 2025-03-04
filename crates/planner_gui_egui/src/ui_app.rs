@@ -17,6 +17,7 @@ use crate::toolbar::{Toolbar, ToolbarUiCommand};
 use crate::ui_app::app_tabs::home::HomeTab;
 use crate::ui_app::app_tabs::{TabContext, TabKind};
 use crate::ui_app::app_tabs::project::ProjectTab;
+use crate::ui_component::UiComponent;
 
 pub mod app_tabs;
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -116,9 +117,8 @@ pub struct AppState {
 impl AppState {
     pub fn init(sender: Enqueue<UiCommand>) -> Self {
 
-        let (signal, toolbar_slot) = egui_mobius::factory::create_signal_slot::<ToolbarUiCommand>();
-        Self::create_toolbar_mapping(&toolbar_slot, sender.clone());
-        let toolbar = Toolbar::new(signal.sender.clone(), toolbar_slot);
+        let mut toolbar = Toolbar::new();
+        toolbar.component.configure_mapper(sender.clone(), |command: ToolbarUiCommand|UiCommand::ToolbarCommand(command));
 
         
         Self {
@@ -130,17 +130,7 @@ impl AppState {
             toolbar,
         }
     }
-
-    pub fn create_toolbar_mapping(toolbar_slot: &Slot<ToolbarUiCommand>, sender: Enqueue<UiCommand>) {
-        toolbar_slot.start({
-            move |command| {
-                debug!("toolbar_command.  command: {:?}", command);
-                sender.send(UiCommand::ToolbarCommand(command)).expect("sent");
-            }
-        });
-    }
-
-
+    
     pub fn pick_file(&mut self) {
         if !self.file_picker.is_picking() {
             self.file_picker.pick_file();
@@ -383,7 +373,7 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
 
-            self.app_state().toolbar.ui(ui);
+            self.app_state().toolbar.ui(ui, &mut ());
         });
 
         if !self.app_state().startup_done {

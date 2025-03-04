@@ -5,6 +5,7 @@ use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::{AppState, PersistentUiState};
+use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
 pub enum UiCommand {
@@ -64,7 +65,11 @@ pub fn handle_command(
     }
 }
 
-fn handle_toolbar_action(toolbar_action: ToolbarAction, app_state: &Value<AppState>, ui_state: &Value<PersistentUiState>) -> Task<UiCommand> {
+fn handle_toolbar_action(toolbar_action: Option<ToolbarAction>, app_state: &Value<AppState>, ui_state: &Value<PersistentUiState>) -> Task<UiCommand> {
+    let Some(toolbar_action) = toolbar_action else { 
+        return Task::none() 
+    };
+    
     match toolbar_action {
         ToolbarAction::ShowHomeTab => {
             let mut ui_state = ui_state.lock().unwrap();
