@@ -1,6 +1,6 @@
+use egui::Ui;
 use egui_i18n::tr;
-use egui_mobius::slot::Slot;
-use egui_mobius::types::Enqueue;
+use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug, Clone)]
 pub enum ToolbarUiCommand {
@@ -16,23 +16,23 @@ pub enum ToolbarAction {
 }
 
 pub struct Toolbar {
-    //
-    // ui component fields
-    //
-    sender: Enqueue<ToolbarUiCommand>,
-    #[allow(dead_code)]
-    toolbar_slot: Slot<ToolbarUiCommand>,
+    pub component: ComponentState<ToolbarUiCommand>,
 }
 
 impl Toolbar {
-    pub fn new(sender: Enqueue<ToolbarUiCommand>, toolbar_slot: Slot<ToolbarUiCommand>) -> Self {
+    pub fn new() -> Self {
         Self {
-            sender,
-            toolbar_slot,
+            component: ComponentState::default(),
         }
     }
+}
 
-    pub fn ui(&self, ui: &mut egui::Ui) {
+impl UiComponent for Toolbar {
+    type UiContext<'context> = ();
+    type UiCommand = ToolbarUiCommand;
+    type UiAction = ToolbarAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         egui::Frame::new().show(ui, |ui| {
             ui.horizontal(|ui| {
                 let home_button = ui.button(tr!("toolbar-button-home"));
@@ -40,30 +40,30 @@ impl Toolbar {
                 let close_all_button = ui.button(tr!("toolbar-button-close-all"));
 
                 if home_button.clicked() {
-                    self.sender.send(ToolbarUiCommand::ShowHomeTabClicked).ok();
+                    self.component.send(ToolbarUiCommand::ShowHomeTabClicked);
                 }
 
                 if open_button.clicked() {
-                    self.sender.send(ToolbarUiCommand::OpenClicked).ok();
+                    self.component.send(ToolbarUiCommand::OpenClicked);
                 }
 
                 if close_all_button.clicked() {
-                    self.sender.send(ToolbarUiCommand::CloseAllTabsClicked).ok();
+                    self.component.send(ToolbarUiCommand::CloseAllTabsClicked);
                 }
             });
         });
     }
-    
-    pub fn update(&mut self, command: ToolbarUiCommand) -> ToolbarAction {
+
+    fn update(&mut self, command: Self::UiCommand) -> Option<Self::UiAction> {
         match command {
             ToolbarUiCommand::ShowHomeTabClicked => {
-                ToolbarAction::ShowHomeTab
+                Some(ToolbarAction::ShowHomeTab)
             }
             ToolbarUiCommand::CloseAllTabsClicked => {
-                ToolbarAction::CloseAllTabs
+                Some(ToolbarAction::CloseAllTabs)
             }
             ToolbarUiCommand::OpenClicked => {
-                ToolbarAction::PickFile
+                Some(ToolbarAction::PickFile)
             }
         }
     }
