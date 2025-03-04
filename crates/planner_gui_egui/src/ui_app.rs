@@ -10,7 +10,7 @@ use crate::config::Config;
 use crate::{fonts, task};
 use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
-use crate::project::{Project, ProjectKey, ProjectUiCommand};
+use crate::project::{Project, ProjectKey};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::toolbar::{Toolbar, ToolbarUiCommand};
@@ -142,13 +142,8 @@ impl AppState {
         
         let label = path.file_name().unwrap().to_string_lossy().to_string();
 
-        let (project_signal, project_slot) = egui_mobius::factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
-
-        self.create_project_mapping(&project_slot, self.command_sender.clone());
-
-        let project_sender = project_signal.sender.clone();
-
-        let (project, project_command) = Project::from_path(path.clone(), project_sender, project_slot);
+        let (mut project, project_command) = Project::from_path(path.clone());
+        project.component.configure_mapper(self.command_sender.clone(), |(key, command)|UiCommand::ProjectCommand { key, command });
         let project_key = self.projects.lock().unwrap().insert(project);
         
         let tab_kind = TabKind::Project(ProjectTab::new(label, path, project_key));
@@ -156,15 +151,6 @@ impl AppState {
         ui_state.lock().unwrap().add_tab(tab_kind);
         
         self.command_sender.send(UiCommand::ProjectCommand { key: project_key, command: project_command }).expect("sent");
-    }
-
-    pub fn create_project_mapping(&self, project_slot: &Slot<(ProjectKey, ProjectUiCommand)>, sender: Enqueue<UiCommand>) {
-        project_slot.start({
-            move |(key, command)| {
-                debug!("project_command.  key: {:?}, command: {:?}", key, command);
-                sender.send(UiCommand::ProjectCommand { key, command }).expect("sent");
-            }
-        });
     }
     
     pub fn close_project(&mut self, project_key: ProjectKey) {
@@ -317,13 +303,9 @@ impl UiApp {
             let (project_key, project_command) = {
                 let app_state = self.app_state();
 
-                let (project_signal, project_slot) = egui_mobius::factory::create_signal_slot::<(ProjectKey, ProjectUiCommand)>();
+                let (mut project, project_command) = Project::from_path(path.clone());
+                project.component.configure_mapper(app_state.command_sender.clone(), |(key, command)|UiCommand::ProjectCommand { key, command });
                 
-                app_state.create_project_mapping(&project_slot, app_state.command_sender.clone());
-
-                let project_sender = project_signal.sender.clone();
-
-                let (project, project_command) = Project::from_path(path.clone(), project_sender, project_slot);
                 let project_key = app_state.projects.lock().unwrap().insert(project);
 
                 (project_key, project_command)

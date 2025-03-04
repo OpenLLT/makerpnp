@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use egui_mobius::types::Value;
 use tracing::trace;
-use crate::project::{ProjectKey, ProjectUiCommand};
+use crate::project::{ProjectAction, ProjectKey, ProjectUiCommand};
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::{AppState, PersistentUiState};
@@ -49,18 +49,25 @@ pub fn handle_command(
             let app_state = app_state.lock().unwrap();
             let mut guard = app_state.projects.lock().unwrap();
             let project = guard.get_mut(key).unwrap();
-            project.update(key, command)
-                .map(move |result|{
-                    match result {
-                        Ok((key, command)) => {
-                            UiCommand::ProjectCommand { key, command }
-                        }
-                        Err(error) => {
-                            UiCommand::ProjectCommand { key, command: ProjectUiCommand::Error(error) }
-                        }
-                    }
-                    
-                })
+            let action = project.update((key, command));
+
+            match action {
+                Some(ProjectAction::Task(task)) => {
+                    task
+                        .map(move |result|{
+                            match result {
+                                Ok((key, command)) => {
+                                    UiCommand::ProjectCommand { key, command }
+                                }
+                                Err(error) => {
+                                    UiCommand::ProjectCommand { key, command: ProjectUiCommand::Error(error) }
+                                }
+                            }
+
+                        })
+                }
+                _ => Task::none(),
+            }
         }
     }
 }
