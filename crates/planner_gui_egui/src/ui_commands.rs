@@ -1,10 +1,15 @@
 use std::path::PathBuf;
 use egui_mobius::types::Value;
 use tracing::trace;
-use crate::project::{ProjectAction, ProjectKey, ProjectUiCommand};
+use crate::config::Config;
+use crate::project::ProjectUiCommand;
+use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
-use crate::ui_app::{AppState, PersistentUiState};
+use crate::ui_app::app_tabs::{AppTabs, TabAction, TabKindContext, TabKindAction, TabKindUiCommand, TabUiCommand};
+use crate::ui_app::app_tabs::home::HomeTabAction;
+use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
+use crate::ui_app::AppState;
 use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
@@ -13,14 +18,15 @@ pub enum UiCommand {
     None,
     ToolbarCommand(ToolbarUiCommand),
     OpenFile(PathBuf),
-    ProjectClosed(ProjectKey),
-    ProjectCommand { key: ProjectKey, command: ProjectUiCommand },
+    TabCommand { tab_key: TabKey, command: TabUiCommand },
 }
 
+// TODO perhaps the return type of this method be `Task<Result<UiCommand, UiAppError>>`
 pub fn handle_command(
-    app_state: Value<AppState>,
-    ui_state: Value<PersistentUiState>,
     command: UiCommand,
+    app_state: Value<AppState>,
+    app_tabs: Value<AppTabs>,
+    config: Value<Config>,
 ) -> Task<UiCommand> {
     trace!("Handling command: {:?}", command);
     
@@ -29,54 +35,74 @@ pub fn handle_command(
             Task::none()
         }
         UiCommand::ToolbarCommand(command) => {
-            let toolbar_action = app_state.lock().unwrap().toolbar.update(command);
+            let toolbar_action = app_state.lock().unwrap().toolbar.update(command, &mut ());
 
-            let task = handle_toolbar_action(toolbar_action, &app_state, &ui_state);
+            let task = handle_toolbar_action(toolbar_action, &app_state, &app_tabs);
             task
         }
         UiCommand::OpenFile(picked_file) => {
             let mut app_state = app_state.lock().unwrap();
-            app_state.open_file(picked_file, ui_state);
+            app_state.open_file(picked_file, app_tabs);
             Task::none()
         }
-        UiCommand::ProjectClosed(project_key) => {
-            let mut app_state = app_state.lock().unwrap();
-            app_state.close_project(project_key);
-            Task::none()
-        }
-        UiCommand::ProjectCommand { key, command} => {
-            // TODO find project, call `handle_command` on it with the command
-            let app_state = app_state.lock().unwrap();
-            let mut guard = app_state.projects.lock().unwrap();
-            let project = guard.get_mut(key).unwrap();
-            let action = project.update((key, command));
+        UiCommand::TabCommand { tab_key, command } => {
+            let mut app_tabs = app_tabs.lock().unwrap();
 
+            let mut context = TabKindContext {
+                config: config.clone(),
+                projects: app_state.lock().unwrap().projects.clone(),
+            };
+
+            let action = app_tabs.update((tab_key, command), &mut context);
             match action {
-                Some(ProjectAction::Task(task)) => {
-                    task
-                        .map(move |result|{
-                            match result {
-                                Ok((key, command)) => {
-                                    UiCommand::ProjectCommand { key, command }
-                                }
-                                Err(error) => {
-                                    UiCommand::ProjectCommand { key, command: ProjectUiCommand::Error(error) }
-                                }
-                            }
+                None => Task::none(),
+                Some(TabAction::None) => Task::none(),
+                Some(TabAction::TabKindAction { action }) => {
+                    match action {
+                        TabKindAction::None => Task::none(),
+                        TabKindAction::HomeTabAction { action } => match action {
+                            HomeTabAction::None => Task::none()
+                        }
+                        TabKindAction::ProjectTabAction { action } => match action {
+                            ProjectTabAction::ProjectTask(key, task) => task.map(move |result| {
 
-                        })
+                                match result {
+                                    Ok(command) => {
+                                        UiCommand::TabCommand {
+                                            tab_key,
+                                            command: TabUiCommand::TabKindCommand(
+                                                TabKindUiCommand::ProjectTabCommand {
+                                                    command: ProjectTabUiCommand::ProjectCommand { key, command }
+                                                }
+                                            )
+                                        }
+                                    }
+                                    Err(error) => {
+                                        UiCommand::TabCommand {
+                                            tab_key,
+                                            command: TabUiCommand::TabKindCommand(
+                                                TabKindUiCommand::ProjectTabCommand {
+                                                    command: ProjectTabUiCommand::ProjectCommand { key, command: ProjectUiCommand::Error(error) }
+                                                }
+                                            )
+                                        }
+
+                                    }
+                                }
+                            }),
+                        }
+                    }
                 }
-                _ => Task::none(),
             }
         }
     }
 }
 
-fn handle_toolbar_action(toolbar_action: Option<ToolbarAction>, app_state: &Value<AppState>, ui_state: &Value<PersistentUiState>) -> Task<UiCommand> {
-    let Some(toolbar_action) = toolbar_action else { 
-        return Task::none() 
+fn handle_toolbar_action(toolbar_action: Option<ToolbarAction>, app_state: &Value<AppState>, ui_state: &Value<AppTabs>) -> Task<UiCommand> {
+    let Some(toolbar_action) = toolbar_action else {
+        return Task::none()
     };
-    
+
     match toolbar_action {
         ToolbarAction::ShowHomeTab => {
             let mut ui_state = ui_state.lock().unwrap();

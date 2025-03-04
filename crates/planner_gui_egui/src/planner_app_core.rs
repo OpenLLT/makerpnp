@@ -2,7 +2,7 @@ use std::sync::Arc;
 use planner_app::{Effect, Event, Planner};
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use tracing::{debug, error};
-use crate::project::{ProjectError, ProjectKey, ProjectUiCommand};
+use crate::project::{ProjectError, ProjectUiCommand};
 use crate::task::Task;
 
 type Core = Arc<planner_app::Core<Planner>>;
@@ -18,20 +18,20 @@ impl PlannerCoreService {
         }
     }
 
-    pub fn update(&mut self, event: Event, project_key: ProjectKey) -> Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>> {
+    pub fn update(&mut self, event: Event) -> Task<Result<ProjectUiCommand, ProjectError>> {
         debug!("event: {:?}", event);
 
-        let mut tasks: Vec<Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>>> = Vec::new();
+        let mut tasks: Vec<Task<Result<ProjectUiCommand, ProjectError>>> = Vec::new();
 
         for effect in self.core.process_event(event) {
-            let effect_task = Self::process_effect(&self.core, effect, project_key);
+            let effect_task = Self::process_effect(&self.core, effect);
             tasks.push(effect_task);
         }
 
         Task::batch(tasks)
     }
 
-    pub fn process_effect(core: &Core, effect: Effect, project_key: ProjectKey) -> Task<Result<(ProjectKey, ProjectUiCommand), ProjectError>> {
+    pub fn process_effect(core: &Core, effect: Effect) -> Task<Result<ProjectUiCommand, ProjectError>> {
         debug!("effect: {:?}", effect);
 
         match effect {
@@ -43,7 +43,7 @@ impl PlannerCoreService {
                         Task::done(Err(ProjectError::CoreError(error)))
                     },
                     None => {
-                        Task::done(Ok((project_key, ProjectUiCommand::SetModifiedState(view.modified))))
+                        Task::done(Ok(ProjectUiCommand::SetModifiedState(view.modified)))
                     },
                 };
 
@@ -54,7 +54,7 @@ impl PlannerCoreService {
                     view,
                 } = request.operation;
                 
-                Task::done(Ok((project_key, ProjectUiCommand::UpdateView(view))))
+                Task::done(Ok(ProjectUiCommand::UpdateView(view)))
             }
         }
     }

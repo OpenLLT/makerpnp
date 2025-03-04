@@ -1,9 +1,9 @@
 use egui::{Id, Ui, WidgetText};
-use egui_dock::TabViewer;
 use serde::{Deserialize, Serialize};
 use std::collections::btree_map::{Iter, IterMut};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use egui_dock::TabViewer;
 use egui_mobius::types::Value;
 use tracing::{debug, info};
 
@@ -13,7 +13,7 @@ pub struct TabKey(usize);
 #[derive(Serialize, Deserialize, Default)]
 pub struct Tabs<TabKind, Context> {
     next_id: usize,
-    tabs: BTreeMap<TabKey, TabKind>,
+    pub(crate) tabs: BTreeMap<TabKey, TabKind>,
     _phantom: PhantomData<Context>,
 }
 

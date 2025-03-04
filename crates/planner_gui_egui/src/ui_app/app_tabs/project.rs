@@ -1,15 +1,16 @@
 use std::path::PathBuf;
 use egui::{Ui, WidgetText};
+use egui_mobius::types::Value;
 use serde::{Deserialize, Serialize};
+use slotmap::SlotMap;
 use tracing::debug;
-use crate::project::{ProjectContext, ProjectKey};
+use crate::project::{Project, ProjectAction, ProjectContext, ProjectError, ProjectKey, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
-use crate::ui_app::app_tabs::TabContext;
-use crate::ui_commands::UiCommand;
-use crate::ui_component::UiComponent;
+use crate::task::Task;
+use crate::ui_component::{ComponentState, UiComponent};
 
 /// This is persisted between application restarts
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[derive(Default, Debug, Deserialize, Serialize)]
 pub struct ProjectTab {
     pub project_key: ProjectKey,
     
@@ -17,7 +18,25 @@ pub struct ProjectTab {
     pub path: PathBuf,
     pub label: String,
     pub modified: bool,
+
+    #[serde(skip)]
+    pub component: ComponentState<ProjectTabUiCommand>
 }
+
+#[derive(Debug, Clone)]
+pub enum ProjectTabUiCommand {
+    ProjectCommand { key: ProjectKey, command: ProjectUiCommand },
+}
+
+pub enum ProjectTabAction {
+    ProjectTask(ProjectKey, Task<Result<ProjectUiCommand, ProjectError>>),
+}
+
+pub struct ProjectTabContext {
+    pub tab_key: TabKey,
+    pub projects: Value<SlotMap<ProjectKey, Project>>
+}
+
 
 impl ProjectTab {
     pub fn new(label: String, path: PathBuf, project_key: ProjectKey) -> Self {
@@ -27,31 +46,69 @@ impl ProjectTab {
             path,
             label,
             modified: false,
+            component: ComponentState::default(),
         }
     }
 }
 
 impl Tab for ProjectTab {
-    type Context = TabContext;
+    type Context = ProjectTabContext;
 
     fn label(&self) -> WidgetText {
         egui::widget_text::WidgetText::from(self.label.clone())
     }
 
-    fn ui(&mut self, ui: &mut Ui, _tab_key: &TabKey, tab_context: &mut Self::Context) {
+    fn ui(&mut self, ui: &mut Ui, tab_key: &TabKey, tab_context: &mut Self::Context) {
+        let mut project_tab_context = ProjectTabContext {
+            tab_key: tab_key.clone(),
+            projects: tab_context.projects.clone(),
+        };
 
-        let projects = tab_context.projects.lock().unwrap();
+        UiComponent::ui(self, ui, &mut project_tab_context);
+    }
+
+    fn on_close(&mut self, _tab_key: &TabKey, _tab_context: &mut Self::Context) -> bool {
+        debug!("closing project. key: {:?}", self.project_key);
+        let mut projects = _tab_context.projects.lock().unwrap();
+        projects.remove(self.project_key);
+
+        true
+    }
+}
+
+impl UiComponent for ProjectTab {
+    type UiContext<'context> = ProjectTabContext;
+    type UiCommand = ProjectTabUiCommand;
+    type UiAction = ProjectTabAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
+
+        let projects = context.projects.lock().unwrap();
         let project = projects.get(self.project_key).unwrap();
-        
+
         let mut project_context = ProjectContext {
             key: self.project_key,
         };
+
         project.ui(ui, &mut project_context);
     }
 
-    fn on_close(&mut self, _tab_key: &TabKey, tab_context: &mut Self::Context) -> bool {
-        tab_context.sender.send(UiCommand::ProjectClosed(self.project_key)).ok();
+    fn update<'context>(&mut self, command: Self::UiCommand, context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+        match command {
+            ProjectTabUiCommand::ProjectCommand { key, command } => {
+                let mut projects = context.projects.lock().unwrap();
+                let project = projects.get_mut(self.project_key).unwrap();
 
-        true
+                let mut project_context = ProjectContext {
+                    key: self.project_key,
+                };
+
+                let action: Option<ProjectAction> = project.update((key, command), &mut project_context);
+                match action {
+                    Some(ProjectAction::Task(key, task)) => Some(ProjectTabAction::ProjectTask(key, task)),
+                    _ => None,
+                }
+            }
+        }
     }
 }
