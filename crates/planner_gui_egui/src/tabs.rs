@@ -30,10 +30,10 @@ impl<'b, Context, TabKind: Tab<Context = Context>> Tabs<TabKind, Context> {
     }
 
     pub fn add(&mut self, tab_kind: TabKind) -> TabKey {
-        let id = self.next_key();
-        self.tabs.insert(id, tab_kind);
+        let key = self.next_key();
+        self.tabs.insert(key, tab_kind);
 
-        id
+        key
     }
 
     pub fn get(&self, key: &TabKey) -> Option<&TabKind> {
