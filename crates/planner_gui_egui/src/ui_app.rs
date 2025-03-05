@@ -257,7 +257,6 @@ impl UiApp {
                 ui_state.with_tab_mut(&tab_key, |tab|{
                     if let TabKind::Project(project_tab, _) = tab {
                         project_tab.project_key = project_key;
-                        project_tab.modified = false;
                     } else {
                         unreachable!()
                     }
