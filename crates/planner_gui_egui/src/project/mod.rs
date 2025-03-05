@@ -391,12 +391,17 @@ impl UiComponent for Project {
                     .toolbar
                     .update(toolbar_command, &mut ());
                 match action {
-                    None => {}
                     Some(ProjectToolbarAction::ShowProjectExplorer) => {
                         self.show_explorer();
+                        None
                     }
+                    Some(ProjectToolbarAction::ShowAddPcbDialog) => {
+                        // TODO show the dialog, for now make it add a pcb directly.
+                        let task = self.planner_core_service.update(Event::AddPcb { kind: PcbKind::Single, name: "test".to_string() });
+                        Some(ProjectAction::Task(key, task))
+                    }
+                    None => None
                 }
-                None
             }
             ProjectUiCommand::TabCommand(tab_command) => {
                 let mut project_tabs = self.project_tabs.lock().unwrap();
