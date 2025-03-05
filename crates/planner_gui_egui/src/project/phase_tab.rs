@@ -159,7 +159,7 @@ impl Tab for PhaseTab {
     }
 }
 
-// TODO move this someone else on 2nd re-use.
+// TODO move this somewhere else on 2nd re-use.
 fn index_to_human_readable(index: usize) -> usize {
     index + 1
 }
