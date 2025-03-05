@@ -52,11 +52,6 @@ impl UiComponent for ProjectTabs {
     type UiAction = ProjectTabAction;
 
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
-        if ui.button("test").clicked() {
-            self.component
-                .send(ProjectTabUiCommand::None);
-        }
-
         let ctx = ui.ctx();
 
         let mut tab_viewer = AppTabViewer {
