@@ -6,10 +6,12 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Debug, Clone)]
 pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
+    AddPcbClicked,
 }
 
 pub enum ProjectToolbarAction {
     ShowProjectExplorer,
+    ShowAddPcbDialog,
 }
 
 #[derive(Default)]
@@ -33,6 +35,14 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
             }
+            
+            if ui
+                .button(tr!("project-toolbar-button-add-pcb"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::AddPcbClicked)
+            }
         });
     }
 
@@ -43,6 +53,7 @@ impl UiComponent for ProjectToolbar {
     ) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
+            ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog)
         }
     }
 }
