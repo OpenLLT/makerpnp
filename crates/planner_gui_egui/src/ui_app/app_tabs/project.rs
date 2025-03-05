@@ -32,6 +32,7 @@ pub enum ProjectTabUiCommand {
 
 pub enum ProjectTabAction {
     ProjectTask(ProjectKey, Task<Result<ProjectUiCommand, ProjectError>>),
+    SetModifiedState(bool),
 }
 
 pub struct ProjectTabContext {
@@ -60,7 +61,13 @@ impl Tab for ProjectTab {
     type Context = ProjectTabContext;
 
     fn label(&self) -> WidgetText {
-        egui::widget_text::WidgetText::from(self.label.clone())
+        let mut label = egui::RichText::new(self.label.clone());
+        
+        if self.modified {
+            label = label.italics();
+        }
+        
+        egui::widget_text::WidgetText::from(label)
     }
 
     fn ui(&mut self, ui: &mut Ui, tab_key: &TabKey, tab_context: &mut Self::Context) {
@@ -119,7 +126,8 @@ impl UiComponent for ProjectTab {
                 let action: Option<ProjectAction> = project.update((key, command), &mut project_context);
                 match action {
                     Some(ProjectAction::Task(key, task)) => Some(ProjectTabAction::ProjectTask(key, task)),
-                    _ => None,
+                    Some(ProjectAction::SetModifiedState(modified_state)) => Some(ProjectTabAction::SetModifiedState(modified_state)),
+                    None => None,
                 }
             }
         }
