@@ -217,9 +217,9 @@ impl UiApp {
         }
     }
 
-    /// when the app starts up, the documents will be empty, and the document tabs will have keys that don't exist
-    /// in the documents list (because it's empty now).
-    /// we have to find these tabs, create documents, store them in the map and replace the tab's document key
+    /// when the app starts up, the projects will be empty, and the document tabs will have keys that don't exist
+    /// in the projects list (because it's empty now).
+    /// we have to find these tabs, create projects, store them in the map and replace the tab's project key
     /// with the new key generated when adding the key to the map
     ///
     /// Safety: call only once on startup, before the tabs are shown.
@@ -230,14 +230,11 @@ impl UiApp {
         // step 1 - find the document tabs, return the tab keys and paths.
         let tab_keys_and_paths = {
             let ui_state = self.app_tabs.lock().unwrap();
-            let mut tabs = ui_state.tabs.lock().unwrap();
 
-            tabs.iter_mut()
-                .filter_map(|(tab_key, tab_kind)| match tab_kind {
+            ui_state.filter_map(|(tab_key, tab_kind)| match tab_kind {
                     TabKind::Project(project_tab, _) => Some((tab_key.clone(), project_tab.path.clone())),
                     _ => None,
                 })
-                .collect::<Vec<_>>()
         };
 
         // step 2 - store the documents and update the document key for the tab.
@@ -257,12 +254,13 @@ impl UiApp {
 
             {
                 let ui_state = self.app_tabs.lock().unwrap();
-                let mut tabs = ui_state.tabs.lock().unwrap();
-                if let TabKind::Project(project_tab, _) = tabs.get_mut(&tab_key).unwrap() {
-                    project_tab.project_key = project_key;
-                } else {
-                    unreachable!()
-                }
+                ui_state.with_tab_mut(&tab_key, |tab|{
+                    if let TabKind::Project(project_tab, _) = tab {
+                        project_tab.project_key = project_key;
+                    } else {
+                        unreachable!()
+                    }
+                });
             }
 
             {

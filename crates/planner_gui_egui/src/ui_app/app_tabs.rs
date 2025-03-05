@@ -145,8 +145,7 @@ impl UiComponent for TabKind {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct AppTabs {
-    // FIXME make this private
-    pub tabs: Value<Tabs<TabKind, TabKindContext>>,
+    tabs: Value<Tabs<TabKind, TabKindContext>>,
 
     // Note: `tree` is wrapped in a value because `ui()` only gives us `&self`
     //       but dockstate needs a mutable tree.
@@ -231,7 +230,29 @@ macro_rules! tabs_impl {
 
             tab
         }
-
+        
+        #[allow(dead_code)]
+        pub fn filter_map<B, F>(&self, f: F) -> Vec<B> 
+        where
+            F: FnMut((&TabKey, &$tab_kind)) -> Option<B>,
+        {
+            let tabs = self.tabs.lock().unwrap();
+            tabs
+                .iter()
+                .filter_map(f)
+                .collect::<Vec<_>>()
+        }
+        
+        #[allow(dead_code)]
+        pub fn with_tab_mut<F, O>(&self, tab_key: &TabKey, f: F) -> O 
+        where
+            F: Fn(&mut $tab_kind) -> O,
+        {
+            let mut tabs = self.tabs.lock().unwrap();
+            let mut tab = tabs.get_mut(tab_key).unwrap();
+            f(&mut tab)
+        }
+        
         #[allow(dead_code)]
         pub fn show_tab<F>(&mut self, f: F) -> Result<TabKey, ()>
         where
