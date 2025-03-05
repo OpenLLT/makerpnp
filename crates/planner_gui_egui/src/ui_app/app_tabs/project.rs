@@ -19,6 +19,8 @@ pub struct ProjectTab {
     // path is required here so the project can be loaded when the application restarts
     pub path: PathBuf,
     pub label: String,
+    
+    #[serde(skip)]
     pub modified: bool,
 
     #[serde(skip)]
