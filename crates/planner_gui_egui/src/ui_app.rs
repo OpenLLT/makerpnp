@@ -232,9 +232,9 @@ impl UiApp {
             let ui_state = self.app_tabs.lock().unwrap();
 
             ui_state.filter_map(|(tab_key, tab_kind)| match tab_kind {
-                    TabKind::Project(project_tab, _) => Some((tab_key.clone(), project_tab.path.clone())),
-                    _ => None,
-                })
+                TabKind::Project(project_tab, _) => Some((tab_key.clone(), project_tab.path.clone())),
+                _ => None,
+            })
         };
 
         // step 2 - store the documents and update the document key for the tab.
@@ -254,7 +254,7 @@ impl UiApp {
 
             {
                 let ui_state = self.app_tabs.lock().unwrap();
-                ui_state.with_tab_mut(&tab_key, |tab|{
+                ui_state.with_tab_mut(&tab_key, |tab| {
                     if let TabKind::Project(project_tab, _) = tab {
                         project_tab.project_key = project_key;
                     } else {

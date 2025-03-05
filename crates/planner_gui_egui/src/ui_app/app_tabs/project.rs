@@ -19,7 +19,7 @@ pub struct ProjectTab {
     // path is required here so the project can be loaded when the application restarts
     pub path: PathBuf,
     pub label: String,
-    
+
     #[serde(skip)]
     pub modified: bool,
 
@@ -64,11 +64,11 @@ impl Tab for ProjectTab {
 
     fn label(&self) -> WidgetText {
         let mut label = egui::RichText::new(self.label.clone());
-        
+
         if self.modified {
             label = label.italics();
         }
-        
+
         egui::widget_text::WidgetText::from(label)
     }
 
@@ -128,7 +128,9 @@ impl UiComponent for ProjectTab {
                 let action: Option<ProjectAction> = project.update((key, command), &mut project_context);
                 match action {
                     Some(ProjectAction::Task(key, task)) => Some(ProjectTabAction::ProjectTask(key, task)),
-                    Some(ProjectAction::SetModifiedState(modified_state)) => Some(ProjectTabAction::SetModifiedState(modified_state)),
+                    Some(ProjectAction::SetModifiedState(modified_state)) => {
+                        Some(ProjectTabAction::SetModifiedState(modified_state))
+                    }
                     None => None,
                 }
             }

@@ -35,7 +35,7 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
             }
-            
+
             if ui
                 .button(tr!("project-toolbar-button-add-pcb"))
                 .clicked()
@@ -53,7 +53,7 @@ impl UiComponent for ProjectToolbar {
     ) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
-            ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog)
+            ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
         }
     }
 }

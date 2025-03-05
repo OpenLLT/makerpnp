@@ -11,7 +11,9 @@ use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::AppState;
 use crate::ui_app::app_tabs::home::HomeTabAction;
 use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
-use crate::ui_app::app_tabs::{AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand};
+use crate::ui_app::app_tabs::{
+    AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand,
+};
 use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
@@ -104,13 +106,11 @@ pub fn handle_command(
                             },
                         }),
                         ProjectTabAction::SetModifiedState(modified_state) => {
-                            app_tabs.with_tab_mut(&tab_key, |tab|{
-                                match tab {
-                                    TabKind::Project(project_tab, _) => {
-                                        project_tab.modified = modified_state;
-                                    }
-                                    _ => unreachable!()
+                            app_tabs.with_tab_mut(&tab_key, |tab| match tab {
+                                TabKind::Project(project_tab, _) => {
+                                    project_tab.modified = modified_state;
                                 }
+                                _ => unreachable!(),
                             });
                             Task::none()
                         }

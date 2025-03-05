@@ -397,10 +397,15 @@ impl UiComponent for Project {
                     }
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         // TODO show the dialog, for now make it add a pcb directly.
-                        let task = self.planner_core_service.update(Event::AddPcb { kind: PcbKind::Single, name: "test".to_string() });
+                        let task = self
+                            .planner_core_service
+                            .update(Event::AddPcb {
+                                kind: PcbKind::Single,
+                                name: "test".to_string(),
+                            });
                         Some(ProjectAction::Task(key, task))
                     }
-                    None => None
+                    None => None,
                 }
             }
             ProjectUiCommand::TabCommand(tab_command) => {
