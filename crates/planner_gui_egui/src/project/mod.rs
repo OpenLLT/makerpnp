@@ -7,7 +7,7 @@ use egui::{Modal, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{Event, PcbKind, ProjectView, ProjectViewRequest, Reference};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
@@ -56,6 +56,7 @@ impl Display for ProjectPath {
 
 pub enum ProjectAction {
     Task(ProjectKey, Task<Result<ProjectUiCommand, ProjectError>>),
+    SetModifiedState(bool),
 }
 
 pub struct Project {
@@ -348,8 +349,7 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::SetModifiedState(modified_state) => {
                 self.modified = modified_state;
-                // TODO return an action so that the UI can mark the project's tab with an indicator
-                None
+                Some(ProjectAction::SetModifiedState(modified_state))
             }
             ProjectUiCommand::Navigate(path) => {
                 {
