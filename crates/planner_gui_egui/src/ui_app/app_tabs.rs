@@ -230,21 +230,20 @@ macro_rules! tabs_impl {
 
             tab
         }
-        
+
         #[allow(dead_code)]
-        pub fn filter_map<B, F>(&self, f: F) -> Vec<B> 
+        pub fn filter_map<B, F>(&self, f: F) -> Vec<B>
         where
             F: FnMut((&TabKey, &$tab_kind)) -> Option<B>,
         {
             let tabs = self.tabs.lock().unwrap();
-            tabs
-                .iter()
+            tabs.iter()
                 .filter_map(f)
                 .collect::<Vec<_>>()
         }
-        
+
         #[allow(dead_code)]
-        pub fn with_tab_mut<F, O>(&self, tab_key: &TabKey, f: F) -> O 
+        pub fn with_tab_mut<F, O>(&self, tab_key: &TabKey, f: F) -> O
         where
             F: Fn(&mut $tab_kind) -> O,
         {
@@ -252,7 +251,7 @@ macro_rules! tabs_impl {
             let mut tab = tabs.get_mut(tab_key).unwrap();
             f(&mut tab)
         }
-        
+
         #[allow(dead_code)]
         pub fn show_tab<F>(&mut self, f: F) -> Result<TabKey, ()>
         where

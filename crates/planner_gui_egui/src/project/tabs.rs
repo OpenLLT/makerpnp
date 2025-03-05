@@ -2,6 +2,7 @@ use egui::Ui;
 use egui_dock::{DockArea, DockState, Style};
 use egui_mobius::types::Value;
 use tracing::debug;
+
 use crate::project::{ProjectKey, ProjectTabKind, ProjectUiState};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::tabs_impl;
