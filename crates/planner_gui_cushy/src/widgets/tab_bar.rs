@@ -4,12 +4,12 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use cushy::reactive::channel::Sender;
 use cushy::define_components;
 use cushy::figures::units::Px;
+use cushy::reactive::channel::Sender;
+use cushy::reactive::value::{Destination, Dynamic, Source, Switchable};
 use cushy::styles::components::{ErrorColor, HighlightColor, IntrinsicPadding, OpaqueWidgetColor, WidgetBackground};
 use cushy::styles::{Color, ContainerLevel, Edges};
-use cushy::reactive::value::{Destination, Dynamic, Source, Switchable};
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::button::{
     ButtonActiveBackground, ButtonActiveForeground, ButtonBackground, ButtonForeground, ButtonHoverBackground,

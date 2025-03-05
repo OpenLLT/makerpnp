@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Formatter};
+
 use egui_mobius::slot::Slot;
 use egui_mobius::types::Enqueue;
 use tracing::debug;
@@ -36,25 +37,30 @@ impl<UiCommand: Send + Debug + 'static> ComponentState<UiCommand> {
         self.slot.start({
             move |command| {
                 debug!("command: {:?}", command);
-                sender.send(wrapper(command)).expect("sent");
+                sender
+                    .send(wrapper(command))
+                    .expect("sent");
             }
         });
-    } 
-    
+    }
+
     pub fn send(&self, command: UiCommand) {
         self.sender.send(command).expect("sent");
     }
 }
 
 pub trait UiComponent {
-
     type UiContext<'context>;
     type UiCommand;
     type UiAction;
-    
+
     fn ui<'context>(&self, ui: &mut egui::Ui, context: &mut Self::UiContext<'context>);
 
-    fn update<'context>(&mut self, _command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        _command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         None
     }
 }

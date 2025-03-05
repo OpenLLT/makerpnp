@@ -1,23 +1,25 @@
 use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
+
 use egui::CentralPanel;
-use egui_mobius::types::{Enqueue, Value, ValueGuard};
-use egui_mobius::slot::Slot;
 use egui_i18n::tr;
+use egui_mobius::slot::Slot;
+use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use slotmap::SlotMap;
 use tracing::{debug, info};
+
 use crate::config::Config;
-use crate::{fonts, task};
-use crate::ui_commands::{handle_command, UiCommand};
 use crate::file_picker::Picker;
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::TabKey;
 use crate::toolbar::{Toolbar, ToolbarUiCommand};
-use crate::ui_app::app_tabs::{AppTabs, TabKindContext, TabKind, TabUiCommand, TabKindUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
+use crate::ui_app::app_tabs::{AppTabs, TabKind, TabKindContext, TabKindUiCommand, TabUiCommand};
+use crate::ui_commands::{UiCommand, handle_command};
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::{fonts, task};
 
 pub mod app_tabs;
 
@@ -44,22 +46,22 @@ pub struct AppState {
     file_picker: Picker,
 
     command_sender: Enqueue<UiCommand>,
-    
+
     pub projects: Value<SlotMap<ProjectKey, Project>>,
-    
+
     pub toolbar: Toolbar,
 }
 
 impl AppState {
     pub fn init(sender: Enqueue<UiCommand>) -> Self {
-
         let mut toolbar = Toolbar::new();
-        toolbar.component.configure_mapper(sender.clone(), |command: ToolbarUiCommand| {
-            debug!("app toolbar mapper. command: {:?}", command);
-            UiCommand::ToolbarCommand(command)
-        });
+        toolbar
+            .component
+            .configure_mapper(sender.clone(), |command: ToolbarUiCommand| {
+                debug!("app toolbar mapper. command: {:?}", command);
+                UiCommand::ToolbarCommand(command)
+            });
 
-        
         Self {
             startup_done: false,
             file_picker: Picker::default(),
@@ -69,7 +71,7 @@ impl AppState {
             toolbar,
         }
     }
-    
+
     pub fn pick_file(&mut self) {
         if !self.file_picker.is_picking() {
             self.file_picker.pick_file();
@@ -78,8 +80,12 @@ impl AppState {
 
     pub fn open_file(&mut self, path: PathBuf, ui_state: Value<AppTabs>) {
         info!("open file. path: {:?}", path);
-        
-        let label = path.file_name().unwrap().to_string_lossy().to_string();
+
+        let label = path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
 
         let app_command_sender = self.command_sender.clone();
         let mut projects = self.projects.lock().unwrap();
@@ -90,30 +96,38 @@ impl AppState {
         let tab_kind_sender = tab_kind_component.sender.clone();
 
         let mut project_tab = ProjectTab::new(label, path, project_key);
-        project_tab.component.configure_mapper(tab_kind_sender, |command|{
-            debug!("project tab mapper. command: {:?}", command);
-            TabKindUiCommand::ProjectTabCommand { command }
-        });
+        project_tab
+            .component
+            .configure_mapper(tab_kind_sender, |command| {
+                debug!("project tab mapper. command: {:?}", command);
+                TabKindUiCommand::ProjectTabCommand {
+                    command,
+                }
+            });
 
         let tab_kind = TabKind::Project(project_tab, tab_kind_component);
-        
-        let tab_key = ui_state.lock().unwrap().add_tab(tab_kind);
-        
+
+        let tab_key = ui_state
+            .lock()
+            .unwrap()
+            .add_tab(tab_kind);
+
         let mut project = projects.get_mut(project_key).unwrap();
         configure_project_component(app_command_sender, tab_key.clone(), &mut project);
 
-
-
-        self.command_sender.send(UiCommand::TabCommand { 
-            tab_key, 
-            command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand { 
-                command: ProjectTabUiCommand::ProjectCommand { key: project_key, command: project_command.unwrap() } 
-            }) 
-        }).expect("sent");
+        self.command_sender
+            .send(UiCommand::TabCommand {
+                tab_key,
+                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                    command: ProjectTabUiCommand::ProjectCommand {
+                        key: project_key,
+                        command: project_command.unwrap(),
+                    },
+                }),
+            })
+            .expect("sent");
     }
 }
-
-
 
 impl Default for UiApp {
     fn default() -> Self {
@@ -141,7 +155,6 @@ impl UiApp {
             Self::default()
         };
 
-
         let (app_signal, app_slot) = egui_mobius::factory::create_signal_slot::<UiCommand>();
 
         let app_message_sender = app_signal.sender.clone();
@@ -152,14 +165,12 @@ impl UiApp {
         executor.spawn(MessageDispatcher::dispatch(receiver, app_message_sender.clone()));
         let mut runtime = RunTime::new(executor, sender.clone());
 
-
         let state = Value::new(AppState::init(app_message_sender.clone()));
 
         instance.state.write(state.clone());
         // Safety: `Self::state()` is now safe to call.
 
         let app_tabs = instance.app_tabs.clone();
-        
 
         // Define a handler function for the slot
         let handler = {
@@ -179,14 +190,17 @@ impl UiApp {
         app_slot.start(handler);
 
         let mut app_tabs = app_tabs.lock().unwrap();
-        app_tabs.component.configure_mapper(app_message_sender, |(tab_key, command)|{
-            debug!("app tabs mapper. command: {:?}", command);
-            UiCommand::TabCommand { tab_key, command }
-        });
+        app_tabs
+            .component
+            .configure_mapper(app_message_sender, |(tab_key, command)| {
+                debug!("app tabs mapper. command: {:?}", command);
+                UiCommand::TabCommand {
+                    tab_key,
+                    command,
+                }
+            });
 
         instance.slot.write(app_slot);
-        
-        
 
         instance
     }
@@ -195,7 +209,12 @@ impl UiApp {
     ///
     /// Safety: it's always safe, because `new` calls `state.write()`
     fn app_state(&mut self) -> ValueGuard<AppState> {
-        unsafe { self.state.assume_init_mut().lock().unwrap() }
+        unsafe {
+            self.state
+                .assume_init_mut()
+                .lock()
+                .unwrap()
+        }
     }
 
     /// when the app starts up, the documents will be empty, and the document tabs will have keys that don't exist
@@ -212,13 +231,10 @@ impl UiApp {
         let tab_keys_and_paths = {
             let ui_state = self.app_tabs.lock().unwrap();
             let mut tabs = ui_state.tabs.lock().unwrap();
-            
-            tabs
-                .iter_mut()
+
+            tabs.iter_mut()
                 .filter_map(|(tab_key, tab_kind)| match tab_kind {
-                    TabKind::Project(project_tab, _) => {
-                        Some((tab_key.clone(), project_tab.path.clone()))
-                    }
+                    TabKind::Project(project_tab, _) => Some((tab_key.clone(), project_tab.path.clone())),
                     _ => None,
                 })
                 .collect::<Vec<_>>()
@@ -226,7 +242,6 @@ impl UiApp {
 
         // step 2 - store the documents and update the document key for the tab.
         for (tab_key, path) in tab_keys_and_paths {
-
             let (project_key, project_command) = {
                 let app_state = self.app_state();
                 let app_command_sender = app_state.command_sender.clone();
@@ -237,10 +252,9 @@ impl UiApp {
                 let mut project = projects.get_mut(project_key).unwrap();
                 configure_project_component(app_command_sender, tab_key.clone(), &mut project);
 
-
                 (project_key, project_command.unwrap())
             };
-            
+
             {
                 let ui_state = self.app_tabs.lock().unwrap();
                 let mut tabs = ui_state.tabs.lock().unwrap();
@@ -254,13 +268,18 @@ impl UiApp {
             {
                 let app_state = self.app_state();
 
-                app_state.command_sender.send(UiCommand::TabCommand {
-                    tab_key,
-                    command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                        command: ProjectTabUiCommand::ProjectCommand { key: project_key, command: project_command }
+                app_state
+                    .command_sender
+                    .send(UiCommand::TabCommand {
+                        tab_key,
+                        command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                            command: ProjectTabUiCommand::ProjectCommand {
+                                key: project_key,
+                                command: project_command,
+                            },
+                        }),
                     })
-                }).expect("sent");
-
+                    .expect("sent");
             }
         }
     }
@@ -272,7 +291,6 @@ impl eframe::App for UiApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
 
@@ -281,7 +299,10 @@ impl eframe::App for UiApp {
                 let is_web = cfg!(target_arch = "wasm32");
                 if !is_web {
                     ui.menu_button(tr!("menu-top-level-file"), |ui| {
-                        if ui.button(tr!("menu-item-quit")).clicked() {
+                        if ui
+                            .button(tr!("menu-item-quit"))
+                            .clicked()
+                        {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
@@ -299,12 +320,16 @@ impl eframe::App for UiApp {
 
             {
                 let mut ui_state = self.app_tabs.lock().unwrap();
-                ui_state.show_home_tab_on_startup(self.config.lock().unwrap().show_home_tab_on_startup);
+                ui_state.show_home_tab_on_startup(
+                    self.config
+                        .lock()
+                        .unwrap()
+                        .show_home_tab_on_startup,
+                );
             }
             self.restore_documents_on_startup();
         }
 
-        
         // in a block to limit the scope of the `ui_state` borrow/guard
         {
             let projects = self.app_state().projects.clone();
@@ -319,25 +344,28 @@ impl eframe::App for UiApp {
             // FIXME remove this when `on_close` bugs in egui_dock are fixed.
             ui_state.cleanup_tabs(&mut tab_context);
 
-            CentralPanel::default()
-                .show(ctx, |ui| {
-                    ui_state.ui(ui, &mut tab_context);
-                });
+            CentralPanel::default().show(ctx, |ui| {
+                ui_state.ui(ui, &mut tab_context);
+            });
         }
 
         let mut app_state = self.app_state();
-        
+
         if let Ok(picked_file) = app_state.file_picker.picked() {
             // FIXME this `update` method does not get called immediately after picking a file, instead update gets
             //       called when the user moves the mouse or interacts with the window again.
-            app_state.command_sender.send(UiCommand::OpenFile(picked_file)).ok();
+            app_state
+                .command_sender
+                .send(UiCommand::OpenFile(picked_file))
+                .ok();
         }
-
     }
 }
 
-
-fn project_from_path(path: PathBuf, projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>) -> (Option<ProjectUiCommand>, ProjectKey) {
+fn project_from_path(
+    path: PathBuf,
+    projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>,
+) -> (Option<ProjectUiCommand>, ProjectKey) {
     let mut project_command = None;
     let project_key = projects.insert_with_key(|key| {
         let (project, project_command_to_issue) = Project::from_path(path.clone(), key);
@@ -349,13 +377,18 @@ fn project_from_path(path: PathBuf, projects: &mut ValueGuard<SlotMap<ProjectKey
 }
 
 fn configure_project_component(app_command_sender: Sender<UiCommand>, tab_key: TabKey, project: &mut Project) {
-    project.component.configure_mapper(app_command_sender, move|(key, command)| {
-        debug!("project mapper. command: {:?}", command);
-        UiCommand::TabCommand {
-            tab_key,
-            command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                command: ProjectTabUiCommand::ProjectCommand { key, command }
-            })
-        }
-    });
+    project
+        .component
+        .configure_mapper(app_command_sender, move |(key, command)| {
+            debug!("project mapper. command: {:?}", command);
+            UiCommand::TabCommand {
+                tab_key,
+                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                    command: ProjectTabUiCommand::ProjectCommand {
+                        key,
+                        command,
+                    },
+                }),
+            }
+        });
 }

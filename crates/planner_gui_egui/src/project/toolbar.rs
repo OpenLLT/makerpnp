@@ -1,24 +1,23 @@
 use egui::Ui;
 use egui_i18n::tr;
+
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug, Clone)]
 pub enum ProjectToolbarUiCommand {
-    ProjectExplorerClicked
+    ProjectExplorerClicked,
 }
 
 pub enum ProjectToolbarAction {
-    ShowProjectExplorer
+    ShowProjectExplorer,
 }
 
 #[derive(Default)]
 pub struct ProjectToolbar {
-    pub component: ComponentState<ProjectToolbarUiCommand>
+    pub component: ComponentState<ProjectToolbarUiCommand>,
 }
 
-impl ProjectToolbar {
-    
-}
+impl ProjectToolbar {}
 
 impl UiComponent for ProjectToolbar {
     type UiContext<'context> = ();
@@ -27,13 +26,21 @@ impl UiComponent for ProjectToolbar {
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.horizontal(|ui| {
-            if ui.button(tr!("project-toolbar-button-show-explorer")).clicked() {
-                self.component.send(ProjectToolbarUiCommand::ProjectExplorerClicked)
+            if ui
+                .button(tr!("project-toolbar-button-show-explorer"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
             }
         });
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
         }

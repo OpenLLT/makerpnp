@@ -1,6 +1,6 @@
 use crux_core::capability::{CapabilityContext, Operation};
-use crux_core::{Command, Request};
 use crux_core::macros::Capability;
+use crux_core::{Command, Request};
 
 use crate::ProjectView;
 
@@ -49,5 +49,7 @@ where
     Effect: From<Request<ProjectViewRendererOperation>> + Send + 'static,
     Event: Send + 'static,
 {
-    Command::notify_shell(ProjectViewRendererOperation::View { view })
+    Command::notify_shell(ProjectViewRendererOperation::View {
+        view,
+    })
 }

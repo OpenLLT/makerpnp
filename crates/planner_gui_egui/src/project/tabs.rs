@@ -2,6 +2,7 @@ use egui::Ui;
 use egui_dock::{DockArea, DockState, Style};
 use egui_mobius::types::Value;
 use tracing::debug;
+
 use crate::project::{ProjectKey, ProjectTabKind, ProjectUiState};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::tabs_impl;
@@ -13,7 +14,7 @@ pub struct ProjectTabs {
     tree: Value<DockState<TabKey>>,
 
     #[serde(skip)]
-    pub component: ComponentState<ProjectTabUiCommand>
+    pub component: ComponentState<ProjectTabUiCommand>,
 }
 
 impl Default for ProjectTabs {
@@ -38,11 +39,11 @@ impl ProjectTabs {
 
 #[derive(Debug, Clone)]
 pub enum ProjectTabUiCommand {
-    None
+    None,
 }
 
 pub enum ProjectTabAction {
-    None
+    None,
 }
 
 impl UiComponent for ProjectTabs {
@@ -51,11 +52,11 @@ impl UiComponent for ProjectTabs {
     type UiAction = ProjectTabAction;
 
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
-        
         if ui.button("test").clicked() {
-            self.component.send(ProjectTabUiCommand::None);
+            self.component
+                .send(ProjectTabUiCommand::None);
         }
-        
+
         let ctx = ui.ctx();
 
         let mut tab_viewer = AppTabViewer {
@@ -71,7 +72,11 @@ impl UiComponent for ProjectTabs {
             .show_inside(ui, &mut tab_viewer);
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         debug!("project tab. command: {:?}", command);
         match command {
             ProjectTabUiCommand::None => Some(ProjectTabAction::None),

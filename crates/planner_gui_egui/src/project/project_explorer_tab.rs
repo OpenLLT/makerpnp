@@ -1,13 +1,17 @@
 use std::collections::HashMap;
+
 use egui::{Ui, WidgetText};
 use egui_i18n::{tr, translate_fluent};
 use egui_mobius::types::Enqueue;
+use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
-use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use planner_app::{ProjectTreeItem, ProjectTreeView};
-use crate::project::{project_path_from_view_path, view_path_from_project_path, ProjectKey, ProjectPath, ProjectUiCommand};
+
 use crate::project::tabs::ProjectTabContext;
+use crate::project::{
+    ProjectKey, ProjectPath, ProjectUiCommand, project_path_from_view_path, view_path_from_project_path,
+};
 use crate::tabs::{Tab, TabKey};
 
 #[derive(Debug)]
@@ -26,7 +30,14 @@ impl ProjectExplorerUi {
         }
     }
 
-    fn show_project_tree(&self, ui: &mut egui::Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex, selection_state: &HashMap<NodeIndex, bool>, project_key: &ProjectKey) {
+    fn show_project_tree(
+        &self,
+        ui: &mut egui::Ui,
+        graph: &Graph<ProjectTreeItem, ()>,
+        node: NodeIndex,
+        selection_state: &HashMap<NodeIndex, bool>,
+        project_key: &ProjectKey,
+    ) {
         let item = &graph[node];
 
         let path = project_path_from_view_path(&item.path);
@@ -46,8 +57,13 @@ impl ProjectExplorerUi {
 
         egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
             .show_header(ui, |ui| {
-                if ui.toggle_value(&mut is_selected, label).clicked() {
-                    self.sender.send((*project_key, ProjectUiCommand::Navigate(path))).expect("sent");
+                if ui
+                    .toggle_value(&mut is_selected, label)
+                    .clicked()
+                {
+                    self.sender
+                        .send((*project_key, ProjectUiCommand::Navigate(path)))
+                        .expect("sent");
                 }
             })
             .body(|ui| {
@@ -61,26 +77,32 @@ impl ProjectExplorerUi {
         // it's an error to be given a path without a corresponding tree view node that has the same path
         let path = view_path_from_project_path(project_path).unwrap();
 
-        let graph = &self.project_tree_view.as_mut().unwrap().tree;
+        let graph = &self
+            .project_tree_view
+            .as_mut()
+            .unwrap()
+            .tree;
 
-        if let Some(node) = graph.node_indices().find(|&index| {
-            graph[index].path.eq(&path)
-        }) {
+        if let Some(node) = graph
+            .node_indices()
+            .find(|&index| graph[index].path.eq(&path))
+        {
             self.project_tree_state.clear();
-            self.project_tree_state.insert(node, true);
+            self.project_tree_state
+                .insert(node, true);
         } else {
             unreachable!()
         }
     }
 
     pub fn update_tree(&mut self, project_tree_view: ProjectTreeView) {
-        self.project_tree_view.replace(project_tree_view);
+        self.project_tree_view
+            .replace(project_tree_view);
     }
 }
 
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
-pub struct ProjectExplorerTab {
-}
+pub struct ProjectExplorerTab {}
 
 impl Tab for ProjectExplorerTab {
     type Context = ProjectTabContext;
@@ -94,9 +116,15 @@ impl Tab for ProjectExplorerTab {
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
         if let Some(tree) = &state.project_tree.project_tree_view {
-            state.project_tree.show_project_tree(ui, &tree.tree, NodeIndex::new(0), &state.project_tree.project_tree_state, &context.key);
+            state.project_tree.show_project_tree(
+                ui,
+                &tree.tree,
+                NodeIndex::new(0),
+                &state.project_tree.project_tree_state,
+                &context.key,
+            );
         } else {
-            ui.centered_and_justified(|ui|{
+            ui.centered_and_justified(|ui| {
                 ui.spinner();
             });
         }

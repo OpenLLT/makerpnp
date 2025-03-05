@@ -1,10 +1,11 @@
 use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
+
 use egui_mobius::types::Enqueue;
 use futures::channel::mpsc;
 use futures::stream::{BoxStream, FusedStream};
-use futures::{select, Sink, Stream, StreamExt};
+use futures::{Sink, Stream, StreamExt, select};
 use tracing::{error, trace};
 
 #[derive(Debug)]
