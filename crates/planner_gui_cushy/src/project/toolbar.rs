@@ -1,6 +1,6 @@
-use cushy::reactive::channel::Sender;
 use cushy::figures::units::Lp;
 use cushy::localization::Localize;
+use cushy::reactive::channel::Sender;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::styles::Dimension;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};

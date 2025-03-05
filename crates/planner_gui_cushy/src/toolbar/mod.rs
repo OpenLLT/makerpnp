@@ -1,9 +1,9 @@
-use cushy::reactive::channel::Sender;
 use cushy::figures::units::Lp;
 use cushy::localization::Localize;
+use cushy::reactive::channel::Sender;
+use cushy::reactive::value::Dynamic;
 use cushy::styles::components::IntrinsicPadding;
 use cushy::styles::Dimension;
-use cushy::reactive::value::Dynamic;
 use cushy::widget::{IntoWidgetList, MakeWidget, WidgetInstance};
 use cushy::widgets::{Expand, Radio};
 use unic_langid::LanguageIdentifier;

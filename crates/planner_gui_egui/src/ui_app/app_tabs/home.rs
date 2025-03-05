@@ -2,11 +2,12 @@ use egui::{Checkbox, FontFamily, RichText, Ui, WidgetText};
 use egui_i18n::tr;
 use egui_material_icons::icons::ICON_HOME;
 use egui_mobius::types::Value;
-use egui_taffy::taffy::prelude::{length, percent};
 use egui_taffy::taffy::Style;
-use egui_taffy::{taffy, tui, TuiBuilderLogic};
+use egui_taffy::taffy::prelude::{length, percent};
+use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
+
 use crate::config::Config;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -16,7 +17,7 @@ pub struct HomeTab {
     show_on_startup: bool,
 
     #[serde(skip)]
-    pub component: ComponentState<HomeTabUiCommand>
+    pub component: ComponentState<HomeTabUiCommand>,
 }
 
 #[derive(Debug, Clone)]
@@ -26,14 +27,13 @@ pub enum HomeTabUiCommand {
 }
 
 pub enum HomeTabAction {
-    None
+    None,
 }
 
 pub struct HomeTabContext {
     pub tab_key: TabKey,
-    pub config: Value<Config>
+    pub config: Value<Config>,
 }
-
 
 impl Tab for HomeTab {
     type Context = HomeTabContext;
@@ -86,37 +86,53 @@ impl UiComponent for HomeTab {
                     //align_self: Some(taffy::AlignItems::Center),
                     ..default_style()
                 })
-                    .add_with_border(|tui| {
-                        tui.label(
-                            RichText::new(ICON_HOME)
-                                .size(48.0)
-                                .family(FontFamily::Proportional),
-                        );
-                        tui.label(
-                            RichText::new(tr!("home-banner"))
-                                .size(48.0)
-                                .family(FontFamily::Proportional),
-                        );
-                    });
+                .add_with_border(|tui| {
+                    tui.label(
+                        RichText::new(ICON_HOME)
+                            .size(48.0)
+                            .family(FontFamily::Proportional),
+                    );
+                    tui.label(
+                        RichText::new(tr!("home-banner"))
+                            .size(48.0)
+                            .family(FontFamily::Proportional),
+                    );
+                });
 
                 tui.ui(|ui| {
-                    let mut show_home_tab_on_startup = context.config.lock().unwrap().show_home_tab_on_startup;
-                    if ui.add(Checkbox::new(
-                        &mut show_home_tab_on_startup,
-                        tr!("home-checkbox-label-show-on-startup"),
-                    )).changed() {
-                        self.component.send(HomeTabUiCommand::SetShowOnStartup(show_home_tab_on_startup));
+                    let mut show_home_tab_on_startup = context
+                        .config
+                        .lock()
+                        .unwrap()
+                        .show_home_tab_on_startup;
+                    if ui
+                        .add(Checkbox::new(
+                            &mut show_home_tab_on_startup,
+                            tr!("home-checkbox-label-show-on-startup"),
+                        ))
+                        .changed()
+                    {
+                        self.component
+                            .send(HomeTabUiCommand::SetShowOnStartup(show_home_tab_on_startup));
                     }
                 });
             });
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         match command {
             HomeTabUiCommand::None => Some(HomeTabAction::None),
             HomeTabUiCommand::SetShowOnStartup(value) => {
                 debug!("SetShowOnStartup: {}", value);
-                context.config.lock().unwrap().show_home_tab_on_startup = value;
+                context
+                    .config
+                    .lock()
+                    .unwrap()
+                    .show_home_tab_on_startup = value;
                 None
             }
         }

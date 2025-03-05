@@ -1,9 +1,10 @@
-use egui::{Ui, WidgetText};
 use egui::scroll_area::ScrollBarVisibility;
+use egui::{Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use tracing::debug;
 use planner_app::{PhaseOverview, PhasePlacements, Reference};
+use tracing::debug;
+
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 
@@ -26,7 +27,8 @@ impl PhaseUi {
     }
 
     pub fn update_placements(&mut self, phase_placements: PhasePlacements) {
-        self.placements.replace(phase_placements);
+        self.placements
+            .replace(phase_placements);
     }
 }
 
@@ -38,7 +40,7 @@ pub struct PhaseTab {
 impl PhaseTab {
     pub fn new(phase: Reference) -> Self {
         Self {
-            phase
+            phase,
         }
     }
 }
@@ -57,7 +59,6 @@ impl Tab for PhaseTab {
         let state = context.state.lock().unwrap();
         let phase = state.phases.get(&self.phase).unwrap();
         if let Some(phase_placements) = &phase.placements {
-
             let table = TableBuilder::new(ui)
                 .striped(true)
                 .resizable(true)
@@ -71,66 +72,81 @@ impl Tab for PhaseTab {
                 .column(Column::auto()) // x
                 .column(Column::auto()); // y
 
-            table.header(20.0, |mut header| {
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-index"));
+            table
+                .header(20.0, |mut header| {
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-index"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-refdes"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-placed"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-manufacturer"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-mpn"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-rotation"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-x"));
+                    });
+                    header.col(|ui| {
+                        ui.strong(tr!("phase-placements-column-y"));
+                    });
+                })
+                .body(|mut body| {
+                    for (index, placement_state) in phase_placements
+                        .placements
+                        .iter()
+                        .enumerate()
+                    {
+                        body.row(18.0, |mut row| {
+                            row.col(|ui| {
+                                ui.label(format!("{}", index_to_human_readable(index)));
+                            });
+                            row.col(|ui| {
+                                ui.label(&placement_state.placement.ref_des);
+                            });
+                            row.col(|ui| {
+                                let label = match placement_state.placed {
+                                    true => tr!("placement-placed"),
+                                    false => tr!("placement-pending"),
+                                };
+                                ui.label(label);
+                            });
+                            row.col(|ui| {
+                                ui.label(
+                                    &placement_state
+                                        .placement
+                                        .part
+                                        .manufacturer,
+                                );
+                            });
+                            row.col(|ui| {
+                                ui.label(&placement_state.placement.part.mpn);
+                            });
+                            row.col(|ui| {
+                                ui.label(placement_state.placement.x.to_string());
+                            });
+                            row.col(|ui| {
+                                ui.label(placement_state.placement.y.to_string());
+                            });
+                            row.col(|ui| {
+                                ui.label(
+                                    placement_state
+                                        .placement
+                                        .rotation
+                                        .to_string(),
+                                );
+                            });
+                        })
+                    }
                 });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-refdes"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-placed"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-manufacturer"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-mpn"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-rotation"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-x"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("phase-placements-column-y"));
-                });
-            }).body(|mut body| {
-
-                for (index, placement_state) in phase_placements.placements.iter().enumerate() {
-                    body.row(18.0, |mut row| {
-                        row.col(|ui| {
-                            ui.label(format!("{}", index_to_human_readable(index)));
-                        });
-                        row.col(|ui| {
-                            ui.label(&placement_state.placement.ref_des);
-                        });
-                        row.col(|ui| {
-                            let label = match placement_state.placed {
-                                true => tr!("placement-placed"),
-                                false => tr!("placement-pending"),
-                            };
-                            ui.label(label);
-                        });
-                        row.col(|ui| {
-                            ui.label(&placement_state.placement.part.manufacturer);
-                        });
-                        row.col(|ui| {
-                            ui.label(&placement_state.placement.part.mpn);
-                        });   
-                        row.col(|ui| {
-                            ui.label(placement_state.placement.x.to_string());
-                        });     
-                        row.col(|ui| {
-                            ui.label(placement_state.placement.y.to_string());
-                        });    
-                        row.col(|ui| {
-                            ui.label(placement_state.placement.rotation.to_string());
-                        });
-                    })
-                }
-            });
         }
     }
 

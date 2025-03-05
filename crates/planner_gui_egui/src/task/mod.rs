@@ -1,10 +1,10 @@
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 
-use futures::stream::BoxStream;
 use futures::FutureExt;
 use futures::StreamExt;
-use futures::{future, stream, Stream};
+use futures::stream::BoxStream;
+use futures::{Stream, future, stream};
 
 use crate::runtime::boxed_stream;
 
@@ -36,10 +36,7 @@ impl<T> Task<T> {
 
     /// Creates a [`Task`] that runs the given [`Stream`] to completion and maps each
     /// item with the given closure.
-    pub fn run<A>(
-        stream: impl Stream<Item = A> + Send + 'static,
-        f: impl Fn(A) -> T + Send + 'static,
-    ) -> Self
+    pub fn run<A>(stream: impl Stream<Item = A> + Send + 'static, f: impl Fn(A) -> T + Send + 'static) -> Self
     where
         T: 'static,
     {
@@ -137,10 +134,7 @@ impl<T, E> Task<Result<T, E>> {
     /// If the task returns an `Err` then the `Err` value is consumed.
     ///
     /// The success value is provided to the closure to create the subsequent [`Task`].
-    pub fn and_then<A>(
-        self,
-        f: impl Fn(T) -> Task<A> + Send + 'static,
-    ) -> Task<A>
+    pub fn and_then<A>(self, f: impl Fn(T) -> Task<A> + Send + 'static) -> Task<A>
     where
         T: Send + 'static,
         E: Send + 'static,
@@ -149,17 +143,13 @@ impl<T, E> Task<Result<T, E>> {
         self.then(move |result| result.map_or_else(|_err: E| Task::none(), &f))
     }
 
-    pub fn map_err<O>(
-        self,
-        f: impl Fn(E) -> O + Send + 'static,
-    ) -> Task<Result<T, O>>
+    pub fn map_err<O>(self, f: impl Fn(E) -> O + Send + 'static) -> Task<Result<T, O>>
     where
         T: Send + 'static,
         E: Send + 'static,
         O: Send + 'static,
-
     {
-        self.map(move |result|{
+        self.map(move |result| {
             let foo = match result {
                 Ok(value) => Ok(value),
                 Err(error) => Err(f(error)),
@@ -169,34 +159,24 @@ impl<T, E> Task<Result<T, E>> {
         })
     }
 
-    pub fn or_else(
-        self,
-        f: impl Fn(E) -> Self + Send + 'static,
-    ) -> Self
+    pub fn or_else(self, f: impl Fn(E) -> Self + Send + 'static) -> Self
     where
         T: Send + 'static,
         E: Send + 'static,
     {
-        self.then(move |result|{
-            match result {
-                Ok(value) => Task::done(Ok(value)),
-                Err(error) => f(error),
-            }
+        self.then(move |result| match result {
+            Ok(value) => Task::done(Ok(value)),
+            Err(error) => f(error),
         })
     }
 
-    pub fn inspect_err(
-        self,
-        f: impl Fn(&E) + Send + 'static
-    ) -> Task<Result<T, E>>
+    pub fn inspect_err(self, f: impl Fn(&E) + Send + 'static) -> Task<Result<T, E>>
     where
         T: Send + 'static,
         E: Send + 'static,
     {
         let task = self.then(move |result| {
-            let result = result.inspect_err(|error|{
-                f(error)
-            });
+            let result = result.inspect_err(|error| f(error));
             Task::done(result)
         });
 

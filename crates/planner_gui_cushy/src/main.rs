@@ -8,12 +8,12 @@ extern crate core;
 use std::path;
 use std::path::PathBuf;
 
-use cushy::reactive::channel::{Receiver, Sender};
 use cushy::dialog::{FilePicker, FileType};
 use cushy::figures::units::Px;
 use cushy::localization::Localization;
-use cushy::styles::components::IntrinsicPadding;
+use cushy::reactive::channel::{Receiver, Sender};
 use cushy::reactive::value::Dynamic;
+use cushy::styles::components::IntrinsicPadding;
 use cushy::widget::{IntoWidgetList, MakeWidget};
 use cushy::window::{PendingWindow, WindowHandle};
 use cushy::{App, Application};
@@ -170,18 +170,19 @@ fn main(app: &mut App) -> cushy::Result {
 
     let dyn_app_state = Dynamic::new(app_state);
 
-    app_message_receiver.on_receive({
-        let dyn_app_state = dyn_app_state.clone();
+    app_message_receiver
+        .on_receive({
+            let dyn_app_state = dyn_app_state.clone();
 
-        move |app_message| {
-            trace!("message received. app_message: {:?}", app_message);
-            let task = dyn_app_state.lock().update(app_message);
+            move |app_message| {
+                trace!("message received. app_message: {:?}", app_message);
+                let task = dyn_app_state.lock().update(app_message);
 
-            if let Some(stream) = task::into_stream(task) {
-                runtime.run(stream);
+                if let Some(stream) = task::into_stream(task) {
+                    runtime.run(stream);
+                }
             }
-        }
-    })
+        })
         .persist();
 
     let ui = pending
@@ -372,19 +373,20 @@ impl AppState {
             .lock()
             .add_tab(&self.context, TabKind::New(NewTab::new(new_tab_message_sender)));
 
-        new_tab_message_receiver.on_receive({
-            let app_message_sender = self.app_message_sender.clone();
-            move |new_tab_message| {
-                debug!("new_tab_message: {:?}", new_tab_message);
-                app_message_sender
-                    .send(AppMessage::TabMessage(TabMessage::TabKindMessage(
-                        tab_key,
-                        TabKindMessage::NewTabMessage(new_tab_message),
-                    )))
-                    .map_err(|message| error!("unable to forward new tab message. message: {:?}", message))
-                    .ok();
-            }
-        })
+        new_tab_message_receiver
+            .on_receive({
+                let app_message_sender = self.app_message_sender.clone();
+                move |new_tab_message| {
+                    debug!("new_tab_message: {:?}", new_tab_message);
+                    app_message_sender
+                        .send(AppMessage::TabMessage(TabMessage::TabKindMessage(
+                            tab_key,
+                            TabKindMessage::NewTabMessage(new_tab_message),
+                        )))
+                        .map_err(|message| error!("unable to forward new tab message. message: {:?}", message))
+                        .ok();
+                }
+            })
             .persist();
     }
 
@@ -514,19 +516,20 @@ impl AppState {
     }
 
     fn create_project_tab_mapping(&self, project_tab_message_receiver: Receiver<ProjectTabMessage>, tab_key: TabKey) {
-        project_tab_message_receiver.on_receive({
-            let app_message_sender = self.app_message_sender.clone();
-            move |project_tab_message| {
-                debug!("project_tab_message: {:?}", project_tab_message);
-                app_message_sender
-                    .send(AppMessage::TabMessage(TabMessage::TabKindMessage(
-                        tab_key,
-                        TabKindMessage::ProjectTabMessage(project_tab_message),
-                    )))
-                    .map_err(|message| error!("unable to forward project tab message. message: {:?}", message))
-                    .ok();
-            }
-        })
+        project_tab_message_receiver
+            .on_receive({
+                let app_message_sender = self.app_message_sender.clone();
+                move |project_tab_message| {
+                    debug!("project_tab_message: {:?}", project_tab_message);
+                    app_message_sender
+                        .send(AppMessage::TabMessage(TabMessage::TabKindMessage(
+                            tab_key,
+                            TabKindMessage::ProjectTabMessage(project_tab_message),
+                        )))
+                        .map_err(|message| error!("unable to forward project tab message. message: {:?}", message))
+                        .ok();
+                }
+            })
             .persist();
     }
 
@@ -535,15 +538,16 @@ impl AppState {
         project_message_receiver: Receiver<ProjectMessage>,
         project_tab_message_sender: Sender<ProjectTabMessage>,
     ) {
-        project_message_receiver.on_receive({
-            move |project_message| {
-                debug!("project_message: {:?}", project_message);
-                project_tab_message_sender
-                    .send(ProjectTabMessage::ProjectMessage(project_message))
-                    .map_err(|message| error!("unable to forward project message, message: {:?}", message))
-                    .ok();
-            }
-        })
+        project_message_receiver
+            .on_receive({
+                move |project_message| {
+                    debug!("project_message: {:?}", project_message);
+                    project_tab_message_sender
+                        .send(ProjectTabMessage::ProjectMessage(project_message))
+                        .map_err(|message| error!("unable to forward project message, message: {:?}", message))
+                        .ok();
+                }
+            })
             .persist();
     }
 

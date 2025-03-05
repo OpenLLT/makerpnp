@@ -1,7 +1,9 @@
 use std::sync::Arc;
-use planner_app::{Effect, Event, Planner};
+
 use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
+use planner_app::{Effect, Event, Planner};
 use tracing::{debug, error};
+
 use crate::project::{ProjectError, ProjectUiCommand};
 use crate::task::Task;
 
@@ -41,10 +43,8 @@ impl PlannerCoreService {
                     Some(error) => {
                         error!("core error: {:?}", error);
                         Task::done(Err(ProjectError::CoreError(error)))
-                    },
-                    None => {
-                        Task::done(Ok(ProjectUiCommand::SetModifiedState(view.modified)))
-                    },
+                    }
+                    None => Task::done(Ok(ProjectUiCommand::SetModifiedState(view.modified))),
                 };
 
                 task
@@ -53,7 +53,7 @@ impl PlannerCoreService {
                 let ProjectViewRendererOperation::View {
                     view,
                 } = request.operation;
-                
+
                 Task::done(Ok(ProjectUiCommand::UpdateView(view)))
             }
         }

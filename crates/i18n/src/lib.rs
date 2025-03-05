@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+
 use tracing::{debug, error, info};
 
 pub struct I18nConfig {
@@ -13,13 +14,15 @@ pub fn init(config: I18nConfig) {
         let mut path = PathBuf::from("assets/translations");
         path.push(identifier.clone());
         path.push("translations.ftl");
-        debug!("Loading translations. identifier: {}, absolute_path: {:?}", identifier, std::path::absolute(path.clone()).unwrap());
+        debug!(
+            "Loading translations. identifier: {}, absolute_path: {:?}",
+            identifier,
+            std::path::absolute(path.clone()).unwrap()
+        );
         match fs::read_to_string(path.clone()) {
-            Ok(content) => {
-                match egui_i18n::load_translations_from_text("en-US", content) {
-                    Err(e) => error!("Error parsing translation file: {}, cause: {}", path.display(), e),
-                    Ok(_) => info!("Loaded translations. file: {}", path.display()),
-                }
+            Ok(content) => match egui_i18n::load_translations_from_text("en-US", content) {
+                Err(e) => error!("Error parsing translation file: {}, cause: {}", path.display(), e),
+                Ok(_) => info!("Loaded translations. file: {}", path.display()),
             },
             Err(e) => {
                 error!("Error reading translation file: {}, cause: {}", path.display(), e);
@@ -32,14 +35,15 @@ pub fn init(config: I18nConfig) {
 }
 
 pub mod fluent_argument_helpers {
-    
+
     #[cfg(feature = "json")]
     pub mod json {
+        use std::borrow::Cow;
+        use std::collections::HashMap;
+
         use fluent_bundle::types::{FluentNumber, FluentNumberOptions};
         use fluent_bundle::{FluentArgs, FluentValue};
         use serde_json::Value;
-        use std::borrow::Cow;
-        use std::collections::HashMap;
         use tracing::trace;
 
         pub fn build_fluent_args<'a>(params: &'a HashMap<Cow<'_, str>, Value>) -> FluentArgs<'a> {
@@ -89,6 +93,7 @@ pub mod fluent_argument_helpers {
     #[cfg(feature = "planner_app")]
     pub mod planner_app {
         use std::collections::HashMap;
+
         use fluent_bundle::{FluentArgs, FluentValue};
         use planner_app::Arg;
 

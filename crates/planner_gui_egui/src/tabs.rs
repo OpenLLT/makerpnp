@@ -1,10 +1,11 @@
-use egui::{Id, Ui, WidgetText};
-use serde::{Deserialize, Serialize};
-use std::collections::btree_map::{Iter, IterMut};
 use std::collections::BTreeMap;
+use std::collections::btree_map::{Iter, IterMut};
 use std::marker::PhantomData;
+
+use egui::{Id, Ui, WidgetText};
 use egui_dock::TabViewer;
 use egui_mobius::types::Value;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 #[derive(Debug, Clone, Hash, Copy, Ord, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
@@ -63,7 +64,7 @@ impl<'b, Context, TabKind: Tab<Context = Context>> Tabs<TabKind, Context> {
     pub fn retain_all(&mut self, tab_keys: &[TabKey], tab_context: &mut Context) {
         self.tabs.retain(|tab_key, tab| {
             let retain = tab_keys.contains(tab_key);
-            
+
             if !retain {
                 let can_close = tab.on_close(tab_key, tab_context);
 
@@ -83,9 +84,8 @@ impl<TabKind, TabContext> Tabs<TabKind, TabContext> {
 }
 
 pub trait Tab {
-    
     type Context;
-    
+
     fn label(&self) -> WidgetText;
     fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context);
 

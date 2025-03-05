@@ -1,15 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+use i18n::I18nConfig;
+use planner_gui_egui::ui_app::UiApp;
 /// Run as follows:
 /// `run --package planner_gui_egui --bin planner_gui_egui`
 ///
 /// To enable logging, set the environment variable appropriately, for example:
 /// `RUST_LOG=debug,eframe=warn,egui_glow=warn,egui=warn`
 use tracing::info;
-use tracing_subscriber::{fmt, EnvFilter};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use i18n::I18nConfig;
-use planner_gui_egui::ui_app::UiApp;
+use tracing_subscriber::{EnvFilter, fmt};
 
 fn main() {
     tracing_subscriber::registry()
@@ -19,17 +19,12 @@ fn main() {
 
     info!("Started");
 
-    i18n::init(
-        I18nConfig {
-            languages: vec![
-                String::from("es-ES"),
-                String::from("en-US"),
-            ],
-            default: "en-US".to_string(),
-            fallback: "en-US".to_string(),
-        }
-    );
-    
+    i18n::init(I18nConfig {
+        languages: vec![String::from("es-ES"), String::from("en-US")],
+        default: "en-US".to_string(),
+        fallback: "en-US".to_string(),
+    });
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 440.0])
@@ -44,5 +39,4 @@ fn main() {
     ) {
         eprintln!("Failed to run eframe: {:?}", e);
     }
-
 }

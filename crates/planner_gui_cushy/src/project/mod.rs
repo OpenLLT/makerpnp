@@ -4,10 +4,10 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use cushy::reactive::channel::Sender;
 use cushy::dialog::ShouldClose;
 use cushy::localization::Localize;
 use cushy::localize;
+use cushy::reactive::channel::Sender;
 use cushy::reactive::value::{Destination, Dynamic, Source};
 use cushy::widget::{MakeWidget, WidgetInstance, WidgetList};
 use cushy::widgets::label::Displayable;
@@ -210,19 +210,21 @@ impl Project {
         self.create_unit_assignments_modal
             .replace(modal.new_handle());
 
-        let (create_unit_assignments_sender, create_unit_assignments_receiver) = cushy::reactive::channel::build().finish();
+        let (create_unit_assignments_sender, create_unit_assignments_receiver) =
+            cushy::reactive::channel::build().finish();
         self.create_unit_assignments_sender
             .replace(create_unit_assignments_sender);
 
-        create_unit_assignments_receiver.on_receive({
-            let project_message_sender = self.sender.clone();
-            move |form_message| {
-                project_message_sender
-                    .send(ProjectMessage::CreateUnitAssignmentFormMessage(form_message))
-                    .map_err(|message| error!("Could not forward form message: {:?}", message))
-                    .ok();
-            }
-        })
+        create_unit_assignments_receiver
+            .on_receive({
+                let project_message_sender = self.sender.clone();
+                move |form_message| {
+                    project_message_sender
+                        .send(ProjectMessage::CreateUnitAssignmentFormMessage(form_message))
+                        .map_err(|message| error!("Could not forward form message: {:?}", message))
+                        .ok();
+                }
+            })
             .persist();
 
         let project_tree_widget = self.project_tree.lock().make_widget();
@@ -256,32 +258,29 @@ impl Project {
 
         let (toolbar_message_sender, toolbar_message_receiver) = cushy::reactive::channel::build().finish();
 
-        toolbar_message_receiver.on_receive({
-            let project_message_sender = self.sender.clone();
-            move |toolbar_message| {
-                debug!("project_toolbar_message: {:?}", toolbar_message);
-                project_message_sender
-                    .send(ProjectMessage::ToolbarMessage(toolbar_message))
-                    .map_err(|message| error!("unable to forward toolbar message. message: {:?}", message))
-                    .ok();
-            }
-        })
+        toolbar_message_receiver
+            .on_receive({
+                let project_message_sender = self.sender.clone();
+                move |toolbar_message| {
+                    debug!("project_toolbar_message: {:?}", toolbar_message);
+                    project_message_sender
+                        .send(ProjectMessage::ToolbarMessage(toolbar_message))
+                        .map_err(|message| error!("unable to forward toolbar message. message: {:?}", message))
+                        .ok();
+                }
+            })
             .persist();
 
         let toolbar = make_toolbar(toolbar_message_sender);
 
-        let content_pane = self.pile.clone()
-            .expand()
-            .contain();
+        let content_pane = self.pile.clone().expand().contain();
 
         let columns = project_explorer
             .and(content_pane)
             .into_columns()
             .expand_horizontally();
 
-        let project_ui = toolbar
-            .and(columns)
-            .into_rows();
+        let project_ui = toolbar.and(columns).into_rows();
 
         project_ui
             .and(modal)

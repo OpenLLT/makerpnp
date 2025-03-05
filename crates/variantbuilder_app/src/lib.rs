@@ -5,8 +5,8 @@ pub use assembly::assembly_variant::AssemblyVariant;
 use assembly::AssemblyVariantProcessor;
 use crux_core::macros::Effect;
 use crux_core::render::Render;
-use crux_core::{render, App, Command};
 pub use crux_core::Core;
+use crux_core::{render, App, Command};
 use csv::QuoteStyle;
 use eda::placement::{EdaPlacement, EdaPlacementField};
 use eda::substitution::{EdaSubstitutionResult, EdaSubstitutionRule, EdaSubstitutor};
@@ -70,11 +70,14 @@ impl App for VariantBuilder {
     type Capabilities = Capabilities;
     type Effect = Effect;
 
-    fn update(&self, event: Self::Event, model: &mut Self::Model, _caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
+    fn update(
+        &self,
+        event: Self::Event,
+        model: &mut Self::Model,
+        _caps: &Self::Capabilities,
+    ) -> Command<Self::Effect, Self::Event> {
         match event {
-            Event::None => {
-                render::render()
-            }
+            Event::None => render::render(),
             Event::Build {
                 eda_tool,
                 placements,

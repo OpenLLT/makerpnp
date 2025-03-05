@@ -4,6 +4,7 @@ use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
+
 use crate::config::Config;
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
@@ -21,18 +22,9 @@ pub struct TabKindContext {
 
 #[derive(Deserialize, Serialize)]
 pub enum TabKind {
-    Home(
-        HomeTab,
-        #[serde(skip)]
-        ComponentState<TabKindUiCommand>
-    ),
-    Project(
-        ProjectTab,
-        #[serde(skip)]
-        ComponentState<TabKindUiCommand>
-    ),
+    Home(HomeTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
+    Project(ProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
 }
-
 
 #[derive(Debug, Clone)]
 pub enum TabKindUiCommand {
@@ -48,7 +40,7 @@ pub enum TabKindAction {
 
 impl Tab for TabKind {
     type Context = TabKindContext;
-    
+
     fn label(&self) -> WidgetText {
         match self {
             TabKind::Home(tab, _) => tab.label(),
@@ -63,16 +55,19 @@ impl Tab for TabKind {
     fn on_close(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
         match self {
             TabKind::Home(tab, _) => {
-                let mut home_tab_context = HomeTabContext { tab_key: tab_key.clone(), config: context.config.clone() };
+                let mut home_tab_context = HomeTabContext {
+                    tab_key: tab_key.clone(),
+                    config: context.config.clone(),
+                };
                 tab.on_close(tab_key, &mut home_tab_context)
-            },
+            }
             TabKind::Project(tab, _) => {
                 let mut project_tab_context = project::ProjectTabContext {
                     tab_key: tab_key.clone(),
-                    projects: context.projects.clone()
+                    projects: context.projects.clone(),
                 };
                 tab.on_close(tab_key, &mut project_tab_context)
-            },
+            }
         }
     }
 }
@@ -88,37 +83,61 @@ impl UiComponent for TabKind {
 
         match self {
             TabKind::Home(tab, _) => {
-                let mut home_tab_context = HomeTabContext { tab_key, config: context.config.clone() };
+                let mut home_tab_context = HomeTabContext {
+                    tab_key,
+                    config: context.config.clone(),
+                };
                 tab.ui(ui, &mut home_tab_context)
-            },
+            }
             TabKind::Project(tab, _) => {
                 let mut project_tab_context = project::ProjectTabContext {
                     tab_key,
-                    projects: context.projects.clone()
+                    projects: context.projects.clone(),
                 };
                 tab.ui(ui, &mut project_tab_context)
-            },
+            }
         }
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         let (tab_key, command) = command;
         let (_tab_key, context) = context;
 
         match (self, command) {
-            (TabKind::Home(tab, _), TabKindUiCommand::HomeTabCommand { command}) => {
-                let mut home_tab_context = HomeTabContext { tab_key, config: context.config.clone() };
+            (
+                TabKind::Home(tab, _),
+                TabKindUiCommand::HomeTabCommand {
+                    command,
+                },
+            ) => {
+                let mut home_tab_context = HomeTabContext {
+                    tab_key,
+                    config: context.config.clone(),
+                };
                 tab.update(command, &mut home_tab_context)
-                    .map(|action| TabKindAction::HomeTabAction { action })
-            },
-            (TabKind::Project(tab, _), TabKindUiCommand::ProjectTabCommand { command }) => {
+                    .map(|action| TabKindAction::HomeTabAction {
+                        action,
+                    })
+            }
+            (
+                TabKind::Project(tab, _),
+                TabKindUiCommand::ProjectTabCommand {
+                    command,
+                },
+            ) => {
                 let mut project_tab_context = project::ProjectTabContext {
                     tab_key,
-                    projects: context.projects.clone()
+                    projects: context.projects.clone(),
                 };
                 tab.update(command, &mut project_tab_context)
-                    .map(|action| TabKindAction::ProjectTabAction { action })
-            },
+                    .map(|action| TabKindAction::ProjectTabAction {
+                        action,
+                    })
+            }
             _ => unreachable!(),
         }
     }
@@ -134,7 +153,7 @@ pub struct AppTabs {
     tree: Value<DockState<TabKey>>,
 
     #[serde(skip)]
-    pub component: ComponentState<(TabKey, TabUiCommand)>
+    pub component: ComponentState<(TabKey, TabUiCommand)>,
 }
 
 impl Default for AppTabs {
@@ -194,7 +213,7 @@ macro_rules! tabs_impl {
         #[allow(dead_code)]
         pub fn find_tab<F>(&self, f: F) -> Option<TabKey>
         where
-            F: Fn(&$tab_kind) -> bool
+            F: Fn(&$tab_kind) -> bool,
         {
             let tree = self.tree.lock().unwrap();
 
@@ -216,7 +235,7 @@ macro_rules! tabs_impl {
         #[allow(dead_code)]
         pub fn show_tab<F>(&mut self, f: F) -> Result<TabKey, ()>
         where
-            F: Fn(&$tab_kind) -> bool
+            F: Fn(&$tab_kind) -> bool,
         {
             let tab = self.find_tab(f);
 
@@ -230,7 +249,7 @@ macro_rules! tabs_impl {
                 Err(())
             }
         }
-    }
+    };
 }
 
 impl AppTabs {
@@ -241,8 +260,8 @@ impl AppTabs {
     //
 
     pub fn show_home_tab(&mut self) {
-        self.show_tab(|candidate_tab|matches!(candidate_tab, TabKind::Home(..)))
-            .inspect_err(|_|{
+        self.show_tab(|candidate_tab| matches!(candidate_tab, TabKind::Home(..)))
+            .inspect_err(|_| {
                 // create a new home tab
                 let tab_kind_component = ComponentState::default();
 
@@ -256,10 +275,15 @@ impl AppTabs {
 
                 let mut tree = self.tree.lock().unwrap();
                 tree.push_to_focused_leaf(tab_key);
-            }).ok();
+            })
+            .ok();
     }
 
-    fn configure_home_tab_mappers(tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>, mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>, tab_key: TabKey) {
+    fn configure_home_tab_mappers(
+        tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
+        mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,
+        tab_key: TabKey,
+    ) {
         match tabs.tabs.get_mut(&tab_key).unwrap() {
             TabKind::Home(home_tab, tab_kind_component) => {
                 tab_kind_component.configure_mapper(tab_kind_sender, move |command| {
@@ -269,31 +293,33 @@ impl AppTabs {
 
                 let tab_kind_component_sender = tab_kind_component.sender.clone();
 
-                home_tab.component.configure_mapper(tab_kind_component_sender, move |command| {
-                    debug!("home tab mapper. command: {:?}", command);
-                    TabKindUiCommand::HomeTabCommand { command }
-                });
+                home_tab
+                    .component
+                    .configure_mapper(tab_kind_component_sender, move |command| {
+                        debug!("home tab mapper. command: {:?}", command);
+                        TabKindUiCommand::HomeTabCommand {
+                            command,
+                        }
+                    });
             }
             _ => unreachable!(),
         }
     }
 
     pub fn find_home_tab(&self) -> Option<TabKey> {
-        self.find_tab(|candidate_tab|matches!(candidate_tab, TabKind::Home(..)))
+        self.find_tab(|candidate_tab| matches!(candidate_tab, TabKind::Home(..)))
     }
 
     /// Safety: call only once on startup, before the tabs are shown.
     pub fn show_home_tab_on_startup(&mut self, show_home_tab_on_startup: bool) {
-
         if show_home_tab_on_startup {
-            
             // the home tab's components won't be wired up, because they got restored with `Default`, so we have to fix it
             if let Some(home_tab_key) = self.find_home_tab() {
                 let tabs = self.tabs.lock().unwrap();
                 let tab_kind_sender = self.component.sender.clone();
                 Self::configure_home_tab_mappers(tab_kind_sender, tabs, home_tab_key);
             }
-            
+
             self.show_home_tab();
         } else if let Some(home_tab_key) = self.find_home_tab() {
             // TODO refactor into 'retain_tabs(...)` or `remove_tab(...)`
@@ -307,7 +333,7 @@ impl AppTabs {
 
 #[derive(Debug, Clone)]
 pub enum TabUiCommand {
-    TabKindCommand(TabKindUiCommand)
+    TabKindCommand(TabKindUiCommand),
 }
 
 pub enum TabAction {
@@ -321,7 +347,6 @@ impl UiComponent for AppTabs {
     type UiAction = TabAction;
 
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
-
         let ctx = ui.ctx();
 
         let mut app_tab_viewer = AppTabViewer {
@@ -337,20 +362,22 @@ impl UiComponent for AppTabs {
             .show(ctx, &mut app_tab_viewer);
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         let (tab_key, command) = command;
         match command {
             TabUiCommand::TabKindCommand(tab_kind_command) => {
-
                 let mut tabs = self.tabs.lock().unwrap();
                 let tab = tabs.get_mut(&tab_key).unwrap();
                 let tab_action = tab.update((tab_key, tab_kind_command), &mut (tab_key, context));
 
-                tab_action.map(|action| {
-                    TabAction::TabKindAction { action }
+                tab_action.map(|action| TabAction::TabKindAction {
+                    action,
                 })
             }
         }
     }
-
 }

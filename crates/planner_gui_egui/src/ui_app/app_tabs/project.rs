@@ -1,9 +1,11 @@
 use std::path::PathBuf;
+
 use egui::{Ui, WidgetText};
 use egui_mobius::types::Value;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
+
 use crate::project::{Project, ProjectAction, ProjectContext, ProjectError, ProjectKey, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
@@ -13,14 +15,14 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Default, Debug, Deserialize, Serialize)]
 pub struct ProjectTab {
     pub project_key: ProjectKey,
-    
+
     // path is required here so the project can be loaded when the application restarts
     pub path: PathBuf,
     pub label: String,
     pub modified: bool,
 
     #[serde(skip)]
-    pub component: ComponentState<ProjectTabUiCommand>
+    pub component: ComponentState<ProjectTabUiCommand>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,13 +36,16 @@ pub enum ProjectTabAction {
 
 pub struct ProjectTabContext {
     pub tab_key: TabKey,
-    pub projects: Value<SlotMap<ProjectKey, Project>>
+    pub projects: Value<SlotMap<ProjectKey, Project>>,
 }
-
 
 impl ProjectTab {
     pub fn new(label: String, path: PathBuf, project_key: ProjectKey) -> Self {
-        debug!("Creating project tab. key: {:?}, path: {}", &project_key, &path.display());
+        debug!(
+            "Creating project tab. key: {:?}, path: {}",
+            &project_key,
+            &path.display()
+        );
         Self {
             project_key,
             path,
@@ -82,7 +87,6 @@ impl UiComponent for ProjectTab {
     type UiAction = ProjectTabAction;
 
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
-
         let projects = context.projects.lock().unwrap();
         let project = projects.get(self.project_key).unwrap();
 
@@ -93,11 +97,20 @@ impl UiComponent for ProjectTab {
         project.ui(ui, &mut project_context);
     }
 
-    fn update<'context>(&mut self, command: Self::UiCommand, context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
         match command {
-            ProjectTabUiCommand::ProjectCommand { key, command } => {
+            ProjectTabUiCommand::ProjectCommand {
+                key,
+                command,
+            } => {
                 let mut projects = context.projects.lock().unwrap();
-                let project = projects.get_mut(self.project_key).unwrap();
+                let project = projects
+                    .get_mut(self.project_key)
+                    .unwrap();
 
                 let mut project_context = ProjectContext {
                     key: self.project_key,

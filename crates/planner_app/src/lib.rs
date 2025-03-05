@@ -4,8 +4,8 @@ use std::str::FromStr;
 
 use crux_core::macros::Effect;
 use crux_core::render::Render;
-use crux_core::{render, App, Command};
 pub use crux_core::Core;
+use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
 use planning::placement::{PlacementOperation, PlacementSortingItem, PlacementState};
@@ -23,6 +23,7 @@ use serde_with::serde_as;
 use stores::load_out::{LoadOutOperationError, LoadOutSource};
 use thiserror::Error;
 use tracing::{info, trace};
+
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 
@@ -177,7 +178,6 @@ pub enum ProjectViewRequest {
     PhasePlacements { phase: String },
 }
 
-
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct ProjectOperationViewModel {
     pub modified: bool,
@@ -272,648 +272,614 @@ pub enum Event {
 }
 
 impl Planner {
-    fn update_inner(&self, event: <Planner as App>::Event) -> Box<dyn FnOnce(&mut <Planner as App>::Model) -> Result<Command<<Planner as App>::Effect, <Planner as App>::Event>, AppError>> {
+    fn update_inner(
+        &self,
+        event: <Planner as App>::Event,
+    ) -> Box<
+        dyn FnOnce(
+            &mut <Planner as App>::Model,
+        ) -> Result<Command<<Planner as App>::Effect, <Planner as App>::Event>, AppError>,
+    > {
         match event {
-            Event::None => {
-                Box::new(| _model: &mut Model | Ok(render::render()))
-            }
+            Event::None => Box::new(|_model: &mut Model| Ok(render::render())),
             Event::CreateProject {
                 name,
                 path,
-            } => {
-                Box::new(| model: &mut Model | {
-                    info!("Creating project. path: {:?}", &path);
+            } => Box::new(|model: &mut Model| {
+                info!("Creating project. path: {:?}", &path);
 
-                    let project = Project::new(name);
-                    model
-                        .model_project
-                        .replace(ModelProject {
-                            path,
-                            project,
-                            modified: true,
-                        });
+                let project = Project::new(name);
+                model
+                    .model_project
+                    .replace(ModelProject {
+                        path,
+                        project,
+                        modified: true,
+                    });
 
-                    info!("Created project successfully.");
-                    Ok(render::render())
-                })
-            }
+                info!("Created project successfully.");
+                Ok(render::render())
+            }),
             Event::Load {
                 path,
-            } => {
-                Box::new(|model: &mut Model| {
-                    info!("Load project. path: {:?}", &path);
+            } => Box::new(|model: &mut Model| {
+                info!("Load project. path: {:?}", &path);
 
-                    let project = project::load(&path).map_err(AppError::IoError)?;
+                let project = project::load(&path).map_err(AppError::IoError)?;
 
-                    model
-                        .model_project
-                        .replace(ModelProject {
-                            path,
-                            project,
-                            modified: false,
-                        });
-
-                    Ok(render::render())
-                })
-            }
-            Event::Save => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project,
+                model
+                    .model_project
+                    .replace(ModelProject {
                         path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+                        project,
+                        modified: false,
+                    });
 
-                    info!("Save project. path: {:?}", &path);
+                Ok(render::render())
+            }),
+            Event::Save => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    project::save(project, path).map_err(AppError::IoError)?;
+                info!("Save project. path: {:?}", &path);
 
-                    info!("Saved. path: {:?}", path);
-                    *modified = false;
+                project::save(project, path).map_err(AppError::IoError)?;
 
-                    Ok(render::render())
-                })
-            }
+                info!("Saved. path: {:?}", path);
+                *modified = false;
+
+                Ok(render::render())
+            }),
             Event::AddPcb {
                 kind,
                 name,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    project::add_pcb(project, kind.clone().into(), name)
-                        .map_err(|cause| AppError::PcbError(cause.into()))?;
+                project::add_pcb(project, kind.clone().into(), name)
+                    .map_err(|cause| AppError::PcbError(cause.into()))?;
 
-                    *modified |= true;
+                *modified |= true;
 
-                    Ok(render::render())
-                })
-            }
+                Ok(render::render())
+            }),
             Event::AssignVariantToUnit {
                 design,
                 variant,
                 unit,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    project
-                        .update_assignment(unit.clone(), DesignVariant {
-                            design_name: design.clone(),
-                            variant_name: variant.clone(),
-                        })
-                        .map_err(|cause| AppError::OperationError(cause.into()))?;
-                    *modified |= true;
-                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    Ok(render::render())
-                })
-            }
-            Event::RefreshFromDesignVariants => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                project
+                    .update_assignment(unit.clone(), DesignVariant {
+                        design_name: design.clone(),
+                        variant_name: variant.clone(),
+                    })
+                    .map_err(|cause| AppError::OperationError(cause.into()))?;
+                *modified |= true;
+                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                Ok(render::render())
+            }),
+            Event::RefreshFromDesignVariants => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
+                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
 
-                    *modified |= refresh_result.modified;
+                *modified |= refresh_result.modified;
 
-                    Ok(render::render())
-                })
-            }
+                Ok(render::render())
+            }),
             Event::AssignProcessToParts {
                 process: process_name,
                 manufacturer: manufacturer_pattern,
                 mpn: mpn_pattern,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let process = project
-                        .find_process(&process_name)
-                        .map_err(|cause| AppError::ProcessError(cause.into()))?
-                        .clone();
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let process = project
+                    .find_process(&process_name)
+                    .map_err(|cause| AppError::ProcessError(cause.into()))?
+                    .clone();
 
-                    let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified |= true;
+                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= true;
 
-                    project::update_applicable_processes(
-                        project,
-                        refresh_result.unique_parts.as_slice(),
-                        process,
-                        manufacturer_pattern,
-                        mpn_pattern,
-                    );
+                project::update_applicable_processes(
+                    project,
+                    refresh_result.unique_parts.as_slice(),
+                    process,
+                    manufacturer_pattern,
+                    mpn_pattern,
+                );
 
-                    Ok(render::render())
-                })
-            }
+                Ok(render::render())
+            }),
             Event::CreatePhase {
                 process: process_name,
                 reference,
                 load_out,
                 pcb_side,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let process_name_str = process_name.to_string();
-                    let process = ProcessFactory::by_name(process_name_str.as_str())
-                        .map_err(|cause| AppError::ProcessError(cause.into()))?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let process_name_str = process_name.to_string();
+                let process = ProcessFactory::by_name(process_name_str.as_str())
+                    .map_err(|cause| AppError::ProcessError(cause.into()))?;
 
-                    project
-                        .ensure_process(&process)
-                        .map_err(AppError::OperationError)?;
-                    *modified |= true;
+                project
+                    .ensure_process(&process)
+                    .map_err(AppError::OperationError)?;
+                *modified |= true;
 
-                    stores::load_out::ensure_load_out(&load_out).map_err(AppError::OperationError)?;
+                stores::load_out::ensure_load_out(&load_out).map_err(AppError::OperationError)?;
 
-                    project
-                        .update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)
-                        .map_err(AppError::OperationError)?;
+                project
+                    .update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)
+                    .map_err(AppError::OperationError)?;
 
-                    Ok(render::render())
-                })
-            }
+                Ok(render::render())
+            }),
             Event::AssignPlacementsToPhase {
                 phase: phase_reference,
                 placements: placements_pattern,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified |= true;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= true;
 
-                    let phase = project
-                        .phases
-                        .get_mut(&phase_reference)
-                        .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?
-                        .clone();
+                let phase = project
+                    .phases
+                    .get_mut(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?
+                    .clone();
 
-                    let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
-                    trace!("Required load_out parts: {:?}", parts);
+                let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
+                trace!("Required load_out parts: {:?}", parts);
 
-                    *modified |= project::update_phase_operation_states(project);
+                *modified |= project::update_phase_operation_states(project);
 
-                    for part in parts.iter() {
-                        let part_state = project
-                            .part_states
-                            .get_mut(&part)
-                            .ok_or_else(|| PartStateError::NoPartStateFound {
-                                part: part.clone(),
-                            })
-                            .map_err(AppError::PartError)?;
+                for part in parts.iter() {
+                    let part_state = project
+                        .part_states
+                        .get_mut(&part)
+                        .ok_or_else(|| PartStateError::NoPartStateFound {
+                            part: part.clone(),
+                        })
+                        .map_err(AppError::PartError)?;
 
-                        project::add_process_to_part(part_state, part, phase.process.clone());
-                    }
+                    project::add_process_to_part(part_state, part, phase.process.clone());
+                }
 
-                    stores::load_out::add_parts_to_load_out(
-                        &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                        parts,
-                    )
-                        .map_err(AppError::LoadoutError)?;
+                stores::load_out::add_parts_to_load_out(
+                    &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
+                    parts,
+                )
+                .map_err(AppError::LoadoutError)?;
 
-                    Ok(render::render())
-                })
-            }
+                Ok(render::render())
+            }),
             Event::AssignFeederToLoadOutItem {
                 phase: phase_reference,
                 feeder_reference,
                 manufacturer,
                 mpn,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project, ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    let phase = project
-                        .phases
-                        .get(&phase_reference)
-                        .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+                let phase = project
+                    .phases
+                    .get(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                    let process = project
-                        .find_process(&phase.process)
-                        .map_err(|cause| AppError::ProcessError(cause.into()))?
-                        .clone();
+                let process = project
+                    .find_process(&phase.process)
+                    .map_err(|cause| AppError::ProcessError(cause.into()))?
+                    .clone();
 
-                    stores::load_out::assign_feeder_to_load_out_item(
-                        &phase,
-                        &process,
-                        &feeder_reference,
-                        manufacturer,
-                        mpn,
-                    )
-                        .map_err(AppError::OperationError)?;
-                    Ok(render::render())
-                })
-            }
+                stores::load_out::assign_feeder_to_load_out_item(
+                    &phase,
+                    &process,
+                    &feeder_reference,
+                    manufacturer,
+                    mpn,
+                )
+                .map_err(AppError::OperationError)?;
+                Ok(render::render())
+            }),
             Event::SetPlacementOrdering {
                 phase: reference,
                 placement_orderings,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                    *modified |= true;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= true;
 
-                    *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
-                        .map_err(AppError::OperationError)?;
+                *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
+                    .map_err(AppError::OperationError)?;
 
-                    Ok(render::render())
-                })
-            }
-            Event::GenerateArtifacts => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+                Ok(render::render())
+            }),
+            Event::GenerateArtifacts => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    *modified |= project::update_phase_operation_states(project);
+                *modified |= project::update_phase_operation_states(project);
 
-                    let phase_load_out_item_map = project
-                        .phases
-                        .iter()
-                        .try_fold(
-                            BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
-                            |mut map, (reference, phase)| {
-                                let load_out_items = stores::load_out::load_items(
-                                    &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                                )?;
-                                map.insert(reference.clone(), load_out_items);
-                                Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
-                            },
-                        )
-                        .map_err(AppError::OperationError)?;
+                let phase_load_out_item_map = project
+                    .phases
+                    .iter()
+                    .try_fold(
+                        BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
+                        |mut map, (reference, phase)| {
+                            let load_out_items = stores::load_out::load_items(
+                                &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
+                            )?;
+                            map.insert(reference.clone(), load_out_items);
+                            Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
+                        },
+                    )
+                    .map_err(AppError::OperationError)?;
 
-                    let directory = path.parent().unwrap();
-                    project::generate_artifacts(project, directory, phase_load_out_item_map)
-                        .map_err(|cause| AppError::OperationError(cause.into()))?;
-                    Ok(render::render())
-                })
-            }
+                let directory = path.parent().unwrap();
+                project::generate_artifacts(project, directory, phase_load_out_item_map)
+                    .map_err(|cause| AppError::OperationError(cause.into()))?;
+                Ok(render::render())
+            }),
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
                 set,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    let directory = path.parent().unwrap();
-                    *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
-                        .map_err(AppError::OperationError)?;
-                    Ok(render::render())
-                })
-            }
+                let directory = path.parent().unwrap();
+                *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
+                    .map_err(AppError::OperationError)?;
+                Ok(render::render())
+            }),
             Event::RecordPlacementsOperation {
                 object_path_patterns,
                 operation,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        path,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let directory = path.parent().unwrap();
-                    *modified |=
-                        project::update_placements_operation(project, directory, object_path_patterns, operation)
-                            .map_err(AppError::OperationError)?;
-                    Ok(render::render())
-                })
-            }
-            Event::ResetOperations {} => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project,
-                        modified,
-                        ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    project::reset_operations(project).map_err(AppError::OperationError)?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let directory = path.parent().unwrap();
+                *modified |= project::update_placements_operation(project, directory, object_path_patterns, operation)
+                    .map_err(AppError::OperationError)?;
+                Ok(render::render())
+            }),
+            Event::ResetOperations {} => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                project::reset_operations(project).map_err(AppError::OperationError)?;
 
-                    *modified |= true;
-                    Ok(render::render())
-                })
-            }
+                *modified |= true;
+                Ok(render::render())
+            }),
 
             //
             // Views
             //
-            Event::RequestOverviewView {} => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project, ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+            Event::RequestOverviewView {} => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    let overview = ProjectOverview {
-                        name: project.name.clone(),
-                    };
-                    Ok(view_renderer::view(ProjectView::Overview(overview)))
-                })
-            }
-            Event::RequestProjectTreeView {} => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project, ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
+                let overview = ProjectOverview {
+                    name: project.name.clone(),
+                };
+                Ok(view_renderer::view(ProjectView::Overview(overview)))
+            }),
+            Event::RequestProjectTreeView {} => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
-                    let add_test_nodes = false;
+                let add_test_nodes = false;
 
-                    let mut project_tree = ProjectTreeView::new();
+                let mut project_tree = ProjectTreeView::new();
 
-                    let root_node = project_tree
+                let root_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "root".to_string(),
+                        path: "/".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+
+                let pcbs_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "pcbs".to_string(),
+                        path: "/pcbs".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node.clone(), pcbs_node.clone(), ());
+
+                for (index, pcb) in project.pcbs.iter().enumerate() {
+                    let pcb_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
-                            key: "root".to_string(),
-                            path: "/".to_string(),
-                            ..ProjectTreeItem::default()
-                        });
-
-                    let pcbs_node = project_tree
-                        .tree
-                        .add_node(ProjectTreeItem {
-                            key: "pcbs".to_string(),
-                            path: "/pcbs".to_string(),
-                            ..ProjectTreeItem::default()
-                        });
-                    project_tree
-                        .tree
-                        .add_edge(root_node.clone(), pcbs_node.clone(), ());
-
-                    for (index, pcb) in project.pcbs.iter().enumerate() {
-                        let pcb_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "pcb".to_string(),
-                                args: HashMap::from([
-                                    ("name".to_string(), Arg::String(pcb.name.clone())),
-                                    ("kind".to_string(), Arg::String(pcb.kind.to_string())),
-                                ]),
-                                path: format!("/pcbs/{}", index).to_string(),
-                            });
-                        project_tree
-                            .tree
-                            .add_edge(pcbs_node.clone(), pcb_node, ());
-                    }
-
-                    let unit_assignments_node = project_tree
-                        .tree
-                        .add_node(ProjectTreeItem {
-                            key: "unit-assignments".to_string(),
-                            path: "/units".to_string(),
-                            ..ProjectTreeItem::default()
+                            key: "pcb".to_string(),
+                            args: HashMap::from([
+                                ("name".to_string(), Arg::String(pcb.name.clone())),
+                                ("kind".to_string(), Arg::String(pcb.kind.to_string())),
+                            ]),
+                            path: format!("/pcbs/{}", index).to_string(),
                         });
                     project_tree
                         .tree
-                        .add_edge(root_node.clone(), unit_assignments_node.clone(), ());
+                        .add_edge(pcbs_node.clone(), pcb_node, ());
+                }
 
-                    for (index, (path, design_variant)) in project
-                        .unit_assignments
-                        .iter()
-                        .enumerate()
-                    {
-                        let unit_assignment_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "unit-assignment".to_string(),
-                                args: HashMap::from([
-                                    ("name".to_string(), Arg::String(path.to_string())),
-                                    (
-                                        "design_name".to_string(),
-                                        Arg::String(design_variant.design_name.to_string()),
-                                    ),
-                                    (
-                                        "variant_name".to_string(),
-                                        Arg::String(design_variant.variant_name.to_string()),
-                                    ),
-                                ]),
-                                path: format!("/units/{}", index).to_string(),
-                            });
+                let unit_assignments_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "unit-assignments".to_string(),
+                        path: "/units".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node.clone(), unit_assignments_node.clone(), ());
 
-                        project_tree
-                            .tree
-                            .add_edge(unit_assignments_node.clone(), unit_assignment_node, ());
-                    }
-
-                    let processes_node = project_tree
+                for (index, (path, design_variant)) in project
+                    .unit_assignments
+                    .iter()
+                    .enumerate()
+                {
+                    let unit_assignment_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
-                            key: "processes".to_string(),
-                            path: "/processes".to_string(),
-                            ..ProjectTreeItem::default()
+                            key: "unit-assignment".to_string(),
+                            args: HashMap::from([
+                                ("name".to_string(), Arg::String(path.to_string())),
+                                (
+                                    "design_name".to_string(),
+                                    Arg::String(design_variant.design_name.to_string()),
+                                ),
+                                (
+                                    "variant_name".to_string(),
+                                    Arg::String(design_variant.variant_name.to_string()),
+                                ),
+                            ]),
+                            path: format!("/units/{}", index).to_string(),
+                        });
+
+                    project_tree
+                        .tree
+                        .add_edge(unit_assignments_node.clone(), unit_assignment_node, ());
+                }
+
+                let processes_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "processes".to_string(),
+                        path: "/processes".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node.clone(), processes_node.clone(), ());
+
+                for (index, process) in project.processes.iter().enumerate() {
+                    let process_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "process".to_string(),
+                            args: HashMap::from([("name".to_string(), Arg::String(process.name.to_string()))]),
+                            path: format!("/processes/{}", index).to_string(),
+                        });
+
+                    project_tree
+                        .tree
+                        .add_edge(processes_node.clone(), process_node, ());
+                }
+
+                let phases_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "phases".to_string(),
+                        path: "/phases".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node.clone(), phases_node.clone(), ());
+
+                for (reference, ..) in &project.phases {
+                    let phase_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "phase".to_string(),
+                            args: HashMap::from([("reference".to_string(), Arg::String(reference.to_string()))]),
+                            path: format!("/phases/{}", reference).to_string(),
                         });
                     project_tree
                         .tree
-                        .add_edge(root_node.clone(), processes_node.clone(), ());
-
-                    for (index, process) in project.processes.iter().enumerate() {
-                        let process_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "process".to_string(),
-                                args: HashMap::from([("name".to_string(), Arg::String(process.name.to_string()))]),
-                                path: format!("/processes/{}", index).to_string(),
-                            });
-
-                        project_tree
-                            .tree
-                            .add_edge(processes_node.clone(), process_node, ());
-                    }
-
-                    let phases_node = project_tree
-                        .tree
-                        .add_node(ProjectTreeItem {
-                            key: "phases".to_string(),
-                            path: "/phases".to_string(),
-                            ..ProjectTreeItem::default()
-                        });
-                    project_tree
-                        .tree
-                        .add_edge(root_node.clone(), phases_node.clone(), ());
-
-                    for (reference, ..) in &project.phases {
-                        let phase_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "phase".to_string(),
-                                args: HashMap::from([("reference".to_string(), Arg::String(reference.to_string()))]),
-                                path: format!("/phases/{}", reference).to_string(),
-                            });
-                        project_tree
-                            .tree
-                            .add_edge(phases_node.clone(), phase_node, ());
-
-                        if add_test_nodes {
-                            let test_node = project_tree
-                                .tree
-                                .add_node(ProjectTreeItem {
-                                    key: "test".to_string(),
-                                    path: format!("/phases/{}/test", reference).to_string(),
-                                    ..ProjectTreeItem::default()
-                                });
-                            project_tree
-                                .tree
-                                .add_edge(phase_node, test_node, ());
-                        }
-                    }
+                        .add_edge(phases_node.clone(), phase_node, ());
 
                     if add_test_nodes {
                         let test_node = project_tree
                             .tree
                             .add_node(ProjectTreeItem {
                                 key: "test".to_string(),
-                                path: "/test".to_string(),
+                                path: format!("/phases/{}/test", reference).to_string(),
                                 ..ProjectTreeItem::default()
                             });
                         project_tree
                             .tree
-                            .add_edge(root_node.clone(), test_node, ());
+                            .add_edge(phase_node, test_node, ());
                     }
+                }
 
-                    Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
-                })
-            }
+                if add_test_nodes {
+                    let test_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "test".to_string(),
+                            path: "/test".to_string(),
+                            ..ProjectTreeItem::default()
+                        });
+                    project_tree
+                        .tree
+                        .add_edge(root_node.clone(), test_node, ());
+                }
+
+                Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
+            }),
             Event::RequestPhaseOverviewView {
                 phase_reference,
-            } => {
-                Box::new(|model: &mut Model| {
-                    let ModelProject {
-                        project, ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let phase = project
-                        .phases
-                        .get(&phase_reference)
-                        .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+            } => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let phase = project
+                    .phases
+                    .get(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                    let phase_overview = PhaseOverview {
-                        phase_reference,
-                        process: phase.process.clone(),
-                        load_out_source: phase.load_out_source.clone(),
-                        pcb_side: phase.pcb_side.clone(),
-                    };
+                let phase_overview = PhaseOverview {
+                    phase_reference,
+                    process: phase.process.clone(),
+                    load_out_source: phase.load_out_source.clone(),
+                    pcb_side: phase.pcb_side.clone(),
+                };
 
-                    Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
-                })
-            }
+                Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
+            }),
             Event::RequestPhasePlacementsView {
                 phase_reference,
-            } => {
-                Box::new(move |model: &mut Model| {
-                    let ModelProject {
-                        project, ..
-                    } = model
-                        .model_project
-                        .as_mut()
-                        .ok_or(AppError::OperationRequiresProject)?;
-                    let _phase = project
-                        .phases
-                        .get(&phase_reference)
-                        .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let _phase = project
+                    .phases
+                    .get(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                    let placements = project
-                        .placements
-                        .iter()
-                        .filter_map(|(_path, state)| match &state.phase {
-                            Some(candidate_phase) if phase_reference == *candidate_phase => Some(state.clone()),
-                            _ => None,
-                        })
-                        .collect();
+                let placements = project
+                    .placements
+                    .iter()
+                    .filter_map(|(_path, state)| match &state.phase {
+                        Some(candidate_phase) if phase_reference == *candidate_phase => Some(state.clone()),
+                        _ => None,
+                    })
+                    .collect();
 
-                    let phase_placements = PhasePlacements {
-                        phase_reference,
-                        placements,
-                    };
-                    Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
-                })
-            }
+                let phase_placements = PhasePlacements {
+                    phase_reference,
+                    placements,
+                };
+                Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
+            }),
         }
     }
 }
@@ -925,7 +891,12 @@ impl App for Planner {
     type Capabilities = Capabilities;
     type Effect = Effect;
 
-    fn update(&self, event: Self::Event, model: &mut Self::Model, _caps: &Self::Capabilities) -> Command<Self::Effect, Self::Event> {
+    fn update(
+        &self,
+        event: Self::Event,
+        model: &mut Self::Model,
+        _caps: &Self::Capabilities,
+    ) -> Command<Self::Effect, Self::Event> {
         let try_fn = self.update_inner(event);
 
         match try_fn(model) {
@@ -933,11 +904,8 @@ impl App for Planner {
                 model.error.replace(format!("{:?}", e));
                 render::render()
             }
-            Ok(command) => {
-                command
-            }
+            Ok(command) => command,
         }
-
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
