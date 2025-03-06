@@ -308,7 +308,7 @@ impl UiComponent for Project {
                             .project_tree
                             .update_tree(project_tree)
                     }
-                    ProjectView::Placements(placements) => {
+                    ProjectView::Placements(_placements) => {
                         todo!()
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
@@ -403,6 +403,7 @@ impl UiComponent for Project {
                                 kind: PcbKind::Single,
                                 name: "test".to_string(),
                             });
+                                                
                         Some(ProjectAction::Task(key, task))
                     }
                     None => None,
