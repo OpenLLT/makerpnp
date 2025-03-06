@@ -94,6 +94,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
     use futures::stream::FusedStream;
@@ -120,8 +121,226 @@ mod tests {
         
         // then
         dump_collected_messages(&messages);
-        assert_eq!(messages, vec![OuterMessage::Wrapped(InnerMessage::Inner1)])
+        assert_eq!(messages, vec![
+            OuterMessage::Wrapped(InnerMessage::Inner1)
+        ]);
     }
+
+    #[test]
+    pub fn batched_messages() {
+        // given
+        
+        // this is the same as what is returned by a call to a crux service's `update()` method 
+        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
+            Task::done(Ok(InnerMessage::Inner1)),
+            Task::done(Err(TestError::Error1)),
+        ];
+        
+        let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
+
+        let task: Task<OuterMessage> = task.map(|result|{
+            match result {
+                Ok(message) => OuterMessage::Wrapped(message),
+                Err(error) => OuterMessage::Error(error) ,
+            }
+        });
+
+        // when
+        let messages = run(task);
+
+        // then
+        dump_collected_messages(&messages);
+        assert_eq!(messages, vec![
+            OuterMessage::Wrapped(InnerMessage::Inner1), 
+            OuterMessage::Error(TestError::Error1),
+        ]);
+    }
+
+    #[test]
+    pub fn batched_messages_with_chain() {
+        // given
+
+        // this is the same as what is returned by a call to a crux service's `update()` method 
+        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
+            Task::done(Ok(InnerMessage::Inner1)),
+            Task::done(Err(TestError::Error1)),
+        ];
+
+        let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
+        
+        let task = task.chain(Task::done(Ok(InnerMessage::Inner2)));
+        
+        let task: Task<OuterMessage> = task.map(|result|{
+            match result {
+                Ok(message) => OuterMessage::Wrapped(message),
+                Err(error) => OuterMessage::Error(error) ,
+            }
+        });
+
+        // when
+        let messages = run(task);
+
+        // then
+        dump_collected_messages(&messages);
+        assert_eq!(messages, vec![
+            OuterMessage::Wrapped(InnerMessage::Inner1), 
+            OuterMessage::Error(TestError::Error1), 
+            // Note that the chained message is present, even though there was a preceding error
+            OuterMessage::Wrapped(InnerMessage::Inner2), 
+        ]);
+    }
+
+    #[test]
+    pub fn batched_messages_with_and_then() {
+        // given
+
+        // this is the same as what is returned by a call to a crux service's `update()` method 
+        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
+            Task::done(Ok(InnerMessage::Inner1)),
+            Task::done(Err(TestError::Error1)),
+        ];
+
+        let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
+
+        let messages_to_assert = Arc::new(Mutex::new(vec![]));
+        
+        let task = task.and_then({
+            let messages_to_assert = messages_to_assert.clone();
+            move |last_inner_message| {
+                println!("last inner message: {:?}", &last_inner_message);
+                messages_to_assert.lock().unwrap().push(last_inner_message);
+
+                Task::done(Ok(InnerMessage::Inner2))
+            }
+        });
+
+        let task: Task<OuterMessage> = task.map(|result|{
+            match result {
+                Ok(message) => OuterMessage::Wrapped(message),
+                Err(error) => OuterMessage::Error(error) ,
+            }
+        });
+
+        // when
+        let messages = run(task);
+
+        // then
+        dump_collected_messages(&messages);
+        assert_eq!(messages, vec![
+            // Note that the inner messages are gone!
+            OuterMessage::Wrapped(InnerMessage::Inner2),
+        ]);
+        
+        // and
+        let messages_to_assert = Arc::into_inner(messages_to_assert).unwrap().into_inner().unwrap();
+        assert_eq!(messages_to_assert, vec![
+            InnerMessage::Inner1,
+        ]);
+    }
+
+    #[test]
+    pub fn batched_messages_with_map() {
+        // given
+
+        // this is the same as what is returned by a call to a crux service's `update()` method 
+        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
+            Task::done(Ok(InnerMessage::Inner1)),
+            Task::done(Err(TestError::Error1)),
+        ];
+
+        let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
+
+        let results_to_assert = Arc::new(Mutex::new(vec![]));
+
+        let task = task.map({
+            let results_to_assert = results_to_assert.clone();
+            move |result| {
+                println!("result passed to `.map`: {:?}", &result);
+                results_to_assert.lock().unwrap().push(result.clone());
+
+                Ok(InnerMessage::Inner2)
+            }
+        });
+
+        let task: Task<OuterMessage> = task.map(|result|{
+            match result {
+                Ok(message) => OuterMessage::Wrapped(message),
+                Err(error) => OuterMessage::Error(error) ,
+            }
+        });
+
+        // when
+        let messages = run(task);
+
+        // then
+        dump_collected_messages(&messages);
+        assert_eq!(messages, vec![
+            // both the inner messages were replaced with a different message
+            OuterMessage::Wrapped(InnerMessage::Inner2),
+            OuterMessage::Wrapped(InnerMessage::Inner2),
+        ]);
+
+        // and
+        let results_to_assert = Arc::into_inner(results_to_assert).unwrap().into_inner().unwrap();
+        assert_eq!(results_to_assert, [
+            Ok(InnerMessage::Inner1),
+            Err(TestError::Error1),
+        ]);
+    }
+
+    #[test]
+    pub fn batched_messages_with_then() {
+        // given
+
+        // this is the same as what is returned by a call to a crux service's `update()` method 
+        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
+            Task::done(Ok(InnerMessage::Inner1)),
+            Task::done(Err(TestError::Error1)),
+            Task::done(Ok(InnerMessage::Inner2)),
+        ];
+
+        let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
+
+        let results_to_assert = Arc::new(Mutex::new(vec![]));
+
+        let task = task.then({
+            let results_to_assert = results_to_assert.clone();
+            move |result| {
+                println!("result passed to `.map`: {:?}", &result);
+                results_to_assert.lock().unwrap().push(result.clone());
+
+                Task::done(Ok(InnerMessage::Inner3))
+            }
+        });
+
+        let task: Task<OuterMessage> = task.map(|result|{
+            match result {
+                Ok(message) => OuterMessage::Wrapped(message),
+                Err(error) => OuterMessage::Error(error) ,
+            }
+        });
+
+        // when
+        let messages = run(task);
+
+        // then
+        dump_collected_messages(&messages);
+        assert_eq!(messages, vec![
+            // note that all the inner tasks were mapped, including the errors
+            OuterMessage::Wrapped(InnerMessage::Inner3),
+            OuterMessage::Wrapped(InnerMessage::Inner3),
+            OuterMessage::Wrapped(InnerMessage::Inner3),
+        ]);
+
+        // and
+        let results_to_assert = Arc::into_inner(results_to_assert).unwrap().into_inner().unwrap();
+        assert_eq!(results_to_assert, [
+            Ok(InnerMessage::Inner1),
+            Err(TestError::Error1),
+            Ok(InnerMessage::Inner2),
+        ]);
+    }
+
 
     fn dump_collected_messages(messages: &Vec<OuterMessage>) {
         for message in messages.iter() {
@@ -142,11 +361,13 @@ mod tests {
             runtime.run(stream);
         }
 
+        // FIXME this may cause flakey tests if the system running the tests is slow/loaded.
+        //       ideally we collect all received messages until the `collect_messages` thread is told to stop...
+        
         let handle = thread::spawn(|| {
             collect_messages(app_message_receiver)
         });
-
-        thread::sleep(Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(250));
 
         let messages = handle.join().unwrap();
         messages
@@ -180,21 +401,22 @@ mod tests {
         }
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     enum InnerMessage {
-        Inner1
+        Inner1,
+        Inner2,
+        Inner3,
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     enum OuterMessage {
         Wrapped(InnerMessage),
         Error(TestError)
     }
 
-    #[derive(Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Clone)]
     #[allow(dead_code)]
     enum TestError {
         Error1
     }
-
 }
