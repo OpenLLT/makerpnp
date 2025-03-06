@@ -43,13 +43,13 @@ where
     pub fn run(&mut self, stream: BoxStream<'static, M>) {
         use futures::{FutureExt, StreamExt};
 
-        let message = self.sender.clone();
+        let sender = self.sender.clone();
         let future = stream
             .map(move |message| {
                 //trace!("stream message: {:?}", message);
                 Ok(message)
             })
-            .forward(message)
+            .forward(sender)
             .map(|result| match result {
                 Ok(()) => (),
                 Err(error) => {
