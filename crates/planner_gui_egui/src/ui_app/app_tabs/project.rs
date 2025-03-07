@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
 
-use crate::project::{Project, ProjectAction, ProjectContext, ProjectError, ProjectKey, ProjectUiCommand};
+use crate::project::{Project, ProjectAction, ProjectContext, ProjectKey, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
