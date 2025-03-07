@@ -4,7 +4,7 @@ use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
 use tracing::{debug, error};
 
-use crate::project::{ProjectError, ProjectUiCommand};
+use crate::project::{ProjectAction, ProjectError, ProjectKey, ProjectUiCommand};
 use crate::task::Task;
 
 type Core = Arc<planner_app::Core<Planner>>;
@@ -20,20 +20,28 @@ impl PlannerCoreService {
         }
     }
 
-    pub fn update(&mut self, event: Event) -> Task<Result<ProjectUiCommand, ProjectError>> {
+    pub fn update(&mut self, project_key: ProjectKey, event: Event) -> ResultHelper {
         debug!("event: {:?}", event);
 
-        let mut tasks: Vec<Task<Result<ProjectUiCommand, ProjectError>>> = Vec::new();
+        let mut actions: Vec<ProjectAction> = Vec::new();
 
         for effect in self.core.process_event(event) {
-            let effect_task = Self::process_effect(&self.core, effect);
-            tasks.push(effect_task);
+            let action = Self::process_effect(&self.core, effect);
+            match action {
+                Ok(action) => {
+                    actions.push(action);
+                }
+                Err(error) => {
+                    return ResultHelper::new(project_key, Err(error))
+                }
+            }
+            
         }
 
-        Task::batch(tasks)
+        ResultHelper::new(project_key, Ok(actions))
     }
 
-    pub fn process_effect(core: &Core, effect: Effect) -> Task<Result<ProjectUiCommand, ProjectError>> {
+    pub fn process_effect(core: &Core, effect: Effect) -> Result<ProjectAction, ProjectError> {
         debug!("effect: {:?}", effect);
 
         match effect {
@@ -42,9 +50,9 @@ impl PlannerCoreService {
                 let task = match view.error.take() {
                     Some(error) => {
                         error!("core error: {:?}", error);
-                        Task::done(Err(ProjectError::CoreError(error)))
+                        Err(ProjectError::CoreError(error))
                     }
-                    None => Task::done(Ok(ProjectUiCommand::SetModifiedState(view.modified))),
+                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState(view.modified))),
                 };
 
                 task
@@ -54,7 +62,56 @@ impl PlannerCoreService {
                     view,
                 } = request.operation;
 
-                Task::done(Ok(ProjectUiCommand::UpdateView(view)))
+                Ok(ProjectAction::UiCommand(ProjectUiCommand::UpdateView(view)))
+            }
+        }
+    }
+}
+
+pub struct ResultHelper {
+    result: Result<Vec<ProjectAction>, ProjectError>,
+    project_key: ProjectKey,
+}
+
+impl ResultHelper {
+    pub fn new(project_key: ProjectKey, result: Result<Vec<ProjectAction>, ProjectError>) -> Self {
+        Self { project_key, result }
+    }
+    
+    pub fn when_ok<F>(self, f: F) -> Option<ProjectAction> 
+    where
+        F: FnOnce() -> ProjectAction,
+    {
+        self.into_action_inner(Some(f()))
+    }
+    
+    pub fn into_inner(self) -> (ProjectKey, Result<Vec<ProjectAction>, ProjectError>) {
+        (self.project_key, self.result)
+    }
+    
+    pub fn unwrap(self) -> Result<Vec<ProjectAction>, ProjectError> {
+        self.result
+    }
+    
+    pub fn into_action(self) -> Option<ProjectAction> {
+        self.into_action_inner(None)
+    }
+
+    pub fn into_action_inner(self, additional_action: Option<ProjectAction>) -> Option<ProjectAction> {
+        match self.result {
+            Ok(mut actions) => {
+                if let Some(additional_action) = additional_action {
+                    actions.push(additional_action);
+                }
+                let tasks: Vec<_> = actions.into_iter().map(|action|Task::done(action)).collect();
+                if tasks.is_empty() {
+                    None
+                } else {
+                    Some(ProjectAction::Task(self.project_key, Task::batch(tasks)))
+                }
+            }
+            Err(error) => {
+                Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error)))
             }
         }
     }
