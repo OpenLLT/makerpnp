@@ -4,7 +4,7 @@ use egui_mobius::types::Value;
 use tracing::trace;
 
 use crate::config::Config;
-use crate::project::{ProjectAction, ProjectUiCommand};
+use crate::project::ProjectAction;
 use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};

@@ -12,7 +12,7 @@ use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
-use crate::planner_app_core::{PlannerCoreService, ResultHelper};
+use crate::planner_app_core::PlannerCoreService;
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
