@@ -1,0 +1,59 @@
+use std::path::PathBuf;
+use egui::{Modal, Ui};
+use egui_extras::{Column, TableBuilder};
+use egui_i18n::tr;
+use crate::project::{ProjectKey, ProjectUiCommand};
+use crate::ui_component::ComponentState;
+
+pub(crate) fn show_errors_modal(ui: &mut Ui, key: ProjectKey, path: &PathBuf, errors: &Vec<String>, component: &ComponentState<(ProjectKey, ProjectUiCommand)>) {
+    let errors_modal_id = ui.id().with("errors");
+
+    Modal::new(errors_modal_id).show(ui.ctx(), |ui| {
+        ui.set_width(ui.available_width() * 0.8);
+        let file_name = path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        ui.heading(tr!("modal-errors-title", {file: file_name}));
+
+        let table = TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            .column(Column::auto())
+            .column(Column::remainder());
+
+        table
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.strong(tr!("modal-errors-column-errors"));
+                });
+            })
+            .body(|mut body| {
+                for (index, error) in errors.iter().enumerate() {
+                    body.row(18.0, |mut row| {
+                        row.col(|ui| {
+                            ui.label(format!("{}", index));
+                        });
+                        row.col(|ui| {
+                            ui.label(error);
+                        });
+                    })
+                }
+            });
+
+        egui::Sides::new().show(
+            ui,
+            |_ui| {},
+            |ui| {
+                if ui
+                    .button(tr!("form-button-ok"))
+                    .clicked()
+                {
+                    component
+                        .send((key, ProjectUiCommand::ClearErrors))
+                }
+            },
+        );
+    });
+}
