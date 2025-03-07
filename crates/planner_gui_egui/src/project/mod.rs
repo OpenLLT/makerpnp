@@ -11,6 +11,7 @@ use slotmap::new_key_type;
 use tracing::{debug, info};
 
 use crate::planner_app_core::PlannerCoreService;
+use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
@@ -76,6 +77,8 @@ pub struct Project {
     toolbar: ProjectToolbar,
 
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
+    
+    add_pcb_modal: Option<AddPcbModal>,
 }
 
 impl Project {
@@ -117,6 +120,7 @@ impl Project {
             project_tabs,
             toolbar,
             component,
+            add_pcb_modal: None,
         };
 
         (instance, ProjectUiCommand::Load)
@@ -188,6 +192,10 @@ impl UiComponent for Project {
 
         if !self.errors.is_empty() {
             dialogs::errors::show_errors_modal(ui, *key, &self.path, &self.errors, &self.component);
+        }
+        
+        if let Some(dialog) = &self.add_pcb_modal {
+            dialog.ui(ui, &mut ());
         }
     }
 
@@ -341,14 +349,17 @@ impl UiComponent for Project {
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
-                        // TODO show the dialog, for now make it add a pcb directly.
-                        self
-                            .planner_core_service
-                            .update(key, Event::AddPcb {
-                                kind: PcbKind::Single,
-                                name: "test".to_string(),
-                            })
-                            .when_ok(||ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
+                        let mut modal = AddPcbModal::new(
+                            self.path.clone(),
+                            key,
+                        );
+                        modal.component.configure_mapper(self.component.sender.clone(), move |command|{
+                            debug!("add pcb modal mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::AddPcbModalCommand(command))
+                        });
+                            
+                        self.add_pcb_modal = Some(modal);
+                        None
                     }
                     None => None,
                 }
@@ -369,6 +380,28 @@ impl UiComponent for Project {
                     }
                 }
                 None
+            }
+            ProjectUiCommand::AddPcbModalCommand(command) => {
+                if let Some(modal) = &mut self.add_pcb_modal {
+                    let action = modal.update(command, &mut ());
+                    match action {
+                        None => None,
+                        Some(AddPcbModalAction::CloseDialog) => {
+                            self.add_pcb_modal.take();
+                            self
+                                .planner_core_service
+                                .update(key, Event::AddPcb {
+                                    kind: PcbKind::Single,
+                                    name: "test".to_string(),
+                                })
+                                .when_ok(||{
+                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
+                                })
+                        }
+                    }
+                } else {
+                    None
+                }
             }
         }
     }
@@ -440,6 +473,7 @@ pub enum ProjectUiCommand {
     Navigate(ProjectPath),
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
+    AddPcbModalCommand(AddPcbModalUiCommand),
 }
 
 #[derive(Debug, Clone)]
