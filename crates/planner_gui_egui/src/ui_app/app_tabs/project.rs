@@ -33,7 +33,7 @@ pub enum ProjectTabUiCommand {
 }
 
 pub enum ProjectTabAction {
-    ProjectTask(ProjectKey, Task<Result<ProjectUiCommand, ProjectError>>),
+    ProjectTask(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
 }
 
@@ -132,6 +132,10 @@ impl UiComponent for ProjectTab {
                         Some(ProjectTabAction::SetModifiedState(modified_state))
                     }
                     None => None,
+                    Some(ProjectAction::UiCommand(command)) => {
+                        project.update((key, command), &mut project_context)
+                            .map(|action|ProjectTabAction::ProjectTask(key, Task::done(action)))
+                    }
                 }
             }
         }

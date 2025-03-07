@@ -12,7 +12,7 @@ use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
-use crate::planner_app_core::PlannerCoreService;
+use crate::planner_app_core::{PlannerCoreService, ResultHelper};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
@@ -55,8 +55,9 @@ impl Display for ProjectPath {
 }
 
 pub enum ProjectAction {
-    Task(ProjectKey, Task<Result<ProjectUiCommand, ProjectError>>),
+    Task(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
+    UiCommand(ProjectUiCommand),
 }
 
 pub struct Project {
@@ -256,24 +257,22 @@ impl UiComponent for Project {
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
 
-                let task = self
+                self
                     .planner_core_service
-                    .update(Event::Load {
+                    .update(key, Event::Load {
                         path: self.path.clone(),
                     })
-                    .map(|result| result.map(|_| ProjectUiCommand::Loaded));
-                Some(ProjectAction::Task(key, task))
+                    .when_ok(||{
+                        ProjectAction::UiCommand(ProjectUiCommand::Loaded)
+                    })
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 state.loaded = true;
-                let task = self
+                self
                     .planner_core_service
-                    .update(Event::RequestOverviewView {})
-                    .chain(Task::done(Ok(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::ProjectTree,
-                    ))));
-                Some(ProjectAction::Task(key, task))
+                    .update(key, Event::RequestOverviewView {})
+                    .when_ok(||ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
             }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
@@ -291,8 +290,8 @@ impl UiComponent for Project {
                     },
                 };
 
-                let task = self.planner_core_service.update(event);
-                Some(ProjectAction::Task(key, task))
+                self.planner_core_service.update(key, event)
+                    .into_action()
             }
             ProjectUiCommand::UpdateView(view) => {
                 match view {
@@ -373,10 +372,10 @@ impl UiComponent for Project {
                     self.show_phase(phase_reference.clone().into());
 
                     let tasks: Vec<_> = vec![
-                        Task::done(Ok(ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
                             phase: phase_reference.clone(),
                         }))),
-                        Task::done(Ok(ProjectUiCommand::RequestView(ProjectViewRequest::PhasePlacements {
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::PhasePlacements {
                             phase: phase_reference.clone(),
                         }))),
                     ];
@@ -397,14 +396,13 @@ impl UiComponent for Project {
                     }
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         // TODO show the dialog, for now make it add a pcb directly.
-                        let task = self
+                        self
                             .planner_core_service
-                            .update(Event::AddPcb {
+                            .update(key, Event::AddPcb {
                                 kind: PcbKind::Single,
                                 name: "test".to_string(),
-                            });
-                                                
-                        Some(ProjectAction::Task(key, task))
+                            })
+                            .when_ok(||ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
                     }
                     None => None,
                 }

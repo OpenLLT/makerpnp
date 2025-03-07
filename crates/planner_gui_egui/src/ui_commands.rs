@@ -4,7 +4,7 @@ use egui_mobius::types::Value;
 use tracing::trace;
 
 use crate::config::Config;
-use crate::project::ProjectUiCommand;
+use crate::project::{ProjectAction, ProjectUiCommand};
 use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
@@ -85,26 +85,32 @@ pub fn handle_command(
                     TabKindAction::ProjectTabAction {
                         action,
                     } => match action {
-                        ProjectTabAction::ProjectTask(key, task) => task.map(move |result| match result {
-                            Ok(command) => UiCommand::TabCommand {
-                                tab_key,
-                                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                                    command: ProjectTabUiCommand::ProjectCommand {
-                                        key,
-                                        command,
-                                    },
-                                }),
-                            },
-                            Err(error) => UiCommand::TabCommand {
-                                tab_key,
-                                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                                    command: ProjectTabUiCommand::ProjectCommand {
-                                        key,
-                                        command: ProjectUiCommand::Error(error),
-                                    },
-                                }),
-                            },
-                        }),
+                        ProjectTabAction::ProjectTask(key, task) => task.map(move |action|
+                            match action {
+                                ProjectAction::UiCommand(command) => {
+                                    UiCommand::TabCommand {
+                                        tab_key,
+                                        command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                                            command: ProjectTabUiCommand::ProjectCommand {
+                                                key,
+                                                command,
+                                            },
+                                        }),
+                                    }
+                                },
+                                ProjectAction::Task(_, _) => {
+                                    // unsupported here, no corresponding TabCommands
+                                    // should have already been handled by the project
+                                    panic!("unsupported")
+                                },
+                                
+                                ProjectAction::SetModifiedState(_) => {
+                                    // unsupported here, no corresponding TabCommands
+                                    // should have already been handled by the project
+                                    panic!("unsupported")
+                                },
+                            }
+                        ),
                         ProjectTabAction::SetModifiedState(modified_state) => {
                             app_tabs.with_tab_mut(&tab_key, |tab| match tab {
                                 TabKind::Project(project_tab, _) => {
