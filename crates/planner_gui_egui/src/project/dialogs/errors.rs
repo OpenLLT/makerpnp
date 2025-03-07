@@ -5,10 +5,10 @@ use egui_i18n::tr;
 use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::ui_component::ComponentState;
 
-pub(crate) fn show_errors_modal(ui: &mut Ui, key: ProjectKey, path: &PathBuf, errors: &Vec<String>, component: &ComponentState<(ProjectKey, ProjectUiCommand)>) {
-    let errors_modal_id = ui.id().with("errors");
+pub fn show_errors_modal(ui: &mut Ui, key: ProjectKey, path: &PathBuf, errors: &Vec<String>, component: &ComponentState<(ProjectKey, ProjectUiCommand)>) {
+    let modal_id = ui.id().with("errors");
 
-    Modal::new(errors_modal_id).show(ui.ctx(), |ui| {
+    Modal::new(modal_id).show(ui.ctx(), |ui| {
         ui.set_width(ui.available_width() * 0.8);
         let file_name = path
             .file_name()

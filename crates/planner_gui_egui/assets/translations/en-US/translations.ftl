@@ -2,6 +2,7 @@ menu-top-level-file = File
 menu-item-quit = Quit
 
 modal-errors-title = Errors - { $file }
+modal-add-pcb-title = Add PCB - { $file }
 
 toolbar-button-home = Home
 toolbar-button-new = New
