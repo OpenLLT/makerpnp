@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::future::Future;
 use std::marker::PhantomData;
+
 use futures::channel::mpsc;
 use futures::stream::{BoxStream, FusedStream};
 use futures::{Sink, Stream, StreamExt, select};
@@ -90,59 +91,52 @@ where
     StreamExt::boxed(stream)
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::fmt::Debug;
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
+
     use futures::stream::FusedStream;
     use futures::{Stream, StreamExt, select};
     use tracing::{error, trace};
+
     use crate::runtime::{Executor, RunTime};
     use crate::task;
     use crate::task::Task;
-    
+
     #[test]
     pub fn wrapped_messages() {
         // given
         let task: Task<Result<InnerMessage, TestError>> = Task::done(Ok(InnerMessage::Inner1));
 
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
         let messages = run(task);
-        
+
         // then
         dump_collected_messages(&messages);
-        assert_eq!(messages, vec![
-            OuterMessage::Wrapped(InnerMessage::Inner1)
-        ]);
+        assert_eq!(messages, vec![OuterMessage::Wrapped(InnerMessage::Inner1)]);
     }
 
     #[test]
     pub fn batched_messages() {
         // given
-        
-        // this is the same as what is returned by a call to a crux service's `update()` method 
-        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
-            Task::done(Ok(InnerMessage::Inner1)),
-            Task::done(Err(TestError::Error1)),
-        ];
-        
+
+        // this is the same as what is returned by a call to a crux service's `update()` method
+        let results: Vec<Task<Result<InnerMessage, TestError>>> =
+            vec![Task::done(Ok(InnerMessage::Inner1)), Task::done(Err(TestError::Error1))];
+
         let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
 
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
@@ -151,7 +145,7 @@ mod tests {
         // then
         dump_collected_messages(&messages);
         assert_eq!(messages, vec![
-            OuterMessage::Wrapped(InnerMessage::Inner1), 
+            OuterMessage::Wrapped(InnerMessage::Inner1),
             OuterMessage::Error(TestError::Error1),
         ]);
     }
@@ -160,21 +154,17 @@ mod tests {
     pub fn batched_messages_with_chain() {
         // given
 
-        // this is the same as what is returned by a call to a crux service's `update()` method 
-        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
-            Task::done(Ok(InnerMessage::Inner1)),
-            Task::done(Err(TestError::Error1)),
-        ];
+        // this is the same as what is returned by a call to a crux service's `update()` method
+        let results: Vec<Task<Result<InnerMessage, TestError>>> =
+            vec![Task::done(Ok(InnerMessage::Inner1)), Task::done(Err(TestError::Error1))];
 
         let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
-        
+
         let task = task.chain(Task::done(Ok(InnerMessage::Inner2)));
-        
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
@@ -183,10 +173,10 @@ mod tests {
         // then
         dump_collected_messages(&messages);
         assert_eq!(messages, vec![
-            OuterMessage::Wrapped(InnerMessage::Inner1), 
-            OuterMessage::Error(TestError::Error1), 
+            OuterMessage::Wrapped(InnerMessage::Inner1),
+            OuterMessage::Error(TestError::Error1),
             // Note that the chained message is present, even though there was a preceding error
-            OuterMessage::Wrapped(InnerMessage::Inner2), 
+            OuterMessage::Wrapped(InnerMessage::Inner2),
         ]);
     }
 
@@ -194,31 +184,30 @@ mod tests {
     pub fn batched_messages_with_and_then() {
         // given
 
-        // this is the same as what is returned by a call to a crux service's `update()` method 
-        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
-            Task::done(Ok(InnerMessage::Inner1)),
-            Task::done(Err(TestError::Error1)),
-        ];
+        // this is the same as what is returned by a call to a crux service's `update()` method
+        let results: Vec<Task<Result<InnerMessage, TestError>>> =
+            vec![Task::done(Ok(InnerMessage::Inner1)), Task::done(Err(TestError::Error1))];
 
         let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
 
         let messages_to_assert = Arc::new(Mutex::new(vec![]));
-        
+
         let task = task.and_then({
             let messages_to_assert = messages_to_assert.clone();
             move |last_inner_message| {
                 println!("last inner message: {:?}", &last_inner_message);
-                messages_to_assert.lock().unwrap().push(last_inner_message);
+                messages_to_assert
+                    .lock()
+                    .unwrap()
+                    .push(last_inner_message);
 
                 Task::done(Ok(InnerMessage::Inner2))
             }
         });
 
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
@@ -230,23 +219,22 @@ mod tests {
             // Note that the inner messages are gone!
             OuterMessage::Wrapped(InnerMessage::Inner2),
         ]);
-        
+
         // and
-        let messages_to_assert = Arc::into_inner(messages_to_assert).unwrap().into_inner().unwrap();
-        assert_eq!(messages_to_assert, vec![
-            InnerMessage::Inner1,
-        ]);
+        let messages_to_assert = Arc::into_inner(messages_to_assert)
+            .unwrap()
+            .into_inner()
+            .unwrap();
+        assert_eq!(messages_to_assert, vec![InnerMessage::Inner1,]);
     }
 
     #[test]
     pub fn batched_messages_with_map() {
         // given
 
-        // this is the same as what is returned by a call to a crux service's `update()` method 
-        let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
-            Task::done(Ok(InnerMessage::Inner1)),
-            Task::done(Err(TestError::Error1)),
-        ];
+        // this is the same as what is returned by a call to a crux service's `update()` method
+        let results: Vec<Task<Result<InnerMessage, TestError>>> =
+            vec![Task::done(Ok(InnerMessage::Inner1)), Task::done(Err(TestError::Error1))];
 
         let task: Task<Result<InnerMessage, TestError>> = Task::batch(results);
 
@@ -256,17 +244,18 @@ mod tests {
             let results_to_assert = results_to_assert.clone();
             move |result| {
                 println!("result passed to `.map`: {:?}", &result);
-                results_to_assert.lock().unwrap().push(result.clone());
+                results_to_assert
+                    .lock()
+                    .unwrap()
+                    .push(result.clone());
 
                 Ok(InnerMessage::Inner2)
             }
         });
 
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
@@ -281,18 +270,18 @@ mod tests {
         ]);
 
         // and
-        let results_to_assert = Arc::into_inner(results_to_assert).unwrap().into_inner().unwrap();
-        assert_eq!(results_to_assert, [
-            Ok(InnerMessage::Inner1),
-            Err(TestError::Error1),
-        ]);
+        let results_to_assert = Arc::into_inner(results_to_assert)
+            .unwrap()
+            .into_inner()
+            .unwrap();
+        assert_eq!(results_to_assert, [Ok(InnerMessage::Inner1), Err(TestError::Error1),]);
     }
 
     #[test]
     pub fn batched_messages_with_then() {
         // given
 
-        // this is the same as what is returned by a call to a crux service's `update()` method 
+        // this is the same as what is returned by a call to a crux service's `update()` method
         let results: Vec<Task<Result<InnerMessage, TestError>>> = vec![
             Task::done(Ok(InnerMessage::Inner1)),
             Task::done(Err(TestError::Error1)),
@@ -307,17 +296,18 @@ mod tests {
             let results_to_assert = results_to_assert.clone();
             move |result| {
                 println!("result passed to `.map`: {:?}", &result);
-                results_to_assert.lock().unwrap().push(result.clone());
+                results_to_assert
+                    .lock()
+                    .unwrap()
+                    .push(result.clone());
 
                 Task::done(Ok(InnerMessage::Inner3))
             }
         });
 
-        let task: Task<OuterMessage> = task.map(|result|{
-            match result {
-                Ok(message) => OuterMessage::Wrapped(message),
-                Err(error) => OuterMessage::Error(error) ,
-            }
+        let task: Task<OuterMessage> = task.map(|result| match result {
+            Ok(message) => OuterMessage::Wrapped(message),
+            Err(error) => OuterMessage::Error(error),
         });
 
         // when
@@ -333,14 +323,16 @@ mod tests {
         ]);
 
         // and
-        let results_to_assert = Arc::into_inner(results_to_assert).unwrap().into_inner().unwrap();
+        let results_to_assert = Arc::into_inner(results_to_assert)
+            .unwrap()
+            .into_inner()
+            .unwrap();
         assert_eq!(results_to_assert, [
             Ok(InnerMessage::Inner1),
             Err(TestError::Error1),
             Ok(InnerMessage::Inner2),
         ]);
     }
-
 
     fn dump_collected_messages(messages: &Vec<OuterMessage>) {
         for message in messages.iter() {
@@ -363,10 +355,8 @@ mod tests {
 
         // FIXME this may cause flakey tests if the system running the tests is slow/loaded.
         //       ideally we collect all received messages until the `collect_messages` thread is told to stop...
-        
-        let handle = thread::spawn(|| {
-            collect_messages(app_message_receiver)
-        });
+
+        let handle = thread::spawn(|| collect_messages(app_message_receiver));
         thread::sleep(Duration::from_millis(250));
 
         let messages = handle.join().unwrap();
@@ -386,17 +376,17 @@ mod tests {
         ) {
             loop {
                 select! {
-                received_message = receiver.select_next_some() => {
-                    trace!("dispatcher. task message: {:?}", &received_message);
-                    match sender.send(received_message) {
+                    received_message = receiver.select_next_some() => {
+                        trace!("dispatcher. task message: {:?}", &received_message);
+                        match sender.send(received_message) {
 
-                        Ok(_) => trace!("dispatch. completed"),
-                        Err(message) => {
-                            error!("dispatch. error dispatching task message: {:?}", message);
-                        }
-                    };
+                            Ok(_) => trace!("dispatch. completed"),
+                            Err(message) => {
+                                error!("dispatch. error dispatching task message: {:?}", message);
+                            }
+                        };
+                    }
                 }
-            }
             }
         }
     }
@@ -411,12 +401,12 @@ mod tests {
     #[derive(Debug, PartialEq, Clone)]
     enum OuterMessage {
         Wrapped(InnerMessage),
-        Error(TestError)
+        Error(TestError),
     }
 
     #[derive(Debug, PartialEq, Clone)]
     #[allow(dead_code)]
     enum TestError {
-        Error1
+        Error1,
     }
 }

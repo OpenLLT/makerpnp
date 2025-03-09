@@ -31,11 +31,8 @@ impl PlannerCoreService {
                 Ok(action) => {
                     actions.push(action);
                 }
-                Err(error) => {
-                    return ResultHelper::new(project_key, Err(error))
-                }
+                Err(error) => return ResultHelper::new(project_key, Err(error)),
             }
-            
         }
 
         ResultHelper::new(project_key, Ok(actions))
@@ -52,7 +49,9 @@ impl PlannerCoreService {
                         error!("core error: {:?}", error);
                         Err(ProjectError::CoreError(error))
                     }
-                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState(view.modified))),
+                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState(
+                        view.modified,
+                    ))),
                 };
 
                 task
@@ -75,24 +74,27 @@ pub struct ResultHelper {
 
 impl ResultHelper {
     pub fn new(project_key: ProjectKey, result: Result<Vec<ProjectAction>, ProjectError>) -> Self {
-        Self { project_key, result }
+        Self {
+            project_key,
+            result,
+        }
     }
-    
-    pub fn when_ok<F>(self, f: F) -> Option<ProjectAction> 
+
+    pub fn when_ok<F>(self, f: F) -> Option<ProjectAction>
     where
         F: FnOnce() -> ProjectAction,
     {
         self.into_action_inner(Some(f()))
     }
-    
+
     pub fn into_inner(self) -> (ProjectKey, Result<Vec<ProjectAction>, ProjectError>) {
         (self.project_key, self.result)
     }
-    
+
     pub fn unwrap(self) -> Result<Vec<ProjectAction>, ProjectError> {
         self.result
     }
-    
+
     pub fn into_action(self) -> Option<ProjectAction> {
         self.into_action_inner(None)
     }
@@ -103,16 +105,17 @@ impl ResultHelper {
                 if let Some(additional_action) = additional_action {
                     actions.push(additional_action);
                 }
-                let tasks: Vec<_> = actions.into_iter().map(|action|Task::done(action)).collect();
+                let tasks: Vec<_> = actions
+                    .into_iter()
+                    .map(|action| Task::done(action))
+                    .collect();
                 if tasks.is_empty() {
                     None
                 } else {
                     Some(ProjectAction::Task(self.project_key, Task::batch(tasks)))
                 }
             }
-            Err(error) => {
-                Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error)))
-            }
+            Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
         }
     }
 }
