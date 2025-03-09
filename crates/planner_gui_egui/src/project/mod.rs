@@ -401,6 +401,10 @@ impl UiComponent for Project {
                                     ))
                                 })
                         }
+                        Some(AddPcbModalAction::CloseDialog) => {
+                            self.add_pcb_modal.take();
+                            None
+                        }
                     }
                 } else {
                     None
