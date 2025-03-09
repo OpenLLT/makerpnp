@@ -1,12 +1,13 @@
 use std::sync::mpsc::Sender;
+
 use egui::{Response, RichText, Ui};
 use egui_i18n::translate_fluent;
 use egui_mobius::types::{Value, ValueGuard};
+use egui_taffy::taffy::prelude::{fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignItems, AlignSelf, Display, FlexDirection, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, TuiContainerResponse};
-use egui_taffy::taffy::prelude::{fit_content, fr, length, percent, span};
-use validator::{Validate, ValidationErrors};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
+use validator::{Validate, ValidationErrors};
 
 /// transient helper
 pub struct Form<F, C> {
@@ -37,7 +38,6 @@ impl<F: Validate, C> Form<F, C> {
     }
 
     pub fn show_fields(&self, tui: &mut Tui, fields: impl FnOnce(&Self, &mut Tui)) {
-
         let default_style = Self::form_default_style();
 
         //
@@ -48,27 +48,27 @@ impl<F: Validate, C> Form<F, C> {
             align_self: Some(AlignSelf::Stretch),
             ..default_style()
         })
+        .add(|tui| {
+            //
+            // grid container
+            //
+            tui.style(Style {
+                flex_grow: 1.0,
+                display: Display::Grid,
+                grid_template_columns: vec![fit_content(percent(1.)), fr(1.)],
+                grid_template_rows: vec![fr(1.), fr(1.)],
+
+                // ensure items are centered vertically on rows
+                align_items: Some(AlignItems::Center),
+                ..default_style()
+            })
             .add(|tui| {
-                //
-                // grid container
-                //
-                tui.style(Style {
-                    flex_grow: 1.0,
-                    display: Display::Grid,
-                    grid_template_columns: vec![fit_content(percent(1.)), fr(1.)],
-                    grid_template_rows: vec![fr(1.), fr(1.)],
-
-                    // ensure items are centered vertically on rows
-                    align_items: Some(AlignItems::Center),
-                    ..default_style()
-                })
-                    .add(|tui| {
-                        fields(&self, tui);
-                        // end of grid container content
-                    });
-
-                // end of form fields container content
+                fields(&self, tui);
+                // end of grid container content
             });
+
+            // end of form fields container content
+        });
     }
 
     fn form_default_style() -> fn() -> Style {
@@ -86,11 +86,14 @@ impl<F: Validate, C> Form<F, C> {
         field_name: &str,
         label: String,
         tui: &mut Tui,
-        mut ui_builder: impl FnMut(&mut Ui, ValueGuard<'_, F>, Sender<C>) -> Response)
-    {
+        mut ui_builder: impl FnMut(&mut Ui, ValueGuard<'_, F>, Sender<C>) -> Response,
+    ) {
         let default_style = Self::form_default_style();
 
-        tui.style(Style { ..default_style() }).add(|tui| {
+        tui.style(Style {
+            ..default_style()
+        })
+        .add(|tui| {
             tui.label(label);
         });
 
@@ -98,19 +101,17 @@ impl<F: Validate, C> Form<F, C> {
             flex_grow: 1.0,
             ..default_style()
         })
-            .add(|tui| {
-                tui.style(Style {
-                    flex_grow: 1.0,
-                    ..default_style()
-                })
-                    .ui_add_manual(
-                        | ui | {
-                            ui_builder(ui, self.fields.lock().unwrap(), self.sender.clone())
-                        },
-                        Self::no_transform,
-                    );
-            });
-        
+        .add(|tui| {
+            tui.style(Style {
+                flex_grow: 1.0,
+                ..default_style()
+            })
+            .ui_add_manual(
+                |ui| ui_builder(ui, self.fields.lock().unwrap(), self.sender.clone()),
+                Self::no_transform,
+            );
+        });
+
         Self::field_error(&self.validation_errors, default_style, tui, field_name);
     }
 
@@ -131,20 +132,20 @@ impl<F: Validate, C> Form<F, C> {
                     grid_column: span(2),
                     ..default_style()
                 })
-                    .add(|tui| {
-                        for field_error in field_errors.iter() {
-                            let code = &field_error.code;
-                            let params = &field_error.params;
+                .add(|tui| {
+                    for field_error in field_errors.iter() {
+                        let code = &field_error.code;
+                        let params = &field_error.params;
 
-                            let args = build_fluent_args(params);
+                        let args = build_fluent_args(params);
 
-                            let message = translate_fluent(code, &args);
+                        let message = translate_fluent(code, &args);
 
-                            //trace!("field_error: {}", field_error);
+                        //trace!("field_error: {}", field_error);
 
-                            tui.label(RichText::new(message).color(colors::ERROR));
-                        }
-                    });
+                        tui.label(RichText::new(message).color(colors::ERROR));
+                    }
+                });
             }
         }
     }

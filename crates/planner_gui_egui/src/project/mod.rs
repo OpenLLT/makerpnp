@@ -77,7 +77,7 @@ pub struct Project {
     toolbar: ProjectToolbar,
 
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
-    
+
     add_pcb_modal: Option<AddPcbModal>,
 }
 
@@ -193,7 +193,7 @@ impl UiComponent for Project {
         if !self.errors.is_empty() {
             dialogs::errors::show_errors_modal(ui, *key, &self.path, &self.errors, &self.component);
         }
-        
+
         if let Some(dialog) = &self.add_pcb_modal {
             dialog.ui(ui, &mut ());
         }
@@ -211,22 +211,20 @@ impl UiComponent for Project {
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
 
-                self
-                    .planner_core_service
+                self.planner_core_service
                     .update(key, Event::Load {
                         path: self.path.clone(),
                     })
-                    .when_ok(||{
-                        ProjectAction::UiCommand(ProjectUiCommand::Loaded)
-                    })
+                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Loaded))
             }
             ProjectUiCommand::Loaded => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 state.loaded = true;
-                self
-                    .planner_core_service
+                self.planner_core_service
                     .update(key, Event::RequestOverviewView {})
-                    .when_ok(||ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
+                    .when_ok(|| {
+                        ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
+                    })
             }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
@@ -244,7 +242,8 @@ impl UiComponent for Project {
                     },
                 };
 
-                self.planner_core_service.update(key, event)
+                self.planner_core_service
+                    .update(key, event)
                     .into_action()
             }
             ProjectUiCommand::UpdateView(view) => {
@@ -326,12 +325,16 @@ impl UiComponent for Project {
                     self.show_phase(phase_reference.clone().into());
 
                     let tasks: Vec<_> = vec![
-                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::PhaseOverview {
-                            phase: phase_reference.clone(),
-                        }))),
-                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::PhasePlacements {
-                            phase: phase_reference.clone(),
-                        }))),
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::PhaseOverview {
+                                phase: phase_reference.clone(),
+                            },
+                        ))),
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::PhasePlacements {
+                                phase: phase_reference.clone(),
+                            },
+                        ))),
                     ];
 
                     Some(ProjectAction::Task(key, Task::batch(tasks)))
@@ -349,14 +352,14 @@ impl UiComponent for Project {
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
-                        let mut modal = AddPcbModal::new(
-                            self.path.clone(),
-                        );
-                        modal.component.configure_mapper(self.component.sender.clone(), move |command|{
-                            debug!("add pcb modal mapper. command: {:?}", command);
-                            (key, ProjectUiCommand::AddPcbModalCommand(command))
-                        });
-                            
+                        let mut modal = AddPcbModal::new(self.path.clone());
+                        modal
+                            .component
+                            .configure_mapper(self.component.sender.clone(), move |command| {
+                                debug!("add pcb modal mapper. command: {:?}", command);
+                                (key, ProjectUiCommand::AddPcbModalCommand(command))
+                            });
+
                         self.add_pcb_modal = Some(modal);
                         None
                     }
@@ -387,14 +390,15 @@ impl UiComponent for Project {
                         None => None,
                         Some(AddPcbModalAction::Submit(args)) => {
                             self.add_pcb_modal.take();
-                            self
-                                .planner_core_service
+                            self.planner_core_service
                                 .update(key, Event::AddPcb {
                                     kind: args.kind,
                                     name: args.name,
                                 })
-                                .when_ok(||{
-                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
+                                .when_ok(|| {
+                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        ProjectViewRequest::ProjectTree,
+                                    ))
                                 })
                         }
                     }

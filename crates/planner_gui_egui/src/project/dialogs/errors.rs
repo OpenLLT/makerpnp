@@ -1,11 +1,19 @@
 use std::path::PathBuf;
+
 use egui::{Modal, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
+
 use crate::project::{ProjectKey, ProjectUiCommand};
 use crate::ui_component::ComponentState;
 
-pub fn show_errors_modal(ui: &mut Ui, key: ProjectKey, path: &PathBuf, errors: &Vec<String>, component: &ComponentState<(ProjectKey, ProjectUiCommand)>) {
+pub fn show_errors_modal(
+    ui: &mut Ui,
+    key: ProjectKey,
+    path: &PathBuf,
+    errors: &Vec<String>,
+    component: &ComponentState<(ProjectKey, ProjectUiCommand)>,
+) {
     let modal_id = ui.id().with("errors");
 
     Modal::new(modal_id).show(ui.ctx(), |ui| {
@@ -50,8 +58,7 @@ pub fn show_errors_modal(ui: &mut Ui, key: ProjectKey, path: &PathBuf, errors: &
                     .button(tr!("form-button-ok"))
                     .clicked()
                 {
-                    component
-                        .send((key, ProjectUiCommand::ClearErrors))
+                    component.send((key, ProjectUiCommand::ClearErrors))
                 }
             },
         );

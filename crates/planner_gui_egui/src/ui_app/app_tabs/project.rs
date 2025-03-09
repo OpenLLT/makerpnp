@@ -132,10 +132,9 @@ impl UiComponent for ProjectTab {
                         Some(ProjectTabAction::SetModifiedState(modified_state))
                     }
                     None => None,
-                    Some(ProjectAction::UiCommand(command)) => {
-                        project.update((key, command), &mut project_context)
-                            .map(|action|ProjectTabAction::ProjectTask(key, Task::done(action)))
-                    }
+                    Some(ProjectAction::UiCommand(command)) => project
+                        .update((key, command), &mut project_context)
+                        .map(|action| ProjectTabAction::ProjectTask(key, Task::done(action))),
                 }
             }
         }
