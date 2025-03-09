@@ -10,7 +10,6 @@ use taffy::Size;
 use validator::{Validate};
 use crate::forms::Form;
 use crate::project::dialogs::PcbKindChoice;
-use crate::project::ProjectKey;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
@@ -18,17 +17,15 @@ pub struct AddPcbModal {
     fields: Value<AddPcbFields>,
     
     path: PathBuf,
-    key: ProjectKey,
     
     pub component: ComponentState<AddPcbModalUiCommand>
 }
 
 impl AddPcbModal {
-    pub fn new(path: PathBuf, key: ProjectKey) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
             fields: Default::default(),
             path,
-            key,
             component: Default::default(),
         }
     }
@@ -38,12 +35,6 @@ impl AddPcbModal {
         let default_style = || Style {
             padding: length(2.),
             gap: length(2.),
-            ..Default::default()
-        };
-
-        let no_padding_style = || Style {
-            padding: length(0.),
-            gap: length(0.),
             ..Default::default()
         };
 

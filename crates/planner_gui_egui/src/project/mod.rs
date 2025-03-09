@@ -351,7 +351,6 @@ impl UiComponent for Project {
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         let mut modal = AddPcbModal::new(
                             self.path.clone(),
-                            key,
                         );
                         modal.component.configure_mapper(self.component.sender.clone(), move |command|{
                             debug!("add pcb modal mapper. command: {:?}", command);
