@@ -135,7 +135,14 @@ pub enum AddPcbModalUiCommand {
 
 #[derive(Debug, Clone)]
 pub enum AddPcbModalAction {
-    CloseDialog,
+    Submit(AddPcbArgs),
+}
+
+/// Value object
+#[derive(Debug, Clone)]
+pub struct AddPcbArgs {
+    pub name: String,
+    pub kind: planner_app::PcbKind,
 }
 
 impl UiComponent for AddPcbModal {
@@ -181,8 +188,14 @@ impl UiComponent for AddPcbModal {
     fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
         match command {
             AddPcbModalUiCommand::Submit => {
-                // todo validation, etc...
-                Some(AddPcbModalAction::CloseDialog)
+                
+                let fields = self.fields.lock().unwrap();
+                let args = AddPcbArgs {
+                    name: fields.name.clone(),
+                    // Safety: form validation prevents kind from being None
+                    kind: fields.kind.clone().unwrap().try_into().unwrap(),
+                };
+                Some(AddPcbModalAction::Submit(args))
             }
             AddPcbModalUiCommand::NameChanged(name) => {
                 self.fields.lock().unwrap().name = name;

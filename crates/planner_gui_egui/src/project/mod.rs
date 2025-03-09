@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{Event, PcbKind, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
@@ -385,13 +385,13 @@ impl UiComponent for Project {
                     let action = modal.update(command, &mut ());
                     match action {
                         None => None,
-                        Some(AddPcbModalAction::CloseDialog) => {
+                        Some(AddPcbModalAction::Submit(args)) => {
                             self.add_pcb_modal.take();
                             self
                                 .planner_core_service
                                 .update(key, Event::AddPcb {
-                                    kind: PcbKind::Single,
-                                    name: "test".to_string(),
+                                    kind: args.kind,
+                                    name: args.name,
                                 })
                                 .when_ok(||{
                                     ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
