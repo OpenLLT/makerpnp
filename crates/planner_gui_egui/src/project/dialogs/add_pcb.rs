@@ -134,6 +134,8 @@ pub struct AddPcbFields {
 #[derive(Debug, Clone)]
 pub enum AddPcbModalUiCommand {
     Submit,
+    Cancel,
+
     NameChanged(String),
     PcbKindChanged(PcbKindChoice),
 }
@@ -141,6 +143,7 @@ pub enum AddPcbModalUiCommand {
 #[derive(Debug, Clone)]
 pub enum AddPcbModalAction {
     Submit(AddPcbArgs),
+    CloseDialog,
 }
 
 /// Value object
@@ -177,6 +180,13 @@ impl UiComponent for AddPcbModal {
                 ui,
                 |_ui| {},
                 |ui| {
+                    if ui
+                        .button(tr!("form-button-cancel"))
+                        .clicked()
+                    {
+                        self.component
+                            .send(AddPcbModalUiCommand::Cancel);
+                    }
                     if ui
                         .button(tr!("form-button-ok"))
                         .clicked()
@@ -218,6 +228,7 @@ impl UiComponent for AddPcbModal {
                 self.fields.lock().unwrap().kind = Some(kind);
                 None
             }
+            AddPcbModalUiCommand::Cancel => Some(AddPcbModalAction::CloseDialog),
         }
     }
 }
