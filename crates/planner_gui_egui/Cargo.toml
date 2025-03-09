@@ -33,7 +33,7 @@ egui_extras = { workspace = true }
 rfd = { workspace = true }
 
 # i18n
-i18n = { path = "../i18n", features = ["planner_app"] }
+i18n = { path = "../i18n", features = ["planner_app", "json"] }
 unic-langid = { workspace = true, features = ["macros"]}
 fluent = { workspace = true }
 fluent-bundle = { workspace = true }
