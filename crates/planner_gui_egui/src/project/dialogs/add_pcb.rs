@@ -1,9 +1,10 @@
 use i18n::fluent_argument_helpers::json::build_fluent_args;
 use std::fmt::Debug;
 use std::path::PathBuf;
+use std::sync::mpsc::Sender;
 use egui::{Modal, Response, RichText, TextEdit, Ui, Widget};
 use egui_i18n::{tr, translate_fluent};
-use egui_mobius::types::Value;
+use egui_mobius::types::{Value, ValueGuard};
 use egui_taffy::taffy::prelude::{auto, fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignItems, AlignSelf, Display, FlexDirection, Style};
 use egui_taffy::{taffy, tui, Tui, TuiBuilderLogic, TuiContainerResponse};
@@ -91,12 +92,62 @@ impl AddPcbModal {
                             ..default_style()
                         })
                             .add(|tui| {
-                                form_field("name", tr!("form-add-pcb-input-name"), &validation_errors, tui, {
-                                    let fields = self.fields.clone();
-                                    move |ui: &mut Ui|{
-                                        TextEdit::singleline(&mut fields.lock().unwrap().name)
+                                form_field("name", tr!("form-add-pcb-input-name"), self.fields.clone(), self.component.sender.clone(), &validation_errors, tui, {
+                                    // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
+                                    //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
+                                    move |ui: &mut Ui, fields, sender|{
+                                        let mut name_clone = fields.name.clone();
+                                        let output = TextEdit::singleline(&mut name_clone)
                                             .desired_width(ui.available_width())
-                                            .ui(ui)
+                                            .show(ui);
+                                        
+                                        if !fields.name.eq(&name_clone) {
+                                            sender.send(AddPcbModalUiCommand::NameChanged(name_clone)).expect("sent")
+                                        }
+                                        
+                                        output.response
+                                    }
+                                });
+                                
+                                form_field("pcb_kind", tr!("form-common-choice-pcb-kind"), self.fields.clone(), self.component.sender.clone(), &validation_errors, tui, {
+                                    move |ui: &mut Ui, fields, sender |{
+                                        let kind = fields.kind.clone();
+                                        
+                                        let available_size = ui.available_size();
+
+                                        ui.add_sized(available_size, |ui: &mut Ui| {
+                                            let kind_id = ui.id();
+                                            egui::ComboBox::from_id_salt(kind_id)
+                                                .width(ui.available_width())
+                                                .selected_text(match kind {
+                                                    None => tr!("form-common-combo-default"),
+                                                    Some(PcbKindChoice::Single) => tr!("form-common-choice-pcb-kind-single"),
+                                                    Some(PcbKindChoice::Panel) => {
+                                                        tr!("form-common-choice-pcb-kind-panel")
+                                                    }
+                                                })
+                                                .show_ui(ui, |ui| {
+                                                    if ui
+                                                        .add(egui::SelectableLabel::new(
+                                                            kind == Some(PcbKindChoice::Single),
+                                                            tr!("form-common-choice-pcb-kind-single"),
+                                                        ))
+                                                        .clicked()
+                                                    {
+                                                        sender.send(AddPcbModalUiCommand::PcbKindChanged(PcbKindChoice::Single)).expect("sent");
+                                                    }
+                                                    if ui
+                                                        .add(egui::SelectableLabel::new(
+                                                            kind == Some(PcbKindChoice::Panel),
+                                                            tr!("form-common-choice-pcb-kind-panel"),
+                                                        ))
+                                                        .clicked()
+                                                    {
+                                                        sender.send(AddPcbModalUiCommand::PcbKindChanged(PcbKindChoice::Panel)).expect("sent");
+                                                    }
+                                                })
+                                                .response
+                                        })
                                     }
                                 });
                                 // end of grid container content
@@ -119,6 +170,8 @@ pub struct AddPcbFields {
 #[derive(Debug, Clone)]
 pub enum AddPcbModalUiCommand {
     Submit,
+    NameChanged(String),
+    PcbKindChanged(PcbKindChoice),
 }
 
 #[derive(Debug, Clone)]
@@ -164,11 +217,19 @@ impl UiComponent for AddPcbModal {
         });
     }
 
-    fn update<'context>(&mut self, _command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
-        match _command {
+    fn update<'context>(&mut self, command: Self::UiCommand, _context: &mut Self::UiContext<'context>) -> Option<Self::UiAction> {
+        match command {
             AddPcbModalUiCommand::Submit => {
                 // todo validation, etc...
                 Some(AddPcbModalAction::CloseDialog)
+            }
+            AddPcbModalUiCommand::NameChanged(name) => {
+                self.fields.lock().unwrap().name = name;
+                None
+            }
+            AddPcbModalUiCommand::PcbKindChanged(kind) => {
+                self.fields.lock().unwrap().kind = Some(kind);
+                None
             }
         }
     }
@@ -186,8 +247,15 @@ pub fn form_default_style() -> fn() -> Style {
     default_style
 }
 
-pub fn form_field(field_name: &str, label: String, validation_errors: &Result<(), ValidationErrors>, tui: &mut Tui, mut ui_builder: impl FnMut(&mut Ui) -> Response) {
-
+pub fn form_field<T, C>(
+    field_name: &str, 
+    label: String, 
+    fields: Value<T>,
+    sender: Sender<C>,
+    validation_errors: &Result<(), ValidationErrors>, 
+    tui: &mut Tui, 
+    mut ui_builder: impl FnMut(&mut Ui, ValueGuard<'_, T>, Sender<C>) -> Response) 
+{
     let default_style = form_default_style();
 
     tui.style(Style { ..default_style() }).add(|tui| {
@@ -199,15 +267,13 @@ pub fn form_field(field_name: &str, label: String, validation_errors: &Result<()
         ..default_style()
     })
         .add(|tui| {
-            // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
-            //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
             tui.style(Style {
                 flex_grow: 1.0,
                 ..default_style()
             })
                 .ui_add_manual(
-                    |ui| {
-                        ui_builder(ui)
+                    | ui | {
+                        ui_builder(ui, fields.lock().unwrap(), sender)
                     },
                     no_transform,
                 );
