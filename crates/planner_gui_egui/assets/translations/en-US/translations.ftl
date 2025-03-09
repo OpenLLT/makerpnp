@@ -67,10 +67,12 @@ form-common-choice-pcb-kind = PCB Kind
 form-common-choice-pcb-kind-single = Single
 form-common-choice-pcb-kind-panel = Panel
 
-form-field-required = * Required
+form-option-error-required = * Required
 
 form-input-error-empty = Cannot be empty
-form-input-choice-empty = Choose an option
+form-input-error-length = Minimum length { $min }
+form-choice-empty = Choose an option
+
 form-input-number-require-greater-than-zero = Require a number greater than zero
 form-input-number-require-positive-number = Require a number
 form-file-not-found = File not found
