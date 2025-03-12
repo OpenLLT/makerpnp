@@ -1,19 +1,20 @@
 use std::path::PathBuf;
 
 use egui_mobius::types::Value;
-use tracing::trace;
+use tracing::field::debug;
+use tracing::{debug, trace};
 
 use crate::config::Config;
-use crate::project::ProjectAction;
+use crate::project::{ProjectAction, ProjectUiCommand};
 use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
-use crate::ui_app::AppState;
 use crate::ui_app::app_tabs::home::HomeTabAction;
 use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{
     AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand,
 };
+use crate::ui_app::{AppState, build_toolbar_context};
 use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
@@ -40,11 +41,13 @@ pub fn handle_command(
     match command {
         UiCommand::None => Task::none(),
         UiCommand::ToolbarCommand(command) => {
+            let mut context = build_toolbar_context(&app_tabs);
+
             let toolbar_action = app_state
                 .lock()
                 .unwrap()
                 .toolbar
-                .update(command, &mut ());
+                .update(command, &mut context);
 
             let task = handle_toolbar_action(toolbar_action, &app_state, &app_tabs);
             task
@@ -147,6 +150,25 @@ fn handle_toolbar_action(
             let mut app_state = app_state.lock().unwrap();
             app_state.pick_file();
             Task::none()
+        }
+        ToolbarAction::SaveTab(tab_key) => {
+            let ui_state = ui_state.lock().unwrap();
+            ui_state.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
+                TabKind::Project(project_tab, _) => {
+                    let command = UiCommand::TabCommand {
+                        tab_key,
+                        command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                            command: ProjectTabUiCommand::ProjectCommand {
+                                key: project_tab.project_key,
+                                command: ProjectUiCommand::Save,
+                            },
+                        }),
+                    };
+                    debug!("save command: {:?}", command);
+                    Task::done(command)
+                }
+                _ => Task::none(),
+            })
         }
     }
 }

@@ -1,6 +1,7 @@
 use egui::Ui;
 use egui_i18n::tr;
 
+use crate::tabs::TabKey;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug, Clone)]
@@ -8,12 +9,19 @@ pub enum ToolbarUiCommand {
     ShowHomeTabClicked,
     CloseAllTabsClicked,
     OpenClicked,
+    SaveClicked(TabKey),
 }
 
 pub enum ToolbarAction {
     ShowHomeTab,
     CloseAllTabs,
     PickFile,
+    SaveTab(TabKey),
+}
+
+pub struct ToolbarContext {
+    pub active_tab: Option<TabKey>,
+    pub can_save: bool,
 }
 
 pub struct Toolbar {
@@ -29,28 +37,43 @@ impl Toolbar {
 }
 
 impl UiComponent for Toolbar {
-    type UiContext<'context> = ();
+    type UiContext<'context> = ToolbarContext;
     type UiCommand = ToolbarUiCommand;
     type UiAction = ToolbarAction;
 
-    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+    fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         egui::Frame::new().show(ui, |ui| {
             ui.horizontal(|ui| {
-                let home_button = ui.button(tr!("toolbar-button-home"));
-                let open_button = ui.button(tr!("toolbar-button-open"));
-                let close_all_button = ui.button(tr!("toolbar-button-close-all"));
-
-                if home_button.clicked() {
+                if ui
+                    .button(tr!("toolbar-button-home"))
+                    .clicked()
+                {
                     self.component
                         .send(ToolbarUiCommand::ShowHomeTabClicked);
                 }
 
-                if open_button.clicked() {
+                if ui
+                    .button(tr!("toolbar-button-open"))
+                    .clicked()
+                {
                     self.component
                         .send(ToolbarUiCommand::OpenClicked);
                 }
 
-                if close_all_button.clicked() {
+                ui.add_enabled_ui(context.can_save, |ui| {
+                    if ui
+                        .button(tr!("toolbar-button-save"))
+                        .clicked()
+                    {
+                        self.component
+                            .send(ToolbarUiCommand::SaveClicked(context.active_tab.unwrap()));
+                    }
+                });
+
+                if ui
+                    .button(tr!("toolbar-button-close-all"))
+                    .clicked()
+                {
                     self.component
                         .send(ToolbarUiCommand::CloseAllTabsClicked);
                 }
@@ -67,6 +90,7 @@ impl UiComponent for Toolbar {
             ToolbarUiCommand::ShowHomeTabClicked => Some(ToolbarAction::ShowHomeTab),
             ToolbarUiCommand::CloseAllTabsClicked => Some(ToolbarAction::CloseAllTabs),
             ToolbarUiCommand::OpenClicked => Some(ToolbarAction::PickFile),
+            ToolbarUiCommand::SaveClicked(tab_key) => Some(ToolbarAction::SaveTab(tab_key)),
         }
     }
 }

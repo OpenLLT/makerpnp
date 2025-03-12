@@ -226,6 +226,16 @@ impl UiComponent for Project {
                         ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
                     })
             }
+            ProjectUiCommand::Save => {
+                debug!("saving project. path: {}", self.path.display());
+                self.planner_core_service
+                    .update(key, Event::Save)
+                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Saved))
+            }
+            ProjectUiCommand::Saved => {
+                debug!("saved");
+                None
+            }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
@@ -472,6 +482,8 @@ pub enum ProjectUiCommand {
     None,
     Load,
     Loaded,
+    Save,
+    Saved,
     UpdateView(ProjectView),
     Error(ProjectError),
     SetModifiedState(bool),
