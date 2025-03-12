@@ -155,7 +155,7 @@ impl UiApp {
             Self::default()
         };
 
-        let (app_signal, app_slot) = egui_mobius::factory::create_signal_slot::<UiCommand>();
+        let (app_signal, mut app_slot) = egui_mobius::factory::create_signal_slot::<UiCommand>(1);
 
         let app_message_sender = app_signal.sender.clone();
 
