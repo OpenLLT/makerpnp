@@ -14,7 +14,7 @@ use crate::file_picker::Picker;
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::TabKey;
-use crate::toolbar::{Toolbar, ToolbarUiCommand};
+use crate::toolbar::{Toolbar, ToolbarContext, ToolbarUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{AppTabs, TabKind, TabKindContext, TabKindUiCommand, TabUiCommand};
 use crate::ui_commands::{UiCommand, handle_command};
@@ -310,7 +310,13 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
             });
 
-            self.app_state().toolbar.ui(ui, &mut ());
+            {
+                let mut context = build_toolbar_context(&self.app_tabs);
+
+                self.app_state()
+                    .toolbar
+                    .ui(ui, &mut context);
+            }
         });
 
         if !self.app_state().startup_done {
@@ -389,4 +395,22 @@ fn configure_project_component(app_command_sender: Sender<UiCommand>, tab_key: T
                 }),
             }
         });
+}
+
+pub fn build_toolbar_context(app_tabs: &Value<AppTabs>) -> ToolbarContext {
+    let app_tabs = app_tabs.lock().unwrap();
+    let active_tab = app_tabs.active_tab();
+
+    let can_save = active_tab.map_or(false, |tab_key| {
+        app_tabs.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
+            TabKind::Home(_, _) => false,
+            TabKind::Project(project_tab, _) => project_tab.modified,
+        })
+    });
+
+    let context = ToolbarContext {
+        active_tab,
+        can_save,
+    };
+    context
 }

@@ -269,6 +269,13 @@ macro_rules! tabs_impl {
                 Err(())
             }
         }
+
+        #[allow(dead_code)]
+        pub fn active_tab(&self) -> Option<TabKey> {
+            let mut tree = self.tree.lock().unwrap();
+            tree.find_active_focused()
+                .map(|(_, tab_key)| tab_key.clone())
+        }
     };
 }
 
