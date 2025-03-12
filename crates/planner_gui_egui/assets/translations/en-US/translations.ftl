@@ -20,9 +20,12 @@ project-toolbar-button-add-pcb = Add PCB
 project-toolbar-button-create-unit-assignment = Create unit assignment
 
 tab-label-home = Home
+tab-label-new-project = New project
 
 home-banner = Home tab
 home-checkbox-label-show-on-startup = Show on startup
+
+new-project-banner = New project
 
 phase-properties-header = Phase properties
 phase-properties-footer = { $count } items

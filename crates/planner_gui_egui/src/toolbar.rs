@@ -10,6 +10,7 @@ pub enum ToolbarUiCommand {
     CloseAllTabsClicked,
     OpenClicked,
     SaveClicked(TabKey),
+    NewClicked,
 }
 
 pub enum ToolbarAction {
@@ -17,6 +18,7 @@ pub enum ToolbarAction {
     CloseAllTabs,
     PickFile,
     SaveTab(TabKey),
+    AddNewProjectTab,
 }
 
 pub struct ToolbarContext {
@@ -50,6 +52,14 @@ impl UiComponent for Toolbar {
                 {
                     self.component
                         .send(ToolbarUiCommand::ShowHomeTabClicked);
+                }
+
+                if ui
+                    .button(tr!("toolbar-button-new"))
+                    .clicked()
+                {
+                    self.component
+                        .send(ToolbarUiCommand::NewClicked);
                 }
 
                 if ui
@@ -90,6 +100,7 @@ impl UiComponent for Toolbar {
             ToolbarUiCommand::ShowHomeTabClicked => Some(ToolbarAction::ShowHomeTab),
             ToolbarUiCommand::CloseAllTabsClicked => Some(ToolbarAction::CloseAllTabs),
             ToolbarUiCommand::OpenClicked => Some(ToolbarAction::PickFile),
+            ToolbarUiCommand::NewClicked => Some(ToolbarAction::AddNewProjectTab),
             ToolbarUiCommand::SaveClicked(tab_key) => Some(ToolbarAction::SaveTab(tab_key)),
         }
     }

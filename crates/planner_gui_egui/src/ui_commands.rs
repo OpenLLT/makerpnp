@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use egui_mobius::types::Value;
-use tracing::field::debug;
 use tracing::{debug, trace};
 
 use crate::config::Config;
@@ -15,6 +14,7 @@ use crate::ui_app::app_tabs::{
     AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand,
 };
 use crate::ui_app::{AppState, build_toolbar_context};
+use crate::ui_app::app_tabs::new_project::NewProjectTabAction;
 use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
@@ -85,6 +85,11 @@ pub fn handle_command(
                     } => match action {
                         HomeTabAction::None => Task::none(),
                     },
+                    TabKindAction::NewProjectTabAction {
+                        action,
+                    } => match action {
+                        NewProjectTabAction::None => Task::none(),
+                    },
                     TabKindAction::ProjectTabAction {
                         action,
                     } => match action {
@@ -139,6 +144,11 @@ fn handle_toolbar_action(
         ToolbarAction::ShowHomeTab => {
             let mut ui_state = ui_state.lock().unwrap();
             ui_state.show_home_tab();
+            Task::none()
+        }
+        ToolbarAction::AddNewProjectTab => {
+            let mut ui_state = ui_state.lock().unwrap();
+            ui_state.add_new_project_tab();
             Task::none()
         }
         ToolbarAction::CloseAllTabs => {
