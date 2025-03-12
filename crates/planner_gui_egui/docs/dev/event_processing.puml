@@ -1,0 +1,55 @@
+
+@startuml event_processing
+participant User
+participant UI
+participant Tabs
+participant TabKind
+participant ProjectTab
+participant Project
+participant Crux
+
+User -> UI : Click 'Load' - Send(UiCommand(ToolbarCommand(Load)))
+
+== UiCommand Components ==
+UI -> UI : Process(HandleToolBarCommand)
+UI -> UI : UiCommand(OpenFile(Path))
+UI -> UI : Create Project
+UI -> UI : Create Tab
+UI -> UI : UiCommand(TabCommand(TabKindCommand(ProjectTabCommand(ProjectCommand(Load)))))
+UI -> Tabs : TabCommand(TabKindCommand(ProjectTabCommand(ProjectCommand(Load))))
+Tabs -> TabKind : TabKindCommand(ProjectTabCommand(ProjectCommand(Load)))
+TabKind -> ProjectTab : ProjectTabCommand(ProjectCommand(Load))
+ProjectTab -> Project : ProjectCommand(Load)
+
+== Project UI command handler ==
+
+Project -> Crux : Load
+Crux -> Project : Render (Ok)
+
+
+Project -> ProjectTab : ProjectAction::UiCommand(ProjectUiCommand::Loaded)
+ProjectTab -> TabKind : ProjectTabAction(ProjectTask(Task(UiCommand(ProjectUiCommand::Loaded))))
+TabKind -> Tabs : TabKindAction(Task(ProjectTabAction(ProjectTask(UiCommand(ProjectUiCommand::Loaded)))))
+Tabs -> UI : TabAction(Task(TabKindAction(ProjectTabAction(ProjectTask(UiCommand(ProjectUiCommand::Loaded))))))
+
+== UI action handler ==
+UI -> UI : Queue Task (Task(TabAction(TabKindAction(ProjectTabAction(ProjectTask(UiCommand(ProjectUiCommand::Loaded)))))))
+
+UI -> UI : Process(TabCommand(TabKindCommand(ProjectTabCommand(ProjectCommand(ProjectUiCommand::Loaded)))))
+UI -> Tabs : Update(TabKindCommand(ProjectTabCommand(ProjectCommand(ProjectUiCommand::Loaded)))))
+Tabs -> TabKind : Update(ProjectTabCommand(ProjectCommand(ProjectUiCommand::Loaded)))
+TabKind -> ProjectTab : Update(ProjectCommand(ProjectUiCommand::Loaded))
+ProjectTab -> Project : Update(ProjectUiCommand::Loaded)
+
+== Project UI command handler ==
+
+Project -> Crux : Request View (Project Overview)
+Crux -> Project : Record Effect (Project Overview)
+Project -> Crux : Request View (Project Tree)
+Crux -> Project : Record Effect (Project Tree)
+
+== gave up trying to document things ==
+
+UI -> User : Render frame
+
+@enduml
