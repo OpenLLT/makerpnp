@@ -9,11 +9,13 @@ use crate::config::Config;
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::{HomeTab, HomeTabAction, HomeTabContext, HomeTabUiCommand};
+use crate::ui_app::app_tabs::new_project::{NewProjectTab, NewProjectTabAction, NewProjectTabContext, NewProjectTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_component::{ComponentState, UiComponent};
 
 pub mod home;
 pub mod project;
+pub mod new_project;
 
 pub struct TabKindContext {
     pub config: Value<Config>,
@@ -23,18 +25,21 @@ pub struct TabKindContext {
 #[derive(Deserialize, Serialize)]
 pub enum TabKind {
     Home(HomeTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
+    NewProject(NewProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     Project(ProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
 }
 
 #[derive(Debug, Clone)]
 pub enum TabKindUiCommand {
     HomeTabCommand { command: HomeTabUiCommand },
+    NewProjectTabCommand { command: NewProjectTabUiCommand },
     ProjectTabCommand { command: ProjectTabUiCommand },
 }
 
 pub enum TabKindAction {
     None,
     HomeTabAction { action: HomeTabAction },
+    NewProjectTabAction { action: NewProjectTabAction },
     ProjectTabAction { action: ProjectTabAction },
 }
 
@@ -44,6 +49,7 @@ impl Tab for TabKind {
     fn label(&self) -> WidgetText {
         match self {
             TabKind::Home(tab, _) => tab.label(),
+            TabKind::NewProject(tab, _) => tab.label(),
             TabKind::Project(tab, _) => tab.label(),
         }
     }
@@ -60,6 +66,12 @@ impl Tab for TabKind {
                     config: context.config.clone(),
                 };
                 tab.on_close(tab_key, &mut home_tab_context)
+            }
+            TabKind::NewProject(tab, _) => {
+                let mut new_project_tab_context = NewProjectTabContext {
+                    tab_key: tab_key.clone(),
+                };
+                tab.on_close(tab_key, &mut new_project_tab_context)
             }
             TabKind::Project(tab, _) => {
                 let mut project_tab_context = project::ProjectTabContext {
@@ -88,6 +100,12 @@ impl UiComponent for TabKind {
                     config: context.config.clone(),
                 };
                 tab.ui(ui, &mut home_tab_context)
+            }
+            TabKind::NewProject(tab, _) => {
+                let mut new_project_tab_context = NewProjectTabContext {
+                    tab_key,
+                };
+                tab.ui(ui, &mut new_project_tab_context)
             }
             TabKind::Project(tab, _) => {
                 let mut project_tab_context = project::ProjectTabContext {
@@ -120,6 +138,20 @@ impl UiComponent for TabKind {
                 };
                 tab.update(command, &mut home_tab_context)
                     .map(|action| TabKindAction::HomeTabAction {
+                        action,
+                    })
+            }
+            (
+                TabKind::NewProject(tab, _),
+                TabKindUiCommand::NewProjectTabCommand {
+                    command,
+                },
+            ) => {
+                let mut new_project_tab_content = NewProjectTabContext {
+                    tab_key,
+                };
+                tab.update(command, &mut new_project_tab_content)
+                    .map(|action| TabKindAction::NewProjectTabAction {
                         action,
                     })
             }
@@ -286,6 +318,51 @@ impl AppTabs {
     // methods specific to this instance
     //
 
+    pub fn add_new_project_tab(&mut self) {
+        // create a new project tab
+        let tab_kind_component = ComponentState::default();
+
+        let mut tabs = self.tabs.lock().unwrap();
+        let new_project_tab = NewProjectTab::default();
+        let tab_kind = TabKind::NewProject(new_project_tab, tab_kind_component);
+        let tab_key = tabs.add(tab_kind);
+
+        let tab_kind_sender = self.component.sender.clone();
+        Self::configure_new_project_tab_mappers(tab_kind_sender, tabs, tab_key);
+
+        let mut tree = self.tree.lock().unwrap();
+        tree.push_to_focused_leaf(tab_key);
+    }
+
+    fn configure_new_project_tab_mappers(
+        tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
+        mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,
+        tab_key: TabKey,
+    ) {
+        match tabs.tabs.get_mut(&tab_key).unwrap() {
+            TabKind::NewProject(new_project_tab, tab_kind_component) => {
+                tab_kind_component.configure_mapper(tab_kind_sender, move |command| {
+                    debug!("tab kind mapper. command: {:?}", command);
+                    (tab_key, TabUiCommand::TabKindCommand(command))
+                });
+
+                let tab_kind_component_sender = tab_kind_component.sender.clone();
+
+                new_project_tab
+                    .component
+                    .configure_mapper(tab_kind_component_sender, move |command| {
+                        debug!("new project tab mapper. command: {:?}", command);
+                        TabKindUiCommand::NewProjectTabCommand {
+                            command,
+                        }
+                    });
+            }
+            _ => unreachable!(),
+        }
+    }
+
+
+
     pub fn show_home_tab(&mut self) {
         self.show_tab(|candidate_tab| matches!(candidate_tab, TabKind::Home(..)))
             .inspect_err(|_| {
@@ -305,7 +382,7 @@ impl AppTabs {
             })
             .ok();
     }
-
+    
     fn configure_home_tab_mappers(
         tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
         mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,

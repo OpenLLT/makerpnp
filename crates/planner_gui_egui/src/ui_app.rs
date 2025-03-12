@@ -404,6 +404,7 @@ pub fn build_toolbar_context(app_tabs: &Value<AppTabs>) -> ToolbarContext {
     let can_save = active_tab.map_or(false, |tab_key| {
         app_tabs.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
             TabKind::Home(_, _) => false,
+            TabKind::NewProject(_, _) => false,
             TabKind::Project(project_tab, _) => project_tab.modified,
         })
     });
