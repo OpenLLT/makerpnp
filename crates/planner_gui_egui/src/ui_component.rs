@@ -17,9 +17,9 @@ impl<UiCommand> Debug for ComponentState<UiCommand> {
     }
 }
 
-impl<UiCommand: Send + 'static> Default for ComponentState<UiCommand> {
+impl<UiCommand: Send + Clone + 'static> Default for ComponentState<UiCommand> {
     fn default() -> Self {
-        let (signal, slot) = egui_mobius::factory::create_signal_slot::<UiCommand>();
+        let (signal, slot) = egui_mobius::factory::create_signal_slot::<UiCommand>(1);
 
         Self {
             sender: signal.sender.clone(),
@@ -28,7 +28,7 @@ impl<UiCommand: Send + 'static> Default for ComponentState<UiCommand> {
     }
 }
 
-impl<UiCommand: Send + Debug + 'static> ComponentState<UiCommand> {
+impl<UiCommand: Send + Clone + Debug + 'static> ComponentState<UiCommand> {
     pub fn configure_mapper<F, WrappedUiCommand>(&mut self, sender: Enqueue<WrappedUiCommand>, mut wrapper: F)
     where
         F: FnMut(UiCommand) -> WrappedUiCommand + Send + 'static,
