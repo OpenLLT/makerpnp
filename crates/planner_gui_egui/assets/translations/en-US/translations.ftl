@@ -26,6 +26,8 @@ home-banner = Home tab
 home-checkbox-label-show-on-startup = Show on startup
 
 new-project-banner = New project
+form-new-project-input-name = Project name
+form-new-project-input-directory = Directory
 
 phase-properties-header = Phase properties
 phase-properties-footer = { $count } items

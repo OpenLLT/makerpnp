@@ -39,7 +39,7 @@ impl AddPcbModal {
             ..Default::default()
         };
 
-        tui(ui, ui.id().with("new"))
+        tui(ui, ui.id().with("add_pcb_form"))
             .reserve_available_width()
             .style(Style {
                 align_items: Some(AlignItems::Center),
@@ -54,7 +54,7 @@ impl AddPcbModal {
             })
             .show(|tui| {
                 form.show_fields(tui, |form, tui| {
-                    form.add_field("name", tr!("form-add-pcb-input-name"), tui, {
+                    form.add_field_ui("name", tr!("form-add-pcb-input-name"), tui, {
                         // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
                         //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
                         move |ui: &mut Ui, fields, sender| {
@@ -73,7 +73,7 @@ impl AddPcbModal {
                         }
                     });
 
-                    form.add_field("pcb_kind", tr!("form-common-choice-pcb-kind"), tui, {
+                    form.add_field_ui("pcb_kind", tr!("form-common-choice-pcb-kind"), tui, {
                         move |ui: &mut Ui, fields, sender| {
                             let kind = fields.kind.clone();
 

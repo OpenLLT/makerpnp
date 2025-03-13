@@ -9,12 +9,12 @@ use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::app_tabs::home::HomeTabAction;
+use crate::ui_app::app_tabs::new_project::NewProjectTabAction;
 use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{
     AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand,
 };
 use crate::ui_app::{AppState, build_toolbar_context};
-use crate::ui_app::app_tabs::new_project::NewProjectTabAction;
 use crate::ui_component::UiComponent;
 
 #[derive(Debug, Clone)]
@@ -61,8 +61,6 @@ pub fn handle_command(
             tab_key,
             command,
         } => {
-            let mut app_tabs = app_tabs.lock().unwrap();
-
             let mut context = TabKindContext {
                 config: config.clone(),
                 projects: app_state
@@ -72,7 +70,10 @@ pub fn handle_command(
                     .clone(),
             };
 
-            let action = app_tabs.update((tab_key, command), &mut context);
+            let action = {
+                let mut app_tabs = app_tabs.lock().unwrap();
+                app_tabs.update((tab_key, command), &mut context)
+            };
             match action {
                 None => Task::none(),
                 Some(TabAction::None) => Task::none(),
@@ -88,7 +89,11 @@ pub fn handle_command(
                     TabKindAction::NewProjectTabAction {
                         action,
                     } => match action {
-                        NewProjectTabAction::None => Task::none(),
+                        NewProjectTabAction::Submit(args) => {
+                            let mut app_state = app_state.lock().unwrap();
+                            app_state.create_project(tab_key, args, app_tabs);
+                            Task::none()
+                        }
                     },
                     TabKindAction::ProjectTabAction {
                         action,
@@ -116,6 +121,7 @@ pub fn handle_command(
                             }
                         }),
                         ProjectTabAction::SetModifiedState(modified_state) => {
+                            let app_tabs = app_tabs.lock().unwrap();
                             app_tabs.with_tab_mut(&tab_key, |tab| match tab {
                                 TabKind::Project(project_tab, _) => {
                                     project_tab.modified = modified_state;

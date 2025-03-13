@@ -9,13 +9,15 @@ use crate::config::Config;
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::{HomeTab, HomeTabAction, HomeTabContext, HomeTabUiCommand};
-use crate::ui_app::app_tabs::new_project::{NewProjectTab, NewProjectTabAction, NewProjectTabContext, NewProjectTabUiCommand};
+use crate::ui_app::app_tabs::new_project::{
+    NewProjectTab, NewProjectTabAction, NewProjectTabContext, NewProjectTabUiCommand,
+};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_component::{ComponentState, UiComponent};
 
 pub mod home;
-pub mod project;
 pub mod new_project;
+pub mod project;
 
 pub struct TabKindContext {
     pub config: Value<Config>,
@@ -308,12 +310,40 @@ macro_rules! tabs_impl {
             tree.find_active_focused()
                 .map(|(_, tab_key)| tab_key.clone())
         }
+
+        #[allow(dead_code)]
+        pub fn retain<F>(&mut self, f: F)
+        where
+            F: Fn(&TabKey, &$tab_kind) -> bool,
+        {
+            let tabs = self.tabs.lock().unwrap();
+            let tab_keys_to_retain = tabs
+                .iter()
+                .filter_map(|(tab_key, tab_kind)| match f(tab_key, tab_kind) {
+                    true => Some(tab_key.clone()),
+                    false => None,
+                })
+                .collect::<Vec<_>>();
+
+            let mut tree = self.tree.lock().unwrap();
+            tree.retain_tabs(|tab_key| tab_keys_to_retain.contains(&tab_key));
+        }
     };
 }
 
 impl AppTabs {
     tabs_impl!(TabKind, TabKindContext);
 
+    pub fn replace(&mut self, tab_key: &TabKey, replacement_tab_kind: TabKind) -> Result<(), ()> {
+        let mut tabs = self.tabs.lock().unwrap();
+
+        if let Some(tab_kind) = tabs.get_mut(tab_key) {
+            *tab_kind = replacement_tab_kind;
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
     //
     // methods specific to this instance
     //
@@ -361,8 +391,6 @@ impl AppTabs {
         }
     }
 
-
-
     pub fn show_home_tab(&mut self) {
         self.show_tab(|candidate_tab| matches!(candidate_tab, TabKind::Home(..)))
             .inspect_err(|_| {
@@ -382,7 +410,7 @@ impl AppTabs {
             })
             .ok();
     }
-    
+
     fn configure_home_tab_mappers(
         tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
         mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,

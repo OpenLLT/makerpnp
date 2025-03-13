@@ -5,9 +5,11 @@ use egui_i18n::translate_fluent;
 use egui_mobius::types::{Value, ValueGuard};
 use egui_taffy::taffy::prelude::{fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignItems, AlignSelf, Display, FlexDirection, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, TuiContainerResponse};
+use egui_taffy::{Tui, TuiBuilderLogic};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
 use validator::{Validate, ValidationErrors};
+
+use crate::forms::transforms::no_transform;
 
 /// transient helper
 pub struct Form<F, C> {
@@ -81,7 +83,7 @@ impl<F: Validate, C> Form<F, C> {
         default_style
     }
 
-    pub fn add_field(
+    pub fn add_field_ui(
         &self,
         field_name: &str,
         label: String,
@@ -108,15 +110,38 @@ impl<F: Validate, C> Form<F, C> {
             })
             .ui_add_manual(
                 |ui| ui_builder(ui, self.fields.lock().unwrap(), self.sender.clone()),
-                Self::no_transform,
+                no_transform,
             );
         });
 
         Self::field_error(&self.validation_errors, default_style, tui, field_name);
     }
 
-    fn no_transform(value: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
-        value
+    pub fn add_field_tui(
+        &self,
+        field_name: &str,
+        label: String,
+        tui: &mut Tui,
+        mut ui_builder: impl FnMut(&mut Tui, ValueGuard<'_, F>, Sender<C>),
+    ) {
+        let default_style = Self::form_default_style();
+
+        tui.style(Style {
+            ..default_style()
+        })
+        .add(|tui| {
+            tui.label(label);
+        });
+
+        tui.style(Style {
+            flex_grow: 1.0,
+            ..default_style()
+        })
+        .add(|tui| {
+            ui_builder(tui, self.fields.lock().unwrap(), self.sender.clone());
+        });
+
+        Self::field_error(&self.validation_errors, default_style, tui, field_name);
     }
 
     fn field_error(
@@ -148,6 +173,15 @@ impl<F: Validate, C> Form<F, C> {
                 });
             }
         }
+    }
+}
+
+pub mod transforms {
+    use egui::{Response, Ui};
+    use egui_taffy::TuiContainerResponse;
+
+    pub fn no_transform(value: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
+        value
     }
 }
 
