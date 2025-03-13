@@ -44,14 +44,13 @@ pub mod fluent_argument_helpers {
         use fluent_bundle::types::{FluentNumber, FluentNumberOptions};
         use fluent_bundle::{FluentArgs, FluentValue};
         use serde_json::Value;
-        use tracing::trace;
 
         pub fn build_fluent_args<'a>(params: &'a HashMap<Cow<'_, str>, Value>) -> FluentArgs<'a> {
             let mut args = egui_i18n::fluent::FluentArgs::new();
             for (key, value) in params.iter() {
                 match value {
                     Value::Null => {
-                        trace!("encountered null value for field: {}", key);
+                        // this occurs for an `Option` with a value of `None`
                     }
                     Value::Bool(_) => todo!(),
                     Value::Number(number) => {

@@ -15,6 +15,7 @@ use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::{Executor, MessageDispatcher, RunTime};
 use crate::tabs::TabKey;
 use crate::toolbar::{Toolbar, ToolbarContext, ToolbarUiCommand};
+use crate::ui_app::app_tabs::new_project::NewProjectArgs;
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{AppTabs, TabKind, TabKindContext, TabKindUiCommand, TabUiCommand};
 use crate::ui_commands::{UiCommand, handle_command};
@@ -78,7 +79,7 @@ impl AppState {
         }
     }
 
-    pub fn open_file(&mut self, path: PathBuf, ui_state: Value<AppTabs>) {
+    pub fn make_project_tab(&mut self, path: PathBuf, project_key: ProjectKey) -> (TabKind, ProjectKey) {
         info!("open file. path: {:?}", path);
 
         let label = path
@@ -86,11 +87,6 @@ impl AppState {
             .unwrap()
             .to_string_lossy()
             .to_string();
-
-        let app_command_sender = self.command_sender.clone();
-        let mut projects = self.projects.lock().unwrap();
-
-        let (project_command, project_key) = project_from_path(path.clone(), &mut projects);
 
         let tab_kind_component = ComponentState::default();
         let tab_kind_sender = tab_kind_component.sender.clone();
@@ -107,25 +103,76 @@ impl AppState {
 
         let tab_kind = TabKind::Project(project_tab, tab_kind_component);
 
-        let tab_key = ui_state
-            .lock()
-            .unwrap()
-            .add_tab(tab_kind);
+        (tab_kind, project_key)
+    }
 
-        let mut project = projects.get_mut(project_key).unwrap();
-        configure_project_component(app_command_sender, tab_key.clone(), &mut project);
-
-        self.command_sender
+    pub fn send_project_command(
+        command_sender: &mut Enqueue<UiCommand>,
+        project_command: ProjectUiCommand,
+        project_key: ProjectKey,
+        tab_key: TabKey,
+    ) {
+        command_sender
             .send(UiCommand::TabCommand {
                 tab_key,
                 command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
                     command: ProjectTabUiCommand::ProjectCommand {
                         key: project_key,
-                        command: project_command.unwrap(),
+                        command: project_command,
                     },
                 }),
             })
             .expect("sent");
+    }
+
+    pub fn configure_project_tab(
+        &mut self,
+        project_key: ProjectKey,
+        tab_key: TabKey,
+        project_command: ProjectUiCommand,
+    ) {
+        let mut projects = self.projects.lock().unwrap();
+        let mut project = projects.get_mut(project_key).unwrap();
+
+        let app_command_sender = self.command_sender.clone();
+        configure_project_component(app_command_sender, tab_key.clone(), &mut project);
+
+        Self::send_project_command(&mut self.command_sender, project_command, project_key, tab_key);
+    }
+
+    pub fn open_file(&mut self, path: PathBuf, app_tabs: Value<AppTabs>) {
+        let (project_command, project_key) = {
+            let mut projects = self.projects.lock().unwrap();
+            project_from_path(path.clone(), &mut projects)
+        };
+
+        let (tab_kind, project_key) = self.make_project_tab(path, project_key);
+
+        let tab_key = app_tabs
+            .lock()
+            .unwrap()
+            .add_tab(tab_kind);
+
+        self.configure_project_tab(project_key, tab_key, project_command);
+    }
+
+    pub fn create_project(&mut self, tab_key: TabKey, args: NewProjectArgs, app_tabs: Value<AppTabs>) {
+        debug!("creating project. tab_key: {:?}, args: {:?}", tab_key, args);
+
+        let (project_command, project_key, path) = {
+            let mut projects = self.projects.lock().unwrap();
+            project_from_args(args, &mut projects)
+        };
+
+        let (tab_kind, project_key) = self.make_project_tab(path, project_key);
+
+        app_tabs
+            .lock()
+            .unwrap()
+            .replace(&tab_key, tab_kind)
+            .expect("replaced");
+
+        self.configure_project_tab(project_key, tab_key, project_command);
     }
 }
 
@@ -217,6 +264,14 @@ impl UiApp {
         }
     }
 
+    /// When the app starts up, the new project tab components won't be wired up, so we just
+    /// remove them for now until we have a component restoration system.
+    fn remove_new_project_tabs_on_startup(&mut self) {
+        let mut ui_state = self.app_tabs.lock().unwrap();
+
+        ui_state.retain(|_tab_key, tab_kind| !matches!(tab_kind, TabKind::NewProject(_, _)));
+    }
+
     /// when the app starts up, the projects will be empty, and the document tabs will have keys that don't exist
     /// in the projects list (because it's empty now).
     /// we have to find these tabs, create projects, store them in the map and replace the tab's project key
@@ -249,7 +304,7 @@ impl UiApp {
                 let mut project = projects.get_mut(project_key).unwrap();
                 configure_project_component(app_command_sender, tab_key.clone(), &mut project);
 
-                (project_key, project_command.unwrap())
+                (project_key, project_command)
             };
 
             {
@@ -331,6 +386,7 @@ impl eframe::App for UiApp {
                         .show_home_tab_on_startup,
                 );
             }
+            self.remove_new_project_tabs_on_startup();
             self.restore_documents_on_startup();
         }
 
@@ -369,7 +425,7 @@ impl eframe::App for UiApp {
 fn project_from_path(
     path: PathBuf,
     projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>,
-) -> (Option<ProjectUiCommand>, ProjectKey) {
+) -> (ProjectUiCommand, ProjectKey) {
     let mut project_command = None;
     let project_key = projects.insert_with_key(|key| {
         let (project, project_command_to_issue) = Project::from_path(path.clone(), key);
@@ -377,7 +433,23 @@ fn project_from_path(
 
         project
     });
-    (project_command, project_key)
+    (project_command.unwrap(), project_key)
+}
+
+fn project_from_args(
+    args: NewProjectArgs,
+    projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>,
+) -> (ProjectUiCommand, ProjectKey, PathBuf) {
+    let path = args.build_path();
+
+    let mut project_command = None;
+    let project_key = projects.insert_with_key(|key| {
+        let (project, project_command_to_issue) = Project::new(args.name, path.clone(), key);
+        project_command.replace(project_command_to_issue);
+
+        project
+    });
+    (project_command.unwrap(), project_key, path)
 }
 
 fn configure_project_component(app_command_sender: Sender<UiCommand>, tab_key: TabKey, project: &mut Project) {

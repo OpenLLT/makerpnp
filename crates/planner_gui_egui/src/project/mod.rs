@@ -83,6 +83,16 @@ pub struct Project {
 
 impl Project {
     pub fn from_path(path: PathBuf, key: ProjectKey) -> (Self, ProjectUiCommand) {
+        let instance = Self::new_inner(path, key, None);
+        (instance, ProjectUiCommand::Load)
+    }
+
+    pub fn new(name: String, path: PathBuf, key: ProjectKey) -> (Self, ProjectUiCommand) {
+        let instance = Self::new_inner(path, key, Some(name));
+        (instance, ProjectUiCommand::Create)
+    }
+
+    fn new_inner(path: PathBuf, key: ProjectKey, name: Option<String>) -> Self {
         debug!("Creating project instance from path. path: {}", &path.display());
 
         let component: ComponentState<(ProjectKey, ProjectUiCommand)> = ComponentState::default();
@@ -96,7 +106,7 @@ impl Project {
                 (key, ProjectUiCommand::ToolbarCommand(command))
             });
 
-        let project_ui_state = Value::new(ProjectUiState::new(component_sender.clone()));
+        let project_ui_state = Value::new(ProjectUiState::new(name, component_sender.clone()));
 
         let project_tabs = Value::new(ProjectTabs::default());
         {
@@ -111,7 +121,7 @@ impl Project {
         }
 
         let core_service = PlannerCoreService::new();
-        let instance = Self {
+        Self {
             path,
             planner_core_service: core_service,
             project_ui_state,
@@ -121,9 +131,7 @@ impl Project {
             toolbar,
             component,
             add_pcb_modal: None,
-        };
-
-        (instance, ProjectUiCommand::Load)
+        }
     }
 
     pub fn show_explorer(&mut self) {
@@ -217,15 +225,23 @@ impl UiComponent for Project {
                     })
                     .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Loaded))
             }
-            ProjectUiCommand::Loaded => {
-                let mut state = self.project_ui_state.lock().unwrap();
-                state.loaded = true;
+            ProjectUiCommand::Loaded => self
+                .planner_core_service
+                .update(key, Event::RequestOverviewView {})
+                .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
+            ProjectUiCommand::Create => {
+                let state = self.project_ui_state.lock().unwrap();
                 self.planner_core_service
-                    .update(key, Event::RequestOverviewView {})
-                    .when_ok(|| {
-                        ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))
+                    .update(key, Event::CreateProject {
+                        name: state.name.clone().unwrap(),
+                        path: self.path.clone(),
                     })
+                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Created))
             }
+            ProjectUiCommand::Created => self
+                .planner_core_service
+                .update(key, Event::RequestOverviewView {})
+                .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
             ProjectUiCommand::Save => {
                 debug!("saving project. path: {}", self.path.display());
                 self.planner_core_service
@@ -453,17 +469,18 @@ impl Tab for ProjectTabKind {
 
 #[derive(Debug)]
 pub struct ProjectUiState {
-    loaded: bool,
+    /// initially unknown until the project is loaded
+    /// always known for newly created projects.
     name: Option<String>,
+
     project_tree: ProjectExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
 }
 
 impl ProjectUiState {
-    pub fn new(sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
+    pub fn new(name: Option<String>, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
         Self {
-            loaded: false,
-            name: None,
+            name,
             phases: HashMap::default(),
             project_tree: ProjectExplorerUi::new(sender),
         }
@@ -493,6 +510,8 @@ pub enum ProjectUiCommand {
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
     AddPcbModalCommand(AddPcbModalUiCommand),
+    Create,
+    Created,
 }
 
 #[derive(Debug, Clone)]
