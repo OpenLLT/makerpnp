@@ -202,6 +202,13 @@ impl UiApp {
             Self::default()
         };
 
+        {
+            let config = instance.config.lock().unwrap();
+            egui_i18n::set_language(&config.language_identifier);
+
+            // Safety: now safe to use i18n translation system (e.g. [`egui_i18n::tr!`])
+        }
+
         let (app_signal, mut app_slot) = egui_mobius::factory::create_signal_slot::<UiCommand>(1);
 
         let app_message_sender = app_signal.sender.clone();
@@ -365,25 +372,25 @@ impl eframe::App for UiApp {
                 egui::widgets::global_theme_preference_buttons(ui);
 
                 let language = egui_i18n::get_language();
-                
+
                 egui::ComboBox::from_id_salt(ui.id())
-                .selected_text(language.clone())
-                .show_ui(ui, |ui| {
-                    for other_language in egui_i18n::languages() {
-                        let sender = self.app_state().command_sender.clone();
-                        if ui
-                            .add(egui::SelectableLabel::new(
-                                other_language.eq(&language),
-                                other_language.clone(),
-                            ))
-                            .clicked()
-                        {
-                            sender
-                                .send(UiCommand::LangageChanged(other_language.clone()))
-                                .expect("sent");
+                    .selected_text(language.clone())
+                    .show_ui(ui, |ui| {
+                        for other_language in egui_i18n::languages() {
+                            let sender = self.app_state().command_sender.clone();
+                            if ui
+                                .add(egui::SelectableLabel::new(
+                                    other_language.eq(&language),
+                                    other_language.clone(),
+                                ))
+                                .clicked()
+                            {
+                                sender
+                                    .send(UiCommand::LangageChanged(other_language.clone()))
+                                    .expect("sent");
+                            }
                         }
-                    }
-                });
+                    });
             });
 
             {

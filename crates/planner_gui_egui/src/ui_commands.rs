@@ -43,6 +43,10 @@ pub fn handle_command(
         UiCommand::None => Task::none(),
         UiCommand::LangageChanged(language) => {
             egui_i18n::set_language(&language);
+            config
+                .lock()
+                .unwrap()
+                .language_identifier = language;
             Task::none()
         }
         UiCommand::ToolbarCommand(command) => {

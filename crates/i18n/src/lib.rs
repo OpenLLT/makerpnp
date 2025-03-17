@@ -32,7 +32,7 @@ pub fn init(config: I18nConfig) {
 
     egui_i18n::set_language(&config.default);
     egui_i18n::set_fallback(&config.fallback);
-    
+
     debug!("languages: {:?}", egui_i18n::languages());
 }
 
