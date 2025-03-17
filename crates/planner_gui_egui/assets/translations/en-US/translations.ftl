@@ -97,5 +97,3 @@ phase-placements-column-mpn = MPN
 phase-placements-column-rotation = Rotation 
 phase-placements-column-x = X 
 phase-placements-column-y = Y 
-
-
