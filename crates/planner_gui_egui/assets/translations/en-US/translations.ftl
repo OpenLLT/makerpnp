@@ -3,6 +3,7 @@ menu-item-quit = Quit
 
 modal-errors-title = Errors - { $file }
 modal-add-pcb-title = Add PCB - { $file }
+modal-create-unit-assignment-title = Create unit assignment - { $file }
 
 toolbar-button-home = Home
 toolbar-button-new = New
@@ -67,6 +68,7 @@ form-create-unit-assignment-input-pcb-instance-placeholder = A number > 0
 form-create-unit-assignment-input-pcb-unit = PCB unit
 form-create-unit-assignment-input-pcb-unit-placeholder = A number > 0
 form-create-unit-assignment-input-placements-filename = Placements filename
+form-create-unit-assignment-input-placements-directory = Placements directory
 
 form-common-choice-pcb-kind = PCB Kind
 form-common-choice-pcb-kind-single = Single

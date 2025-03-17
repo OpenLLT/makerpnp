@@ -41,6 +41,7 @@ base64 = { version = "0.22.1"}
 termtree = { version = "0.5.1"}
 rust_decimal = { version = "1.35.0"}
 rust_decimal_macros = { version = "1.35"}
+derivative = { version = "2.2.0" }
 
 # cli
 clap = { version = "4.5.8" }
