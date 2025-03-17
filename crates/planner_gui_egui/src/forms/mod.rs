@@ -7,7 +7,7 @@ use egui_taffy::taffy::prelude::{fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignItems, AlignSelf, Display, FlexDirection, Style};
 use egui_taffy::{Tui, TuiBuilderLogic};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
-use validator::{Validate, ValidationErrors};
+use validator::{ValidateArgs, ValidationErrors};
 
 use crate::forms::transforms::no_transform;
 
@@ -18,14 +18,14 @@ pub struct Form<F, C> {
     sender: Sender<C>,
 }
 
-impl<F: Validate, C> Form<F, C> {
-    pub fn new(fields: &Value<F>, sender: &Sender<C>) -> Self {
+impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
+    pub fn new(fields: &Value<F>, sender: &Sender<C>, context: F::Args) -> Self {
         let fields = fields.clone();
         let sender = sender.clone();
         let validation_errors = {
             let fields = fields.lock().unwrap();
 
-            fields.validate()
+            fields.validate_with_args(context)
         };
 
         Self {
