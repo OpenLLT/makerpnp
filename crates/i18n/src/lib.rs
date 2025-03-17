@@ -20,7 +20,7 @@ pub fn init(config: I18nConfig) {
             std::path::absolute(path.clone()).unwrap()
         );
         match fs::read_to_string(path.clone()) {
-            Ok(content) => match egui_i18n::load_translations_from_text("en-US", content) {
+            Ok(content) => match egui_i18n::load_translations_from_text(identifier, content) {
                 Err(e) => error!("Error parsing translation file: {}, cause: {}", path.display(), e),
                 Ok(_) => info!("Loaded translations. file: {}", path.display()),
             },
@@ -32,6 +32,8 @@ pub fn init(config: I18nConfig) {
 
     egui_i18n::set_language(&config.default);
     egui_i18n::set_fallback(&config.fallback);
+    
+    debug!("languages: {:?}", egui_i18n::languages());
 }
 
 pub mod fluent_argument_helpers {
