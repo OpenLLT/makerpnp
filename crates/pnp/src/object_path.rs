@@ -50,12 +50,28 @@ impl Display for ObjectPathChunk {
 
 /// A path to an object
 ///
-/// `<("panel"|"single")=<index>::"unit"=<index>[::("ref_dex")=<ref_des>]`
+/// `<("panel"|"single")=<instance>::"unit"=<unit>[::("ref_dex")=<ref_des>]`
 ///
-/// e.g.
+/// <instance> = the instance of the pcb within the project, 1 based index.
+/// <unit> = the design variant unit on instance, for panels this is >= 1, for single pcbs this is always 1.  1 based index.
 ///
-/// `panel=1::unit=1`
-/// `panel=1::unit=1::ref_des=R1`
+///
+/// valid examples:
+///
+/// `panel=1` (points to a panel pcb instance)
+/// `single=1` (points to a single pcb instance)
+/// `panel=1::unit=1` (points to a unit of a panel pcb instance)
+/// `panel=1::unit=2::ref_des=R1` (points to a refdes on a unit of a panel pcb instance)
+/// `single=1::unit=1::ref_des=R1` (points to a refdes on the only unit of a single pcb instance)
+///
+/// invalid examples:
+/// `panel=1::ref_des=R1` (missing unit)
+/// `single=1::ref_des=R1` (missing unit)
+/// `single=1::unit=2::ref_des=R1` (invalid unit)
+///
+/// Currently, there are example where wildcards are used to search for objects, e.g. `panel=.*::unit=.*::ref_des=R1`
+/// however this object is not for STORING such patterns, but the string representation of a path
+/// can be compared to such a pattern.
 #[derive(
     Debug,
     Clone,
@@ -72,6 +88,9 @@ pub struct ObjectPath {
 }
 
 impl ObjectPath {
+    // TODO consider making pcb_instance `i8`, 'i16', or `isize`, should always be positive.
+    //      unlikely that someone will ever need > 255 single pcb instances;
+    //      probably `i16` is the minimum for future-proofing
     pub fn set_pcb_kind_and_instance(&mut self, pcb_kind: PcbKind, pcb_instance: usize) {
         self.set_chunk(ObjectPathChunk {
             key: pcb_kind.to_string(),
@@ -79,6 +98,9 @@ impl ObjectPath {
         })
     }
 
+    // TODO consider making pcb_instance `i8`, 'i16', or `isize`, should always be positive.
+    //      it's possible to have large panels with more than 256 units, so probably i16 is the minimum.
+    /// only applicable to panels
     pub fn set_pcb_unit(&mut self, pcb_instance: usize) {
         self.set_chunk(ObjectPathChunk {
             key: "unit".to_string(),
@@ -294,6 +316,10 @@ impl FromStr for ObjectPath {
             )
 
         // TODO validate the the order of the chunks is correct
+        // TODO validate that the unit for a single pcbs is always 1
+        // TODO validate that if a refdes is present, a unit must also be present
+        // NOTE Since it's not /fully/ defined what a object path will be used for, this above are not
+        //      implemented yet, but probably should be soon.
     }
 }
 
