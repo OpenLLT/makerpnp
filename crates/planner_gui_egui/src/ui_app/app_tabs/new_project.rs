@@ -76,7 +76,7 @@ impl UiComponent for NewProjectTab {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
 
-        let form = Form::new(&self.fields, &self.component.sender);
+        let form = Form::new(&self.fields, &self.component.sender, ());
 
         self.show_form(ui, &form);
     }

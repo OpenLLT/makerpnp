@@ -172,7 +172,7 @@ impl UiComponent for AddPcbModal {
                 .unwrap();
             ui.heading(tr!("modal-add-pcb-title", {file: file_name}));
 
-            let form = Form::new(&self.fields, &self.component.sender);
+            let form = Form::new(&self.fields, &self.component.sender, ());
 
             self.show_form(ui, &form);
 
