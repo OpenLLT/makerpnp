@@ -27,6 +27,7 @@ pub enum UiCommand {
         tab_key: TabKey,
         command: TabUiCommand,
     },
+    LangageChanged(String),
 }
 
 // TODO perhaps the return type of this method be `Task<Result<UiCommand, UiAppError>>`
@@ -40,6 +41,10 @@ pub fn handle_command(
 
     match command {
         UiCommand::None => Task::none(),
+        UiCommand::LangageChanged(language) => {
+            egui_i18n::set_language(&language);
+            Task::none()
+        }
         UiCommand::ToolbarCommand(command) => {
             let mut context = build_toolbar_context(&app_tabs);
 
