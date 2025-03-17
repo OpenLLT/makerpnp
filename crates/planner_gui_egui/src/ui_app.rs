@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use egui::CentralPanel;
+use egui::{CentralPanel, ThemePreference};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
@@ -230,9 +230,16 @@ impl UiApp {
         let handler = {
             let app_tabs = app_tabs.clone();
             let config = instance.config.clone();
+            let context = cc.egui_ctx.clone();
 
             move |command: UiCommand| {
-                let task = handle_command(command, state.clone(), app_tabs.clone(), config.clone());
+                let task = handle_command(
+                    command,
+                    state.clone(),
+                    app_tabs.clone(),
+                    config.clone(),
+                    context.clone(),
+                );
 
                 if let Some(stream) = task::into_stream(task) {
                     runtime.run(stream);
@@ -355,42 +362,97 @@ impl eframe::App for UiApp {
             // The top panel is often a good place for a menu bar:
 
             egui::menu::bar(ui, |ui| {
-                // NOTE: no File->Quit on web pages!
-                let is_web = cfg!(target_arch = "wasm32");
-                if !is_web {
-                    ui.menu_button(tr!("menu-top-level-file"), |ui| {
-                        if ui
-                            .button(tr!("menu-item-quit"))
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                egui::Sides::new().show(
+                    ui,
+                    |ui| {
+                        // NOTE: no File->Quit on web pages!
+                        let is_web = cfg!(target_arch = "wasm32");
+                        if !is_web {
+                            ui.menu_button(tr!("menu-top-level-file"), |ui| {
+                                if ui
+                                    .button(tr!("menu-item-quit"))
+                                    .clicked()
+                                {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            });
+                            ui.add_space(16.0);
                         }
-                    });
-                    ui.add_space(16.0);
-                }
+                    },
+                    |ui| {
+                        let theme_preference = ctx.options(|opt| opt.theme_preference);
 
-                egui::widgets::global_theme_preference_buttons(ui);
+                        egui::ComboBox::from_id_salt(ui.id().with("theme"))
+                            .selected_text({
+                                match theme_preference {
+                                    ThemePreference::Dark => tr!("theme-button-dark"),
+                                    ThemePreference::Light => tr!("theme-button-light"),
+                                    ThemePreference::System => tr!("theme-button-system"),
+                                }
+                            })
+                            .show_ui(ui, |ui| {
+                                let sender = self.app_state().command_sender.clone();
 
-                let language = egui_i18n::get_language();
+                                if ui
+                                    .add(egui::SelectableLabel::new(
+                                        theme_preference.eq(&ThemePreference::Dark),
+                                        tr!("theme-button-dark"),
+                                    ))
+                                    .clicked()
+                                {
+                                    sender
+                                        .send(UiCommand::ThemeChanged(ThemePreference::Dark))
+                                        .expect("sent");
+                                }
+                                if ui
+                                    .add(egui::SelectableLabel::new(
+                                        theme_preference.eq(&ThemePreference::Light),
+                                        tr!("theme-button-light"),
+                                    ))
+                                    .clicked()
+                                {
+                                    sender
+                                        .send(UiCommand::ThemeChanged(ThemePreference::Light))
+                                        .expect("sent");
+                                }
+                                if ui
+                                    .add(egui::SelectableLabel::new(
+                                        theme_preference.eq(&ThemePreference::System),
+                                        tr!("theme-button-system"),
+                                    ))
+                                    .clicked()
+                                {
+                                    sender
+                                        .send(UiCommand::ThemeChanged(ThemePreference::System))
+                                        .expect("sent");
+                                }
+                            });
 
-                egui::ComboBox::from_id_salt(ui.id())
-                    .selected_text(language.clone())
-                    .show_ui(ui, |ui| {
-                        for other_language in egui_i18n::languages() {
-                            let sender = self.app_state().command_sender.clone();
-                            if ui
-                                .add(egui::SelectableLabel::new(
-                                    other_language.eq(&language),
-                                    other_language.clone(),
-                                ))
-                                .clicked()
-                            {
-                                sender
-                                    .send(UiCommand::LangageChanged(other_language.clone()))
-                                    .expect("sent");
-                            }
+                        let language = egui_i18n::get_language();
+                        fn format_language_key(language_identifier: &String) -> String {
+                            format!("language-{}", &language_identifier).to_string()
                         }
-                    });
+
+                        egui::ComboBox::from_id_salt(ui.id().with("language"))
+                            .selected_text(tr!(&format_language_key(&language)))
+                            .show_ui(ui, |ui| {
+                                for other_language in egui_i18n::languages() {
+                                    let sender = self.app_state().command_sender.clone();
+                                    if ui
+                                        .add(egui::SelectableLabel::new(
+                                            other_language.eq(&language),
+                                            tr!(&format_language_key(&other_language)),
+                                        ))
+                                        .clicked()
+                                    {
+                                        sender
+                                            .send(UiCommand::LangageChanged(other_language.clone()))
+                                            .expect("sent");
+                                    }
+                                }
+                            });
+                    },
+                );
             });
 
             {

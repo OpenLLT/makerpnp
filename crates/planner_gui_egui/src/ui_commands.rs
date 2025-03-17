@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use egui::{Context, ThemePreference};
 use egui_mobius::types::Value;
 use tracing::{debug, trace};
 
@@ -28,6 +29,7 @@ pub enum UiCommand {
         command: TabUiCommand,
     },
     LangageChanged(String),
+    ThemeChanged(ThemePreference),
 }
 
 // TODO perhaps the return type of this method be `Task<Result<UiCommand, UiAppError>>`
@@ -36,6 +38,7 @@ pub fn handle_command(
     app_state: Value<AppState>,
     app_tabs: Value<AppTabs>,
     config: Value<Config>,
+    ui_context: Context,
 ) -> Task<UiCommand> {
     trace!("Handling command: {:?}", command);
 
@@ -47,6 +50,10 @@ pub fn handle_command(
                 .lock()
                 .unwrap()
                 .language_identifier = language;
+            Task::none()
+        }
+        UiCommand::ThemeChanged(theme) => {
+            ui_context.set_theme(theme);
             Task::none()
         }
         UiCommand::ToolbarCommand(command) => {
