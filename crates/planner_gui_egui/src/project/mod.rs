@@ -2,16 +2,20 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use egui::{Ui, WidgetText};
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{Event, ProjectView, ProjectViewRequest, Reference};
+use planner_app::{DesignName, Event, ProjectView, ProjectViewRequest, Reference, VariantName};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
 use crate::planner_app_core::PlannerCoreService;
 use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
+use crate::project::dialogs::create_unit_assignment::{
+    CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
+};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
@@ -79,6 +83,7 @@ pub struct Project {
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 
     add_pcb_modal: Option<AddPcbModal>,
+    create_unit_assignment_modal: Option<CreateUnitAssignmentModal>,
 }
 
 impl Project {
@@ -131,6 +136,7 @@ impl Project {
             toolbar,
             component,
             add_pcb_modal: None,
+            create_unit_assignment_modal: None,
         }
     }
 
@@ -203,6 +209,9 @@ impl UiComponent for Project {
         }
 
         if let Some(dialog) = &self.add_pcb_modal {
+            dialog.ui(ui, &mut ());
+        }
+        if let Some(dialog) = &self.create_unit_assignment_modal {
             dialog.ui(ui, &mut ());
         }
     }
@@ -389,6 +398,18 @@ impl UiComponent for Project {
                         self.add_pcb_modal = Some(modal);
                         None
                     }
+                    Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog) => {
+                        let mut modal = CreateUnitAssignmentModal::new(self.path.clone());
+                        modal
+                            .component
+                            .configure_mapper(self.component.sender.clone(), move |command| {
+                                debug!("create unit assignment modal mapper. command: {:?}", command);
+                                (key, ProjectUiCommand::CreateUnitAssignmentModalCommand(command))
+                            });
+
+                        self.create_unit_assignment_modal = Some(modal);
+                        None
+                    }
                     None => None,
                 }
             }
@@ -429,6 +450,34 @@ impl UiComponent for Project {
                         }
                         Some(AddPcbModalAction::CloseDialog) => {
                             self.add_pcb_modal.take();
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            ProjectUiCommand::CreateUnitAssignmentModalCommand(command) => {
+                if let Some(modal) = &mut self.create_unit_assignment_modal {
+                    let action = modal.update(command, &mut ());
+                    match action {
+                        None => None,
+                        Some(CreateUnitAssignmentModalAction::Submit(args)) => {
+                            self.create_unit_assignment_modal.take();
+                            self.planner_core_service
+                                .update(key, Event::AssignVariantToUnit {
+                                    design: DesignName::from_str(&args.design_name).unwrap(),
+                                    variant: VariantName::from_str(&args.variant_name).unwrap(),
+                                    unit: args.object_path,
+                                })
+                                .when_ok(|| {
+                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        ProjectViewRequest::ProjectTree,
+                                    ))
+                                })
+                        }
+                        Some(CreateUnitAssignmentModalAction::CloseDialog) => {
+                            self.create_unit_assignment_modal.take();
                             None
                         }
                     }
@@ -512,6 +561,7 @@ pub enum ProjectUiCommand {
     AddPcbModalCommand(AddPcbModalUiCommand),
     Create,
     Created,
+    CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
 }
 
 #[derive(Debug, Clone)]

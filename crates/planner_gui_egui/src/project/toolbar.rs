@@ -7,11 +7,13 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
+    CreateUnitAssignmentClicked,
 }
 
 pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     ShowAddPcbDialog,
+    ShowCreateUnitAssignmentDialog,
 }
 
 #[derive(Default)]
@@ -43,6 +45,13 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::AddPcbClicked)
             }
+            if ui
+                .button(tr!("project-toolbar-button-create-unit-assignment"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::CreateUnitAssignmentClicked)
+            }
         });
     }
 
@@ -54,6 +63,9 @@ impl UiComponent for ProjectToolbar {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
+            ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
+                Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
+            }
         }
     }
 }
