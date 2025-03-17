@@ -363,6 +363,27 @@ impl eframe::App for UiApp {
                 }
 
                 egui::widgets::global_theme_preference_buttons(ui);
+
+                let language = egui_i18n::get_language();
+                
+                egui::ComboBox::from_id_salt(ui.id())
+                .selected_text(language.clone())
+                .show_ui(ui, |ui| {
+                    for other_language in egui_i18n::languages() {
+                        let sender = self.app_state().command_sender.clone();
+                        if ui
+                            .add(egui::SelectableLabel::new(
+                                other_language.eq(&language),
+                                other_language.clone(),
+                            ))
+                            .clicked()
+                        {
+                            sender
+                                .send(UiCommand::LangageChanged(other_language.clone()))
+                                .expect("sent");
+                        }
+                    }
+                });
             });
 
             {
