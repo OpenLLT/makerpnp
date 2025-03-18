@@ -1,5 +1,6 @@
+use std::ops::{ControlFlow};
 use egui::Ui;
-use egui_dock::{DockArea, DockState, Style};
+use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
 use tracing::debug;
 
@@ -35,6 +36,50 @@ pub struct ProjectTabContext {
 
 impl ProjectTabs {
     tabs_impl!(ProjectTabKind, ProjectTabContext);
+
+    pub fn add_tab_to_second_leaf_or_split(&mut self, tab_kind: ProjectTabKind) -> TabKey {
+        let mut tabs = self.tabs.lock().unwrap();
+        let tab_key = tabs.add(tab_kind);
+
+        let mut tree = self.tree.lock().unwrap();
+
+        let node_count = tree.iter_all_nodes().count();
+        if node_count == 1 {
+            let [_old_node_index, _new_node_index] =
+                tree.main_surface_mut()
+                    .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
+        } else {
+            fn get_leaf_mut<T>(tree: &mut Tree<T>, index: usize) -> Option<&mut Node<T>> {
+                if let ControlFlow::Break((Some(leaf), _)) = tree.iter_mut().try_fold((None, 0), |(mut leaf_node, mut leaf_count), node|{
+                    if node.is_leaf() {
+                        if leaf_count == index {
+                            leaf_node.replace(node);
+                            return ControlFlow::Break((leaf_node, leaf_count))
+                        } else {
+                            leaf_count += 1;
+                        }
+                    }
+                    ControlFlow::Continue((leaf_node, leaf_count))
+                }) {
+                    Some(leaf)
+                } else {
+                    None
+                }
+            }
+
+            let mut iter = tree.iter_surfaces_mut();
+            let surface = iter.next().unwrap();
+            let tree = surface.node_tree_mut().unwrap();
+
+            if let Some(leaf) = get_leaf_mut(tree, 1) {
+                leaf.append_tab(tab_key);
+            } else {
+                panic!("unable to find leaf to append tab");
+            }
+        }
+
+        tab_key
+    }
 }
 
 #[derive(Debug, Clone)]

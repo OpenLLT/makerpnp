@@ -160,7 +160,7 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
         if result.is_err() {
-            project_tabs.add_tab(ProjectTabKind::Overview(OverviewTab::default()));
+            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Overview(OverviewTab::default()));
         }
     }
 
@@ -177,7 +177,7 @@ impl Project {
                 state
                     .phases
                     .insert(phase.clone(), PhaseUi::new());
-                let tab_key = project_tabs.add_tab(ProjectTabKind::Phase(tab));
+                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Phase(tab));
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .ok();
