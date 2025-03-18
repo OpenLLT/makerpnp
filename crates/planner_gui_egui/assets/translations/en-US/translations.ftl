@@ -38,6 +38,10 @@ new-project-banner = New project
 form-new-project-input-name = Project name
 form-new-project-input-directory = Directory
 
+project-overview-tab-label = Overview
+project-overview-header = Overview
+project-overview-detail-name = Name: { $name }
+
 phase-properties-header = Phase properties
 phase-properties-footer = { $count } items
 

@@ -17,7 +17,7 @@ use crate::tabs::{Tab, TabKey};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct ProjectExplorerUi {
+pub struct ExplorerUi {
     project_tree_view: Option<ProjectTreeView>,
 
     // tuple struct containing old state and new state, state changes trigger events.
@@ -26,7 +26,7 @@ pub struct ProjectExplorerUi {
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
 }
 
-impl ProjectExplorerUi {
+impl ExplorerUi {
     pub fn new(sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
         Self {
             project_tree_view: None,
@@ -137,9 +137,9 @@ impl ProjectExplorerUi {
 }
 
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
-pub struct ProjectExplorerTab {}
+pub struct ExplorerTab {}
 
-impl Tab for ProjectExplorerTab {
+impl Tab for ExplorerTab {
     type Context = ProjectTabContext;
 
     fn label(&self) -> WidgetText {

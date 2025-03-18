@@ -16,16 +16,18 @@ use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbMod
 use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
+use crate::project::explorer_tab::{ExplorerTab, ExplorerUi};
+use crate::project::overview_tab::{OverviewTab, OverviewUi};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
-use crate::project::project_explorer_tab::{ProjectExplorerTab, ProjectExplorerUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
+mod explorer_tab;
+mod overview_tab;
 mod phase_tab;
-mod project_explorer_tab;
 mod tabs;
 mod toolbar;
 
@@ -56,6 +58,12 @@ impl Deref for ProjectPath {
 impl Display for ProjectPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
+    }
+}
+
+impl From<&str> for ProjectPath {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
     }
 }
 
@@ -122,7 +130,7 @@ impl Project {
                     debug!("project inner-tab mapper. command: {:?}", command);
                     (key, ProjectUiCommand::TabCommand(command))
                 });
-            project_tabs.add_tab(ProjectTabKind::ProjectExplorer(ProjectExplorerTab::default()));
+            project_tabs.add_tab(ProjectTabKind::Explorer(ExplorerTab::default()));
         }
 
         let core_service = PlannerCoreService::new();
@@ -142,9 +150,17 @@ impl Project {
 
     pub fn show_explorer(&mut self) {
         let mut project_tabs = self.project_tabs.lock().unwrap();
-        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::ProjectExplorer(_)));
+        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Explorer(_)));
         if result.is_err() {
-            project_tabs.add_tab(ProjectTabKind::ProjectExplorer(ProjectExplorerTab::default()));
+            project_tabs.add_tab(ProjectTabKind::Explorer(ExplorerTab::default()));
+        }
+    }
+
+    pub fn show_overview(&mut self) {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
+        if result.is_err() {
+            project_tabs.add_tab(ProjectTabKind::Overview(OverviewTab::default()));
         }
     }
 
@@ -286,7 +302,10 @@ impl UiComponent for Project {
                     ProjectView::Overview(project_overview) => {
                         debug!("project overview: {:?}", project_overview);
                         let mut state = self.project_ui_state.lock().unwrap();
-                        state.name = Some(project_overview.name);
+                        state.name = Some(project_overview.name.clone());
+                        state
+                            .overview_ui
+                            .update_overview(project_overview);
                     }
                     ProjectView::ProjectTree(project_tree) => {
                         debug!("project tree: {:?}", project_tree);
@@ -348,34 +367,57 @@ impl UiComponent for Project {
                 // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
                 info!("ProjectMessage::Navigate. path: {}", path);
 
-                let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
-                if let Some(captures) = phase_pattern.captures(&path) {
-                    let phase_reference: String = captures
-                        .name("phase")
-                        .unwrap()
-                        .as_str()
-                        .to_string();
-                    debug!("phase_reference: {}", phase_reference);
+                #[must_use]
+                fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+                    if path.eq(&"/project/".into()) {
+                        project.show_overview();
+                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::Overview,
+                        )));
 
-                    self.show_phase(phase_reference.clone().into());
-
-                    let tasks: Vec<_> = vec![
-                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::PhaseOverview {
-                                phase: phase_reference.clone(),
-                            },
-                        ))),
-                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::PhasePlacements {
-                                phase: phase_reference.clone(),
-                            },
-                        ))),
-                    ];
-
-                    Some(ProjectAction::Task(key, Task::batch(tasks)))
-                } else {
-                    None
+                        Some(ProjectAction::Task(key.clone(), task))
+                    } else {
+                        None
+                    }
                 }
+
+                #[must_use]
+                fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+                    let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
+                    if let Some(captures) = phase_pattern.captures(&path) {
+                        let phase_reference: String = captures
+                            .name("phase")
+                            .unwrap()
+                            .as_str()
+                            .to_string();
+                        debug!("phase_reference: {}", phase_reference);
+
+                        project.show_phase(phase_reference.clone().into());
+
+                        let tasks: Vec<_> = vec![
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                ProjectViewRequest::PhaseOverview {
+                                    phase: phase_reference.clone(),
+                                },
+                            ))),
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                ProjectViewRequest::PhasePlacements {
+                                    phase: phase_reference.clone(),
+                                },
+                            ))),
+                        ];
+
+                        Some(ProjectAction::Task(key.clone(), Task::batch(tasks)))
+                    } else {
+                        None
+                    }
+                }
+
+                let handlers = [handle_root, handle_phase];
+
+                handlers
+                    .iter()
+                    .find_map(|handler| handler(self, &key, &path))
             }
             ProjectUiCommand::ToolbarCommand(toolbar_command) => {
                 let action = self
@@ -494,7 +536,8 @@ impl Tab for ProjectTabKind {
 
     fn label(&self) -> WidgetText {
         let title = match self {
-            ProjectTabKind::ProjectExplorer(tab) => tab.label(),
+            ProjectTabKind::Explorer(tab) => tab.label(),
+            ProjectTabKind::Overview(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
         };
 
@@ -503,14 +546,16 @@ impl Tab for ProjectTabKind {
 
     fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
         match self {
-            ProjectTabKind::ProjectExplorer(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
         }
     }
 
     fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
         match self {
-            ProjectTabKind::ProjectExplorer(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
         }
     }
@@ -522,7 +567,8 @@ pub struct ProjectUiState {
     /// always known for newly created projects.
     name: Option<String>,
 
-    project_tree: ProjectExplorerUi,
+    overview_ui: OverviewUi,
+    project_tree: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
 }
 
@@ -531,7 +577,8 @@ impl ProjectUiState {
         Self {
             name,
             phases: HashMap::default(),
-            project_tree: ProjectExplorerUi::new(sender),
+            overview_ui: OverviewUi::new(),
+            project_tree: ExplorerUi::new(sender),
         }
     }
 }
@@ -539,7 +586,8 @@ impl ProjectUiState {
 // these should not contain state
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 enum ProjectTabKind {
-    ProjectExplorer(ProjectExplorerTab),
+    Explorer(ExplorerTab),
+    Overview(OverviewTab),
     Phase(PhaseTab),
 }
 
