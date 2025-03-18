@@ -30,6 +30,7 @@ egui_dock = { version = "0.16.0", features = ["serde"]}
 egui_mobius = { workspace = true, features = ["serde"] }
 egui_material_icons = { workspace = true }
 egui_extras = { workspace = true }
+egui_ltreeview = { workspace = true, features = ["persistence", "serde"] }
 rfd = { workspace = true }
 
 # i18n

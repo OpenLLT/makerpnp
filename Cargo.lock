@@ -1817,6 +1817,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_ltreeview"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d3ffd2ae90067cee4a333039316c0786e93a862ea9ca18fba2783de93d8f7f2"
+dependencies = [
+ "egui",
+ "serde",
+]
+
+[[package]]
 name = "egui_material_icons"
 version = "0.3.0"
 source = "git+https://github.com/lucasmerlin/hello_egui.git?tag=hello_egui-v0.8.0#bb14772a4b9ba476e7f5149e3eeb9542db34e32e"
@@ -4166,6 +4176,7 @@ dependencies = [
  "egui-i18n",
  "egui_dock",
  "egui_extras",
+ "egui_ltreeview",
  "egui_material_icons",
  "egui_mobius",
  "egui_taffy",
