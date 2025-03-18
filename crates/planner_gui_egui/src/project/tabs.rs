@@ -42,8 +42,11 @@ impl ProjectTabs {
 
         let mut tree = self.tree.lock().unwrap();
 
-        let node_count = tree.iter_all_nodes().count();
-        if node_count == 1 {
+        let leaf_count = tree
+            .iter_all_nodes()
+            .filter(|(_surface_index, node)| node.is_leaf())
+            .count();
+        if leaf_count == 1 {
             let [_old_node_index, _new_node_index] =
                 tree.main_surface_mut()
                     .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
