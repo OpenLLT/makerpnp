@@ -1,4 +1,3 @@
-use std::ops::{ControlFlow};
 use egui::Ui;
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
@@ -49,22 +48,10 @@ impl ProjectTabs {
                 tree.main_surface_mut()
                     .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
         } else {
-            fn get_leaf_mut<T>(tree: &mut Tree<T>, index: usize) -> Option<&mut Node<T>> {
-                if let ControlFlow::Break((Some(leaf), _)) = tree.iter_mut().try_fold((None, 0), |(mut leaf_node, mut leaf_count), node|{
-                    if node.is_leaf() {
-                        if leaf_count == index {
-                            leaf_node.replace(node);
-                            return ControlFlow::Break((leaf_node, leaf_count))
-                        } else {
-                            leaf_count += 1;
-                        }
-                    }
-                    ControlFlow::Continue((leaf_node, leaf_count))
-                }) {
-                    Some(leaf)
-                } else {
-                    None
-                }
+            fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
+                tree.iter_mut()
+                    .filter(|node| node.is_leaf())
+                    .nth(target_index)
             }
 
             let mut iter = tree.iter_surfaces_mut();
