@@ -42,30 +42,18 @@ impl ProjectTabs {
 
         let mut tree = self.tree.lock().unwrap();
 
-        let leaf_count = tree
-            .iter_all_nodes()
-            .filter(|(_surface_index, node)| node.is_leaf())
-            .count();
-        if leaf_count == 1 {
+        fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
+            tree.iter_mut()
+                .filter(|node| node.is_leaf())
+                .nth(target_index)
+        }
+
+        if let Some(leaf) = get_leaf_mut(tree.main_surface_mut(), 1) {
+            leaf.append_tab(tab_key);
+        } else {
             let [_old_node_index, _new_node_index] =
                 tree.main_surface_mut()
                     .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
-        } else {
-            fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
-                tree.iter_mut()
-                    .filter(|node| node.is_leaf())
-                    .nth(target_index)
-            }
-
-            let mut iter = tree.iter_surfaces_mut();
-            let surface = iter.next().unwrap();
-            let tree = surface.node_tree_mut().unwrap();
-
-            if let Some(leaf) = get_leaf_mut(tree, 1) {
-                leaf.append_tab(tab_key);
-            } else {
-                panic!("unable to find leaf to append tab");
-            }
         }
 
         tab_key
