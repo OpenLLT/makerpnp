@@ -80,7 +80,12 @@ impl ExplorerUi {
         let node_id = node.index();
 
         let mut node_created: bool = false;
-        for neighbour in graph.neighbors(node) {
+        for &neighbour in graph
+            .neighbors(node)
+            .collect::<Vec<_>>()
+            .iter()
+            .rev()
+        {
             if !node_created {
                 tree_builder.dir(node_id, &label);
                 node_created = true;
