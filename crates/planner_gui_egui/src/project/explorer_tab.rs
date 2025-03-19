@@ -7,7 +7,6 @@ use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use planner_app::{ProjectTreeItem, ProjectTreeView};
-use tracing::trace;
 
 use crate::project::tabs::ProjectTabContext;
 use crate::project::{
@@ -20,9 +19,8 @@ use crate::tabs::{Tab, TabKey};
 pub struct ExplorerUi {
     project_tree_view: Option<ProjectTreeView>,
 
-    // tuple struct containing old state and new state, state changes trigger events.
     #[derivative(Debug = "ignore")]
-    tree_view_state: Value<(TreeViewState<usize>, TreeViewState<usize>)>,
+    tree_view_state: Value<TreeViewState<usize>>,
     sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
 }
 
@@ -46,29 +44,23 @@ impl ExplorerUi {
 
         TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(
             ui,
-            &mut tree_view_state.0,
+            &mut tree_view_state,
             |builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
                 self.show_project_tree_inner(builder, graph, node, project_key);
             },
         );
 
-        let selected = tree_view_state.0.selected();
-        let previously_selected = tree_view_state.1.selected();
-        if selected != previously_selected {
-            if selected.len() == 1 {
-                let node = *selected.first().unwrap();
+        // open tabs when the selection is opened
+        if let Some(_modifiers) = tree_view_state.opened() {
+            for &node in tree_view_state.selected() {
                 let item = &graph[NodeIndex::new(node)];
                 let path = project_path_from_view_path(&item.path);
 
                 self.sender
                     .send((*project_key, ProjectUiCommand::Navigate(path)))
                     .expect("sent");
-            } else {
-                trace!("multi-select");
             }
         }
-
-        tree_view_state.1 = tree_view_state.0.clone();
     }
 
     fn show_project_tree_inner(
@@ -119,12 +111,14 @@ impl ExplorerUi {
             let mut tree_view_state = self.tree_view_state.lock().unwrap();
 
             let node_index = node.index();
-            tree_view_state
-                .0
-                .set_one_selected(node_index);
-            tree_view_state
-                .0
-                .expand_node(node_index);
+
+            let mut selection = tree_view_state.selected().clone();
+            if !selection.contains(&node_index) {
+                selection.push(node_index)
+            }
+
+            tree_view_state.set_selected(selection);
+            tree_view_state.expand_node(node_index);
         } else {
             unreachable!()
         }

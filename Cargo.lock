@@ -1819,8 +1819,7 @@ dependencies = [
 [[package]]
 name = "egui_ltreeview"
 version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d3ffd2ae90067cee4a333039316c0786e93a862ea9ca18fba2783de93d8f7f2"
+source = "git+https://github.com/MakerPnP/egui_ltreeview.git?rev=c826ded544b0c096ca3acb8b41dba876ff37078a#c826ded544b0c096ca3acb8b41dba876ff37078a"
 dependencies = [
  "egui",
  "serde",
