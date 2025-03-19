@@ -38,9 +38,17 @@ new-project-banner = Nuevo proyecto
 form-new-project-input-name = Nombre del proyecto
 form-new-project-input-directory = Directorio
 
+project-detail-path = Ruta: { $path }
+project-detail-name = Nombre: { $name }
+
 project-overview-tab-label = Visión general
 project-overview-header = Visión general
 project-overview-detail-name = Nombre: { $name }
+
+project-placements-tab-label = Ubicaciones
+project-placements-header = Ubicaciones de proyecto
+
+phase-placements-header = Ubicaciones de fase
 
 phase-properties-header = Propiedades de fase
 phase-properties-footer = { $count } items
@@ -56,6 +64,7 @@ pcb-side-bottom = Parte inferior
 project-explorer-tab-label = Explorador de proyectos
 
 project-explorer-node-root = Raíz
+project-explorer-node-placements = Ubicaciones
 project-explorer-node-phases = Fases
 project-explorer-node-phase = { $reference }
 project-explorer-node-unit-assignments = Asignaciones de unidad

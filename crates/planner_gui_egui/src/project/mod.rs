@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use egui::{Ui, WidgetText};
+use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{DesignName, Event, ProjectView, ProjectViewRequest, Reference, VariantName};
 use regex::Regex;
@@ -19,6 +20,7 @@ use crate::project::dialogs::create_unit_assignment::{
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi};
 use crate::project::overview_tab::{OverviewTab, OverviewUi};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
+use crate::project::placements_tab::{PlacementsTab, PlacementsUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::tabs::{Tab, TabKey};
@@ -28,8 +30,11 @@ use crate::ui_component::{ComponentState, UiComponent};
 mod explorer_tab;
 mod overview_tab;
 mod phase_tab;
+mod placements_tab;
 mod tabs;
 mod toolbar;
+
+mod tables;
 
 mod dialogs;
 
@@ -164,6 +169,14 @@ impl Project {
         }
     }
 
+    pub fn show_placements(&mut self) {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Placements(_)));
+        if result.is_err() {
+            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Placements(PlacementsTab::default()));
+        }
+    }
+
     pub fn show_phase(&mut self, phase: Reference) {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
@@ -199,11 +212,11 @@ impl UiComponent for Project {
         } = context;
 
         egui::TopBottomPanel::top(ui.id().with("top_panel")).show_inside(ui, |ui| {
-            ui.label(format!("Project.  path: {}", self.path.display()));
+            ui.label(tr!("project-detail-path", { path: self.path.display().to_string() }));
 
             let state = self.project_ui_state.lock().unwrap();
             if let Some(name) = &state.name {
-                ui.label(format!("name: {}", name));
+                ui.label(tr!("project-detail-name", { name: name }));
             } else {
                 ui.spinner();
             }
@@ -280,6 +293,7 @@ impl UiComponent for Project {
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
+                    ProjectViewRequest::Placements => Event::RequestPlacementsView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
                     ProjectViewRequest::PhaseOverview {
                         phase,
@@ -314,8 +328,12 @@ impl UiComponent for Project {
                             .project_tree
                             .update_tree(project_tree)
                     }
-                    ProjectView::Placements(_placements) => {
-                        todo!()
+                    ProjectView::Placements(placements) => {
+                        debug!("placements: {:?}", placements);
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        state
+                            .placements_ui
+                            .update_placements(placements)
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
@@ -375,7 +393,25 @@ impl UiComponent for Project {
                             ProjectViewRequest::Overview,
                         )));
 
-                        Some(ProjectAction::Task(key.clone(), task))
+                        Some(ProjectAction::Task(*key, task))
+                    } else {
+                        None
+                    }
+                }
+
+                #[must_use]
+                fn handle_placements(
+                    project: &mut Project,
+                    key: &ProjectKey,
+                    path: &ProjectPath,
+                ) -> Option<ProjectAction> {
+                    if path.eq(&"/project/placements".into()) {
+                        project.show_placements();
+                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::Placements,
+                        )));
+
+                        Some(ProjectAction::Task(*key, task))
                     } else {
                         None
                     }
@@ -407,13 +443,13 @@ impl UiComponent for Project {
                             ))),
                         ];
 
-                        Some(ProjectAction::Task(key.clone(), Task::batch(tasks)))
+                        Some(ProjectAction::Task(*key, Task::batch(tasks)))
                     } else {
                         None
                     }
                 }
 
-                let handlers = [handle_root, handle_phase];
+                let handlers = [handle_root, handle_placements, handle_phase];
 
                 handlers
                     .iter()
@@ -538,6 +574,7 @@ impl Tab for ProjectTabKind {
         let title = match self {
             ProjectTabKind::Explorer(tab) => tab.label(),
             ProjectTabKind::Overview(tab) => tab.label(),
+            ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
         };
 
@@ -548,6 +585,7 @@ impl Tab for ProjectTabKind {
         match self {
             ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
         }
     }
@@ -556,6 +594,7 @@ impl Tab for ProjectTabKind {
         match self {
             ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
         }
     }
@@ -568,6 +607,7 @@ pub struct ProjectUiState {
     name: Option<String>,
 
     overview_ui: OverviewUi,
+    placements_ui: PlacementsUi,
     project_tree: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
 }
@@ -578,6 +618,7 @@ impl ProjectUiState {
             name,
             phases: HashMap::default(),
             overview_ui: OverviewUi::new(),
+            placements_ui: PlacementsUi::new(),
             project_tree: ExplorerUi::new(sender),
         }
     }
@@ -589,6 +630,7 @@ enum ProjectTabKind {
     Explorer(ExplorerTab),
     Overview(OverviewTab),
     Phase(PhaseTab),
+    Placements(PlacementsTab),
 }
 
 #[derive(Debug, Clone)]

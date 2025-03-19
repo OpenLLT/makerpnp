@@ -38,9 +38,17 @@ new-project-banner = New project
 form-new-project-input-name = Project name
 form-new-project-input-directory = Directory
 
+project-detail-path = Path: { $path }
+project-detail-name = Name: { $name }
+
 project-overview-tab-label = Overview
 project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
+
+project-placements-tab-label = Placements
+project-placements-header = Project placements
+
+phase-placements-header = Phase Placements
 
 phase-properties-header = Phase properties
 phase-properties-footer = { $count } items
@@ -56,6 +64,7 @@ pcb-side-bottom = Bottom
 project-explorer-tab-label = Project explorer
 
 project-explorer-node-root = Root
+project-explorer-node-placements = Placements
 project-explorer-node-phases = Phases
 project-explorer-node-phase = { $reference }
 project-explorer-node-unit-assignments = Unit assignments
@@ -99,13 +108,13 @@ form-file-not-found = File not found
 placement-placed = Placed
 placement-pending = Pending
 
-
-phase-placements-header = Placements
-phase-placements-column-index = # 
-phase-placements-column-refdes = Ref. Des.
-phase-placements-column-placed = Placed? 
-phase-placements-column-manufacturer = Manufacturer 
-phase-placements-column-mpn = MPN 
-phase-placements-column-rotation = Rotation 
-phase-placements-column-x = X 
-phase-placements-column-y = Y 
+table-placements-column-index = #
+table-placements-column-object-path = Path
+table-placements-column-refdes = Ref. Des.
+table-placements-column-placed = Placed?
+table-placements-column-manufacturer = Manufacturer
+table-placements-column-mpn = MPN
+table-placements-column-rotation = Rotation
+table-placements-column-x = X
+table-placements-column-y = Y
+table-placements-column-pcb-side = Side
