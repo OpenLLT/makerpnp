@@ -370,7 +370,7 @@ fn generate_phase_artifacts(
                             let pcb_unit_b = object_path_b.pcb_unit();
 
                             trace!(
-                                "Comparing pcb units, pcb_unit_a: '{}', pcb_unit_b: '{}'",
+                                "Comparing pcb units, pcb_unit_a: '{:?}', pcb_unit_b: '{:?}'",
                                 pcb_unit_a,
                                 pcb_unit_b
                             );

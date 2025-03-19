@@ -381,11 +381,11 @@ impl UiComponent for CreateUnitAssignmentModal {
                 let mut object_path = ObjectPath::default();
 
                 let pcb_kind = fields.pcb_kind.as_ref().unwrap();
-                object_path.set_pcb_kind_and_instance(pcb_kind.clone().into(), fields.pcb_instance as usize);
+                object_path.set_pcb_kind_and_instance(pcb_kind.clone().into(), fields.pcb_instance as u16);
                 match pcb_kind {
                     PcbKindChoice::Single => {}
                     PcbKindChoice::Panel => {
-                        object_path.set_pcb_unit(fields.pcb_unit as usize);
+                        object_path.set_pcb_unit(fields.pcb_unit as u16);
                     }
                 }
 

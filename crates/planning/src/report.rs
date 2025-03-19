@@ -13,7 +13,7 @@ use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use thiserror::Error;
-use tracing::{info, trace};
+use tracing::{error, info, trace};
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
@@ -194,7 +194,7 @@ fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<P
     for (object_path, _design_variant) in project.unit_assignments.iter() {
         let pcb_kind_counts = count_pcb_kinds(&project.pcbs);
 
-        if let Some((pcb_kind, index)) = object_path.pcb_kind_and_index() {
+        if let Some((pcb_kind, index)) = object_path.pcb_kind_and_instance() {
             let issue = match pcb_kind_counts.get(&pcb_kind) {
                 Some(count) => {
                     if index > *count {
@@ -297,7 +297,7 @@ fn build_operation_load_pcbs(project: &Project) -> PhaseOperation {
     let pcbs: Vec<PcbReportItem> = unit_paths_with_placements
         .iter()
         .find_map(|unit_path| {
-            if let Some((kind, mut index)) = unit_path.pcb_kind_and_index() {
+            if let Some((kind, mut index)) = unit_path.pcb_kind_and_instance() {
                 // TODO consider if unit paths should use zero-based index
                 index -= 1;
 
@@ -342,9 +342,12 @@ fn build_unit_paths_with_placements(placement_states: &BTreeMap<ObjectPath, Plac
         BTreeSet::<ObjectPath>::new(),
         |mut acc, (object_path, placement_state)| {
             if placement_state.placement.place {
-                let pcb_unit = object_path.pcb_unit();
-                if acc.insert(pcb_unit) {
-                    trace!("Phase pcb unit found.  object_path: {}", object_path);
+                if let Ok(pcb_unit) = object_path.pcb_unit() {
+                    if acc.insert(pcb_unit) {
+                        trace!("Phase pcb unit found.  object_path: {}", object_path);
+                    }
+                } else {
+                    error!("pcb unit not specified.  object_path: {}", object_path);
                 }
             }
             acc
@@ -537,28 +540,28 @@ mod report_issue_sorting {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::InvalidUnitAssignment {
-                object_path: ObjectPath::from_str("panel=1").expect("always ok"),
+                object_path: ObjectPath::from_str("pcb=panel::instance=1").expect("always ok"),
             },
         };
         let issue4 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::InvalidUnitAssignment {
-                object_path: ObjectPath::from_str("panel=2").expect("always ok"),
+                object_path: ObjectPath::from_str("pcb=panel::instance=2").expect("always ok"),
             },
         };
         let issue5 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPlacement {
-                object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R1").expect("always ok"),
+                object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").expect("always ok"),
             },
         };
         let issue6 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPlacement {
-                object_path: ObjectPath::from_str("panel=1::unit=1::ref_des=R2").expect("always ok"),
+                object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R2").expect("always ok"),
             },
         };
         let issue7 = ProjectReportIssue {

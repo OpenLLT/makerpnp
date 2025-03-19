@@ -138,17 +138,17 @@ impl CreateUnitAssignmentForm {
         }
 
         let pcb_kind = self.state.pcb_kind.get().try_into()?;
-        let pcb_instance: usize = self
+        let pcb_instance = self
             .state
             .pcb_instance
             .get()
-            .parse::<usize>()
+            .parse::<u16>()
             .unwrap();
-        let pcb_unit: usize = self
+        let pcb_unit = self
             .state
             .pcb_unit
             .get()
-            .parse::<usize>()
+            .parse::<u16>()
             .unwrap();
 
         let mut object_path = ObjectPath::default();

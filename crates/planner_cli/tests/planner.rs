@@ -262,7 +262,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -272,16 +272,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -297,16 +297,16 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(10), dec!(110), dec!(0)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(5), dec!(105), dec!(90)),
                     false,
                     "Known",
@@ -323,7 +323,7 @@ mod operation_sequence_1 {
             "assign-variant-to-unit",
             "--design design_a",
             "--variant variant_a",
-            "--unit panel=1::unit=1",
+            "--unit pcb=panel::instance=1::unit=1",
         ]);
 
         // when
@@ -339,7 +339,7 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Unit assignment added. unit: 'panel=1::unit=1', design_variant: design_a-variant_a\n",
+            "Unit assignment added. unit: 'pcb=panel::instance=1::unit=1', design_variant: design_a-variant_a\n",
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
             "New part. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }\n",
@@ -388,7 +388,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -398,16 +398,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -423,24 +423,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -507,7 +507,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -532,16 +532,16 @@ mod operation_sequence_1 {
             ])])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -557,24 +557,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -652,7 +652,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -694,16 +694,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -719,24 +719,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -814,7 +814,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -874,16 +874,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -899,24 +899,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -934,11 +934,11 @@ mod operation_sequence_1 {
             "assign-placements-to-phase",
             "--phase top_1",
             // By placement path pattern
-            //"--placements panel=1::unit=1::ref_des=R1"
-            "--placements panel=1::unit=1::ref_des=R.*",
-            //"--placements panel=1::unit=1::ref_des=J1",
-            //"--placements panel=.*::unit=.*::ref_des=R1"
-            //"--placements panel=1::unit=.*::ref_des=.*"
+            //"--placements pcb=panel::instance=1::unit=1::ref_des=R1"
+            "--placements pcb=panel::instance=1::unit=1::ref_des=R.*",
+            //"--placements pcb=panel::instance=1::unit=1::ref_des=J1",
+            //"--placements pcb=panel::instance=.*::unit=.*::ref_des=R1"
+            //"--placements pcb=panel::instance=1::unit=.*::ref_des=.*"
             //"--placements .*::ref_des=R.*"
             //"--placements .*",
 
@@ -990,9 +990,9 @@ mod operation_sequence_1 {
 
         assert_contains_inorder!(trace_content, [
             // assignments should be made
-            "Assigning placement to phase. phase: top_1, placement_path: panel=1::unit=1::ref_des=R1",
-            "Assigning placement to phase. phase: top_1, placement_path: panel=1::unit=1::ref_des=R2",
-            "Assigning placement to phase. phase: top_1, placement_path: panel=1::unit=1::ref_des=R3",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R1",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R2",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R3",
             // all phase status should be updated
             "Updating phase status. phase: bottom_1\n",
             "Phase operation pending. phase: bottom_1, operation: ManuallySolderComponents\n",
@@ -1101,7 +1101,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -1161,16 +1161,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -1186,24 +1186,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -1264,7 +1264,7 @@ mod operation_sequence_1 {
         let expected_phase_1_placements_content = PhasePlacementsCSVBuilder::new()
             .with_items(&[
                 TestPhasePlacementRecord {
-                    object_path: "panel=1::unit=1::ref_des=R2".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R2".to_string(),
                     feeder_reference: "".to_string(),
                     manufacturer: "RES_MFR2".to_string(),
                     mpn: "RES2".to_string(),
@@ -1273,7 +1273,7 @@ mod operation_sequence_1 {
                     rotation: dec!(91),
                 },
                 TestPhasePlacementRecord {
-                    object_path: "panel=1::unit=1::ref_des=R1".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
@@ -1282,7 +1282,7 @@ mod operation_sequence_1 {
                     rotation: dec!(1),
                 },
                 TestPhasePlacementRecord {
-                    object_path: "panel=1::unit=1::ref_des=R3".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R3".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
@@ -1329,7 +1329,7 @@ mod operation_sequence_1 {
                             pcbs: vec![TestPcb::Panel {
                                 name: "panel_a".to_string(),
                                 unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "panel=1::unit=1".to_string(),
+                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
                                     design_name: "design_a".to_string(),
                                     variant_name: "variant_a".to_string(),
                                 }],
@@ -1360,7 +1360,7 @@ mod operation_sequence_1 {
                             pcbs: vec![TestPcb::Panel {
                                 name: "panel_a".to_string(),
                                 unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "panel=1::unit=1".to_string(),
+                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
                                     design_name: "design_a".to_string(),
                                     variant_name: "variant_a".to_string(),
                                 }],
@@ -1376,7 +1376,7 @@ mod operation_sequence_1 {
                     message: "A placement has not been assigned to a phase".to_string(),
                     severity: TestIssueSeverity::Warning,
                     kind: TestIssueKind::UnassignedPlacement {
-                        object_path: "panel=1::unit=1::ref_des=J1".to_string(),
+                        object_path: "pcb=panel::instance=1::unit=1::ref_des=J1".to_string(),
                     },
                 },
                 TestIssue {
@@ -1490,7 +1490,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -1550,16 +1550,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -1575,24 +1575,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
@@ -1669,7 +1669,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -1729,16 +1729,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -1754,24 +1754,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     true,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     true,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     true,
                     "Known",
@@ -1786,21 +1786,21 @@ mod operation_sequence_1 {
             (
                 "require",
                 Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "panel=1::unit=1::ref_des=R1".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
                     operation: TestOperationHistoryPlacementOperation::Placed,
                 })),
             ),
             (
                 "require",
                 Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "panel=1::unit=1::ref_des=R2".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R2".to_string(),
                     operation: TestOperationHistoryPlacementOperation::Placed,
                 })),
             ),
             (
                 "require",
                 Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "panel=1::unit=1::ref_des=R3".to_string(),
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R3".to_string(),
                     operation: TestOperationHistoryPlacementOperation::Placed,
                 })),
             ),
@@ -1813,7 +1813,7 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-placements-operation",
-            "--object-path-patterns panel=1::unit=1::ref_des=R([1-3])?,panel=1::unit=2::ref_des=.*",
+            "--object-path-patterns pcb=panel::instance=1::unit=1::ref_des=R([1-3])?,pcb=panel::instance=1::unit=2::ref_des=.*",
             "--operation placed",
         ]);
         // when
@@ -1831,10 +1831,10 @@ mod operation_sequence_1 {
         let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
-            "Setting placed flag. object_path: panel=1::unit=1::ref_des=R1\n",
-            "Setting placed flag. object_path: panel=1::unit=1::ref_des=R2\n",
-            "Setting placed flag. object_path: panel=1::unit=1::ref_des=R3\n",
-            "Unmatched object path pattern. object_path_pattern: panel=1::unit=2::ref_des=.*\n",
+            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R1\n",
+            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
+            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
+            "Unmatched object path pattern. object_path_pattern: pcb=panel::instance=1::unit=2::ref_des=.*\n",
             "Updating phase status. phase: top_1\n",
             "Phase operation complete. phase: top_1, operation: AutomatedPnp\n",
             &log_file_message,
@@ -1871,7 +1871,7 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(&[("panel", "panel_a")])
             .with_unit_assignments(&[(
-                "panel=1::unit=1",
+                "pcb=panel::instance=1::unit=1",
                 BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
             )])
             .with_part_states(&[
@@ -1931,16 +1931,16 @@ mod operation_sequence_1 {
             ])
             .with_placements(&[
                 (
-                    "panel=1::unit=1::ref_des=C1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
                     "Unknown",
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=J1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=panel::instance=1::unit=1",
                     (
                         "J1",
                         "CONN_MFR1",
@@ -1956,24 +1956,24 @@ mod operation_sequence_1 {
                     None,
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R1",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=panel::instance=1::unit=1",
                     ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R2",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=panel::instance=1::unit=1",
                     ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
                     false,
                     "Known",
                     Some("top_1"),
                 ),
                 (
-                    "panel=1::unit=1::ref_des=R3",
-                    "panel=1::unit=1",
+                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=panel::instance=1::unit=1",
                     ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
                     false,
                     "Known",
