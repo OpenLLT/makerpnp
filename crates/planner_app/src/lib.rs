@@ -8,7 +8,8 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
-use planning::placement::{PlacementOperation, PlacementSortingItem, PlacementState};
+pub use planning::placement::PlacementState;
+use planning::placement::{PlacementOperation, PlacementSortingItem};
 use planning::process::{ProcessName, ProcessOperationKind, ProcessOperationSetItem};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
@@ -17,7 +18,6 @@ pub use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::pcb::{PcbKind, PcbSide};
-use pnp::placement::Placement;
 use regex::Regex;
 use serde_with::serde_as;
 use stores::load_out::{LoadOutOperationError, LoadOutSource};
@@ -80,8 +80,7 @@ pub struct PhasePlacementOrderings {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PlacementsList {
-    // FUTURE consider introducing PlacementListItem, a subset of Placement
-    placements: Vec<Placement>,
+    pub placements: Vec<PlacementState>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
@@ -174,6 +173,7 @@ pub enum ProjectViewRequest {
     // TODO add all the views and use this
     ProjectTree,
     Overview,
+    Placements,
     PhaseOverview { phase: String },
     PhasePlacements { phase: String },
 }
@@ -262,6 +262,7 @@ pub enum Event {
     // Views
     //
     RequestOverviewView {},
+    RequestPlacementsView {},
     RequestProjectTreeView {},
     RequestPhaseOverviewView {
         phase_reference: Reference,
@@ -665,6 +666,24 @@ impl Planner {
                 };
                 Ok(view_renderer::view(ProjectView::Overview(overview)))
             }),
+            Event::RequestPlacementsView {} => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let placements = PlacementsList {
+                    placements: project
+                        .placements
+                        .values()
+                        .cloned()
+                        .collect(),
+                };
+
+                Ok(view_renderer::view(ProjectView::Placements(placements)))
+            }),
             Event::RequestProjectTreeView {} => Box::new(|model: &mut Model| {
                 let ModelProject {
                     project, ..
@@ -685,6 +704,17 @@ impl Planner {
                         ..ProjectTreeItem::default()
                     });
 
+                let placements_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "placements".to_string(),
+                        path: "/placements".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node, placements_node, ());
+
                 let pcbs_node = project_tree
                     .tree
                     .add_node(ProjectTreeItem {
@@ -694,7 +724,7 @@ impl Planner {
                     });
                 project_tree
                     .tree
-                    .add_edge(root_node.clone(), pcbs_node.clone(), ());
+                    .add_edge(root_node, pcbs_node, ());
 
                 for (index, pcb) in project.pcbs.iter().enumerate() {
                     let pcb_node = project_tree
@@ -709,7 +739,7 @@ impl Planner {
                         });
                     project_tree
                         .tree
-                        .add_edge(pcbs_node.clone(), pcb_node, ());
+                        .add_edge(pcbs_node, pcb_node, ());
                 }
 
                 let unit_assignments_node = project_tree
@@ -721,7 +751,7 @@ impl Planner {
                     });
                 project_tree
                     .tree
-                    .add_edge(root_node.clone(), unit_assignments_node.clone(), ());
+                    .add_edge(root_node, unit_assignments_node, ());
 
                 for (index, (path, design_variant)) in project
                     .unit_assignments
@@ -748,7 +778,7 @@ impl Planner {
 
                     project_tree
                         .tree
-                        .add_edge(unit_assignments_node.clone(), unit_assignment_node, ());
+                        .add_edge(unit_assignments_node, unit_assignment_node, ());
                 }
 
                 let processes_node = project_tree
@@ -760,7 +790,7 @@ impl Planner {
                     });
                 project_tree
                     .tree
-                    .add_edge(root_node.clone(), processes_node.clone(), ());
+                    .add_edge(root_node, processes_node, ());
 
                 for (index, process) in project.processes.iter().enumerate() {
                     let process_node = project_tree
@@ -773,7 +803,7 @@ impl Planner {
 
                     project_tree
                         .tree
-                        .add_edge(processes_node.clone(), process_node, ());
+                        .add_edge(processes_node, process_node, ());
                 }
 
                 let phases_node = project_tree
@@ -785,7 +815,7 @@ impl Planner {
                     });
                 project_tree
                     .tree
-                    .add_edge(root_node.clone(), phases_node.clone(), ());
+                    .add_edge(root_node, phases_node, ());
 
                 for (reference, ..) in &project.phases {
                     let phase_node = project_tree
@@ -823,7 +853,7 @@ impl Planner {
                         });
                     project_tree
                         .tree
-                        .add_edge(root_node.clone(), test_node, ());
+                        .add_edge(root_node, test_node, ());
                 }
 
                 Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
