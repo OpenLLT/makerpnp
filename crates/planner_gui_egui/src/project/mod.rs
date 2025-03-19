@@ -290,6 +290,11 @@ impl UiComponent for Project {
                 debug!("saved");
                 None
             }
+            ProjectUiCommand::ProjectRefreshed => {
+                debug!("project refreshed");
+                // TODO anything that is using data from views, this requires ui components to subscribe to refresh events or something.
+                None
+            }
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
@@ -464,6 +469,10 @@ impl UiComponent for Project {
                         self.show_explorer();
                         None
                     }
+                    Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
+                        .planner_core_service
+                        .update(key, Event::RefreshFromDesignVariants)
+                        .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         let mut modal = AddPcbModal::new(self.path.clone());
                         modal
@@ -652,6 +661,7 @@ pub enum ProjectUiCommand {
     Create,
     Created,
     CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
+    ProjectRefreshed,
 }
 
 #[derive(Debug, Clone)]

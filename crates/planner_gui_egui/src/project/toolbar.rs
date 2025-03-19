@@ -8,12 +8,14 @@ pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
     CreateUnitAssignmentClicked,
+    RefreshFromDesignVariantsClicked,
 }
 
 pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     ShowAddPcbDialog,
     ShowCreateUnitAssignmentDialog,
+    RefreshFromDesignVariants,
 }
 
 #[derive(Default)]
@@ -39,6 +41,13 @@ impl UiComponent for ProjectToolbar {
             }
 
             if ui
+                .button(tr!("project-toolbar-button-refresh-from-variants"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked)
+            }
+            if ui
                 .button(tr!("project-toolbar-button-add-pcb"))
                 .clicked()
             {
@@ -62,6 +71,9 @@ impl UiComponent for ProjectToolbar {
     ) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
+            ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked => {
+                Some(ProjectToolbarAction::RefreshFromDesignVariants)
+            }
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
             ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
                 Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
