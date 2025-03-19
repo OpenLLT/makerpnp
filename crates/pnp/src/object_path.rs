@@ -23,13 +23,13 @@ impl FromStr for ObjectPathChunk {
             match key {
                 "pcb" => {
                     let pcb_kind = value.to_string();
-                    let pcb_kind: PcbKind = PcbKind::try_from(&pcb_kind)
-                        .map_err(|_err| ObjectPathError::InvalidPcbKind(pcb_kind))?;
+                    let pcb_kind: PcbKind =
+                        PcbKind::try_from(&pcb_kind).map_err(|_err| ObjectPathError::InvalidPcbKind(pcb_kind))?;
                     Ok(ObjectPathChunk {
                         key: key.to_string(),
                         value: pcb_kind.to_string(),
                     })
-                },
+                }
                 "instance" | "unit" => {
                     let index: usize = value
                         .parse()
@@ -97,6 +97,7 @@ impl Display for ObjectPathChunk {
     Default
 )]
 pub struct ObjectPath {
+    // FUTURE consider if it's better/simpler to use a HashMap here.
     chunks: Vec<ObjectPathChunk>,
 }
 
@@ -111,15 +112,21 @@ impl ObjectPath {
             key: "instance".to_string(),
             value: instance.to_string(),
         });
+        if self.validate_instance().is_err() {
+            panic!("invalid pcb instance");
+        }
     }
 
     /// only applicable to panels
     /// pcb_unit is a 1-based index.
-     pub fn set_pcb_unit(&mut self, unit: u16) {
+    pub fn set_pcb_unit(&mut self, unit: u16) {
         self.set_chunk(ObjectPathChunk {
             key: "unit".to_string(),
             value: unit.to_string(),
-        })
+        });
+        if self.validate_pcb_and_unit().is_err() {
+            panic!("invalid pcb unit");
+        }
     }
 
     pub fn set_ref_des(&mut self, ref_des: String) {
@@ -132,15 +139,16 @@ impl ObjectPath {
     pub fn pcb_unit(&self) -> Result<ObjectPath, ObjectPathError> {
         const PCB_UNIT_KEYS: [&str; 3] = ["pcb", "instance", "unit"];
 
-        let chunks = self.chunks
+        let chunks = self
+            .chunks
             .iter()
-            .filter(|chunk|PCB_UNIT_KEYS.contains(&chunk.key.as_str()))
+            .filter(|chunk| PCB_UNIT_KEYS.contains(&chunk.key.as_str()))
             .collect::<Vec<_>>();
-        
+
         if chunks.len() != PCB_UNIT_KEYS.len() {
-            return Err(ObjectPathError::MissingPcbUnit)
+            return Err(ObjectPathError::MissingPcbUnit);
         }
-            
+
         Ok(chunks
             .iter()
             .fold(ObjectPath::default(), |mut object_path, &chunk| {
@@ -151,8 +159,14 @@ impl ObjectPath {
     }
 
     pub fn pcb_kind_and_instance(&self) -> Option<(PcbKind, usize)> {
-        self.find_chunk_by_key("pcb").zip(self.find_chunk_by_key("instance"))
-            .map(|(pcb_chunk, instance_chunk)| (PcbKind::try_from(&pcb_chunk.value).unwrap(), instance_chunk.value.parse().unwrap()))
+        self.find_chunk_by_key("pcb")
+            .zip(self.find_chunk_by_key("instance"))
+            .map(|(pcb_chunk, instance_chunk)| {
+                (
+                    PcbKind::try_from(&pcb_chunk.value).unwrap(),
+                    instance_chunk.value.parse().unwrap(),
+                )
+            })
     }
 
     fn set_chunk(&mut self, chunk: ObjectPathChunk) {
@@ -180,6 +194,57 @@ impl ObjectPath {
 
         existing_chunk
     }
+
+    fn validate_pcb_and_unit(&self) -> Result<&ObjectPath, ObjectPathError> {
+        let pcb = self.find_chunk_by_key("pcb");
+        let unit = self.find_chunk_by_key("unit");
+        match (pcb, unit) {
+            (Some(pcb), Some(unit)) if pcb.value == "single" && unit.value != "1" => {
+                Err(ObjectPathError::InvalidUnitForPcbKind(unit.value.clone()))
+            }
+            (_, Some(unit)) if unit.value == "0" => Err(ObjectPathError::IndexLessThanOne),
+            _ => Ok(self),
+        }
+    }
+
+    fn validate_instance(&self) -> Result<&ObjectPath, ObjectPathError> {
+        let instance = self.find_chunk_by_key("instance");
+        match instance {
+            Some(instance) if instance.value == "0" => Err(ObjectPathError::IndexLessThanOne),
+            _ => Ok(self),
+        }
+    }
+
+    fn validate_chunk_ordering(&self) -> Result<&Self, ObjectPathError> {
+        /// Ensure all keys are in the correct order, it's ok to have fewer keys, but not missing or additional keys
+        fn is_valid_ordering(keys: &[&String]) -> bool {
+            const KEY_ORDERING: [&str; 4] = ["pcb", "instance", "unit", "ref_des"];
+            let mut key_iter = KEY_ORDERING.iter();
+
+            for &item in keys {
+                if let Some(pos) = key_iter.position(|&key| key == item) {
+                    if pos == 0 {
+                        continue;
+                    }
+                }
+                return false;
+            }
+
+            true
+        }
+
+        let keys = self
+            .chunks
+            .iter()
+            .map(|chunk| &chunk.key)
+            .collect::<Vec<_>>();
+
+        if !is_valid_ordering(keys.as_slice()) {
+            Err(ObjectPathError::InvalidChunkOrder)
+        } else {
+            Ok(self)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -189,6 +254,8 @@ mod pcb_unit_tests {
     use super::*;
 
     #[rstest]
+    #[case("pcb=panel")]
+    #[case("pcb=single")]
     #[case("pcb=panel::instance=1")]
     #[case("pcb=single::instance=1")]
     #[case("pcb=panel::instance=1::unit=1")]
@@ -210,6 +277,12 @@ mod pcb_unit_tests {
     #[case("unit=0", Err(ObjectPathError::IndexLessThanOne))]
     #[case("pcb=bad", Err(ObjectPathError::InvalidPcbKind("bad".to_string())))]
     #[case("pcb=panel::instance=1::::ref_des=R1", Err(ObjectPathError::InvalidChunk("".to_string())))]
+    #[case("pcb=single::instance=1::unit=2", Err(ObjectPathError::InvalidUnitForPcbKind("2".to_string())))]
+    #[case("instance=1::pcb=single", Err(ObjectPathError::InvalidChunkOrder))]
+    #[case("instance=1", Err(ObjectPathError::InvalidChunkOrder))]
+    #[case("unit=1", Err(ObjectPathError::InvalidChunkOrder))]
+    #[case("ref_des=1", Err(ObjectPathError::InvalidChunkOrder))]
+    #[case("pcb=panel::instance=1::ref_des=R1", Err(ObjectPathError::InvalidChunkOrder))]
     pub fn from_str_errors(#[case] input: &str, #[case] expected_result: Result<ObjectPath, ObjectPathError>) {
         // expect
         assert_eq!(ObjectPath::from_str(input), expected_result);
@@ -229,15 +302,17 @@ mod pcb_unit_tests {
         // then
         assert_eq!(result, expected_result);
     }
-    
+
     #[test]
     pub fn pcb_unit_with_no_unit() {
         // given
-        let object_path = ObjectPath::from_str("pcb=single::instance=1::ref_des=R1").expect("always ok");
+        let mut object_path = ObjectPath::default();
+        object_path.set_pcb_kind_and_instance(PcbKind::Panel, 1);
+        object_path.set_ref_des("R1".to_ascii_lowercase());
 
         // when
         let result = object_path.pcb_unit();
-        
+
         // then
         assert_eq!(result, Err(ObjectPathError::MissingPcbUnit))
     }
@@ -290,10 +365,10 @@ mod pcb_unit_tests {
     #[test]
     pub fn set_pcb_unit() {
         // given
-        let mut object_path = ObjectPath::default();
+        let mut object_path = ObjectPath::from_str("pcb=panel::instance=1").expect("always ok");
 
         // and
-        let expected_result = ObjectPath::from_str("unit=1").expect("always ok");
+        let expected_result = ObjectPath::from_str("pcb=panel::instance=1::unit=1").expect("always ok");
 
         // when
         object_path.set_pcb_unit(1);
@@ -336,24 +411,25 @@ impl FromStr for ObjectPath {
     type Err = ObjectPathError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        value
-            .split("::")
-            .try_fold(
-                ObjectPath::default(),
-                |mut object_path: ObjectPath, chunk_str| match ObjectPathChunk::from_str(chunk_str) {
-                    Ok(chunk) => {
-                        object_path.chunks.push(chunk);
-                        Ok(object_path)
+        let object_path =
+            value
+                .split("::")
+                .try_fold(ObjectPath::default(), |mut object_path: ObjectPath, chunk_str| {
+                    match ObjectPathChunk::from_str(chunk_str) {
+                        Ok(chunk) => {
+                            object_path.chunks.push(chunk);
+                            Ok(object_path)
+                        }
+                        Err(err) => Err(err),
                     }
-                    Err(err) => Err(err),
-                },
-            )
+                });
 
-        // TODO validate the the order of the chunks is correct
-        // TODO validate that the unit for a single pcbs is always 1
-        // TODO validate that if a refdes is present, a unit must also be present
-        // NOTE Since it's not /fully/ defined what a object path will be used for, this above are not
-        //      implemented yet, but probably should be soon.
+        if let Ok(object_path) = &object_path {
+            object_path.validate_chunk_ordering()?;
+            object_path.validate_pcb_and_unit()?;
+        }
+
+        object_path
     }
 }
 
@@ -373,4 +449,8 @@ pub enum ObjectPathError {
     InvalidPcbKind(String),
     #[error("Missing PCB unit.")]
     MissingPcbUnit,
+    #[error("Invalid unit for PCB kind. value: '{0:}'")]
+    InvalidUnitForPcbKind(String),
+    #[error("Invalid chunk order, required ordering is: pcb, instance, unit, ref_des.")]
+    InvalidChunkOrder,
 }
