@@ -17,6 +17,7 @@ pub use planning::reference::Reference;
 pub use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
+use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
 use regex::Regex;
 use serde_with::serde_as;
@@ -69,6 +70,23 @@ pub struct PhaseOverview {
 pub struct PhasePlacements {
     pub phase_reference: Reference,
     pub placements: Vec<PlacementState>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct Process {
+    pub name: ProcessName,
+    pub operations: Vec<ProcessOperationKind>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PartWithState {
+    pub part: Part,
+    pub processes: Vec<ProcessName>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PartStates {
+    pub parts: Vec<PartWithState>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -166,6 +184,8 @@ pub enum ProjectView {
     PhaseOverview(PhaseOverview),
     PhasePlacements(PhasePlacements),
     PhasePlacementOrderings(PhasePlacementOrderings),
+    Process(Process),
+    Parts(PartStates),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -176,6 +196,7 @@ pub enum ProjectViewRequest {
     Placements,
     PhaseOverview { phase: String },
     PhasePlacements { phase: String },
+    Parts,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -270,6 +291,10 @@ pub enum Event {
     RequestPhasePlacementsView {
         phase_reference: Reference,
     },
+    RequestProcessView {
+        process_name: String,
+    },
+    RequestPartStatesView,
 }
 
 impl Planner {
@@ -704,6 +729,17 @@ impl Planner {
                         ..ProjectTreeItem::default()
                     });
 
+                let parts_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "parts".to_string(),
+                        path: "/parts".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node, parts_node, ());
+
                 let placements_node = project_tree
                     .tree
                     .add_node(ProjectTreeItem {
@@ -909,6 +945,59 @@ impl Planner {
                     placements,
                 };
                 Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
+            }),
+            Event::RequestProcessView {
+                process_name,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let process_name = ProcessName(process_name);
+
+                let process = project
+                    .find_process(&process_name)
+                    .map_err(|err| AppError::ProcessError(err.into()))?;
+
+                let process_view = Process {
+                    name: process_name,
+                    operations: process.operations.clone(),
+                };
+
+                Ok(view_renderer::view(ProjectView::Process(process_view)))
+            }),
+            Event::RequestPartStatesView {} => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let parts = project
+                    .part_states
+                    .iter()
+                    .map(|(part, state)| {
+                        let processes = state
+                            .applicable_processes
+                            .iter()
+                            .cloned()
+                            .collect();
+                        PartWithState {
+                            part: part.clone(),
+                            processes,
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                let part_states_view = PartStates {
+                    parts,
+                };
+
+                Ok(view_renderer::view(ProjectView::Parts(part_states_view)))
             }),
         }
     }
