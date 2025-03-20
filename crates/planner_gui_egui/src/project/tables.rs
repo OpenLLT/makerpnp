@@ -55,57 +55,59 @@ pub fn show_placements(ui: &mut Ui, placements: &Vec<PlacementState>) {
                 ui.strong(tr!("table-placements-column-pcb-side"));
             });
         })
-        .body(|mut body| {
-            for (index, placement_state) in placements.iter().enumerate() {
-                body.row(18.0, |mut row| {
-                    row.col(|ui| {
-                        ui.label(format!("{}", index_to_human_readable(index)));
-                    });
-                    row.col(|ui| {
-                        ui.label(&placement_state.unit_path.to_string());
-                    });
-                    row.col(|ui| {
-                        ui.label(&placement_state.placement.ref_des);
-                    });
-                    row.col(|ui| {
-                        let label = tr!(placement_placed_to_i18n_key(placement_state.placed));
-                        ui.label(label);
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            &placement_state
-                                .placement
-                                .part
-                                .manufacturer,
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(&placement_state.placement.part.mpn);
-                    });
-                    row.col(|ui| {
-                        ui.label(
-                            placement_state
-                                .placement
-                                .rotation
-                                .to_string(),
-                        );
-                    });
-                    row.col(|ui| {
-                        ui.label(placement_state.placement.x.to_string());
-                    });
-                    row.col(|ui| {
-                        ui.label(placement_state.placement.y.to_string());
-                    });
-                    row.col(|ui| {
-                        let key = pcb_side_to_i18n_key(&placement_state.placement.pcb_side);
-                        ui.label(tr!(key));
-                    });
-                })
-            }
+        .body(|body| {
+            let row_count = placements.len();
+            let mut placements_iter = placements.iter();
+            body.rows(18.0, row_count, |mut row| {
+                let index = row.index();
+                let placement_state = placements_iter.next().unwrap();
+                row.col(|ui| {
+                    ui.label(format!("{}", index_to_human_readable(index)));
+                });
+                row.col(|ui| {
+                    ui.label(&placement_state.unit_path.to_string());
+                });
+                row.col(|ui| {
+                    ui.label(&placement_state.placement.ref_des);
+                });
+                row.col(|ui| {
+                    let label = tr!(placement_placed_to_i18n_key(placement_state.placed));
+                    ui.label(label);
+                });
+                row.col(|ui| {
+                    ui.label(
+                        &placement_state
+                            .placement
+                            .part
+                            .manufacturer,
+                    );
+                });
+                row.col(|ui| {
+                    ui.label(&placement_state.placement.part.mpn);
+                });
+                row.col(|ui| {
+                    ui.label(
+                        placement_state
+                            .placement
+                            .rotation
+                            .to_string(),
+                    );
+                });
+                row.col(|ui| {
+                    ui.label(placement_state.placement.x.to_string());
+                });
+                row.col(|ui| {
+                    ui.label(placement_state.placement.y.to_string());
+                });
+                row.col(|ui| {
+                    let key = pcb_side_to_i18n_key(&placement_state.placement.pcb_side);
+                    ui.label(tr!(key));
+                });
+            })
         });
 }
 
 // TODO move this somewhere else on 2nd re-use.
-fn index_to_human_readable(index: usize) -> usize {
+pub fn index_to_human_readable(index: usize) -> usize {
     index + 1
 }

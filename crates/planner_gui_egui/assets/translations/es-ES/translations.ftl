@@ -48,6 +48,9 @@ project-overview-detail-name = Nombre: { $name }
 project-placements-tab-label = Ubicaciones
 project-placements-header = Ubicaciones de proyecto
 
+project-parts-tab-label = Piezas
+project-parts-header = Piezas de proyecto
+
 phase-placements-header = Ubicaciones de fase
 
 phase-properties-header = Propiedades de fase
@@ -61,9 +64,10 @@ phase-process = Proceso
 pcb-side-top = Parte superior
 pcb-side-bottom = Parte inferior
 
-project-explorer-tab-label = Explorador de proyectos
+project-explorer-tab-label = Explorador de proyecto
 
 project-explorer-node-root = Raíz
+project-explorer-node-parts = Piezas
 project-explorer-node-placements = Ubicaciones
 project-explorer-node-phases = Fases
 project-explorer-node-phase = { $reference }
@@ -108,13 +112,18 @@ form-file-not-found = Archivo no encontrado
 placement-placed = Colocado
 placement-pending = Pendiente
 
+table-placements-column-index = #
+table-placements-column-object-path = Ruta
+table-placements-column-refdes = Ref. Des.
+table-placements-column-placed = ¿Colocado?
+table-placements-column-manufacturer = Fabricante
+table-placements-column-mpn = MPN
+table-placements-column-rotation = Rotación
+table-placements-column-x = X
+table-placements-column-y = Y
+table-placements-column-pcb-side = Lado
 
-phase-placements-header = Colocaciones
-phase-placements-column-index = #
-phase-placements-column-refdes = Ref. Des.
-phase-placements-column-placed = ¿Colocado?
-phase-placements-column-manufacturer = Fabricante
-phase-placements-column-mpn = MPN
-phase-placements-column-rotation = Rotación
-phase-placements-column-x = X
-phase-placements-column-y = Y
+table-parts-column-index = #
+table-parts-column-manufacturer = Fabricante
+table-parts-column-mpn = MPN
+table-parts-column-processes = Procesos

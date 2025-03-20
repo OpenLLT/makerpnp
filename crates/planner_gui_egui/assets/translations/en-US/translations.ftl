@@ -48,6 +48,9 @@ project-overview-detail-name = Name: { $name }
 project-placements-tab-label = Placements
 project-placements-header = Project placements
 
+project-parts-tab-label = Parts
+project-parts-header = Project Parts
+
 phase-placements-header = Phase Placements
 
 phase-properties-header = Phase properties
@@ -64,6 +67,7 @@ pcb-side-bottom = Bottom
 project-explorer-tab-label = Project explorer
 
 project-explorer-node-root = Root
+project-explorer-node-parts = Parts
 project-explorer-node-placements = Placements
 project-explorer-node-phases = Phases
 project-explorer-node-phase = { $reference }
@@ -118,3 +122,8 @@ table-placements-column-rotation = Rotation
 table-placements-column-x = X
 table-placements-column-y = Y
 table-placements-column-pcb-side = Side
+
+table-parts-column-index = #
+table-parts-column-manufacturer = Manufacturer
+table-parts-column-mpn = MPN
+table-parts-column-processes = Processes

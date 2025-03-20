@@ -19,6 +19,7 @@ use crate::project::dialogs::create_unit_assignment::{
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi};
 use crate::project::overview_tab::{OverviewTab, OverviewUi};
+use crate::project::parts_tab::{PartsTab, PartsUi};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::placements_tab::{PlacementsTab, PlacementsUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
@@ -29,6 +30,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 mod explorer_tab;
 mod overview_tab;
+mod parts_tab;
 mod phase_tab;
 mod placements_tab;
 mod tabs;
@@ -169,6 +171,14 @@ impl Project {
         }
     }
 
+    pub fn show_parts(&mut self) {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Parts(_)));
+        if result.is_err() {
+            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Parts(PartsTab::default()));
+        }
+    }
+
     pub fn show_placements(&mut self) {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Placements(_)));
@@ -298,6 +308,7 @@ impl UiComponent for Project {
             ProjectUiCommand::RequestView(view_request) => {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
+                    ProjectViewRequest::Parts => Event::RequestPartStatesView {},
                     ProjectViewRequest::Placements => Event::RequestPlacementsView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
                     ProjectViewRequest::PhaseOverview {
@@ -360,7 +371,19 @@ impl UiComponent for Project {
                             .or_insert(PhaseUi::new());
                         phase_state.update_placements(phase_placements);
                     }
-                    ProjectView::PhasePlacementOrderings(_) => {}
+                    ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
+                        // TODO
+                    }
+                    ProjectView::Process(_process) => {
+                        // TODO
+                    }
+                    ProjectView::Parts(part_states) => {
+                        debug!("parts: {:?}", part_states);
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        state
+                            .parts_ui
+                            .update_part_states(part_states)
+                    }
                 }
                 None
             }
@@ -423,6 +446,20 @@ impl UiComponent for Project {
                 }
 
                 #[must_use]
+                fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+                    if path.eq(&"/project/parts".into()) {
+                        project.show_parts();
+                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::Parts,
+                        )));
+
+                        Some(ProjectAction::Task(*key, task))
+                    } else {
+                        None
+                    }
+                }
+
+                #[must_use]
                 fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
                     let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
                     if let Some(captures) = phase_pattern.captures(&path) {
@@ -454,7 +491,7 @@ impl UiComponent for Project {
                     }
                 }
 
-                let handlers = [handle_root, handle_placements, handle_phase];
+                let handlers = [handle_root, handle_parts, handle_placements, handle_phase];
 
                 handlers
                     .iter()
@@ -580,20 +617,20 @@ impl Tab for ProjectTabKind {
     type Context = ProjectTabContext;
 
     fn label(&self) -> WidgetText {
-        let title = match self {
+        match self {
             ProjectTabKind::Explorer(tab) => tab.label(),
             ProjectTabKind::Overview(tab) => tab.label(),
+            ProjectTabKind::Parts(tab) => tab.label(),
             ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
-        };
-
-        egui::widget_text::WidgetText::from(title)
+        }
     }
 
     fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
         match self {
             ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
         }
@@ -603,6 +640,7 @@ impl Tab for ProjectTabKind {
         match self {
             ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
         }
@@ -617,6 +655,7 @@ pub struct ProjectUiState {
 
     overview_ui: OverviewUi,
     placements_ui: PlacementsUi,
+    parts_ui: PartsUi,
     project_tree: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
 }
@@ -628,6 +667,7 @@ impl ProjectUiState {
             phases: HashMap::default(),
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
+            parts_ui: PartsUi::new(),
             project_tree: ExplorerUi::new(sender),
         }
     }
@@ -640,6 +680,7 @@ enum ProjectTabKind {
     Overview(OverviewTab),
     Phase(PhaseTab),
     Placements(PlacementsTab),
+    Parts(PartsTab),
 }
 
 #[derive(Debug, Clone)]
