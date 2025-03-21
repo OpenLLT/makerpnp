@@ -1819,7 +1819,7 @@ dependencies = [
 [[package]]
 name = "egui_ltreeview"
 version = "0.1.10"
-source = "git+https://github.com/MakerPnP/egui_ltreeview.git?rev=c826ded544b0c096ca3acb8b41dba876ff37078a#c826ded544b0c096ca3acb8b41dba876ff37078a"
+source = "git+https://github.com/MakerPnP/egui_ltreeview.git?rev=9ddc522493f2420744714097bc783c659228a318#9ddc522493f2420744714097bc783c659228a318"
 dependencies = [
  "egui",
  "serde",

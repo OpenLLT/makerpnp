@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::{tr, translate_fluent};
-use egui_ltreeview::{TreeView, TreeViewBuilder, TreeViewState};
+use egui_ltreeview::{Action, Opened, TreeView, TreeViewBuilder, TreeViewState};
 use egui_mobius::types::{Enqueue, Value};
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
@@ -42,7 +42,7 @@ impl ExplorerUi {
     ) {
         let mut tree_view_state = self.tree_view_state.lock().unwrap();
 
-        TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(
+        let (_response, actions) = TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(
             ui,
             &mut tree_view_state,
             |builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
@@ -50,15 +50,21 @@ impl ExplorerUi {
             },
         );
 
-        // open tabs when the selection is opened
-        if let Some(_modifiers) = tree_view_state.opened() {
-            for &node in tree_view_state.selected() {
-                let item = &graph[NodeIndex::new(node)];
-                let path = project_path_from_view_path(&item.path);
+        for action in actions {
+            if let Action::Opened(Opened {
+                selected,
+                modifiers,
+            }) = action
+            {
+                let _ = modifiers;
+                for &node in &selected {
+                    let item = &graph[NodeIndex::new(node)];
+                    let path = project_path_from_view_path(&item.path);
 
-                self.sender
-                    .send((*project_key, ProjectUiCommand::Navigate(path)))
-                    .expect("sent");
+                    self.sender
+                        .send((*project_key, ProjectUiCommand::Navigate(path)))
+                        .expect("sent");
+                }
             }
         }
     }
