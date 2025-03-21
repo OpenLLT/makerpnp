@@ -75,6 +75,7 @@ egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d
 egui_mobius = { git = "https://github.com/saturn77/egui_mobius", rev = "fcdfe8603d4744ba8a6f4b7b3aa6810c968071e3" }
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.8.0" }
 egui_ltreeview = { version = "0.1.10" }
+egui-data-table = { version = "0.6.1" }
 
 rfd = "0.15.2"
 

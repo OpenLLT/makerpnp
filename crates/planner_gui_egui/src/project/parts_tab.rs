@@ -1,83 +1,207 @@
-use egui::scroll_area::ScrollBarVisibility;
-use egui::{Ui, WidgetText};
-use egui_extras::{Column, TableBuilder};
-use egui_i18n::tr;
-use planner_app::PartStates;
+use std::borrow::Cow;
 
-use crate::project::tables;
+use derivative::Derivative;
+use egui::{Response, Ui, WidgetText};
+use egui_data_table::viewer::CellWriteContext;
+use egui_data_table::{DataTable, RowViewer};
+use egui_i18n::tr;
+use egui_mobius::types::Value;
+use planner_app::{Part, PartStates, PartWithState};
+use tracing::debug;
+
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PartsUi {
-    part_states: Option<PartStates>,
+    #[derivative(Debug = "ignore")]
+    part_states_table: Value<Option<(PartStatesRowViewer, DataTable<PartStatesRow>)>>,
 }
 
 impl PartsUi {
     pub fn new() -> Self {
         Self {
-            part_states: None,
+            //part_states: None,
+            part_states_table: Value::default(),
         }
     }
 
-    pub fn update_part_states(&mut self, part_states: PartStates) {
-        self.part_states.replace(part_states);
+    pub fn update_part_states(&mut self, mut part_states: PartStates) {
+        //self.part_states.replace(part_states);
+
+        let mut part_states_table = self.part_states_table.lock().unwrap();
+        let table: DataTable<PartStatesRow> = {
+            part_states
+                .parts
+                .drain(0..)
+                .map(|part_state| {
+                    // todo, build dynamically
+                    let processes = vec![(true, "Manual".into()), (false, "PnP".into())];
+                    PartStatesRow {
+                        part_state,
+                        processes,
+                    }
+                })
+        }
+        .collect();
+
+        part_states_table.replace((PartStatesRowViewer::default(), table));
     }
 
     pub fn ui(&self, ui: &mut Ui) {
         ui.label(tr!("project-parts-header"));
-        if let Some(part_states) = &self.part_states {
-            let table = TableBuilder::new(ui)
-                .striped(true)
-                .resizable(true)
-                .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                .column(Column::auto()) // index
-                .column(Column::auto()) // mfr
-                .column(Column::auto()) // mpn
-                .column(Column::auto()); // processes
-
-            table
-                .header(20.0, |mut header| {
-                    header.col(|ui| {
-                        ui.strong(tr!("table-parts-column-index"));
-                    });
-                    header.col(|ui| {
-                        ui.strong(tr!("table-parts-column-manufacturer"));
-                    });
-                    header.col(|ui| {
-                        ui.strong(tr!("table-parts-column-mpn"));
-                    });
-                    header.col(|ui| {
-                        ui.strong(tr!("table-parts-column-processes"));
-                    });
-                })
-                .body(|body| {
-                    let row_count = part_states.parts.len();
-                    let mut part_state_iter = part_states.parts.iter();
-                    body.rows(18.0, row_count, |mut row| {
-                        let index = row.index();
-                        let part_state = part_state_iter.next().unwrap();
-                        row.col(|ui| {
-                            ui.label(format!("{}", tables::index_to_human_readable(index)));
-                        });
-                        row.col(|ui| {
-                            ui.label(&part_state.part.manufacturer);
-                        });
-                        row.col(|ui| {
-                            ui.label(&part_state.part.mpn);
-                        });
-                        row.col(|ui| {
-                            let processes: String = part_state
-                                .processes
-                                .iter()
-                                .map(|process| process.to_string())
-                                .collect::<Vec<_>>()
-                                .join(",");
-                            ui.label(processes);
-                        });
-                    })
-                });
+        let mut part_states_table = self.part_states_table.lock().unwrap();
+        if let Some((viewer, table)) = part_states_table.as_mut() {
+            ui.add(egui_data_table::Renderer::new(table, viewer));
         }
+    }
+}
+
+#[derive(Debug)]
+struct PartStatesRow {
+    part_state: PartWithState,
+    processes: Vec<(bool, String)>,
+}
+
+#[derive(Default)]
+struct PartStatesRowViewer;
+
+impl RowViewer<PartStatesRow> for PartStatesRowViewer {
+    fn num_columns(&mut self) -> usize {
+        3
+    }
+
+    fn is_sortable_column(&mut self, column: usize) -> bool {
+        [true, true, true][column]
+    }
+
+    fn compare_cell(&self, row_l: &PartStatesRow, row_r: &PartStatesRow, column: usize) -> std::cmp::Ordering {
+        match column {
+            0 => row_l
+                .part_state
+                .part
+                .manufacturer
+                .cmp(&row_r.part_state.part.manufacturer),
+            1 => row_l
+                .part_state
+                .part
+                .mpn
+                .cmp(&row_r.part_state.part.mpn),
+            2 => row_l
+                .part_state
+                .processes
+                .cmp(&row_r.part_state.processes),
+            _ => unreachable!(),
+        }
+    }
+
+    fn column_name(&mut self, column: usize) -> Cow<'static, str> {
+        match column {
+            0 => tr!("table-parts-column-manufacturer"),
+            1 => tr!("table-parts-column-mpn"),
+            2 => tr!("table-parts-column-processes"),
+            _ => unreachable!(),
+        }
+        .into()
+    }
+
+    fn show_cell_view(&mut self, ui: &mut Ui, row: &PartStatesRow, column: usize) {
+        let _ = match column {
+            0 => ui.label(&row.part_state.part.manufacturer),
+            1 => ui.label(&row.part_state.part.mpn),
+            2 => {
+                let processes: String = row
+                    .processes
+                    .iter()
+                    .filter_map(|(enabled, name)| match enabled {
+                        true => Some(name.to_string()),
+                        false => None,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                ui.label(processes)
+            }
+            _ => unreachable!(),
+        };
+    }
+
+    fn show_cell_editor(&mut self, ui: &mut Ui, row: &mut PartStatesRow, column: usize) -> Option<Response> {
+        match column {
+            0 => None,
+            1 => None,
+            2 => {
+                let ui = ui.add(|ui: &mut Ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (enabled, name) in row.processes.iter_mut() {
+                            ui.checkbox(enabled, name.clone());
+                        }
+                    })
+                    .response
+                });
+                Some(ui)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn set_cell_value(&mut self, src: &PartStatesRow, dst: &mut PartStatesRow, column: usize) {
+        match column {
+            0 => dst
+                .part_state
+                .part
+                .manufacturer
+                .clone_from(&src.part_state.part.manufacturer),
+            1 => dst
+                .part_state
+                .part
+                .mpn
+                .clone_from(&src.part_state.part.mpn),
+            2 => {
+                dst.part_state
+                    .processes
+                    .clone_from(&src.part_state.processes);
+                dst.processes.clone_from(&src.processes);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn new_empty_row(&mut self) -> PartStatesRow {
+        // FIXME why do we need to implement this?
+        PartStatesRow {
+            part_state: PartWithState {
+                part: Part {
+                    manufacturer: "".to_string(),
+                    mpn: "".to_string(),
+                },
+                processes: vec![],
+            },
+            processes: vec![],
+        }
+    }
+
+    fn confirm_cell_write_by_ui(
+        &mut self,
+        _current: &PartStatesRow,
+        _next: &PartStatesRow,
+        column: usize,
+        _context: CellWriteContext,
+    ) -> bool {
+        debug!(
+            "confirm cell write by ui. column: {}, current: {:?}, next: {:?}, context: {:?}",
+            column, _current, _next, _context
+        );
+        match column {
+            0 => false,
+            1 => false,
+            2 => true,
+            _ => unreachable!(),
+        }
+    }
+
+    fn confirm_row_deletion_by_ui(&mut self, _row: &PartStatesRow) -> bool {
+        false
     }
 }
 
