@@ -1,8 +1,12 @@
+use eframe::emath::Align;
+use egui::response::Flags;
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Ui, WidgetText};
+use egui::{Sense, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
+use egui_mobius::types::Value;
 use planner_app::PartStates;
+use tracing::debug;
 
 use crate::project::tables;
 use crate::project::tabs::ProjectTabContext;
@@ -12,6 +16,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Debug)]
 pub struct PartsUi {
     part_states: Option<PartStates>,
+    editing: Value<Option<(usize, usize)>>,
 
     pub component: ComponentState<PartsUiCommand>,
 }
@@ -20,6 +25,8 @@ impl PartsUi {
     pub fn new() -> Self {
         Self {
             part_states: None,
+            editing: Value::default(),
+
             component: Default::default(),
         }
     }
@@ -53,6 +60,7 @@ impl UiComponent for PartsUi {
             let table = TableBuilder::new(ui)
                 .striped(true)
                 .resizable(true)
+                .sense(Sense::CLICK)
                 .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                 .column(Column::auto()) // index
                 .column(Column::remainder()) // mfr
@@ -79,16 +87,46 @@ impl UiComponent for PartsUi {
                     body.rows(18.0, row_count, move |mut row| {
                         let index = row.index();
                         let part_state = &part_states.parts[index];
+                        let mut editing = self.editing.lock().unwrap();
 
                         row.col(|ui| {
                             ui.label(format!("{}", tables::index_to_human_readable(index)));
                         });
+
                         row.col(|ui| {
-                            ui.label(&part_state.part.manufacturer);
+                            if ui
+                                .label(&part_state.part.manufacturer)
+                                .clicked()
+                                || ui.response().clicked()
+                            {
+                                debug!("clicked");
+                            };
                         });
-                        row.col(|ui| {
-                            ui.label(&part_state.part.mpn);
+
+                        let this_cell = (index, 2);
+                        let is_editing = editing.is_some() && editing.unwrap() == this_cell;
+                        let (_rect, response) = row.col(|ui| {
+                            if is_editing {
+                                let mut value = part_state.part.mpn.clone();
+                                let response =
+                                    ui.add_sized(ui.available_size(), egui::TextEdit::singleline(&mut value));
+                                if response.clicked_elsewhere() || response.lost_focus() {
+                                    editing.take();
+                                }
+
+                                if part_state.part.mpn.eq(&value) {
+                                    // TODO signal state update with new value so that the part_state.part.mpn is correct on the next frame
+                                    debug!("changed");
+                                }
+                            } else {
+                                ui.add(egui::Label::new(&part_state.part.mpn).selectable(false));
+                            }
                         });
+                        if !is_editing && response.clicked() {
+                            debug!("clicked");
+                            editing.replace(this_cell);
+                        }
+
                         row.col(|ui| {
                             let processes: String = part_state
                                 .processes
