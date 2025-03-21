@@ -1717,6 +1717,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-data-table"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74e244a1ac14a16eebb36edeb29c0ef9806fde8e5daa8b0c9152e449ce70538a"
+dependencies = [
+ "egui",
+ "egui_extras",
+ "itertools 0.14.0",
+ "serde",
+ "tap",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "egui-i18n"
 version = "0.1.0"
 source = "git+https://github.com/fewensa/egui-i18n?rev=3be4d89e6328d545a715529ac80415f49d675756#3be4d89e6328d545a715529ac80415f49d675756"
@@ -1792,6 +1806,7 @@ dependencies = [
  "enum-map",
  "log",
  "profiling",
+ "serde",
 ]
 
 [[package]]
@@ -3009,6 +3024,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "itertools"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4167,6 +4191,7 @@ dependencies = [
  "derivative",
  "eframe",
  "egui",
+ "egui-data-table",
  "egui-i18n",
  "egui_dock",
  "egui_extras",
@@ -4615,7 +4640,7 @@ dependencies = [
  "built",
  "cfg-if",
  "interpolate_name",
- "itertools",
+ "itertools 0.12.1",
  "libc",
  "libfuzzer-sys",
  "log",

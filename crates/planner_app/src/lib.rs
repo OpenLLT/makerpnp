@@ -18,7 +18,7 @@ pub use planning::reference::Reference;
 pub use planning::variant::VariantName;
 use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
-use pnp::part::Part;
+pub use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
 use regex::Regex;
 use serde_with::serde_as;
