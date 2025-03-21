@@ -1,12 +1,13 @@
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
+use std::pin::Pin;
 
 use futures::FutureExt;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use futures::{Stream, future, stream};
 
-use crate::runtime::boxed_stream;
+use crate::runtime::tokio_runtime::boxed_stream;
 
 pub struct Task<T>(Option<BoxStream<'static, T>>);
 
@@ -121,6 +122,13 @@ impl<T> Task<T> {
 
 pub fn into_stream<T>(task: Task<T>) -> Option<BoxStream<'static, T>> {
     task.0
+}
+
+pub fn into_future<T: 'static>(task: Task<T>) -> Option<Pin<Box<dyn Future<Output = T> + Send + 'static>>> {
+    task.0.map(|stream| {
+        let future = stream.into_future().map(|(item, _)| item.unwrap());
+        Box::pin(future) as Pin<Box<dyn Future<Output = T> + Send + 'static>>
+    })
 }
 
 impl<T> Debug for Task<T> {
