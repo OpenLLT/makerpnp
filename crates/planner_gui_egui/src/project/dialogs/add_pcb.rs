@@ -159,6 +159,11 @@ impl UiComponent for AddPcbModal {
     type UiAction = AddPcbModalAction;
 
     fn ui<'context>(&self, ui: &mut egui::Ui, _context: &mut Self::UiContext<'context>) {
+        ui.ctx().style_mut(|style| {
+            // if this is not done, text in labels/checkboxes/etc wraps
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
+
         let modal_id = ui.id().with("add_pcb_modal");
 
         Modal::new(modal_id).show(ui.ctx(), |ui| {
