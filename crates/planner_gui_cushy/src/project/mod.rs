@@ -438,7 +438,9 @@ impl Project {
 
                         ProjectAction::None
                     }
-                    ProjectView::PhasePlacementOrderings(phase_placement_orderings) => ProjectAction::None,
+                    ProjectView::PhasePlacementOrderings(_) | ProjectView::Process(_) | ProjectView::Parts(_) => {
+                        todo!()
+                    }
                 }
             }
             ProjectMessage::ToolbarMessage(message) => {
