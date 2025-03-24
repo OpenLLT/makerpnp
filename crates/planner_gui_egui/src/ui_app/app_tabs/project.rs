@@ -32,6 +32,7 @@ pub enum ProjectTabUiCommand {
     ProjectCommand { key: ProjectKey, command: ProjectUiCommand },
 }
 
+#[derive(Debug)]
 pub enum ProjectTabAction {
     ProjectTask(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),

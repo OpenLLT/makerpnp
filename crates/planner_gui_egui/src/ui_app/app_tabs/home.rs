@@ -26,6 +26,7 @@ pub enum HomeTabUiCommand {
     SetShowOnStartup(bool),
 }
 
+#[derive(Debug)]
 pub enum HomeTabAction {
     None,
 }

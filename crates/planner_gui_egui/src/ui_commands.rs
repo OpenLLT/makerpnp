@@ -90,6 +90,7 @@ pub fn handle_command(
                 let mut app_tabs = app_tabs.lock().unwrap();
                 app_tabs.update((tab_key, command), &mut context)
             };
+            debug!("handling tab command action: {:?}", action);
             match action {
                 None => Task::none(),
                 Some(TabAction::None) => Task::none(),
@@ -114,26 +115,29 @@ pub fn handle_command(
                     TabKindAction::ProjectTabAction {
                         action,
                     } => match action {
-                        ProjectTabAction::ProjectTask(key, task) => task.map(move |action| match action {
-                            ProjectAction::UiCommand(command) => UiCommand::TabCommand {
-                                tab_key,
-                                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                                    command: ProjectTabUiCommand::ProjectCommand {
-                                        key,
-                                        command,
-                                    },
-                                }),
-                            },
-                            ProjectAction::Task(_, _) => {
-                                // unsupported here, no corresponding TabCommands
-                                // should have already been handled by the project
-                                panic!("unsupported")
-                            }
+                        ProjectTabAction::ProjectTask(key, task) => task.map(move |action| {
+                            debug!("handling project action: {:?}", action);
+                            match action {
+                                ProjectAction::UiCommand(command) => UiCommand::TabCommand {
+                                    tab_key,
+                                    command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                                        command: ProjectTabUiCommand::ProjectCommand {
+                                            key,
+                                            command,
+                                        },
+                                    }),
+                                },
+                                ProjectAction::Task(_, _) => {
+                                    // unsupported here, no corresponding TabCommands
+                                    // should have already been handled by the project
+                                    panic!("unsupported")
+                                }
 
-                            ProjectAction::SetModifiedState(_) => {
-                                // unsupported here, no corresponding TabCommands
-                                // should have already been handled by the project
-                                panic!("unsupported")
+                                ProjectAction::SetModifiedState(_) => {
+                                    // unsupported here, no corresponding TabCommands
+                                    // should have already been handled by the project
+                                    panic!("unsupported")
+                                }
                             }
                         }),
                         ProjectTabAction::SetModifiedState(modified_state) => {

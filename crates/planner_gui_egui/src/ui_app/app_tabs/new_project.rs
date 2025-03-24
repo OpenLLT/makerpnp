@@ -33,6 +33,7 @@ pub enum NewProjectTabUiCommand {
     PickDirectoryClicked,
 }
 
+#[derive(Debug)]
 pub enum NewProjectTabAction {
     Submit(NewProjectArgs),
 }

@@ -38,6 +38,7 @@ pub enum TabKindUiCommand {
     ProjectTabCommand { command: ProjectTabUiCommand },
 }
 
+#[derive(Debug)]
 pub enum TabKindAction {
     None,
     HomeTabAction { action: HomeTabAction },
@@ -468,6 +469,7 @@ pub enum TabUiCommand {
     TabKindCommand(TabKindUiCommand),
 }
 
+#[derive(Debug)]
 pub enum TabAction {
     None,
     TabKindAction { action: TabKindAction },

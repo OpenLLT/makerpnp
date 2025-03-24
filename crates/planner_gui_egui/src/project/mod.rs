@@ -74,6 +74,7 @@ impl From<&str> for ProjectPath {
     }
 }
 
+#[derive(Debug)]
 pub enum ProjectAction {
     Task(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
