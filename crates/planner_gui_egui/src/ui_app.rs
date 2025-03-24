@@ -6,6 +6,7 @@ use egui::{CentralPanel, ThemePreference};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
+use futures::StreamExt;
 use slotmap::SlotMap;
 use tracing::{debug, info};
 
@@ -20,7 +21,7 @@ use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{AppTabs, TabKind, TabKindContext, TabKindUiCommand, TabUiCommand};
 use crate::ui_commands::{UiCommand, handle_command};
 use crate::ui_component::{ComponentState, UiComponent};
-use crate::fonts;
+use crate::{fonts, task};
 
 pub mod app_tabs;
 
@@ -229,6 +230,7 @@ impl UiApp {
             let app_tabs = app_tabs.clone();
             let config = instance.config.clone();
             let context = cc.egui_ctx.clone();
+            let app_message_sender = app_message_sender.clone();
 
             move |command: UiCommand| {
                 let task = handle_command(
@@ -239,8 +241,19 @@ impl UiApp {
                     context.clone(),
                 );
 
-                if let Some(future) = crate::task::into_future(task) {
-                    runtime.runtime().spawn(future);
+                if let Some(mut stream) = task::into_stream(task) {
+                    runtime.runtime().spawn({
+                        let app_message_sender = app_message_sender.clone();
+                        async move {
+                            debug!("running stream future");
+                            while let Some(command) = stream.next().await {
+                                debug!("command returned from future: {:?}", command);
+                                app_message_sender
+                                    .send(command)
+                                    .expect("sent");
+                            }
+                        }
+                    });
                 }
             }
         };
