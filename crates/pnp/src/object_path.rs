@@ -1,6 +1,8 @@
+use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
+use lexical_sort::natural_lexical_cmp;
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use thiserror::Error;
 
@@ -85,17 +87,7 @@ impl Display for ObjectPathChunk {
 /// Currently, there are example where wildcards are used to search for objects, e.g. `pcb=panel::instance=.*::unit=.*::ref_des=R1`
 /// however this object is not for STORING such patterns, but the string representation of a path
 /// can be compared to such a pattern.
-#[derive(
-    Debug,
-    Clone,
-    DeserializeFromStr,
-    SerializeDisplay,
-    PartialOrd,
-    Ord,
-    Eq,
-    PartialEq,
-    Default
-)]
+#[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq, Default)]
 pub struct ObjectPath {
     // FUTURE consider if it's better/simpler to use a HashMap here.
     chunks: Vec<ObjectPathChunk>,
@@ -453,4 +445,49 @@ pub enum ObjectPathError {
     InvalidUnitForPcbKind(String),
     #[error("Invalid chunk order, required ordering is: pcb, instance, unit, ref_des.")]
     InvalidChunkOrder,
+}
+
+impl Ord for ObjectPath {
+    fn cmp(&self, other: &Self) -> Ordering {
+        //extract_numbers(&self.to_string()).cmp(&extract_numbers(&other.to_string()))
+        natural_lexical_cmp(&self.to_string(), &other.to_string())
+    }
+}
+
+impl PartialOrd for ObjectPath {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod ordering_tests {
+    use std::str::FromStr;
+
+    use crate::object_path::ObjectPath;
+
+    #[test]
+    fn test_object_paths_are_sorted_lexicographically() {
+        let mut values = [
+            ObjectPath::from_str("pcb=panel::instance=10::unit=1").unwrap(),
+            ObjectPath::from_str("pcb=panel::instance=10::unit=10").unwrap(),
+            ObjectPath::from_str("pcb=panel::instance=1::unit=10").unwrap(),
+            ObjectPath::from_str("pcb=panel::instance=1::unit=1").unwrap(),
+        ];
+
+        values.sort(); // Uses our custom Ord implementation
+
+        let sorted_strings: Vec<String> = values
+            .iter()
+            .map(|obj| obj.to_string())
+            .collect();
+        let expected = vec![
+            "pcb=panel::instance=1::unit=1",
+            "pcb=panel::instance=1::unit=10",
+            "pcb=panel::instance=10::unit=1",
+            "pcb=panel::instance=10::unit=10",
+        ];
+
+        assert_eq!(sorted_strings, expected);
+    }
 }
