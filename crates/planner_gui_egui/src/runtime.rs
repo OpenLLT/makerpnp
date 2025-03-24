@@ -1,6 +1,7 @@
-use futures::stream::BoxStream;
-use futures::Stream;
 use std::pin::Pin;
+
+use futures::Stream;
+use futures::stream::BoxStream;
 use tokio::runtime::Runtime;
 
 pub fn boxed_stream<T>(stream: impl Stream<Item = T> + Send + 'static) -> BoxStream<'static, T> {
@@ -17,7 +18,9 @@ impl TokioRuntime {
     /// Creates a new Tokio runtime.
     pub fn new() -> Self {
         let runtime = Runtime::new().expect("Failed to create Tokio runtime");
-        Self { runtime }
+        Self {
+            runtime,
+        }
     }
 
     /// Gets a reference to the Tokio runtime.

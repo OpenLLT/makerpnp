@@ -126,7 +126,9 @@ pub fn into_stream<T>(task: Task<T>) -> Option<BoxStream<'static, T>> {
 
 pub fn into_future<T: 'static>(task: Task<T>) -> Option<Pin<Box<dyn Future<Output = T> + Send + 'static>>> {
     task.0.map(|stream| {
-        let future = stream.into_future().map(|(item, _)| item.unwrap());
+        let future = stream
+            .into_future()
+            .map(|(item, _)| item.unwrap());
         Box::pin(future) as Pin<Box<dyn Future<Output = T> + Send + 'static>>
     })
 }
