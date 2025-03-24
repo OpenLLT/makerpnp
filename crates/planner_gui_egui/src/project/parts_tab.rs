@@ -65,7 +65,7 @@ impl UiComponent for PartsUi {
                 .column(Column::auto()) // index
                 .column(Column::remainder()) // mfr
                 .column(Column::remainder()) // mpn
-                .column(Column::remainder()); // processes
+                .column(Column::auto()); // processes
 
             table
                 .header(20.0, |mut header| {
