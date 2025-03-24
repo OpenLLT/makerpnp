@@ -12,11 +12,11 @@ pub fn show_placements(ui: &mut Ui, placements: &Vec<PlacementState>) {
         .resizable(true)
         .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
         .column(Column::auto()) // index
-        .column(Column::auto()) // object path
+        .column(Column::remainder()) // object path
         .column(Column::auto()) // refdes
         .column(Column::auto()) // placed
-        .column(Column::auto()) // mfr
-        .column(Column::auto()) // mpn
+        .column(Column::remainder()) // mfr
+        .column(Column::remainder()) // mpn
         .column(Column::auto()) // rotation
         .column(Column::auto()) // x
         .column(Column::auto()) // y
@@ -57,10 +57,9 @@ pub fn show_placements(ui: &mut Ui, placements: &Vec<PlacementState>) {
         })
         .body(|body| {
             let row_count = placements.len();
-            let mut placements_iter = placements.iter();
-            body.rows(18.0, row_count, |mut row| {
+            body.rows(18.0, row_count, move |mut row| {
                 let index = row.index();
-                let placement_state = placements_iter.next().unwrap();
+                let placement_state = &placements[index];
                 row.col(|ui| {
                     ui.label(format!("{}", index_to_human_readable(index)));
                 });

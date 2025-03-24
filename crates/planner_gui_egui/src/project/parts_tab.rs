@@ -32,9 +32,9 @@ impl PartsUi {
                 .resizable(true)
                 .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                 .column(Column::auto()) // index
-                .column(Column::auto()) // mfr
-                .column(Column::auto()) // mpn
-                .column(Column::auto()); // processes
+                .column(Column::remainder()) // mfr
+                .column(Column::remainder()) // mpn
+                .column(Column::remainder()); // processes
 
             table
                 .header(20.0, |mut header| {
@@ -53,10 +53,10 @@ impl PartsUi {
                 })
                 .body(|body| {
                     let row_count = part_states.parts.len();
-                    let mut part_state_iter = part_states.parts.iter();
-                    body.rows(18.0, row_count, |mut row| {
+                    body.rows(18.0, row_count, move |mut row| {
                         let index = row.index();
-                        let part_state = part_state_iter.next().unwrap();
+                        let part_state = &part_states.parts[index];
+
                         row.col(|ui| {
                             ui.label(format!("{}", tables::index_to_human_readable(index)));
                         });
