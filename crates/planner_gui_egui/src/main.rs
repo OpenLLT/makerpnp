@@ -1,8 +1,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 use i18n::I18nConfig;
 use planner_gui_egui::ui_app::UiApp;
+/// Run as follows:
+/// `run --package planner_gui_egui --bin planner_gui_egui`
+///
+/// To enable logging, set the environment variable appropriately, for example:
+/// `RUST_LOG=debug,eframe=warn,egui_glow=warn,egui=warn`
+use tracing::info;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, fmt};
 
 fn main() {
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env())
+        .init();
+
+    info!("Started");
+    
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([600.0, 440.0])
