@@ -7,6 +7,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
+    AddPhaseClicked,
     CreateUnitAssignmentClicked,
     RefreshFromDesignVariantsClicked,
 }
@@ -14,6 +15,7 @@ pub enum ProjectToolbarUiCommand {
 pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     ShowAddPcbDialog,
+    ShowAddPhaseDialog,
     ShowCreateUnitAssignmentDialog,
     RefreshFromDesignVariants,
 }
@@ -55,6 +57,13 @@ impl UiComponent for ProjectToolbar {
                     .send(ProjectToolbarUiCommand::AddPcbClicked)
             }
             if ui
+                .button(tr!("project-toolbar-button-add-phase"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::AddPhaseClicked)
+            }
+            if ui
                 .button(tr!("project-toolbar-button-create-unit-assignment"))
                 .clicked()
             {
@@ -75,6 +84,7 @@ impl UiComponent for ProjectToolbar {
                 Some(ProjectToolbarAction::RefreshFromDesignVariants)
             }
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
+            ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
             ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
                 Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
             }

@@ -7,13 +7,14 @@ use std::str::FromStr;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{DesignName, Event, ProjectView, ProjectViewRequest, Reference, VariantName};
+use planner_app::{DesignName, Event, ProcessName, ProjectView, ProjectViewRequest, Reference, VariantName};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
 use crate::planner_app_core::PlannerCoreService;
 use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
+use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
@@ -101,6 +102,7 @@ pub struct Project {
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 
     add_pcb_modal: Option<AddPcbModal>,
+    add_phase_modal: Option<AddPhaseModal>,
     create_unit_assignment_modal: Option<CreateUnitAssignmentModal>,
 }
 
@@ -154,6 +156,7 @@ impl Project {
             toolbar,
             component,
             add_pcb_modal: None,
+            add_phase_modal: None,
             create_unit_assignment_modal: None,
         }
     }
@@ -357,6 +360,9 @@ impl UiComponent for Project {
         }
 
         if let Some(dialog) = &self.add_pcb_modal {
+            dialog.ui(ui, &mut ());
+        }
+        if let Some(dialog) = &self.add_phase_modal {
             dialog.ui(ui, &mut ());
         }
         if let Some(dialog) = &self.create_unit_assignment_modal {
@@ -605,6 +611,23 @@ impl UiComponent for Project {
                         self.add_pcb_modal = Some(modal);
                         None
                     }
+                    Some(ProjectToolbarAction::ShowAddPhaseDialog) => {
+                        // TODO get this from the project
+                        let processes = vec![
+                            ProcessName::from_str("manual").unwrap(),
+                            ProcessName::from_str("pnp").unwrap(),
+                        ];
+                        let mut modal = AddPhaseModal::new(self.path.clone(), processes);
+                        modal
+                            .component
+                            .configure_mapper(self.component.sender.clone(), move |command| {
+                                debug!("add phase modal mapper. command: {:?}", command);
+                                (key, ProjectUiCommand::AddPhaseModalCommand(command))
+                            });
+
+                        self.add_phase_modal = Some(modal);
+                        None
+                    }
                     Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog) => {
                         let mut modal = CreateUnitAssignmentModal::new(self.path.clone());
                         modal
@@ -656,6 +679,35 @@ impl UiComponent for Project {
                         }
                         Some(AddPcbModalAction::CloseDialog) => {
                             self.add_pcb_modal.take();
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            ProjectUiCommand::AddPhaseModalCommand(command) => {
+                if let Some(modal) = &mut self.add_phase_modal {
+                    let action = modal.update(command, &mut ());
+                    match action {
+                        None => None,
+                        Some(AddPhaseModalAction::Submit(args)) => {
+                            self.add_phase_modal.take();
+                            self.planner_core_service
+                                .update(key, Event::CreatePhase {
+                                    process: args.process,
+                                    reference: args.reference,
+                                    load_out: args.load_out,
+                                    pcb_side: args.pcb_side,
+                                })
+                                .when_ok(|| {
+                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        ProjectViewRequest::ProjectTree,
+                                    ))
+                                })
+                        }
+                        Some(AddPhaseModalAction::CloseDialog) => {
+                            self.add_phase_modal.take();
                             None
                         }
                     }
@@ -814,6 +866,7 @@ pub enum ProjectUiCommand {
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
     AddPcbModalCommand(AddPcbModalUiCommand),
+    AddPhaseModalCommand(AddPhaseModalUiCommand),
     Create,
     Created,
     CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),

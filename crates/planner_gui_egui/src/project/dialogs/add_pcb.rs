@@ -80,8 +80,8 @@ impl AddPcbModal {
                             let available_size = ui.available_size();
 
                             ui.add_sized(available_size, |ui: &mut Ui| {
-                                let kind_id = ui.id();
-                                egui::ComboBox::from_id_salt(kind_id)
+                                let pcb_kind_id = ui.id();
+                                egui::ComboBox::from_id_salt(pcb_kind_id)
                                     .width(ui.available_width())
                                     .selected_text(match kind {
                                         None => tr!("form-common-combo-default"),

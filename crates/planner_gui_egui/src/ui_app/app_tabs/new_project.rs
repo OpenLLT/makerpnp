@@ -31,6 +31,7 @@ pub enum NewProjectTabUiCommand {
     NameChanged(String),
     Submit,
     PickDirectoryClicked,
+    DirectoryPicked(PathBuf),
 }
 
 #[derive(Debug)]
@@ -69,7 +70,8 @@ impl UiComponent for NewProjectTab {
             .unwrap()
             .picked()
         {
-            self.fields.lock().unwrap().directory = Some(picked_directory);
+            self.component
+                .send(NewProjectTabUiCommand::DirectoryPicked(picked_directory.clone()));
         }
 
         ui.ctx().style_mut(|style| {
@@ -105,6 +107,10 @@ impl UiComponent for NewProjectTab {
                     .lock()
                     .unwrap()
                     .pick_folder();
+                None
+            }
+            NewProjectTabUiCommand::DirectoryPicked(picked_directory) => {
+                self.fields.lock().unwrap().directory = Some(picked_directory);
                 None
             }
         }

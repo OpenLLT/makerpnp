@@ -8,13 +8,20 @@ pub struct ProcessName(pub String);
 
 #[derive(Debug, Error)]
 #[error("Process name error")]
-pub struct ProcessNameError;
+pub enum ProcessNameError {
+    #[error("Invalid")]
+    Invalid,
+}
 
 impl FromStr for ProcessName {
     type Err = ProcessNameError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(ProcessName(s.to_string()))
+        if s.is_empty() {
+            Err(ProcessNameError::Invalid)
+        } else {
+            Ok(ProcessName(s.to_string()))
+        }
     }
 }
 

@@ -11,6 +11,7 @@ menu-item-quit = Quit
 
 modal-errors-title = Errors - { $file }
 modal-add-pcb-title = Add PCB - { $file }
+modal-add-phase-title = Add phase - { $file }
 modal-create-unit-assignment-title = Create unit assignment - { $file }
 
 toolbar-button-home = Home
@@ -26,6 +27,7 @@ side-bar-item-path = Path
 project-toolbar-button-show-explorer = Show explorer
 project-toolbar-button-refresh-from-variants = Refresh from variants
 project-toolbar-button-add-pcb = Add PCB
+project-toolbar-button-add-phase = Add phase
 project-toolbar-button-create-unit-assignment = Create unit assignment
 
 tab-label-home = Home
@@ -98,6 +100,14 @@ form-create-unit-assignment-input-placements-directory = Placements directory
 form-common-choice-pcb-kind = PCB Kind
 form-common-choice-pcb-kind-single = Single
 form-common-choice-pcb-kind-panel = Panel
+
+form-common-choice-pcb-side = PCB Side
+form-common-choice-pcb-side-top = Top
+form-common-choice-pcb-side-bottom = Bottom
+
+form-common-input-load-out-source = Loadout source
+form-common-input-phase-reference = Phase reference
+form-common-choice-process = Process
 
 form-option-error-required = * Required
 
