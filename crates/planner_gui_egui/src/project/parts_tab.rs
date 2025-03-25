@@ -7,24 +7,47 @@ use planner_app::PartStates;
 use crate::project::tables;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
+use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
 pub struct PartsUi {
     part_states: Option<PartStates>,
+
+    pub component: ComponentState<PartsUiCommand>,
 }
 
 impl PartsUi {
     pub fn new() -> Self {
         Self {
             part_states: None,
+            component: Default::default(),
         }
     }
 
     pub fn update_part_states(&mut self, part_states: PartStates) {
         self.part_states.replace(part_states);
     }
+}
 
-    pub fn ui(&self, ui: &mut Ui) {
+#[derive(Debug, Clone)]
+pub enum PartsUiCommand {
+    None,
+}
+
+#[derive(Debug, Clone)]
+pub enum PartsUiAction {
+    None,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PartsUiContext {}
+
+impl UiComponent for PartsUi {
+    type UiContext<'context> = PartsUiContext;
+    type UiCommand = PartsUiCommand;
+    type UiAction = PartsUiAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-parts-header"));
         if let Some(part_states) = &self.part_states {
             let table = TableBuilder::new(ui)
@@ -79,6 +102,16 @@ impl PartsUi {
                 });
         }
     }
+
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
+        match command {
+            PartsUiCommand::None => Some(PartsUiAction::None),
+        }
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Default, PartialEq)]
@@ -93,7 +126,7 @@ impl Tab for PartsTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        state.parts_ui.ui(ui);
+        UiComponent::ui(&state.parts_ui, ui, &mut PartsUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

@@ -19,7 +19,7 @@ use crate::project::dialogs::create_unit_assignment::{
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi};
-use crate::project::parts_tab::{PartsTab, PartsUi};
+use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
 use crate::project::placements_tab::{PlacementsTab, PlacementsUi};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
@@ -489,7 +489,6 @@ impl UiComponent for Project {
                 self.modified = modified_state;
                 Some(ProjectAction::SetModifiedState(modified_state))
             }
-
             ProjectUiCommand::ExplorerUiCommand(command) => {
                 let context = &mut ExplorerUiContext::default();
                 let explorer_ui_action = self
@@ -503,7 +502,19 @@ impl UiComponent for Project {
                     _ => None,
                 }
             }
-
+            ProjectUiCommand::PartsUiCommand(command) => {
+                let context = &mut PartsUiContext::default();
+                let parts_ui_action = self
+                    .project_ui_state
+                    .lock()
+                    .unwrap()
+                    .parts_ui
+                    .update(command, context);
+                match parts_ui_action {
+                    Some(PartsUiAction::None) => None,
+                    _ => None,
+                }
+            }
             ProjectUiCommand::ToolbarCommand(toolbar_command) => {
                 let action = self
                     .toolbar
@@ -680,8 +691,17 @@ impl ProjectUiState {
         instance
             .project_tree
             .component
-            .configure_mapper(sender, move |explorer_ui_command| {
-                (key, ProjectUiCommand::ExplorerUiCommand(explorer_ui_command))
+            .configure_mapper(sender.clone(), move |command| {
+                debug!("explorer ui mapper. command: {:?}", command);
+                (key, ProjectUiCommand::ExplorerUiCommand(command))
+            });
+
+        instance
+            .parts_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                debug!("parts ui mapper. command: {:?}", command);
+                (key, ProjectUiCommand::PartsUiCommand(command))
             });
 
         instance
@@ -718,6 +738,7 @@ pub enum ProjectUiCommand {
     CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
     ProjectRefreshed,
     ExplorerUiCommand(ExplorerUiCommand),
+    PartsUiCommand(PartsUiCommand),
 }
 
 #[derive(Debug, Clone)]
