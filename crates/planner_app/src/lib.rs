@@ -132,6 +132,7 @@ pub enum Arg {
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectOverview {
     pub name: String,
+    pub processes: Vec<ProcessName>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
@@ -690,6 +691,11 @@ impl Planner {
 
                 let overview = ProjectOverview {
                     name: project.name.clone(),
+                    processes: project
+                        .processes
+                        .iter()
+                        .map(|process| process.name.clone())
+                        .collect(),
                 };
                 Ok(view_renderer::view(ProjectView::Overview(overview)))
             }),

@@ -7,7 +7,9 @@ use std::str::FromStr;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{DesignName, Event, ProcessName, ProjectView, ProjectViewRequest, Reference, VariantName};
+use planner_app::{
+    DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference, VariantName,
+};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
@@ -91,8 +93,11 @@ pub struct Project {
 
     modified: bool,
 
-    // list of errors to show
+    /// list of errors to show
     errors: Vec<String>,
+
+    /// initially empty until the OverviewView has been received and processed.
+    processes: Vec<ProcessName>,
 
     // FIXME actually persist this, currently it should be treated as 'persistable_state'.
     project_tabs: Value<ProjectTabs>,
@@ -152,6 +157,7 @@ impl Project {
             project_ui_state,
             modified: false,
             errors: Default::default(),
+            processes: Default::default(),
             project_tabs,
             toolbar,
             component,
@@ -318,6 +324,10 @@ impl Project {
             .iter()
             .find_map(|handler| handler(self, &key, &path))
     }
+
+    pub fn update_processes(&mut self, project_overview: &ProjectOverview) {
+        self.processes = project_overview.processes.clone();
+    }
 }
 
 pub struct ProjectContext {
@@ -446,6 +456,8 @@ impl UiComponent for Project {
                 match view {
                     ProjectView::Overview(project_overview) => {
                         debug!("project overview: {:?}", project_overview);
+                        self.update_processes(&project_overview);
+
                         let mut state = self.project_ui_state.lock().unwrap();
                         state.name = Some(project_overview.name.clone());
                         state
@@ -457,7 +469,7 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
                             .explorer_ui
-                            .update_tree(project_tree)
+                            .update_tree(project_tree);
                     }
                     ProjectView::Placements(placements) => {
                         debug!("placements: {:?}", placements);
@@ -612,12 +624,7 @@ impl UiComponent for Project {
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPhaseDialog) => {
-                        // TODO get this from the project
-                        let processes = vec![
-                            ProcessName::from_str("manual").unwrap(),
-                            ProcessName::from_str("pnp").unwrap(),
-                        ];
-                        let mut modal = AddPhaseModal::new(self.path.clone(), processes);
+                        let mut modal = AddPhaseModal::new(self.path.clone(), self.processes.clone());
                         modal
                             .component
                             .configure_mapper(self.component.sender.clone(), move |command| {
