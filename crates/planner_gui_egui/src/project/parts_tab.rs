@@ -1,5 +1,3 @@
-use eframe::emath::Align;
-use egui::response::Flags;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Sense, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};

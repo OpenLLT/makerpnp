@@ -4,6 +4,7 @@ use planner_app::{PhaseOverview, PhasePlacements, Reference};
 use tracing::debug;
 
 use crate::project::tables;
+use crate::project::tables::{ColumnIdx, PlacementsStateTableState, TableAction};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -13,6 +14,8 @@ pub struct PhaseUi {
     overview: Option<PhaseOverview>,
     placements: Option<PhasePlacements>,
 
+    table_state: PlacementsStateTableState,
+
     pub component: ComponentState<PhaseUiCommand>,
 }
 
@@ -21,6 +24,7 @@ impl PhaseUi {
         Self {
             overview: None,
             placements: None,
+            table_state: Default::default(),
             component: Default::default(),
         }
     }
@@ -37,6 +41,7 @@ impl PhaseUi {
 
 #[derive(Debug, Clone)]
 pub enum PhaseUiCommand {
+    PhasePlacementsTableColumnHeaderClicked { column: usize },
     None,
 }
 
@@ -46,7 +51,8 @@ pub enum PhaseUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PhaseUiContext {}
+pub struct PhaseUiContext {
+}
 
 impl UiComponent for PhaseUi {
     type UiContext<'context> = PhaseUiContext;
@@ -54,9 +60,17 @@ impl UiComponent for PhaseUi {
     type UiAction = PhaseUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        ui.label(tr!("phase-placements-header"));
+
         if let Some(phase_placements) = &self.placements {
-            ui.label(tr!("phase-placements-header"));
-            tables::show_placements(ui, &phase_placements.placements)
+            let table_action = tables::show_placements(ui, &phase_placements.placements, &self.table_state);
+            match table_action {
+                Some(TableAction::ColumnHeaderClicked(index)) => {
+                    self.component
+                        .send(PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked { column: index });
+                }
+                None => {}
+            }
         }
     }
 
@@ -67,6 +81,11 @@ impl UiComponent for PhaseUi {
     ) -> Option<Self::UiAction> {
         match command {
             PhaseUiCommand::None => Some(PhaseUiAction::None),
+            PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked { column } => {
+                self.table_state.on_column_header_clicked(ColumnIdx(column));
+
+                None
+            }
         }
     }
 }
