@@ -427,7 +427,7 @@ impl UiComponent for Project {
                         debug!("project tree: {:?}", project_tree);
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
-                            .project_tree
+                            .explorer_ui
                             .update_tree(project_tree)
                     }
                     ProjectView::Placements(placements) => {
@@ -495,7 +495,7 @@ impl UiComponent for Project {
                     .project_ui_state
                     .lock()
                     .unwrap()
-                    .project_tree
+                    .explorer_ui
                     .update(command, context);
                 match explorer_ui_action {
                     Some(ExplorerUiAction::Navigate(path)) => self.navigate(key, path),
@@ -673,7 +673,7 @@ pub struct ProjectUiState {
     overview_ui: OverviewUi,
     placements_ui: PlacementsUi,
     parts_ui: PartsUi,
-    project_tree: ExplorerUi,
+    explorer_ui: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
 }
 
@@ -685,11 +685,11 @@ impl ProjectUiState {
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
             parts_ui: PartsUi::new(),
-            project_tree: ExplorerUi::new(),
+            explorer_ui: ExplorerUi::new(),
         };
 
         instance
-            .project_tree
+            .explorer_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
                 debug!("explorer ui mapper. command: {:?}", command);
