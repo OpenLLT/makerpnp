@@ -135,13 +135,11 @@ impl ExplorerUi {
 
 #[derive(Debug, Clone)]
 pub enum ExplorerUiCommand {
-    None,
     Navigate(ProjectPath),
 }
 
 #[derive(Debug, Clone)]
 pub enum ExplorerUiAction {
-    None,
     Navigate(ProjectPath),
 }
 
@@ -169,7 +167,6 @@ impl UiComponent for ExplorerUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            ExplorerUiCommand::None => Some(ExplorerUiAction::None),
             ExplorerUiCommand::Navigate(path) => {
                 self.select_path(&path);
 

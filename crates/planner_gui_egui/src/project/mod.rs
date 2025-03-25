@@ -18,10 +18,12 @@ use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
-use crate::project::overview_tab::{OverviewTab, OverviewUi};
+use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
 use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
-use crate::project::placements_tab::{PlacementsTab, PlacementsUi};
+use crate::project::placements_tab::{
+    PlacementsTab, PlacementsUi, PlacementsUiAction, PlacementsUiCommand, PlacementsUiContext,
+};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::tabs::{Tab, TabKey};
@@ -499,7 +501,20 @@ impl UiComponent for Project {
                     .update(command, context);
                 match explorer_ui_action {
                     Some(ExplorerUiAction::Navigate(path)) => self.navigate(key, path),
-                    _ => None,
+                    None => None,
+                }
+            }
+            ProjectUiCommand::OverviewUiCommand(command) => {
+                let context = &mut OverviewUiContext::default();
+                let overview_ui_action = self
+                    .project_ui_state
+                    .lock()
+                    .unwrap()
+                    .overview_ui
+                    .update(command, context);
+                match overview_ui_action {
+                    Some(OverviewUiAction::None) => None,
+                    None => None,
                 }
             }
             ProjectUiCommand::PartsUiCommand(command) => {
@@ -512,7 +527,20 @@ impl UiComponent for Project {
                     .update(command, context);
                 match parts_ui_action {
                     Some(PartsUiAction::None) => None,
-                    _ => None,
+                    None => None,
+                }
+            }
+            ProjectUiCommand::PlacementsUiCommand(command) => {
+                let context = &mut PlacementsUiContext::default();
+                let parts_ui_action = self
+                    .project_ui_state
+                    .lock()
+                    .unwrap()
+                    .placements_ui
+                    .update(command, context);
+                match parts_ui_action {
+                    Some(PlacementsUiAction::None) => None,
+                    None => None,
                 }
             }
             ProjectUiCommand::ToolbarCommand(toolbar_command) => {
@@ -697,11 +725,27 @@ impl ProjectUiState {
             });
 
         instance
+            .overview_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                debug!("overview ui mapper. command: {:?}", command);
+                (key, ProjectUiCommand::OverviewUiCommand(command))
+            });
+
+        instance
             .parts_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
                 debug!("parts ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::PartsUiCommand(command))
+            });
+
+        instance
+            .placements_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                debug!("placements ui mapper. command: {:?}", command);
+                (key, ProjectUiCommand::PlacementsUiCommand(command))
             });
 
         instance
@@ -739,6 +783,8 @@ pub enum ProjectUiCommand {
     ProjectRefreshed,
     ExplorerUiCommand(ExplorerUiCommand),
     PartsUiCommand(PartsUiCommand),
+    OverviewUiCommand(OverviewUiCommand),
+    PlacementsUiCommand(PlacementsUiCommand),
 }
 
 #[derive(Debug, Clone)]
