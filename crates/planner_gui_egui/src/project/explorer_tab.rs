@@ -2,17 +2,16 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::{tr, translate_fluent};
 use egui_ltreeview::{Action, Opened, TreeView, TreeViewBuilder, TreeViewState};
-use egui_mobius::types::{Enqueue, Value};
+use egui_mobius::types::Value;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
 use planner_app::{ProjectTreeItem, ProjectTreeView};
 
 use crate::project::tabs::ProjectTabContext;
-use crate::project::{
-    ProjectKey, ProjectPath, ProjectUiCommand, project_path_from_view_path, view_path_from_project_path,
-};
+use crate::project::{ProjectPath, project_path_from_view_path, view_path_from_project_path};
 use crate::tabs::{Tab, TabKey};
+use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -21,32 +20,27 @@ pub struct ExplorerUi {
 
     #[derivative(Debug = "ignore")]
     tree_view_state: Value<TreeViewState<usize>>,
-    sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
+
+    pub component: ComponentState<ExplorerUiCommand>,
 }
 
 impl ExplorerUi {
-    pub fn new(sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
+    pub fn new() -> Self {
         Self {
             project_tree_view: None,
             tree_view_state: Default::default(),
-            sender,
+            component: Default::default(),
         }
     }
 
-    fn show_project_tree(
-        &self,
-        ui: &mut Ui,
-        graph: &Graph<ProjectTreeItem, ()>,
-        node: NodeIndex,
-        project_key: &ProjectKey,
-    ) {
+    fn show_project_tree(&self, ui: &mut Ui, graph: &Graph<ProjectTreeItem, ()>, node: NodeIndex) {
         let mut tree_view_state = self.tree_view_state.lock().unwrap();
 
         let (_response, actions) = TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(
             ui,
             &mut tree_view_state,
             |builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
-                self.show_project_tree_inner(builder, graph, node, project_key);
+                self.show_project_tree_inner(builder, graph, node);
             },
         );
 
@@ -61,9 +55,8 @@ impl ExplorerUi {
                     let item = &graph[NodeIndex::new(node)];
                     let path = project_path_from_view_path(&item.path);
 
-                    self.sender
-                        .send((*project_key, ProjectUiCommand::Navigate(path)))
-                        .expect("sent");
+                    self.component
+                        .send(ExplorerUiCommand::Navigate(path));
                 }
             }
         }
@@ -74,7 +67,6 @@ impl ExplorerUi {
         tree_builder: &mut TreeViewBuilder<usize>,
         graph: &Graph<ProjectTreeItem, ()>,
         node: NodeIndex,
-        project_key: &ProjectKey,
     ) {
         let item = &graph[node];
 
@@ -96,7 +88,7 @@ impl ExplorerUi {
                 tree_builder.dir(node_id, &label);
                 node_created = true;
             }
-            self.show_project_tree_inner(tree_builder, graph, neighbour, project_key);
+            self.show_project_tree_inner(tree_builder, graph, neighbour);
         }
         if node_created {
             tree_builder.close_dir();
@@ -141,6 +133,52 @@ impl ExplorerUi {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ExplorerUiCommand {
+    None,
+    Navigate(ProjectPath),
+}
+
+#[derive(Debug, Clone)]
+pub enum ExplorerUiAction {
+    None,
+    Navigate(ProjectPath),
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ExplorerUiContext {}
+
+impl UiComponent for ExplorerUi {
+    type UiContext<'context> = ExplorerUiContext;
+    type UiCommand = ExplorerUiCommand;
+    type UiAction = ExplorerUiAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        if let Some(tree) = &self.project_tree_view {
+            self.show_project_tree(ui, &tree.tree, NodeIndex::new(0));
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.spinner();
+            });
+        }
+    }
+
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
+        match command {
+            ExplorerUiCommand::None => Some(ExplorerUiAction::None),
+            ExplorerUiCommand::Navigate(path) => {
+                self.select_path(&path);
+
+                Some(ExplorerUiAction::Navigate(path))
+            }
+        }
+    }
+}
+
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
 pub struct ExplorerTab {}
 
@@ -155,15 +193,7 @@ impl Tab for ExplorerTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        if let Some(tree) = &state.project_tree.project_tree_view {
-            state
-                .project_tree
-                .show_project_tree(ui, &tree.tree, NodeIndex::new(0), &context.key);
-        } else {
-            ui.centered_and_justified(|ui| {
-                ui.spinner();
-            });
-        }
+        UiComponent::ui(&state.project_tree, ui, &mut ExplorerUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

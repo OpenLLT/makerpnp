@@ -3,7 +3,7 @@ use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
 use tracing::debug;
 
-use crate::project::{ProjectKey, ProjectTabKind, ProjectUiState};
+use crate::project::{ProjectTabKind, ProjectUiState};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
@@ -29,7 +29,6 @@ impl Default for ProjectTabs {
 
 // Not to be confused with the other one...
 pub struct ProjectTabContext {
-    pub key: ProjectKey,
     pub state: Value<ProjectUiState>,
 }
 

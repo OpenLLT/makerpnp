@@ -17,7 +17,7 @@ use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbMod
 use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
-use crate::project::explorer_tab::{ExplorerTab, ExplorerUi};
+use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi};
 use crate::project::parts_tab::{PartsTab, PartsUi};
 use crate::project::phase_tab::{PhaseTab, PhaseUi};
@@ -127,7 +127,7 @@ impl Project {
                 (key, ProjectUiCommand::ToolbarCommand(command))
             });
 
-        let project_ui_state = Value::new(ProjectUiState::new(name, component_sender.clone()));
+        let project_ui_state = Value::new(ProjectUiState::new(key, name, component_sender.clone()));
 
         let project_tabs = Value::new(ProjectTabs::default());
         {
@@ -206,6 +206,92 @@ impl Project {
             })
             .ok();
     }
+
+    fn navigate(&mut self, key: ProjectKey, path: ProjectPath) -> Option<ProjectAction> {
+        // if the path starts with `/project/` then show/hide UI elements based on the path,
+        // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
+        info!("ProjectMessage::Navigate. path: {}", path);
+
+        #[must_use]
+        fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            if path.eq(&"/project/".into()) {
+                project.show_overview();
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::Overview,
+                )));
+
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
+        fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            if path.eq(&"/project/placements".into()) {
+                project.show_placements();
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::Placements,
+                )));
+
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
+        fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            if path.eq(&"/project/parts".into()) {
+                project.show_parts();
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::Parts,
+                )));
+
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
+        fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
+            if let Some(captures) = phase_pattern.captures(&path) {
+                let phase_reference: String = captures
+                    .name("phase")
+                    .unwrap()
+                    .as_str()
+                    .to_string();
+                debug!("phase_reference: {}", phase_reference);
+
+                project.show_phase(phase_reference.clone().into());
+
+                let tasks: Vec<_> = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhaseOverview {
+                            phase: phase_reference.clone(),
+                        },
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhasePlacements {
+                            phase: phase_reference.clone(),
+                        },
+                    ))),
+                ];
+
+                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+            } else {
+                None
+            }
+        }
+
+        let handlers = [handle_root, handle_parts, handle_placements, handle_phase];
+
+        handlers
+            .iter()
+            .find_map(|handler| handler(self, &key, &path))
+    }
 }
 
 pub struct ProjectContext {
@@ -236,7 +322,6 @@ impl UiComponent for Project {
         });
 
         let mut tab_context = ProjectTabContext {
-            key: *key,
             state: self.project_ui_state.clone(),
         };
 
@@ -404,100 +489,21 @@ impl UiComponent for Project {
                 self.modified = modified_state;
                 Some(ProjectAction::SetModifiedState(modified_state))
             }
-            ProjectUiCommand::Navigate(path) => {
-                {
-                    let mut state = self.project_ui_state.lock().unwrap();
-                    state.project_tree.select_path(&path);
+
+            ProjectUiCommand::ExplorerUiCommand(command) => {
+                let context = &mut ExplorerUiContext::default();
+                let explorer_ui_action = self
+                    .project_ui_state
+                    .lock()
+                    .unwrap()
+                    .project_tree
+                    .update(command, context);
+                match explorer_ui_action {
+                    Some(ExplorerUiAction::Navigate(path)) => self.navigate(key, path),
+                    _ => None,
                 }
-
-                // if the path starts with `/project/` then show/hide UI elements based on the path,
-                // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
-                info!("ProjectMessage::Navigate. path: {}", path);
-
-                #[must_use]
-                fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-                    if path.eq(&"/project/".into()) {
-                        project.show_overview();
-                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::Overview,
-                        )));
-
-                        Some(ProjectAction::Task(*key, task))
-                    } else {
-                        None
-                    }
-                }
-
-                #[must_use]
-                fn handle_placements(
-                    project: &mut Project,
-                    key: &ProjectKey,
-                    path: &ProjectPath,
-                ) -> Option<ProjectAction> {
-                    if path.eq(&"/project/placements".into()) {
-                        project.show_placements();
-                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::Placements,
-                        )));
-
-                        Some(ProjectAction::Task(*key, task))
-                    } else {
-                        None
-                    }
-                }
-
-                #[must_use]
-                fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-                    if path.eq(&"/project/parts".into()) {
-                        project.show_parts();
-                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::Parts,
-                        )));
-
-                        Some(ProjectAction::Task(*key, task))
-                    } else {
-                        None
-                    }
-                }
-
-                #[must_use]
-                fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-                    let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
-                    if let Some(captures) = phase_pattern.captures(&path) {
-                        let phase_reference: String = captures
-                            .name("phase")
-                            .unwrap()
-                            .as_str()
-                            .to_string();
-                        debug!("phase_reference: {}", phase_reference);
-
-                        project.show_phase(phase_reference.clone().into());
-
-                        let tasks: Vec<_> = vec![
-                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                ProjectViewRequest::PhaseOverview {
-                                    phase: phase_reference.clone(),
-                                },
-                            ))),
-                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                ProjectViewRequest::PhasePlacements {
-                                    phase: phase_reference.clone(),
-                                },
-                            ))),
-                        ];
-
-                        Some(ProjectAction::Task(*key, Task::batch(tasks)))
-                    } else {
-                        None
-                    }
-                }
-
-                let handlers = [handle_root, handle_parts, handle_placements, handle_phase];
-
-                handlers
-                    .iter()
-                    .find_map(|handler| handler(self, &key, &path))
             }
+
             ProjectUiCommand::ToolbarCommand(toolbar_command) => {
                 let action = self
                     .toolbar
@@ -541,12 +547,11 @@ impl UiComponent for Project {
             ProjectUiCommand::TabCommand(tab_command) => {
                 let mut project_tabs = self.project_tabs.lock().unwrap();
 
-                let mut context = ProjectTabContext {
-                    key,
+                let mut tab_context = ProjectTabContext {
                     state: self.project_ui_state.clone(),
                 };
 
-                let action = project_tabs.update(tab_command, &mut context);
+                let action = project_tabs.update(tab_command, &mut tab_context);
                 match action {
                     None => {}
                     Some(ProjectTabAction::None) => {
@@ -662,15 +667,24 @@ pub struct ProjectUiState {
 }
 
 impl ProjectUiState {
-    pub fn new(name: Option<String>, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
-        Self {
+    pub fn new(key: ProjectKey, name: Option<String>, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
+        let mut instance = Self {
             name,
             phases: HashMap::default(),
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
             parts_ui: PartsUi::new(),
-            project_tree: ExplorerUi::new(sender),
-        }
+            project_tree: ExplorerUi::new(),
+        };
+
+        instance
+            .project_tree
+            .component
+            .configure_mapper(sender, move |explorer_ui_command| {
+                (key, ProjectUiCommand::ExplorerUiCommand(explorer_ui_command))
+            });
+
+        instance
     }
 }
 
@@ -696,7 +710,6 @@ pub enum ProjectUiCommand {
     SetModifiedState(bool),
     RequestView(ProjectViewRequest),
     ClearErrors,
-    Navigate(ProjectPath),
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
     AddPcbModalCommand(AddPcbModalUiCommand),
@@ -704,6 +717,7 @@ pub enum ProjectUiCommand {
     Created,
     CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
     ProjectRefreshed,
+    ExplorerUiCommand(ExplorerUiCommand),
 }
 
 #[derive(Debug, Clone)]
