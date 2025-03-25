@@ -51,8 +51,7 @@ pub enum PhaseUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PhaseUiContext {
-}
+pub struct PhaseUiContext {}
 
 impl UiComponent for PhaseUi {
     type UiContext<'context> = PhaseUiContext;
@@ -67,7 +66,9 @@ impl UiComponent for PhaseUi {
             match table_action {
                 Some(TableAction::ColumnHeaderClicked(index)) => {
                     self.component
-                        .send(PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked { column: index });
+                        .send(PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked {
+                            column: index,
+                        });
                 }
                 None => {}
             }
@@ -81,8 +82,11 @@ impl UiComponent for PhaseUi {
     ) -> Option<Self::UiAction> {
         match command {
             PhaseUiCommand::None => Some(PhaseUiAction::None),
-            PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked { column } => {
-                self.table_state.on_column_header_clicked(ColumnIdx(column));
+            PhaseUiCommand::PhasePlacementsTableColumnHeaderClicked {
+                column,
+            } => {
+                self.table_state
+                    .on_column_header_clicked(ColumnIdx(column));
 
                 None
             }

@@ -49,7 +49,11 @@ impl PlacementsStateTableState {
 
 impl<'a> PlacementStateTable<'a> {
     fn new(placements: &'a Vec<PlacementState>, state: &'a PlacementsStateTableState) -> Self {
-        Self { placements, state, action: None }
+        Self {
+            placements,
+            state,
+            action: None,
+        }
     }
 
     pub fn cell_content_ui(&self, row_nr: u64, col_nr: usize, ui: &mut egui::Ui) {
@@ -118,68 +122,73 @@ impl egui_table::TableDelegate for PlacementStateTable<'_> {
 
         let col = ColumnIdx(cell.group_index);
 
-        let response = ui.scope_builder(UiBuilder::new()
-            .sense(Sense::click()), |ui|{
+        let response = ui
+            .scope_builder(UiBuilder::new().sense(Sense::click()), |ui| {
+                egui::Frame::NONE
+                    .inner_margin(Margin::symmetric(4, 0))
+                    .show(ui, |ui| {
+                        egui::Sides::new()
+                            .height(ui.available_height())
+                            .show(
+                                ui,
+                                |ui| {
+                                    let label = match cell.group_index {
+                                        0 => Label::new(tr!("table-placements-column-index")).selectable(false),
+                                        1 => Label::new(
+                                            RichText::new(tr!("table-placements-column-object-path")).strong(),
+                                        )
+                                        .selectable(false),
+                                        2 => Label::new(RichText::new(tr!("table-placements-column-refdes")).strong())
+                                            .selectable(false),
+                                        3 => Label::new(RichText::new(tr!("table-placements-column-placed")).strong())
+                                            .selectable(false),
+                                        4 => Label::new(
+                                            RichText::new(tr!("table-placements-column-manufacturer")).strong(),
+                                        )
+                                        .selectable(false),
+                                        5 => Label::new(RichText::new(tr!("table-placements-column-mpn")).strong())
+                                            .selectable(false),
+                                        6 => {
+                                            Label::new(RichText::new(tr!("table-placements-column-rotation")).strong())
+                                                .selectable(false)
+                                        }
+                                        7 => Label::new(RichText::new(tr!("table-placements-column-x")).strong())
+                                            .selectable(false),
+                                        8 => Label::new(RichText::new(tr!("table-placements-column-y")).strong())
+                                            .selectable(false),
+                                        9 => {
+                                            Label::new(RichText::new(tr!("table-placements-column-pcb-side")).strong())
+                                                .selectable(false)
+                                        }
+                                        _ => unreachable!(),
+                                    };
+                                    //let label = label.sense(Sense::click());
+                                    ui.add(label)
+                                },
+                                |ui| {
+                                    if let Some(pos) = self
+                                        .state
+                                        .sort
+                                        .iter()
+                                        .position(|(c, ..)| c == &col)
+                                    {
+                                        let is_asc = self.state.sort[pos].1.0 as usize;
 
-            egui::Frame::NONE
-                .inner_margin(Margin::symmetric(4, 0))
-                .show(ui, |ui| {
-                    egui::Sides::new()
-                        .height(ui.available_height())
-                        .show(
-                            ui,
-                            |ui| {
-                                let label = match cell.group_index {
-                                    0 => Label::new(tr!("table-placements-column-index")).selectable(false),
-                                    1 => Label::new(RichText::new(tr!("table-placements-column-object-path")).strong())
-                                        .selectable(false),
-                                    2 => Label::new(RichText::new(tr!("table-placements-column-refdes")).strong())
-                                        .selectable(false),
-                                    3 => Label::new(RichText::new(tr!("table-placements-column-placed")).strong())
-                                        .selectable(false),
-                                    4 => Label::new(RichText::new(tr!("table-placements-column-manufacturer")).strong())
-                                        .selectable(false),
-                                    5 => Label::new(RichText::new(tr!("table-placements-column-mpn")).strong())
-                                        .selectable(false),
-                                    6 => Label::new(RichText::new(tr!("table-placements-column-rotation")).strong())
-                                        .selectable(false),
-                                    7 => Label::new(RichText::new(tr!("table-placements-column-x")).strong())
-                                        .selectable(false),
-                                    8 => Label::new(RichText::new(tr!("table-placements-column-y")).strong())
-                                        .selectable(false),
-                                    9 => Label::new(RichText::new(tr!("table-placements-column-pcb-side")).strong())
-                                        .selectable(false),
-                                    _ => unreachable!(),
-                                };
-                                //let label = label.sense(Sense::click());
-                                ui.add(label)
-                            },
-                            |ui| {
-                                if let Some(pos) = self
-                                    .state
-                                    .sort
-                                    .iter()
-                                    .position(|(c, ..)| c == &col)
-                                {
-                                    let is_asc = self.state.sort[pos].1.0 as usize;
-
-                                    ui.colored_label(
-                                        [green, Color32::RED][is_asc],
-                                        RichText::new(format!("{}{}", ["↘", "↗"][is_asc], pos + 1,)).monospace(),
-                                    )
-                                } else {
-                                    ui.monospace(" ")
-                                }
-                            },
-                        );
-                    // end of frame
-                })
-        })
+                                        ui.colored_label(
+                                            [green, Color32::RED][is_asc],
+                                            RichText::new(format!("{}{}", ["↘", "↗"][is_asc], pos + 1,)).monospace(),
+                                        )
+                                    } else {
+                                        ui.monospace(" ")
+                                    }
+                                },
+                            );
+                        // end of frame
+                    })
+            })
             .response;
 
-        if response
-            .clicked()
-        {
+        if response.clicked() {
             debug!("clicked column-index: {}", cell.group_index);
 
             let action = TableAction::ColumnHeaderClicked(cell.group_index);
@@ -210,7 +219,11 @@ impl egui_table::TableDelegate for PlacementStateTable<'_> {
 pub enum TableAction {
     ColumnHeaderClicked(usize),
 }
-pub fn show_placements(ui: &mut Ui, placements: &Vec<PlacementState>, state: &PlacementsStateTableState) -> Option<TableAction> {
+pub fn show_placements(
+    ui: &mut Ui,
+    placements: &Vec<PlacementState>,
+    state: &PlacementsStateTableState,
+) -> Option<TableAction> {
     let id_salt = Id::new("table_demo");
     let state_id = egui_table::Table::new()
         .id_salt(id_salt)

@@ -57,7 +57,9 @@ impl UiComponent for PlacementsUi {
             match table_action {
                 Some(TableAction::ColumnHeaderClicked(index)) => {
                     self.component
-                        .send(PlacementsUiCommand::PlacementsTableColumnHeaderClicked { column: index });
+                        .send(PlacementsUiCommand::PlacementsTableColumnHeaderClicked {
+                            column: index,
+                        });
                 }
                 None => {}
             }
@@ -71,8 +73,11 @@ impl UiComponent for PlacementsUi {
     ) -> Option<Self::UiAction> {
         match command {
             PlacementsUiCommand::None => Some(PlacementsUiAction::None),
-            PlacementsUiCommand::PlacementsTableColumnHeaderClicked { column } => {
-                self.table_state.on_column_header_clicked(ColumnIdx(column));
+            PlacementsUiCommand::PlacementsTableColumnHeaderClicked {
+                column,
+            } => {
+                self.table_state
+                    .on_column_header_clicked(ColumnIdx(column));
                 None
             }
         }
