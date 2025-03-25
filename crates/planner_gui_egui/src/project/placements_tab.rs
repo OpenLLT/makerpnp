@@ -5,7 +5,6 @@ use planner_app::PlacementsList;
 use crate::project::tables;
 use crate::project::tables::{ColumnIdx, PlacementsStateTableState, TableAction};
 use crate::project::tabs::ProjectTabContext;
-use crate::project::{ProjectKey, ProjectUiCommand, tables};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
