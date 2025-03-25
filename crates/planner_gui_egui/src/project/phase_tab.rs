@@ -6,11 +6,14 @@ use tracing::debug;
 use crate::project::tables;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
+use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
 pub struct PhaseUi {
     overview: Option<PhaseOverview>,
     placements: Option<PhasePlacements>,
+
+    pub component: ComponentState<PhaseUiCommand>,
 }
 
 impl PhaseUi {
@@ -18,6 +21,7 @@ impl PhaseUi {
         Self {
             overview: None,
             placements: None,
+            component: Default::default(),
         }
     }
 
@@ -28,6 +32,42 @@ impl PhaseUi {
     pub fn update_placements(&mut self, phase_placements: PhasePlacements) {
         self.placements
             .replace(phase_placements);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PhaseUiCommand {
+    None,
+}
+
+#[derive(Debug, Clone)]
+pub enum PhaseUiAction {
+    None,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PhaseUiContext {}
+
+impl UiComponent for PhaseUi {
+    type UiContext<'context> = PhaseUiContext;
+    type UiCommand = PhaseUiCommand;
+    type UiAction = PhaseUiAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        if let Some(phase_placements) = &self.placements {
+            ui.label(tr!("phase-placements-header"));
+            tables::show_placements(ui, &phase_placements.placements)
+        }
+    }
+
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
+        match command {
+            PhaseUiCommand::None => Some(PhaseUiAction::None),
+        }
     }
 }
 
@@ -54,11 +94,8 @@ impl Tab for PhaseTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let phase = state.phases.get(&self.phase).unwrap();
-        if let Some(phase_placements) = &phase.placements {
-            ui.label(tr!("phase-placements-header"));
-            tables::show_placements(ui, &phase_placements.placements)
-        }
+        let phase_ui = state.phases.get(&self.phase).unwrap();
+        UiComponent::ui(phase_ui, ui, &mut PhaseUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {

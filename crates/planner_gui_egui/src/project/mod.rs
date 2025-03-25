@@ -20,7 +20,7 @@ use crate::project::dialogs::create_unit_assignment::{
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
 use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
-use crate::project::phase_tab::{PhaseTab, PhaseUi};
+use crate::project::phase_tab::{PhaseTab, PhaseUi, PhaseUiAction, PhaseUiCommand, PhaseUiContext};
 use crate::project::placements_tab::{
     PlacementsTab, PlacementsUi, PlacementsUiAction, PlacementsUiCommand, PlacementsUiContext,
 };
@@ -190,7 +190,7 @@ impl Project {
         }
     }
 
-    pub fn show_phase(&mut self, phase: Reference) {
+    pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
         project_tabs
@@ -199,14 +199,35 @@ impl Project {
                 debug!("showing existing phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .inspect_err(|_| {
-                let mut state = self.project_ui_state.lock().unwrap();
-                state
-                    .phases
-                    .insert(phase.clone(), PhaseUi::new());
+                self.ensure_phase(key, phase.clone());
+
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Phase(tab));
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .ok();
+    }
+
+    fn ensure_phase(&self, key: ProjectKey, phase: Reference) {
+        let mut state = self.project_ui_state.lock().unwrap();
+        let _phase_state = state
+            .phases
+            .entry(phase.clone())
+            .or_insert_with(|| {
+                let mut phase_ui = PhaseUi::new();
+                phase_ui
+                    .component
+                    .configure_mapper(self.component.sender.clone(), {
+                        move |command| {
+                            debug!("placements ui mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::PhaseUiCommand {
+                                phase: phase.clone(),
+                                command,
+                            })
+                        }
+                    });
+
+                phase_ui
+            });
     }
 
     fn navigate(&mut self, key: ProjectKey, path: ProjectPath) -> Option<ProjectAction> {
@@ -267,7 +288,7 @@ impl Project {
                     .to_string();
                 debug!("phase_reference: {}", phase_reference);
 
-                project.show_phase(phase_reference.clone().into());
+                project.show_phase(key.clone(), phase_reference.clone().into());
 
                 let tasks: Vec<_> = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
@@ -442,21 +463,23 @@ impl UiComponent for Project {
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
+
+                        self.ensure_phase(key.clone(), phase.clone());
+
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state
-                            .phases
-                            .entry(phase.clone())
-                            .or_insert(PhaseUi::new());
+                        let phase_state = state.phases.get_mut(&phase).unwrap();
+
                         phase_state.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
+
+                        self.ensure_phase(key.clone(), phase.clone());
+
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state
-                            .phases
-                            .entry(phase.clone())
-                            .or_insert(PhaseUi::new());
+                        let phase_state = state.phases.get_mut(&phase).unwrap();
+
                         phase_state.update_placements(phase_placements);
                     }
                     ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
@@ -530,15 +553,29 @@ impl UiComponent for Project {
                     None => None,
                 }
             }
+            ProjectUiCommand::PhaseUiCommand {
+                phase,
+                command,
+            } => {
+                let mut state = self.project_ui_state.lock().unwrap();
+                let phase_ui = state.phases.get_mut(&phase).unwrap();
+
+                let context = &mut PhaseUiContext::default();
+                let phase_ui_action = phase_ui.update(command, context);
+                match phase_ui_action {
+                    Some(PhaseUiAction::None) => None,
+                    None => None,
+                }
+            }
             ProjectUiCommand::PlacementsUiCommand(command) => {
                 let context = &mut PlacementsUiContext::default();
-                let parts_ui_action = self
+                let placements_ui_action = self
                     .project_ui_state
                     .lock()
                     .unwrap()
                     .placements_ui
                     .update(command, context);
-                match parts_ui_action {
+                match placements_ui_action {
                     Some(PlacementsUiAction::None) => None,
                     None => None,
                 }
@@ -785,6 +822,7 @@ pub enum ProjectUiCommand {
     PartsUiCommand(PartsUiCommand),
     OverviewUiCommand(OverviewUiCommand),
     PlacementsUiCommand(PlacementsUiCommand),
+    PhaseUiCommand { phase: Reference, command: PhaseUiCommand },
 }
 
 #[derive(Debug, Clone)]
