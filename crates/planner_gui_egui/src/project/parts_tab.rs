@@ -9,7 +9,7 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{Part, PartStates, ProcessName};
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
@@ -263,6 +263,24 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn confirm_row_deletion_by_ui(&mut self, _row: &PartStatesRow) -> bool {
         false
+    }
+
+    fn on_row_updated(&mut self, row_index: usize, row: &PartStatesRow) {
+        trace!("on_row_updated. row_index {}, row: {:?}", row_index, row);
+    }
+
+    fn on_row_inserted(&mut self, row_index: usize, row: &PartStatesRow) {
+        trace!("on_row_inserted. row_index {}, row: {:?}", row_index, row);
+
+        // should not be possible, since row insertion/deletion is prevented, this is a bug.
+        unreachable!();
+    }
+
+    fn on_row_removed(&mut self, row_index: usize, row: &PartStatesRow) {
+        trace!("on_row_removed. row_index {}, row: {:?}", row_index, row);
+
+        // should not be possible, since row insertion/deletion is prevented, this is a bug.
+        unreachable!();
     }
 }
 

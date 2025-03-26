@@ -32,7 +32,7 @@ egui_extras = { workspace = true }
 # need 'opened' functionality
 egui_ltreeview = { git = "https://github.com/MakerPnP/egui_ltreeview.git", rev ="9ddc522493f2420744714097bc783c659228a318", features = ["persistence", "serde"]}
 #egui_ltreeview = { workspace = true, features = ["persistence", "serde"] }
-egui-data-table = { git = "https://github.com/MakerPnP/egui-data-table.git", rev ="fd7d535ca72afd36d8ae724e4a86d5080645c96e" }
+egui-data-table = { git = "https://github.com/MakerPnP/egui-data-table.git", rev ="a53e35a55ae93cea4f83cd893ad4cdc8cb02d89a" }
 
 rfd = { workspace = true }
 
