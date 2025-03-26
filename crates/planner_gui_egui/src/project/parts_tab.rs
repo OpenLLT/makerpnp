@@ -1,4 +1,6 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::str::FromStr;
 
 use derivative::Derivative;
 use egui::{Response, Ui, WidgetText};
@@ -6,7 +8,7 @@ use egui_data_table::viewer::CellWriteContext;
 use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::types::Value;
-use planner_app::{Part, PartStates, PartWithState};
+use planner_app::{Part, PartStates, ProcessName};
 use tracing::debug;
 
 use crate::project::tabs::ProjectTabContext;
@@ -34,23 +36,32 @@ impl PartsUi {
     pub fn update_part_states(&mut self, mut part_states: PartStates) {
         //self.part_states.replace(part_states);
 
+        // TODO get this from somewhere, don't build here
+        let processes: Vec<ProcessName> = vec![
+            ProcessName::from_str("manual").unwrap(),
+            ProcessName::from_str("pnp").unwrap(),
+        ];
+
         let mut part_states_table = self.part_states_table.lock().unwrap();
         let table: DataTable<PartStatesRow> = {
             part_states
                 .parts
                 .drain(0..)
                 .map(|part_state| {
-                    // todo, build dynamically
-                    let processes = vec![(true, "Manual".into()), (false, "PnP".into())];
+                    let enabled_processes = processes
+                        .iter()
+                        .map(|process| (process.clone(), part_state.processes.contains(process)))
+                        .collect::<HashMap<ProcessName, bool>>();
+
                     PartStatesRow {
-                        part_state,
-                        processes,
+                        part: part_state.part,
+                        processes: enabled_processes,
                     }
                 })
         }
         .collect();
 
-        part_states_table.replace((PartStatesRowViewer::default(), table));
+        part_states_table.replace((PartStatesRowViewer::new(processes), table));
     }
 }
 
@@ -93,12 +104,21 @@ impl UiComponent for PartsUi {
 
 #[derive(Debug)]
 struct PartStatesRow {
-    part_state: PartWithState,
-    processes: Vec<(bool, String)>,
+    part: Part,
+    processes: HashMap<ProcessName, bool>,
 }
 
-#[derive(Default)]
-struct PartStatesRowViewer;
+struct PartStatesRowViewer {
+    processes: Vec<ProcessName>,
+}
+
+impl PartStatesRowViewer {
+    pub fn new(processes: Vec<ProcessName>) -> Self {
+        Self {
+            processes,
+        }
+    }
+}
 
 impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     fn num_columns(&mut self) -> usize {
@@ -109,22 +129,29 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
         [true, true, true][column]
     }
 
+    fn is_editable_cell(&mut self, column: usize, _row: usize) -> bool {
+        column == 2
+    }
+
+    fn allow_row_insertions(&mut self) -> bool {
+        false
+    }
+
+    fn allow_row_deletions(&mut self) -> bool {
+        false
+    }
+
     fn compare_cell(&self, row_l: &PartStatesRow, row_r: &PartStatesRow, column: usize) -> std::cmp::Ordering {
         match column {
             0 => row_l
-                .part_state
                 .part
                 .manufacturer
-                .cmp(&row_r.part_state.part.manufacturer),
-            1 => row_l
-                .part_state
-                .part
-                .mpn
-                .cmp(&row_r.part_state.part.mpn),
+                .cmp(&row_r.part.manufacturer),
+            1 => row_l.part.mpn.cmp(&row_r.part.mpn),
             2 => row_l
-                .part_state
                 .processes
-                .cmp(&row_r.part_state.processes),
+                .iter()
+                .cmp(&row_r.processes),
             _ => unreachable!(),
         }
     }
@@ -141,13 +168,13 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn show_cell_view(&mut self, ui: &mut Ui, row: &PartStatesRow, column: usize) {
         let _ = match column {
-            0 => ui.label(&row.part_state.part.manufacturer),
-            1 => ui.label(&row.part_state.part.mpn),
+            0 => ui.label(&row.part.manufacturer),
+            1 => ui.label(&row.part.mpn),
             2 => {
                 let processes: String = row
                     .processes
                     .iter()
-                    .filter_map(|(enabled, name)| match enabled {
+                    .filter_map(|(name, enabled)| match enabled {
                         true => Some(name.to_string()),
                         false => None,
                     })
@@ -166,8 +193,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             2 => {
                 let ui = ui.add(|ui: &mut Ui| {
                     ui.horizontal_wrapped(|ui| {
-                        for (enabled, name) in row.processes.iter_mut() {
-                            ui.checkbox(enabled, name.clone());
+                        for (name, enabled) in row.processes.iter_mut() {
+                            ui.checkbox(enabled, name.to_string());
                         }
                     })
                     .response
@@ -181,19 +208,12 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     fn set_cell_value(&mut self, src: &PartStatesRow, dst: &mut PartStatesRow, column: usize) {
         match column {
             0 => dst
-                .part_state
                 .part
                 .manufacturer
-                .clone_from(&src.part_state.part.manufacturer),
-            1 => dst
-                .part_state
-                .part
-                .mpn
-                .clone_from(&src.part_state.part.mpn),
+                .clone_from(&src.part.manufacturer),
+            1 => dst.part.mpn.clone_from(&src.part.mpn),
             2 => {
-                dst.part_state
-                    .processes
-                    .clone_from(&src.part_state.processes);
+                dst.processes.clone_from(&src.processes);
                 dst.processes.clone_from(&src.processes);
             }
             _ => unreachable!(),
@@ -201,16 +221,18 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn new_empty_row(&mut self) -> PartStatesRow {
-        // FIXME why do we need to implement this?
+        let enabled_processes = self
+            .processes
+            .iter()
+            .map(|process| (process.clone(), false))
+            .collect::<HashMap<ProcessName, bool>>();
+
         PartStatesRow {
-            part_state: PartWithState {
-                part: Part {
-                    manufacturer: "".to_string(),
-                    mpn: "".to_string(),
-                },
-                processes: vec![],
+            part: Part {
+                manufacturer: "".to_string(),
+                mpn: "".to_string(),
             },
-            processes: vec![],
+            processes: enabled_processes,
         }
     }
 

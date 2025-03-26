@@ -1719,8 +1719,7 @@ dependencies = [
 [[package]]
 name = "egui-data-table"
 version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74e244a1ac14a16eebb36edeb29c0ef9806fde8e5daa8b0c9152e449ce70538a"
+source = "git+https://github.com/MakerPnP/egui-data-table.git?rev=fce13643dac110c5f4025d33f7dceec8d237e659#fce13643dac110c5f4025d33f7dceec8d237e659"
 dependencies = [
  "egui",
  "egui_extras",
