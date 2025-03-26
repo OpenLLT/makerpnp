@@ -34,10 +34,8 @@ impl PartsUi {
     }
 
     pub fn update_part_states(&mut self, mut part_states: PartStates) {
-        //self.part_states.replace(part_states);
-
         // TODO get this from somewhere, don't build here
-        let processes: Vec<ProcessName> = vec![
+        let mut processes: Vec<ProcessName> = vec![
             ProcessName::from_str("manual").unwrap(),
             ProcessName::from_str("pnp").unwrap(),
         ];
@@ -51,11 +49,11 @@ impl PartsUi {
                     let enabled_processes = processes
                         .iter()
                         .map(|process| (process.clone(), part_state.processes.contains(process)))
-                        .collect::<HashMap<ProcessName, bool>>();
+                        .collect::<Vec<(ProcessName, bool)>>();
 
                     PartStatesRow {
                         part: part_state.part,
-                        processes: enabled_processes,
+                        enabled_processes,
                     }
                 })
         }
@@ -105,7 +103,7 @@ impl UiComponent for PartsUi {
 #[derive(Debug)]
 struct PartStatesRow {
     part: Part,
-    processes: HashMap<ProcessName, bool>,
+    enabled_processes: Vec<(ProcessName, bool)>,
 }
 
 struct PartStatesRowViewer {
@@ -113,7 +111,10 @@ struct PartStatesRowViewer {
 }
 
 impl PartStatesRowViewer {
-    pub fn new(processes: Vec<ProcessName>) -> Self {
+    pub fn new(mut processes: Vec<ProcessName>) -> Self {
+        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
+        // ordering.
+        processes.sort();
         Self {
             processes,
         }
@@ -149,9 +150,9 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 .cmp(&row_r.part.manufacturer),
             1 => row_l.part.mpn.cmp(&row_r.part.mpn),
             2 => row_l
-                .processes
+                .enabled_processes
                 .iter()
-                .cmp(&row_r.processes),
+                .cmp(&row_r.enabled_processes),
             _ => unreachable!(),
         }
     }
@@ -171,16 +172,18 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             0 => ui.label(&row.part.manufacturer),
             1 => ui.label(&row.part.mpn),
             2 => {
-                let processes: String = row
-                    .processes
+                // Note that the enabled_processes was built in the same order as self.processes.
+                let processes = row
+                    .enabled_processes
                     .iter()
                     .filter_map(|(name, enabled)| match enabled {
                         true => Some(name.to_string()),
                         false => None,
                     })
-                    .collect::<Vec<_>>()
-                    .join(",");
-                ui.label(processes)
+                    .collect::<Vec<_>>();
+
+                let processes_label: String = processes.join(", ");
+                ui.label(processes_label)
             }
             _ => unreachable!(),
         };
@@ -193,7 +196,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             2 => {
                 let ui = ui.add(|ui: &mut Ui| {
                     ui.horizontal_wrapped(|ui| {
-                        for (name, enabled) in row.processes.iter_mut() {
+                        // Note that the enabled_processes was built in the same order as self.processes.
+                        for (name, enabled) in row.enabled_processes.iter_mut() {
                             ui.checkbox(enabled, name.to_string());
                         }
                     })
@@ -213,8 +217,10 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 .clone_from(&src.part.manufacturer),
             1 => dst.part.mpn.clone_from(&src.part.mpn),
             2 => {
-                dst.processes.clone_from(&src.processes);
-                dst.processes.clone_from(&src.processes);
+                dst.enabled_processes
+                    .clone_from(&src.enabled_processes);
+                dst.enabled_processes
+                    .clone_from(&src.enabled_processes);
             }
             _ => unreachable!(),
         }
@@ -225,14 +231,14 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             .processes
             .iter()
             .map(|process| (process.clone(), false))
-            .collect::<HashMap<ProcessName, bool>>();
+            .collect::<Vec<(ProcessName, bool)>>();
 
         PartStatesRow {
             part: Part {
                 manufacturer: "".to_string(),
                 mpn: "".to_string(),
             },
-            processes: enabled_processes,
+            enabled_processes,
         }
     }
 
