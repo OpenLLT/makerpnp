@@ -129,7 +129,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
         [true, true, true][column]
     }
 
-    fn is_editable_cell(&mut self, column: usize, _row: usize) -> bool {
+    fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PartStatesRow) -> bool {
         column == 2
     }
 
