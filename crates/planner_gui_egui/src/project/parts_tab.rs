@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use derivative::Derivative;
 use egui::{Response, Ui, WidgetText};
@@ -11,6 +12,7 @@ use egui_mobius::types::Value;
 use planner_app::{Part, PartStates, ProcessName};
 use tracing::{debug, trace};
 
+use crate::i18n::datatable_support::FluentTranslator;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -85,7 +87,9 @@ impl UiComponent for PartsUi {
         ui.label(tr!("project-parts-header"));
         let mut part_states_table = self.part_states_table.lock().unwrap();
         if let Some((viewer, table)) = part_states_table.as_mut() {
-            ui.add(egui_data_table::Renderer::new(table, viewer));
+            let table_renderer =
+                egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
+            ui.add(table_renderer);
         }
     }
 

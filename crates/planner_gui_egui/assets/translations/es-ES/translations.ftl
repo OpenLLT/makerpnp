@@ -137,3 +137,23 @@ table-parts-column-index = #
 table-parts-column-manufacturer = Fabricante
 table-parts-column-mpn = MPN
 table-parts-column-processes = Procesos
+
+#
+# egui-data-tables
+#
+
+# cell context menu
+context-menu-selection-copy = Selección: Copiar
+context-menu-selection-cut = Selección: Cortar
+context-menu-selection-clear = Selección: Limpiar
+context-menu-selection-fill = Selección: Rellenar
+context-menu-clipboard-paste = Portapapeles: Pegar
+context-menu-clipboard-insert = Portapapeles: Insertar
+context-menu-row-duplicate = Fila: Duplicar
+context-menu-row-delete = Fila: Eliminar
+context-menu-undo = Deshacer
+context-menu-redo = Rehacer
+# column header context menu
+context-menu-hide = Ocultar columna
+context-menu-hidden = Columnas ocultas
+context-menu-clear-sort = Borrar ordenación

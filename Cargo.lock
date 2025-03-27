@@ -1719,7 +1719,7 @@ dependencies = [
 [[package]]
 name = "egui-data-table"
 version = "0.6.2"
-source = "git+https://github.com/MakerPnP/egui-data-table.git?rev=a53e35a55ae93cea4f83cd893ad4cdc8cb02d89a#a53e35a55ae93cea4f83cd893ad4cdc8cb02d89a"
+source = "git+https://github.com/MakerPnP/egui-data-table.git?rev=9e7747134f31b99a3f72c6a2da3ce392a44a28d9#9e7747134f31b99a3f72c6a2da3ce392a44a28d9"
 dependencies = [
  "egui",
  "egui_extras",
