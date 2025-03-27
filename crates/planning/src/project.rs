@@ -28,6 +28,7 @@ use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
 use crate::operation_history::{OperationHistoryItem, OperationHistoryKind};
+use crate::operations::AddOrRemoveOperation;
 use crate::part::PartState;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
 use crate::placement::{
@@ -713,14 +714,16 @@ fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, 
     changes
 }
 
-// TODO currently only supports adding a process, add support for removing a process too.
+#[must_use]
 pub fn update_applicable_processes(
     project: &mut Project,
     all_parts: &[Part],
     process: Process,
+    operation: AddOrRemoveOperation,
     manufacturer_pattern: Regex,
     mpn_pattern: Regex,
-) {
+) -> bool {
+    let mut modified = false;
     let changes = find_part_changes(project, all_parts);
 
     for change in changes.iter() {
@@ -732,7 +735,14 @@ pub fn update_applicable_processes(
                         .part_states
                         .entry(part.clone())
                         .and_modify(|part_state| {
-                            add_process_to_part(part_state, part, process.name.clone());
+                            modified |= match operation {
+                                AddOrRemoveOperation::Add => {
+                                    add_process_to_part(part_state, part, process.name.clone())
+                                }
+                                AddOrRemoveOperation::Remove => {
+                                    remove_process_from_part(part_state, part, process.name.clone())
+                                }
+                            }
                         });
                 }
             }
@@ -741,9 +751,12 @@ pub fn update_applicable_processes(
             }
         }
     }
+
+    modified
 }
 
-pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: ProcessName) {
+#[must_use]
+pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: ProcessName) -> bool {
     let inserted = part_state
         .applicable_processes
         .insert(process);
@@ -759,6 +772,29 @@ pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: Pro
                 .collect::<Vec<String>>()
         );
     }
+
+    inserted
+}
+
+#[must_use]
+pub fn remove_process_from_part(part_state: &mut PartState, part: &Part, process: ProcessName) -> bool {
+    let removed = part_state
+        .applicable_processes
+        .remove(&process);
+
+    if removed {
+        info!(
+            "Removed process. part: {:?}, applicable_processes: {:?}",
+            part,
+            part_state
+                .applicable_processes
+                .iter()
+                .map(|it| it.to_string())
+                .collect::<Vec<String>>()
+        );
+    }
+
+    removed
 }
 
 pub fn load(project_file_path: &PathBuf) -> Result<Project, std::io::Error> {
