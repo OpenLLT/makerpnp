@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use cli::args::{PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg, ProcessOperationSetArg};
+use cli::args::{
+    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg, ProcessOperationSetArg,
+};
 use planner_app::Event;
 use planning::design::DesignName;
 use planning::placement::PlacementSortingItem;
@@ -77,6 +79,10 @@ pub(crate) enum Command {
         /// Process name
         #[arg(long)]
         process: ProcessName,
+
+        /// Operation
+        #[arg(long)]
+        operation: AddOrRemoveOperationArg,
 
         /// Manufacturer pattern (regexp)
         #[arg(long)]
@@ -219,10 +225,12 @@ impl TryFrom<Opts> for Event {
             }),
             Command::AssignProcessToParts {
                 process,
+                operation,
                 manufacturer,
                 mpn,
             } => Ok(Event::AssignProcessToParts {
                 process,
+                operation: operation.into(),
                 manufacturer,
                 mpn,
             }),

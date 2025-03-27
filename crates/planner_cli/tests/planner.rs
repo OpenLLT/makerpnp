@@ -456,6 +456,7 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "assign-process-to-parts",
             "--process manual",
+            "--operation add",
             "--manufacturer CONN_MFR.*",
             "--mpn .*",
         ]);
@@ -2201,10 +2202,11 @@ mod help {
         let expected_output = indoc! {"
             Assign a process to parts
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-process-to-parts [OPTIONS] --process <PROCESS> --manufacturer <MANUFACTURER> --mpn <MPN>
+            Usage: planner_cli <--project <PROJECT_NAME>> assign-process-to-parts [OPTIONS] --process <PROCESS> --operation <OPERATION> --manufacturer <MANUFACTURER> --mpn <MPN>
 
             Options:
                   --process <PROCESS>            Process name
+                  --operation <OPERATION>        Operation [possible values: add, remove]
                   --manufacturer <MANUFACTURER>  Manufacturer pattern (regexp)
                   --mpn <MPN>                    Manufacturer part number (regexp)
               -v, --verbose...                   Increase logging verbosity

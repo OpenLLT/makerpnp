@@ -8,6 +8,7 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
+pub use planning::operations::AddOrRemoveOperation;
 pub use planning::placement::PlacementState;
 use planning::placement::{PlacementOperation, PlacementSortingItem};
 pub use planning::process::ProcessName;
@@ -239,6 +240,7 @@ pub enum Event {
     RefreshFromDesignVariants,
     AssignProcessToParts {
         process: ProcessName,
+        operation: AddOrRemoveOperation,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
@@ -430,6 +432,7 @@ impl Planner {
             }),
             Event::AssignProcessToParts {
                 process: process_name,
+                operation,
                 manufacturer: manufacturer_pattern,
                 mpn: mpn_pattern,
             } => Box::new(move |model: &mut Model| {
@@ -448,12 +451,13 @@ impl Planner {
                     .clone();
 
                 let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                *modified |= true;
+                *modified |= refresh_result.modified;
 
-                project::update_applicable_processes(
+                *modified |= project::update_applicable_processes(
                     project,
                     refresh_result.unique_parts.as_slice(),
                     process,
+                    operation,
                     manufacturer_pattern,
                     mpn_pattern,
                 );
@@ -527,7 +531,7 @@ impl Planner {
                         })
                         .map_err(AppError::PartError)?;
 
-                    project::add_process_to_part(part_state, part, phase.process.clone());
+                    *modified |= project::add_process_to_part(part_state, part, phase.process.clone());
                 }
 
                 stores::load_out::add_parts_to_load_out(

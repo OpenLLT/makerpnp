@@ -1,5 +1,6 @@
 use clap::ValueEnum;
 use eda::EdaTool;
+use planning::operations::AddOrRemoveOperation;
 use planning::placement::{PlacementOperation, PlacementSortingMode};
 use planning::process::{ProcessOperationKind, ProcessOperationSetItem};
 use pnp::pcb::{PcbKind, PcbSide};
@@ -70,6 +71,21 @@ impl From<PcbKindArg> for PcbKind {
         match value {
             PcbKindArg::Single => Self::Single,
             PcbKindArg::Panel => Self::Panel,
+        }
+    }
+}
+
+#[derive(ValueEnum, Debug, Clone)]
+pub enum AddOrRemoveOperationArg {
+    Add,
+    Remove,
+}
+
+impl From<AddOrRemoveOperationArg> for AddOrRemoveOperation {
+    fn from(value: AddOrRemoveOperationArg) -> Self {
+        match value {
+            AddOrRemoveOperationArg::Add => Self::Add,
+            AddOrRemoveOperationArg::Remove => Self::Remove,
         }
     }
 }
