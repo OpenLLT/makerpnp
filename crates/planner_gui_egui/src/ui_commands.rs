@@ -130,12 +130,14 @@ pub fn handle_command(
                                 ProjectAction::Task(_, _) => {
                                     // unsupported here, no corresponding TabCommands
                                     // should have already been handled by the project
+                                    // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::Task
                                     panic!("unsupported")
                                 }
 
                                 ProjectAction::SetModifiedState(_) => {
                                     // unsupported here, no corresponding TabCommands
                                     // should have already been handled by the project
+                                    // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::SetModifiedState
                                     panic!("unsupported")
                                 }
                             }

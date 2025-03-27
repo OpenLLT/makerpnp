@@ -20,6 +20,7 @@ impl PlannerCoreService {
         }
     }
 
+    #[must_use]
     pub fn update(&mut self, project_key: ProjectKey, event: Event) -> ResultHelper {
         debug!("event: {:?}", event);
 
@@ -116,6 +117,13 @@ impl ResultHelper {
                 }
             }
             Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
+        }
+    }
+
+    pub fn into_actions(self) -> Result<Vec<ProjectAction>, ProjectAction> {
+        match self.result {
+            Ok(actions) => Ok(actions),
+            Err(error) => Err(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
         }
     }
 }

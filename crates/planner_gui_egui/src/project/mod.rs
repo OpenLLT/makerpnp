@@ -8,7 +8,8 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference, VariantName,
+    AddOrRemoveOperation, DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
+    VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -574,21 +575,46 @@ impl UiComponent for Project {
                         part,
                         processes,
                     }) => {
+                        let mut tasks = vec![];
                         for (process, enabled) in processes {
-                            if enabled {
-                                self.planner_core_service
-                                    .update(key, Event::AssignProcessToParts {
-                                        process,
-                                        manufacturer: Regex::new(regex::escape(part.manufacturer.as_str()).as_str())
-                                            .unwrap(),
-                                        mpn: Regex::new(regex::escape(part.mpn.as_str()).as_str()).unwrap(),
-                                    });
-                            } else {
-                                // TODO add support for removing a process from a part
+                            let operation = match enabled {
+                                true => AddOrRemoveOperation::Add,
+                                false => AddOrRemoveOperation::Remove,
+                            };
+                            match self
+                                .planner_core_service
+                                .update(key, Event::AssignProcessToParts {
+                                    process,
+                                    operation,
+                                    manufacturer: Regex::new(regex::escape(part.manufacturer.as_str()).as_str())
+                                        .unwrap(),
+                                    mpn: Regex::new(regex::escape(part.mpn.as_str()).as_str()).unwrap(),
+                                })
+                                .into_actions()
+                            {
+                                Ok(actions) => {
+                                    debug!("actions: {:?}", actions);
+                                    let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                        .into_iter()
+                                        .map(Task::done)
+                                        .collect();
+                                    tasks.extend(effect_tasks);
+                                }
+                                Err(service_error) => {
+                                    tasks.push(Task::done(service_error));
+                                    break;
+                                }
                             }
                         }
 
-                        None
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::Parts,
+                        )));
+                        tasks.push(final_task);
+
+                        let action = ProjectAction::Task(key, Task::batch(tasks));
+
+                        Some(action)
                     }
                 }
             }

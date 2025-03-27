@@ -119,7 +119,7 @@ impl UiComponent for PartsUi {
 }
 
 #[derive(Debug, Clone)]
-struct PartStatesRow {
+pub struct PartStatesRow {
     part: Part,
     enabled_processes: Vec<(ProcessName, bool)>,
 }
