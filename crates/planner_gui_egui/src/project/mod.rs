@@ -509,9 +509,10 @@ impl UiComponent for Project {
                     ProjectView::Parts(part_states) => {
                         debug!("parts: {:?}", part_states);
                         let mut state = self.project_ui_state.lock().unwrap();
+
                         state
                             .parts_ui
-                            .update_part_states(part_states)
+                            .update_part_states(part_states, self.processes.clone())
                     }
                 }
                 None

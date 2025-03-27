@@ -35,13 +35,7 @@ impl PartsUi {
         }
     }
 
-    pub fn update_part_states(&mut self, mut part_states: PartStates) {
-        // TODO get this from somewhere, don't build here
-        let mut processes: Vec<ProcessName> = vec![
-            ProcessName::from_str("manual").unwrap(),
-            ProcessName::from_str("pnp").unwrap(),
-        ];
-
+    pub fn update_part_states(&mut self, mut part_states: PartStates, processes: Vec<ProcessName>) {
         let mut part_states_table = self.part_states_table.lock().unwrap();
         let table: DataTable<PartStatesRow> = {
             part_states
