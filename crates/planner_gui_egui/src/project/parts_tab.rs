@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -6,7 +7,7 @@ use egui::{Response, Ui, WidgetText};
 use egui_data_table::viewer::CellWriteContext;
 use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
-use egui_mobius::types::Value;
+use egui_mobius::types::{Enqueue, Value};
 use planner_app::{Part, PartStates, ProcessName};
 use tracing::{debug, trace};
 
@@ -53,18 +54,28 @@ impl PartsUi {
         }
         .collect();
 
-        part_states_table.replace((PartStatesRowViewer::new(processes), table));
+        part_states_table.replace((
+            PartStatesRowViewer::new(self.component.sender.clone(), processes),
+            table,
+        ));
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum PartsUiCommand {
     None,
+
+    // internal
+    RowUpdated(usize, PartStatesRow),
 }
 
 #[derive(Debug, Clone)]
 pub enum PartsUiAction {
     None,
+    UpdatePart {
+        part: Part,
+        processes: HashMap<ProcessName, bool>,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,11 +103,22 @@ impl UiComponent for PartsUi {
     ) -> Option<Self::UiAction> {
         match command {
             PartsUiCommand::None => Some(PartsUiAction::None),
+            PartsUiCommand::RowUpdated(_row_index, row) => {
+                let processes: HashMap<ProcessName, bool> = row
+                    .enabled_processes
+                    .into_iter()
+                    .collect();
+
+                Some(PartsUiAction::UpdatePart {
+                    part: row.part,
+                    processes,
+                })
+            }
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct PartStatesRow {
     part: Part,
     enabled_processes: Vec<(ProcessName, bool)>,
@@ -104,15 +126,17 @@ struct PartStatesRow {
 
 struct PartStatesRowViewer {
     processes: Vec<ProcessName>,
+    sender: Enqueue<PartsUiCommand>,
 }
 
 impl PartStatesRowViewer {
-    pub fn new(mut processes: Vec<ProcessName>) -> Self {
+    pub fn new(sender: Enqueue<PartsUiCommand>, mut processes: Vec<ProcessName>) -> Self {
         // sorting the processes here helps to ensure that the view vs edit list of processes has the same
         // ordering.
         processes.sort();
         Self {
             processes,
+            sender,
         }
     }
 }
@@ -263,6 +287,9 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn on_row_updated(&mut self, row_index: usize, row: &PartStatesRow) {
         trace!("on_row_updated. row_index {}, row: {:?}", row_index, row);
+        self.sender
+            .send(PartsUiCommand::RowUpdated(row_index, row.clone()))
+            .expect("sent");
     }
 
     fn on_row_inserted(&mut self, row_index: usize, row: &PartStatesRow) {

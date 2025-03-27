@@ -570,6 +570,26 @@ impl UiComponent for Project {
                 match parts_ui_action {
                     Some(PartsUiAction::None) => None,
                     None => None,
+                    Some(PartsUiAction::UpdatePart {
+                        part,
+                        processes,
+                    }) => {
+                        for (process, enabled) in processes {
+                            if enabled {
+                                self.planner_core_service
+                                    .update(key, Event::AssignProcessToParts {
+                                        process,
+                                        manufacturer: Regex::new(regex::escape(part.manufacturer.as_str()).as_str())
+                                            .unwrap(),
+                                        mpn: Regex::new(regex::escape(part.mpn.as_str()).as_str()).unwrap(),
+                                    });
+                            } else {
+                                // TODO add support for removing a process from a part
+                            }
+                        }
+
+                        None
+                    }
                 }
             }
             ProjectUiCommand::PhaseUiCommand {
