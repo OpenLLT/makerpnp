@@ -138,6 +138,8 @@ table-parts-column-manufacturer = Manufacturer
 table-parts-column-mpn = MPN
 table-parts-column-processes = Processes
 
+filter-expression = Search...
+
 #
 # egui-data-tables
 #
