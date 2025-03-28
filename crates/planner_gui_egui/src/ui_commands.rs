@@ -140,6 +140,9 @@ pub fn handle_command(
                                     // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::SetModifiedState
                                     panic!("unsupported")
                                 }
+                                ProjectAction::RequestRepaint => {
+                                    panic!("unsupported")
+                                }
                             }
                         }),
                         ProjectTabAction::SetModifiedState(modified_state) => {
@@ -150,6 +153,10 @@ pub fn handle_command(
                                 }
                                 _ => unreachable!(),
                             });
+                            Task::none()
+                        }
+                        ProjectTabAction::RequestRepaint => {
+                            ui_context.request_repaint();
                             Task::none()
                         }
                     },

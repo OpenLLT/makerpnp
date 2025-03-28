@@ -11,6 +11,7 @@ use egui_mobius::types::{Enqueue, Value};
 use planner_app::{Part, PartStates, ProcessName};
 use tracing::{debug, trace};
 
+use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
 use crate::i18n::datatable_support::FluentTranslator;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
@@ -67,6 +68,7 @@ pub enum PartsUiCommand {
 
     // internal
     RowUpdated(usize, PartStatesRow),
+    FilterCommand(FilterUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +78,7 @@ pub enum PartsUiAction {
         part: Part,
         processes: HashMap<ProcessName, bool>,
     },
+    RequestRepaint,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -89,11 +92,23 @@ impl UiComponent for PartsUi {
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-parts-header"));
         let mut part_states_table = self.part_states_table.lock().unwrap();
-        if let Some((viewer, table)) = part_states_table.as_mut() {
-            let table_renderer =
-                egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
-            ui.add(table_renderer);
+
+        if part_states_table.is_none() {
+            ui.spinner();
+            return;
         }
+
+        let (viewer, table) = part_states_table.as_mut().unwrap();
+
+        viewer
+            .filter
+            .ui(ui, &mut FilterUiContext::default());
+
+        ui.separator();
+
+        let table_renderer =
+            egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
+        ui.add(table_renderer);
     }
 
     fn update<'context>(
@@ -114,6 +129,21 @@ impl UiComponent for PartsUi {
                     processes,
                 })
             }
+            PartsUiCommand::FilterCommand(command) => {
+                let mut table = self.part_states_table.lock().unwrap();
+                if let Some((viewer, _table)) = &mut *table {
+                    let action = viewer
+                        .filter
+                        .update(command, &mut FilterUiContext::default());
+                    debug!("filter action: {:?}", action);
+                    match action {
+                        Some(FilterUiAction::ApplyFilter) => Some(PartsUiAction::RequestRepaint),
+                        None => None,
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -127,6 +157,7 @@ pub struct PartStatesRow {
 struct PartStatesRowViewer {
     processes: Vec<ProcessName>,
     sender: Enqueue<PartsUiCommand>,
+    filter: Filter,
 }
 
 impl PartStatesRowViewer {
@@ -134,9 +165,19 @@ impl PartStatesRowViewer {
         // sorting the processes here helps to ensure that the view vs edit list of processes has the same
         // ordering.
         processes.sort();
+
+        let mut filter = Filter::default();
+        filter
+            .component_state
+            .configure_mapper(sender.clone(), |filter_ui_command| {
+                debug!("filter ui mapper. command: {:?}", filter_ui_command);
+                PartsUiCommand::FilterCommand(filter_ui_command)
+            });
+
         Self {
             processes,
             sender,
+            filter,
         }
     }
 }
@@ -304,6 +345,27 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
         // should not be possible, since row insertion/deletion is prevented, this is a bug.
         unreachable!();
+    }
+
+    fn filter_row(&mut self, row: &PartStatesRow) -> bool {
+        let manufacturer_matched = self
+            .filter
+            .matches(&row.part.manufacturer);
+        let mpn_matched = self.filter.matches(&row.part.mpn);
+
+        // "Filter single row. If this returns false, the row will be hidden."
+        let result = manufacturer_matched || mpn_matched;
+
+        trace!(
+            "row: {:?}, manufacturer matched: {}, mpn matched: {}, result: {}",
+            row, manufacturer_matched, mpn_matched, result
+        );
+
+        result
+    }
+
+    fn row_filter_hash(&mut self) -> &impl std::hash::Hash {
+        &self.filter
     }
 }
 

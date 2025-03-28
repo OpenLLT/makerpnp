@@ -85,6 +85,7 @@ pub enum ProjectAction {
     Task(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
     UiCommand(ProjectUiCommand),
+    RequestRepaint,
 }
 
 pub struct Project {
@@ -616,6 +617,7 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
+                    Some(PartsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                 }
             }
             ProjectUiCommand::PhaseUiCommand {

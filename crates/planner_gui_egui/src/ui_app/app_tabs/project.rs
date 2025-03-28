@@ -36,6 +36,7 @@ pub enum ProjectTabUiCommand {
 pub enum ProjectTabAction {
     ProjectTask(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
+    RequestRepaint,
 }
 
 pub struct ProjectTabContext {
@@ -136,6 +137,7 @@ impl UiComponent for ProjectTab {
                     Some(ProjectAction::UiCommand(command)) => project
                         .update((key, command), &mut project_context)
                         .map(|action| ProjectTabAction::ProjectTask(key, Task::done(action))),
+                    Some(ProjectAction::RequestRepaint) => Some(ProjectTabAction::RequestRepaint),
                 }
             }
         }

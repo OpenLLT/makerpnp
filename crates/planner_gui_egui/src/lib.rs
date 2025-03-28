@@ -1,5 +1,6 @@
 pub mod config;
 pub mod file_picker;
+pub mod filter;
 pub mod fonts;
 pub mod forms;
 pub mod i18n;
