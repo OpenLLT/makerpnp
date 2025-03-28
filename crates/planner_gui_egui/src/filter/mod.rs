@@ -158,6 +158,7 @@ pub enum FilterUiCommand {
     ExpressionChanged(String),
     CaseSensitiveButtonClicked(bool),
     RegexButtonClicked(bool),
+    ClearExpressionClicked,
 }
 
 #[derive(Debug)]
@@ -174,10 +175,17 @@ impl UiComponent for Filter {
         ui.horizontal(|ui| {
             let mut expression = self.expression.clone();
             ui.add(egui::TextEdit::singleline(&mut expression).hint_text(tr!("filter-expression")));
+            
+            if ui.button("x").clicked() {
+                self.component_state
+                    .send(FilterUiCommand::ClearExpressionClicked)
+            };
+            
             if !expression.eq(&self.expression) {
                 self.component_state
                     .send(FilterUiCommand::ExpressionChanged(expression))
             }
+            
             ui.add_enabled_ui(self.does_mode_support_case_sensitivity(), |ui| {
                 let mut is_case_sensitive = self.is_case_sensitive();
                 if ui
@@ -208,6 +216,10 @@ impl UiComponent for Filter {
         match command {
             FilterUiCommand::ExpressionChanged(expression) => {
                 self.expression = expression;
+                Some(FilterUiAction::ApplyFilter)
+            }
+            FilterUiCommand::ClearExpressionClicked => {
+                self.expression.clear();
                 Some(FilterUiAction::ApplyFilter)
             }
             FilterUiCommand::CaseSensitiveButtonClicked(is_case_sensitive) => {
