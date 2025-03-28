@@ -11,7 +11,7 @@ use planner_app::{
     AddOrRemoveOperation, DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
     VariantName,
 };
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
@@ -582,14 +582,18 @@ impl UiComponent for Project {
                                 true => AddOrRemoveOperation::Add,
                                 false => AddOrRemoveOperation::Remove,
                             };
+
+                            fn exact_match(value: &str) -> Regex {
+                                Regex::new(format!("^{}$", regex::escape(value).as_str()).as_str()).unwrap()
+                            }
+
                             match self
                                 .planner_core_service
                                 .update(key, Event::AssignProcessToParts {
                                     process,
                                     operation,
-                                    manufacturer: Regex::new(regex::escape(part.manufacturer.as_str()).as_str())
-                                        .unwrap(),
-                                    mpn: Regex::new(regex::escape(part.mpn.as_str()).as_str()).unwrap(),
+                                    manufacturer: exact_match(part.manufacturer.as_str()),
+                                    mpn: exact_match(part.mpn.as_str()),
                                 })
                                 .into_actions()
                             {
