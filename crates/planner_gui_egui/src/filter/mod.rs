@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use derivative::Derivative;
-use egui::Ui;
+use egui::{Margin, Style, Ui};
 use egui_i18n::tr;
 use regex::RegexBuilder;
 
@@ -174,18 +174,31 @@ impl UiComponent for Filter {
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.horizontal(|ui| {
             let mut expression = self.expression.clone();
-            ui.add(egui::TextEdit::singleline(&mut expression).hint_text(tr!("filter-expression")));
-            
-            if ui.button("x").clicked() {
-                self.component_state
-                    .send(FilterUiCommand::ClearExpressionClicked)
-            };
-            
+
+            // combine the TextEdit and button in a single frame.
+            egui::Frame::group(&Style::default())
+                .inner_margin(Margin::symmetric(4, 2))
+                .show(ui, |ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut expression)
+                            .hint_text(tr!("filter-expression"))
+                            .frame(false),
+                    );
+
+                    if ui
+                        .add(egui::Button::new("x").frame(false))
+                        .clicked()
+                    {
+                        self.component_state
+                            .send(FilterUiCommand::ClearExpressionClicked)
+                    };
+                });
+
             if !expression.eq(&self.expression) {
                 self.component_state
                     .send(FilterUiCommand::ExpressionChanged(expression))
             }
-            
+
             ui.add_enabled_ui(self.does_mode_support_case_sensitivity(), |ui| {
                 let mut is_case_sensitive = self.is_case_sensitive();
                 if ui
