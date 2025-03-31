@@ -485,7 +485,11 @@ pub fn assign_placements_to_phase(
 ) -> BTreeSet<Part> {
     let mut required_load_out_parts = BTreeSet::new();
 
-    for (placement_path, state) in project
+    debug!(
+        "Assigning phase placements to {:?}, operation: {:?}, pattern: {:?}",
+        phase, operation, placements_pattern
+    );
+    let matched_placements: Vec<(&ObjectPath, &mut PlacementState)> = project
         .placements
         .iter_mut()
         .filter(|(path, state)| {
@@ -497,7 +501,11 @@ pub fn assign_placements_to_phase(
                     .pcb_side
                     .eq(&phase.pcb_side)
         })
-    {
+        .collect();
+
+    trace!("matched_placements: {:?}", matched_placements);
+
+    for (placement_path, state) in matched_placements {
         // FUTURE consider refactoring this into the filter above, and then working on the remaining results...
         match operation {
             SetOrClearOperation::Set => {

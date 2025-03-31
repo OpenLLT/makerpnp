@@ -128,7 +128,7 @@ placement-place = Place
 placement-no-place = No-place
 
 table-placements-column-index = #
-table-placements-column-object-path = Path
+table-placements-column-object-path = Object path
 table-placements-column-refdes = Ref. Des.
 table-placements-column-place = Place
 table-placements-column-placed = Placed?

@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{PhaseOverview, PhasePlacements, PlacementState, Reference};
+use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference};
 use tracing::debug;
 
 use crate::project::placements_tab::PlacementsUiCommand;
@@ -62,6 +62,7 @@ pub enum PhaseUiAction {
     None,
     RequestRepaint,
     UpdatePlacement {
+        object_path: ObjectPath,
         new_placement: PlacementState,
         old_placement: PlacementState,
     },
@@ -96,9 +97,11 @@ impl UiComponent for PhaseUi {
                     Some(PlacementsTableUiAction::None) => None,
                     Some(PlacementsTableUiAction::RequestRepaint) => Some(PhaseUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
                     }) => Some(PhaseUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
                     }),

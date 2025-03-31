@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -8,7 +9,7 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Part, PcbSide, Placement, PlacementState, PlacementStatus, Reference};
+use planner_app::{ObjectPath, Part, PcbSide, Placement, PlacementState, PlacementStatus, Reference};
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -33,12 +34,13 @@ impl PlacementsTableUi {
         }
     }
 
-    pub fn update_placements(&mut self, mut placements: Vec<PlacementState>, phases: Vec<Reference>) {
+    pub fn update_placements(&mut self, placements: BTreeMap<ObjectPath, PlacementState>, phases: Vec<Reference>) {
         let mut part_states_table = self.placements_table.lock().unwrap();
         let table: DataTable<PlacementsRow> = {
             placements
-                .drain(0..)
-                .map(|placement_state| PlacementsRow {
+                .into_iter()
+                .map(|(object_path, placement_state)| PlacementsRow {
+                    object_path,
                     placement_state,
                 })
         }
@@ -65,6 +67,7 @@ pub enum PlacementsTableUiCommand {
 pub enum PlacementsTableUiAction {
     None,
     UpdatePlacement {
+        object_path: ObjectPath,
         new_placement: PlacementState,
         old_placement: PlacementState,
     },
@@ -112,6 +115,7 @@ impl UiComponent for PlacementsTableUi {
                 new_row,
                 old_row,
             } => Some(PlacementsTableUiAction::UpdatePlacement {
+                object_path: old_row.object_path,
                 new_placement: new_row.placement_state,
                 old_placement: old_row.placement_state,
             }),
@@ -136,6 +140,7 @@ impl UiComponent for PlacementsTableUi {
 
 #[derive(Debug, Clone)]
 pub struct PlacementsRow {
+    pub object_path: ObjectPath,
     pub placement_state: PlacementState,
 }
 
@@ -192,9 +197,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn compare_cell(&self, row_l: &PlacementsRow, row_r: &PlacementsRow, column: usize) -> std::cmp::Ordering {
         match column {
             0 => row_l
-                .placement_state
-                .unit_path
-                .cmp(&row_r.placement_state.unit_path),
+                .object_path
+                .cmp(&row_r.object_path),
             1 => row_l
                 .placement_state
                 .placement
@@ -274,11 +278,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn show_cell_view(&mut self, ui: &mut Ui, row: &PlacementsRow, column: usize) {
         let _ = match column {
-            0 => ui.label(
-                &row.placement_state
-                    .unit_path
-                    .to_string(),
-            ),
+            0 => ui.label(&row.object_path.to_string()),
             1 => ui.label(&row.placement_state.placement.ref_des),
             2 => {
                 let label = tr!(placement_place_to_i18n_key(row.placement_state.placement.place));
@@ -375,9 +375,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn set_cell_value(&mut self, src: &PlacementsRow, dst: &mut PlacementsRow, column: usize) {
         match column {
             0 => dst
-                .placement_state
-                .unit_path
-                .clone_from(&src.placement_state.unit_path),
+                .object_path
+                .clone_from(&src.object_path),
             1 => dst
                 .placement_state
                 .placement
@@ -439,6 +438,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn new_empty_row(&mut self) -> PlacementsRow {
         PlacementsRow {
+            object_path: Default::default(),
             placement_state: PlacementState {
                 unit_path: Default::default(),
                 placement: Placement {
@@ -511,8 +511,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn filter_row(&mut self, row: &PlacementsRow) -> bool {
         let haystack = format!(
-            "path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}'",
-            &row.placement_state.unit_path,
+            "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}'",
+            &row.object_path,
             &row.placement_state.placement.ref_des,
             &row.placement_state
                 .placement

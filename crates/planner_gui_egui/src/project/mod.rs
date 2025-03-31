@@ -8,7 +8,7 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, PlacementState, ProcessName, ProjectOverview, ProjectView,
+    AddOrRemoveOperation, DesignName, Event, ObjectPath, PlacementState, ProcessName, ProjectOverview, ProjectView,
     ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
 };
 use regex::Regex;
@@ -334,6 +334,7 @@ impl Project {
     fn update_placement(
         planner_core_service: &mut PlannerCoreService,
         key: ProjectKey,
+        object_path: ObjectPath,
         new_placement: &PlacementState,
         old_placement: &PlacementState,
     ) -> Option<ProjectAction> {
@@ -363,7 +364,7 @@ impl Project {
                     .update(key, Event::AssignPlacementsToPhase {
                         phase: phase.clone(),
                         operation,
-                        placements: exact_match(new_placement.placement.ref_des.as_str()),
+                        placements: exact_match(&object_path.to_string()),
                     })
                     .into_actions()
                 {
@@ -701,9 +702,16 @@ impl UiComponent for Project {
                     Some(PhaseUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
                     Some(PhaseUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
-                    }) => Self::update_placement(&mut self.planner_core_service, key, &new_placement, &old_placement),
+                    }) => Self::update_placement(
+                        &mut self.planner_core_service,
+                        key,
+                        object_path,
+                        &new_placement,
+                        &old_placement,
+                    ),
                 }
             }
             ProjectUiCommand::PlacementsUiCommand(command) => {
@@ -718,9 +726,16 @@ impl UiComponent for Project {
                     Some(PlacementsUiAction::None) => None,
                     Some(PlacementsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     Some(PlacementsUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
-                    }) => Self::update_placement(&mut self.planner_core_service, key, &new_placement, &old_placement),
+                    }) => Self::update_placement(
+                        &mut self.planner_core_service,
+                        key,
+                        object_path,
+                        &new_placement,
+                        &old_placement,
+                    ),
                     None => None,
                 }
             }

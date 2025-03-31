@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{PlacementState, PlacementsList, Reference};
+use planner_app::{ObjectPath, PlacementState, PlacementsList, Reference};
 use tracing::debug;
 
 use crate::project::tables::placements::{
@@ -55,6 +55,7 @@ pub enum PlacementsUiAction {
     None,
     RequestRepaint,
     UpdatePlacement {
+        object_path: ObjectPath,
         new_placement: PlacementState,
         old_placement: PlacementState,
     },
@@ -89,9 +90,11 @@ impl UiComponent for PlacementsUi {
                     Some(PlacementsTableUiAction::None) => None,
                     Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
                     }) => Some(PlacementsUiAction::UpdatePlacement {
+                        object_path,
                         new_placement,
                         old_placement,
                     }),

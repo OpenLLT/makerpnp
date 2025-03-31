@@ -77,6 +77,7 @@ pub fn ensure_load_out(load_out_source: &LoadOutSource) -> anyhow::Result<()> {
     Ok(())
 }
 
+// FUTURE maybe this should be a url?
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LoadOutSource(String);
 
@@ -88,6 +89,51 @@ impl FromStr for LoadOutSource {
     }
 }
 
+impl LoadOutSource {
+    pub fn try_from_relative_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+        if !path.is_relative() {
+            panic!()
+        }
+        Self::try_from_path_inner(path)
+    }
+
+    pub fn try_from_path_inner(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+        if !path.exists() {
+            return Err(LoadOutSourceError::PathDoesNotExist(path));
+        }
+        if !path.is_file() {
+            return Err(LoadOutSourceError::PathIsNotAFile(path));
+        }
+        Ok(LoadOutSource(path.to_str().unwrap().to_string()))
+    }
+
+    pub fn try_from_absolute_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+        if !path.is_absolute() {
+            panic!()
+        }
+        Self::try_from_path_inner(path)
+    }
+
+    pub fn try_from_path(project_path: PathBuf, path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+        if !project_path.is_absolute() {
+            return Err(LoadOutSourceError::ProjectPathMustBeAbsolute(project_path));
+        }
+
+        if path.is_relative() {
+            if let Ok(result) = Self::try_from_relative_path(path.clone()) {
+                return Ok(result);
+            }
+        }
+        let full_path = project_path.join(path);
+        Self::try_from_absolute_path(full_path)
+    }
+
+    pub fn from_absolute_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+        assert!(path.is_absolute());
+        Ok(LoadOutSource(path.to_str().unwrap().to_string()))
+    }
+}
+
 impl Display for LoadOutSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.0.as_str())
@@ -95,8 +141,12 @@ impl Display for LoadOutSource {
 }
 
 #[derive(Debug, Error)]
-#[error("Design name error")]
-pub struct LoadOutSourceError;
+#[error("Loadout source error. path: {0}")]
+pub enum LoadOutSourceError {
+    ProjectPathMustBeAbsolute(PathBuf),
+    PathDoesNotExist(PathBuf),
+    PathIsNotAFile(PathBuf),
+}
 
 #[derive(Error, Debug)]
 pub enum LoadOutOperationError {

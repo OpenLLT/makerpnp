@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::pcb::PcbKind;
 
-#[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
 struct ObjectPathChunk {
     key: String,
     value: String,
@@ -87,7 +87,7 @@ impl Display for ObjectPathChunk {
 /// Currently, there are example where wildcards are used to search for objects, e.g. `pcb=panel::instance=.*::unit=.*::ref_des=R1`
 /// however this object is not for STORING such patterns, but the string representation of a path
 /// can be compared to such a pattern.
-#[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq, Default, Hash)]
 pub struct ObjectPath {
     // FUTURE consider if it's better/simpler to use a HashMap here.
     chunks: Vec<ObjectPathChunk>,

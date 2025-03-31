@@ -25,8 +25,8 @@ pub use pnp::pcb::{PcbKind, PcbSide};
 pub use pnp::placement::Placement;
 use regex::Regex;
 use serde_with::serde_as;
-use stores::load_out::LoadOutOperationError;
 pub use stores::load_out::LoadOutSource;
+use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{info, trace};
 
@@ -74,7 +74,8 @@ pub struct PhaseOverview {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhasePlacements {
     pub phase_reference: Reference,
-    pub placements: Vec<PlacementState>,
+
+    pub placements: BTreeMap<ObjectPath, PlacementState>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -103,7 +104,7 @@ pub struct PhasePlacementOrderings {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PlacementsList {
-    pub placements: Vec<PlacementState>,
+    pub placements: BTreeMap<ObjectPath, PlacementState>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
@@ -257,6 +258,8 @@ pub enum Event {
     AssignPlacementsToPhase {
         phase: Reference,
         operation: SetOrClearOperation,
+
+        /// to apply to object path (not refdes)
         #[serde(with = "serde_regex")]
         placements: Regex,
     },
@@ -526,6 +529,8 @@ impl Planner {
 
                 *modified |= project::update_phase_operation_states(project);
 
+                let directory = path.parent().unwrap();
+
                 match operation {
                     SetOrClearOperation::Set => {
                         for part in parts.iter() {
@@ -540,11 +545,13 @@ impl Planner {
                             *modified |= project::add_process_to_part(part_state, part, phase.process.clone());
                         }
 
-                        stores::load_out::add_parts_to_load_out(
-                            &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                            parts,
+                        let source = &LoadOutSource::try_from_path(
+                            directory.into(),
+                            PathBuf::from_str(&phase.load_out_source).unwrap(),
                         )
-                        .map_err(AppError::LoadoutError)?;
+                        .map_err(AppError::LoadoutSourceError)?;
+
+                        stores::load_out::add_parts_to_load_out(source, parts).map_err(AppError::LoadoutError)?;
                     }
                     SetOrClearOperation::Clear => {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
@@ -619,22 +626,24 @@ impl Planner {
 
                 *modified |= project::update_phase_operation_states(project);
 
+                let directory = path.parent().unwrap();
+
                 let phase_load_out_item_map = project
                     .phases
                     .iter()
                     .try_fold(
                         BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
                         |mut map, (reference, phase)| {
-                            let load_out_items = stores::load_out::load_items(
-                                &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                            )?;
+                            let load_out_items = stores::load_out::load_items(&LoadOutSource::try_from_path(
+                                directory.into(),
+                                PathBuf::from_str(&phase.load_out_source)?,
+                            )?)?;
                             map.insert(reference.clone(), load_out_items);
                             Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
                         },
                     )
                     .map_err(AppError::OperationError)?;
 
-                let directory = path.parent().unwrap();
                 project::generate_artifacts(project, directory, phase_load_out_item_map)
                     .map_err(|cause| AppError::OperationError(cause.into()))?;
                 Ok(render::render())
@@ -722,11 +731,7 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let placements = PlacementsList {
-                    placements: project
-                        .placements
-                        .values()
-                        .cloned()
-                        .collect(),
+                    placements: project.placements.clone(),
                 };
 
                 Ok(view_renderer::view(ProjectView::Placements(placements)))
@@ -955,10 +960,11 @@ impl Planner {
 
                 let placements = project
                     .placements
-                    .iter()
-                    .filter_map(|(_path, state)| match &state.phase {
-                        Some(candidate_phase) if phase_reference == *candidate_phase => Some(state.clone()),
-                        _ => None,
+                    .clone()
+                    .into_iter()
+                    .filter(|(_path, state)| match &state.phase {
+                        Some(candidate_phase) if phase_reference == *candidate_phase => true,
+                        _ => false,
                     })
                     .collect();
 
@@ -1072,6 +1078,8 @@ enum AppError {
     ProcessError(anyhow::Error),
     #[error("Part error. cause: {0}")]
     PartError(PartStateError),
+    #[error("Loadout source error. cause: {0}")]
+    LoadoutSourceError(LoadOutSourceError),
     #[error("Loadout error. cause: {0}")]
     LoadoutError(LoadOutOperationError),
     #[error("PCB error. cause: {0}")]

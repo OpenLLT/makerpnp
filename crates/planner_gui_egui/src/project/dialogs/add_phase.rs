@@ -347,7 +347,8 @@ impl UiComponent for AddPhaseModal {
                     // TODO Safety: form validation prevents reference from being invalid
                     reference: Reference::from_str(fields.reference.as_ref()).unwrap(),
                     // TODO Safety: form validation prevents load_out from being invalid or None
-                    load_out: LoadOutSource::from_str(fields.load_out.as_ref().unwrap()).unwrap(),
+                    load_out: LoadOutSource::from_absolute_path(PathBuf::from(fields.load_out.as_ref().unwrap()))
+                        .unwrap(),
                     // Safety: form validation prevents kind from being None
                     pcb_side: fields
                         .pcb_side
