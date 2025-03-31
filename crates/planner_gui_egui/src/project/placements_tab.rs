@@ -1,40 +1,59 @@
+use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::PlacementsList;
+use planner_app::{PlacementsList, Reference};
+use tracing::debug;
 
-use crate::project::tables;
+use crate::project::tables::placements::{
+    PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
+};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PlacementsUi {
-    placements: Option<PlacementsList>,
+    #[derivative(Debug = "ignore")]
+    placements_table_ui: PlacementsTableUi,
 
     pub component: ComponentState<PlacementsUiCommand>,
 }
 
 impl PlacementsUi {
     pub fn new() -> Self {
+        let component: ComponentState<PlacementsUiCommand> = Default::default();
+
+        let mut placements_table_ui = PlacementsTableUi::new();
+        placements_table_ui
+            .component
+            .configure_mapper(component.sender.clone(), |placements_table_command| {
+                debug!("placements table mapper. command: {:?}", placements_table_command);
+                PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
+            });
+
         Self {
-            placements: None,
-            component: Default::default(),
+            placements_table_ui,
+            component,
         }
     }
 
-    pub fn update_placements(&mut self, placements: PlacementsList) {
-        self.placements.replace(placements);
+    pub fn update_placements(&mut self, placements: PlacementsList, phases: Vec<Reference>) {
+        self.placements_table_ui
+            .update_placements(placements.placements, phases);
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum PlacementsUiCommand {
     None,
+    PlacementsTableUiCommand(PlacementsTableUiCommand),
 }
 
 #[derive(Debug, Clone)]
 pub enum PlacementsUiAction {
     None,
+    RequestRepaint,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -47,9 +66,8 @@ impl UiComponent for PlacementsUi {
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-placements-header"));
-        if let Some(placements_list) = &self.placements {
-            tables::show_placements(ui, &placements_list.placements);
-        }
+        self.placements_table_ui
+            .ui(ui, &mut PlacementsTableUiContext::default())
     }
 
     fn update<'context>(
@@ -59,6 +77,21 @@ impl UiComponent for PlacementsUi {
     ) -> Option<Self::UiAction> {
         match command {
             PlacementsUiCommand::None => Some(PlacementsUiAction::None),
+            PlacementsUiCommand::PlacementsTableUiCommand(command) => {
+                let action = self
+                    .placements_table_ui
+                    .update(command, &mut PlacementsTableUiContext::default());
+                match action {
+                    Some(PlacementsTableUiAction::None) => None,
+                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsUiAction::RequestRepaint),
+                    Some(PlacementsTableUiAction::UpdatePlacement {
+                        placement,
+                    }) => {
+                        todo!()
+                    }
+                    None => None,
+                }
+            }
         }
     }
 }

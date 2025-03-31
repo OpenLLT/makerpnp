@@ -121,10 +121,13 @@ form-file-not-found = File not found
 
 placement-placed = Placed
 placement-pending = Pending
+placement-place = Place
+placement-no-place = No-place
 
 table-placements-column-index = #
 table-placements-column-object-path = Path
 table-placements-column-refdes = Ref. Des.
+table-placements-column-place = Place
 table-placements-column-placed = Placed?
 table-placements-column-manufacturer = Manufacturer
 table-placements-column-mpn = MPN
@@ -132,6 +135,7 @@ table-placements-column-rotation = Rotation
 table-placements-column-x = X
 table-placements-column-y = Y
 table-placements-column-pcb-side = Side
+table-placements-column-phase = Phase
 
 table-parts-column-index = #
 table-parts-column-manufacturer = Manufacturer

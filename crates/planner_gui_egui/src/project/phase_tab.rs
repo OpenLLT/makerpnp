@@ -1,26 +1,42 @@
+use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use planner_app::{PhaseOverview, PhasePlacements, Reference};
 use tracing::debug;
 
-use crate::project::tables;
+use crate::project::placements_tab::PlacementsUiCommand;
+use crate::project::tables::placements::{
+    PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
+};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PhaseUi {
     overview: Option<PhaseOverview>,
-    placements: Option<PhasePlacements>,
+    #[derivative(Debug = "ignore")]
+    placements_table_ui: PlacementsTableUi,
 
     pub component: ComponentState<PhaseUiCommand>,
 }
 
 impl PhaseUi {
     pub fn new() -> Self {
+        let component: ComponentState<PlacementsUiCommand> = Default::default();
+
+        let mut placements_table_ui = PlacementsTableUi::new();
+        placements_table_ui
+            .component
+            .configure_mapper(component.sender.clone(), |placements_table_command| {
+                debug!("placements table mapper. command: {:?}", placements_table_command);
+                PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
+            });
+
         Self {
             overview: None,
-            placements: None,
+            placements_table_ui,
             component: Default::default(),
         }
     }
@@ -29,20 +45,22 @@ impl PhaseUi {
         self.overview.replace(phase_overview);
     }
 
-    pub fn update_placements(&mut self, phase_placements: PhasePlacements) {
-        self.placements
-            .replace(phase_placements);
+    pub fn update_placements(&mut self, phase_placements: PhasePlacements, phases: Vec<Reference>) {
+        self.placements_table_ui
+            .update_placements(phase_placements.placements, phases);
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum PhaseUiCommand {
     None,
+    PlacementsTableUiCommand(PlacementsTableUiCommand),
 }
 
 #[derive(Debug, Clone)]
 pub enum PhaseUiAction {
     None,
+    RequestRepaint,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -54,10 +72,9 @@ impl UiComponent for PhaseUi {
     type UiAction = PhaseUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        if let Some(phase_placements) = &self.placements {
-            ui.label(tr!("phase-placements-header"));
-            tables::show_placements(ui, &phase_placements.placements)
-        }
+        ui.label(tr!("phase-placements-header"));
+        self.placements_table_ui
+            .ui(ui, &mut PlacementsTableUiContext::default());
     }
 
     fn update<'context>(
@@ -67,6 +84,21 @@ impl UiComponent for PhaseUi {
     ) -> Option<Self::UiAction> {
         match command {
             PhaseUiCommand::None => Some(PhaseUiAction::None),
+            PhaseUiCommand::PlacementsTableUiCommand(command) => {
+                let action = self
+                    .placements_table_ui
+                    .update(command, &mut PlacementsTableUiContext::default());
+                match action {
+                    Some(PlacementsTableUiAction::None) => None,
+                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PhaseUiAction::RequestRepaint),
+                    Some(PlacementsTableUiAction::UpdatePlacement {
+                        placement,
+                    }) => {
+                        todo!()
+                    }
+                    None => None,
+                }
+            }
         }
     }
 }

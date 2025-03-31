@@ -11,7 +11,7 @@ use planner_app::{
     AddOrRemoveOperation, DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
     VariantName,
 };
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info};
 
@@ -476,9 +476,11 @@ impl UiComponent for Project {
                     ProjectView::Placements(placements) => {
                         debug!("placements: {:?}", placements);
                         let mut state = self.project_ui_state.lock().unwrap();
+                        // TODO get the phases from somewhere
+                        let phases = vec![Reference("bottom".to_string()), Reference("top".to_string())];
                         state
                             .placements_ui
-                            .update_placements(placements)
+                            .update_placements(placements, phases)
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
@@ -500,7 +502,9 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_state = state.phases.get_mut(&phase).unwrap();
 
-                        phase_state.update_placements(phase_placements);
+                        // TODO get the phases from somewhere
+                        let phases = vec![Reference("bottom".to_string()), Reference("top".to_string())];
+                        phase_state.update_placements(phase_placements, phases);
                     }
                     ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
                         // TODO
@@ -635,6 +639,7 @@ impl UiComponent for Project {
                 let phase_ui_action = phase_ui.update(command, context);
                 match phase_ui_action {
                     Some(PhaseUiAction::None) => None,
+                    Some(PhaseUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
                 }
             }
@@ -648,6 +653,7 @@ impl UiComponent for Project {
                     .update(command, context);
                 match placements_ui_action {
                     Some(PlacementsUiAction::None) => None,
+                    Some(PlacementsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
                 }
             }
