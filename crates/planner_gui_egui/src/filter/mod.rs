@@ -4,7 +4,7 @@ use std::hash::{Hash, Hasher};
 use derivative::Derivative;
 use egui::{Margin, Style, Ui};
 use egui_i18n::tr;
-use regex::RegexBuilder;
+use regex::{Regex, RegexBuilder};
 
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -38,7 +38,7 @@ impl Filter {
                 .get(&PartialMatchFlag::CaseSensitive)
                 .is_some(),
             FilterMode::RegexMatch {
-                flags,
+                flags, ..
             } => flags
                 .get(&RegexFilterFlag::CaseSensitive)
                 .is_some(),
@@ -56,12 +56,33 @@ impl Filter {
                 };
             }
             FilterMode::RegexMatch {
-                flags,
+                flags, ..
             } => {
                 match enabled {
                     true => flags.insert(RegexFilterFlag::CaseSensitive),
                     false => flags.remove(&RegexFilterFlag::CaseSensitive),
                 };
+            }
+        }
+    }
+
+    pub fn on_expression_changed(&mut self) {
+        let is_case_sensitive = !self.is_case_sensitive();
+
+        match &mut self.mode {
+            FilterMode::PartialMatch {
+                ..
+            } => {}
+            FilterMode::RegexMatch {
+                flags: _flags,
+                regex,
+            } => {
+                if let Ok(parsed_regex) = RegexBuilder::new(&self.expression)
+                    .case_insensitive(!is_case_sensitive)
+                    .build()
+                {
+                    regex.replace(parsed_regex);
+                }
             }
         }
     }
@@ -82,11 +103,9 @@ impl Filter {
             }
             FilterMode::RegexMatch {
                 flags: _flags,
+                regex,
             } => {
-                if let Ok(pattern) = RegexBuilder::new(&self.expression)
-                    .case_insensitive(!self.is_case_sensitive())
-                    .build()
-                {
+                if let Some(pattern) = regex {
                     pattern.is_match(value)
                 } else {
                     false
@@ -112,10 +131,16 @@ impl Default for Filter {
     }
 }
 
-#[derive(Eq, PartialEq)]
 pub enum FilterMode {
-    PartialMatch { flags: HashSet<PartialMatchFlag> },
-    RegexMatch { flags: HashSet<RegexFilterFlag> },
+    PartialMatch {
+        flags: HashSet<PartialMatchFlag>,
+    },
+
+    // store the regex it can be parsed just one, when the filter changes.
+    RegexMatch {
+        flags: HashSet<RegexFilterFlag>,
+        regex: Option<Regex>,
+    },
 }
 
 impl Hash for FilterMode {
@@ -128,7 +153,7 @@ impl Hash for FilterMode {
                 format!("{:?}", flags).hash(state);
             }
             FilterMode::RegexMatch {
-                flags,
+                flags, ..
             } => {
                 "RM".hash(state);
                 format!("{:?}", flags).hash(state);
@@ -229,14 +254,20 @@ impl UiComponent for Filter {
         match command {
             FilterUiCommand::ExpressionChanged(expression) => {
                 self.expression = expression;
+                self.on_expression_changed();
+
                 Some(FilterUiAction::ApplyFilter)
             }
             FilterUiCommand::ClearExpressionClicked => {
                 self.expression.clear();
+                self.on_expression_changed();
+
                 Some(FilterUiAction::ApplyFilter)
             }
             FilterUiCommand::CaseSensitiveButtonClicked(is_case_sensitive) => {
                 self.set_case_sensitivity(is_case_sensitive);
+                self.on_expression_changed();
+
                 Some(FilterUiAction::ApplyFilter)
             }
             FilterUiCommand::RegexButtonClicked(is_regex) => {
@@ -246,6 +277,7 @@ impl UiComponent for Filter {
                     true => {
                         self.mode = FilterMode::RegexMatch {
                             flags: HashSet::new(),
+                            regex: None,
                         }
                     }
                     false => {
@@ -256,6 +288,8 @@ impl UiComponent for Filter {
                 }
 
                 self.set_case_sensitivity(is_case_sensitive);
+
+                self.on_expression_changed();
 
                 Some(FilterUiAction::ApplyFilter)
             }
