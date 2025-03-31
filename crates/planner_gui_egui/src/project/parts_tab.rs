@@ -348,18 +348,17 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn filter_row(&mut self, row: &PartStatesRow) -> bool {
-        let manufacturer_matched = self
-            .filter
-            .matches(&row.part.manufacturer);
-        let mpn_matched = self.filter.matches(&row.part.mpn);
+        let processes: String = enabled_processes_to_string(&row.enabled_processes);
+
+        let haystack = format!(
+            "manufacturer: '{}', mpn: '{}', processes: {}",
+            &row.part.manufacturer, &row.part.mpn, &processes,
+        );
 
         // "Filter single row. If this returns false, the row will be hidden."
-        let result = manufacturer_matched || mpn_matched;
+        let result = self.filter.matches(haystack.as_str());
 
-        trace!(
-            "row: {:?}, manufacturer matched: {}, mpn matched: {}, result: {}",
-            row, manufacturer_matched, mpn_matched, result
-        );
+        trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
 
         result
     }
@@ -387,4 +386,18 @@ impl Tab for PartsTab {
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
         true
     }
+}
+
+fn enabled_processes_to_string(enabled_processes: &Vec<(ProcessName, bool)>) -> String {
+    format!(
+        "[{}]",
+        enabled_processes
+            .iter()
+            .filter_map(|(process, enabled)| match enabled {
+                true => Some(format!("'{}'", process)),
+                false => None,
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }

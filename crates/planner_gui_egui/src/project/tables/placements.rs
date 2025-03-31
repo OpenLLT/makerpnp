@@ -450,31 +450,28 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     }
 
     fn filter_row(&mut self, row: &PlacementsRow) -> bool {
-        let manufacturer_matched = self.filter.matches(
+        let haystack = format!(
+            "path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}'",
+            &row.placement_state.unit_path,
+            &row.placement_state.placement.ref_des,
             &row.placement_state
                 .placement
                 .part
                 .manufacturer,
-        );
-        let mpn_matched = self
-            .filter
-            .matches(&row.placement_state.placement.part.mpn);
-        let refdes_matched = self
-            .filter
-            .matches(&row.placement_state.placement.ref_des);
-        let unit_path_matched = self.filter.matches(
+            &row.placement_state.placement.part.mpn,
+            &row.placement_state.placement.place,
+            &row.placement_state.placed,
             &row.placement_state
-                .unit_path
-                .to_string(),
+                .phase
+                .as_ref()
+                .map(|phase| phase.to_string())
+                .unwrap_or_default()
         );
 
         // "Filter single row. If this returns false, the row will be hidden."
-        let result = manufacturer_matched || mpn_matched || refdes_matched || unit_path_matched;
+        let result = self.filter.matches(haystack.as_str());
 
-        trace!(
-            "row: {:?}, manufacturer_matched: {}, mpn_matched: {}, refdes_matched: {} unit_path_matched: {}, result: {}",
-            row, manufacturer_matched, mpn_matched, refdes_matched, unit_path_matched, result
-        );
+        trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
 
         result
     }
