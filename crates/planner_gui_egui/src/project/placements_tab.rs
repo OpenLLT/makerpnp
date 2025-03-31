@@ -85,7 +85,8 @@ impl UiComponent for PlacementsUi {
                     Some(PlacementsTableUiAction::None) => None,
                     Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
-                        placement,
+                        old_placement,
+                        new_placement,
                     }) => {
                         todo!()
                     }

@@ -190,10 +190,17 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
         false
     }
 
-    fn on_row_updated(&mut self, row_index: usize, row: &PartStatesRow) {
-        trace!("on_row_updated. row_index {}, row: {:?}", row_index, row);
+    fn on_row_updated(&mut self, row_index: usize, new_row: &PartStatesRow, old_row: &PartStatesRow) {
+        trace!(
+            "on_row_updated. row_index {}, old_row: {:?}, old_row: {:?}",
+            row_index, new_row, old_row
+        );
         self.sender
-            .send(PartsUiCommand::RowUpdated(row_index, row.clone()))
+            .send(PartsUiCommand::RowUpdated {
+                index: row_index,
+                new_row: new_row.clone(),
+                old_row: old_row.clone(),
+            })
             .expect("sent");
     }
 

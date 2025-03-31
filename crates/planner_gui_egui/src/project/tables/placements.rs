@@ -53,14 +53,21 @@ pub enum PlacementsTableUiCommand {
     None,
 
     // internal
-    RowUpdated(usize, PlacementsRow),
+    RowUpdated {
+        index: usize,
+        new_row: PlacementsRow,
+        old_row: PlacementsRow,
+    },
     FilterCommand(FilterUiCommand),
 }
 
 #[derive(Debug, Clone)]
 pub enum PlacementsTableUiAction {
     None,
-    UpdatePlacement { placement: PlacementState },
+    UpdatePlacement {
+        new_placement: PlacementState,
+        old_placement: PlacementState,
+    },
     RequestRepaint,
 }
 
@@ -100,8 +107,13 @@ impl UiComponent for PlacementsTableUi {
     ) -> Option<Self::UiAction> {
         match command {
             PlacementsTableUiCommand::None => Some(PlacementsTableUiAction::None),
-            PlacementsTableUiCommand::RowUpdated(_row_index, row) => Some(PlacementsTableUiAction::UpdatePlacement {
-                placement: row.placement_state,
+            PlacementsTableUiCommand::RowUpdated {
+                index,
+                new_row,
+                old_row,
+            } => Some(PlacementsTableUiAction::UpdatePlacement {
+                new_placement: new_row.placement_state,
+                old_placement: old_row.placement_state,
             }),
             PlacementsTableUiCommand::FilterCommand(command) => {
                 let mut table = self.placements_table.lock().unwrap();
@@ -428,10 +440,17 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         false
     }
 
-    fn on_row_updated(&mut self, row_index: usize, row: &PlacementsRow) {
-        trace!("on_row_updated. row_index {}, row: {:?}", row_index, row);
+    fn on_row_updated(&mut self, row_index: usize, new_row: &PlacementsRow, old_row: &PlacementsRow) {
+        trace!(
+            "on_row_updated. row_index {}, old_row: {:?}, old_row: {:?}",
+            row_index, new_row, old_row
+        );
         self.sender
-            .send(PlacementsTableUiCommand::RowUpdated(row_index, row.clone()))
+            .send(PlacementsTableUiCommand::RowUpdated {
+                index: row_index,
+                new_row: new_row.clone(),
+                old_row: old_row.clone(),
+            })
             .expect("sent");
     }
 

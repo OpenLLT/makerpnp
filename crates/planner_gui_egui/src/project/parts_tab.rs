@@ -66,7 +66,11 @@ pub enum PartsUiCommand {
     None,
 
     // internal
-    RowUpdated(usize, PartStatesRow),
+    RowUpdated {
+        index: usize,
+        new_row: PartStatesRow,
+        old_row: PartStatesRow,
+    },
     FilterCommand(FilterUiCommand),
 }
 
@@ -117,14 +121,19 @@ impl UiComponent for PartsUi {
     ) -> Option<Self::UiAction> {
         match command {
             PartsUiCommand::None => Some(PartsUiAction::None),
-            PartsUiCommand::RowUpdated(_row_index, row) => {
-                let processes: HashMap<ProcessName, bool> = row
+            PartsUiCommand::RowUpdated {
+                index,
+                new_row,
+                old_row,
+            } => {
+                let (_, _) = (index, old_row);
+                let processes: HashMap<ProcessName, bool> = new_row
                     .enabled_processes
                     .into_iter()
                     .collect();
 
                 Some(PartsUiAction::UpdatePart {
-                    part: row.part,
+                    part: new_row.part,
                     processes,
                 })
             }

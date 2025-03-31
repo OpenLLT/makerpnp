@@ -92,7 +92,8 @@ impl UiComponent for PhaseUi {
                     Some(PlacementsTableUiAction::None) => None,
                     Some(PlacementsTableUiAction::RequestRepaint) => Some(PhaseUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
-                        placement,
+                        new_placement,
+                        old_placement,
                     }) => {
                         todo!()
                     }
