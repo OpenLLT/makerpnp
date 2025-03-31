@@ -77,7 +77,7 @@ pub enum PartsUiCommand {
 #[derive(Debug, Clone)]
 pub enum PartsUiAction {
     None,
-    UpdatePart {
+    UpdateProcessesForPart {
         part: Part,
         processes: HashMap<ProcessName, bool>,
     },
@@ -132,7 +132,7 @@ impl UiComponent for PartsUi {
                     .into_iter()
                     .collect();
 
-                Some(PartsUiAction::UpdatePart {
+                Some(PartsUiAction::UpdateProcessesForPart {
                     part: new_row.part,
                     processes,
                 })

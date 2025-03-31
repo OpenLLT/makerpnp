@@ -108,7 +108,7 @@ impl UiComponent for PlacementsTableUi {
         match command {
             PlacementsTableUiCommand::None => Some(PlacementsTableUiAction::None),
             PlacementsTableUiCommand::RowUpdated {
-                index,
+                index: _index,
                 new_row,
                 old_row,
             } => Some(PlacementsTableUiAction::UpdatePlacement {
@@ -175,8 +175,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     }
 
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PlacementsRow) -> bool {
-        // TODO make more things editable
-        false
+        match column {
+            9 => true,
+            _ => false,
+        }
     }
 
     fn allow_row_insertions(&mut self) -> bool {
@@ -325,7 +327,46 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             6 => None,
             7 => None,
             8 => None,
-            9 => None,
+            9 => {
+                let response = ui.add(|ui: &mut Ui| {
+                    let pcb_side_id = ui.id();
+                    egui::ComboBox::from_id_salt(pcb_side_id)
+                        .width(ui.available_width())
+                        .selected_text(match &row.placement_state.phase {
+                            None => tr!("form-common-combo-none"),
+                            Some(phase) => phase.to_string(),
+                        })
+                        .show_ui(ui, |ui| {
+                            // Note: with the arguments to this method, there is no command we can send that will be able
+                            //       to do anything useful with the row as there is probably no API to access the
+                            //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
+
+                            if ui
+                                .add(egui::SelectableLabel::new(
+                                    row.placement_state.phase.is_none(),
+                                    tr!("form-common-combo-none")
+                                ))
+                                .clicked()
+                            {
+                                row.placement_state.phase = None;
+                            }
+
+                            for phase in self.phases.iter() {
+                                if ui
+                                    .add(egui::SelectableLabel::new(
+                                        matches!(&row.placement_state.phase, Some(other_phase) if other_phase.eq(phase)),
+                                        phase.to_string(),
+                                    ))
+                                    .clicked()
+                                {
+                                    row.placement_state.phase = Some(phase.clone());
+                                }
+                            }
+                        }).response
+                });
+
+                Some(response)
+            }
             10 => None,
             _ => unreachable!(),
         }

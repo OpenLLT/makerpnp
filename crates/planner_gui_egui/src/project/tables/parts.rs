@@ -119,16 +119,19 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             0 => None,
             1 => None,
             2 => {
-                let ui = ui.add(|ui: &mut Ui| {
+                let response = ui.add(|ui: &mut Ui| {
                     ui.horizontal_wrapped(|ui| {
                         // Note that the enabled_processes was built in the same order as self.processes.
+                        // FIXME this is directly modifying state, we should be using ['Self::sender'] here and
+                        //       triggering calls to [`update`], but the egui-data-table api doesn't expose the row
+                        //       being edited
                         for (name, enabled) in row.enabled_processes.iter_mut() {
                             ui.checkbox(enabled, name.to_string());
                         }
                     })
                     .response
                 });
-                Some(ui)
+                Some(response)
             }
             _ => unreachable!(),
         }

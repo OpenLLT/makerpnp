@@ -37,3 +37,41 @@ impl Display for AddOrRemoveOperation {
         }
     }
 }
+
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
+#[serde(rename_all = "lowercase")]
+pub enum SetOrClearOperation {
+    Set,
+    Clear,
+}
+
+impl TryFrom<&String> for SetOrClearOperation {
+    type Error = ();
+
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        match value.to_lowercase().as_str() {
+            "add" => Ok(SetOrClearOperation::Set),
+            "remove" => Ok(SetOrClearOperation::Clear),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Display for SetOrClearOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SetOrClearOperation::Set => f.write_str("add"),
+            SetOrClearOperation::Clear => f.write_str("remove"),
+        }
+    }
+}

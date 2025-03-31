@@ -8,8 +8,8 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, ProcessName, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
-    VariantName,
+    AddOrRemoveOperation, DesignName, Event, PlacementState, ProcessName, ProjectOverview, ProjectView,
+    ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -330,6 +330,68 @@ impl Project {
     pub fn update_processes(&mut self, project_overview: &ProjectOverview) {
         self.processes = project_overview.processes.clone();
     }
+
+    fn update_placement(
+        planner_core_service: &mut PlannerCoreService,
+        key: ProjectKey,
+        new_placement: &PlacementState,
+        old_placement: &PlacementState,
+    ) -> Option<ProjectAction> {
+        let mut tasks = vec![];
+
+        #[derive(Debug)]
+        enum Operations {
+            AddOrRemovePhase,
+        }
+
+        let operations = vec![Operations::AddOrRemovePhase];
+
+        for operation in operations.into_iter() {
+            debug!("update placement, operation: {:?}", operation);
+            if !new_placement
+                .phase
+                .eq(&old_placement.phase)
+            {
+                let (phase, operation) = match (&new_placement.phase, &old_placement.phase) {
+                    (Some(new_phase), None) => (new_phase, SetOrClearOperation::Set),
+                    (Some(new_phase), Some(_old_phase)) => (new_phase, SetOrClearOperation::Set),
+                    (None, Some(old_phase)) => (old_phase, SetOrClearOperation::Clear),
+                    _ => unreachable!(),
+                };
+
+                match planner_core_service
+                    .update(key, Event::AssignPlacementsToPhase {
+                        phase: phase.clone(),
+                        operation,
+                        placements: exact_match(new_placement.placement.ref_des.as_str()),
+                    })
+                    .into_actions()
+                {
+                    Ok(actions) => {
+                        debug!("actions: {:?}", actions);
+                        let effect_tasks: Vec<Task<ProjectAction>> = actions
+                            .into_iter()
+                            .map(Task::done)
+                            .collect();
+                        tasks.extend(effect_tasks);
+                    }
+                    Err(service_error) => {
+                        tasks.push(Task::done(service_error));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::Parts,
+        )));
+        tasks.push(final_task);
+
+        let action = ProjectAction::Task(key, Task::batch(tasks));
+
+        Some(action)
+    }
 }
 
 pub struct ProjectContext {
@@ -576,7 +638,7 @@ impl UiComponent for Project {
                 match parts_ui_action {
                     Some(PartsUiAction::None) => None,
                     None => None,
-                    Some(PartsUiAction::UpdatePart {
+                    Some(PartsUiAction::UpdateProcessesForPart {
                         part,
                         processes,
                     }) => {
@@ -586,10 +648,6 @@ impl UiComponent for Project {
                                 true => AddOrRemoveOperation::Add,
                                 false => AddOrRemoveOperation::Remove,
                             };
-
-                            fn exact_match(value: &str) -> Regex {
-                                Regex::new(format!("^{}$", regex::escape(value).as_str()).as_str()).unwrap()
-                            }
 
                             match self
                                 .planner_core_service
@@ -637,10 +695,15 @@ impl UiComponent for Project {
 
                 let context = &mut PhaseUiContext::default();
                 let phase_ui_action = phase_ui.update(command, context);
+
                 match phase_ui_action {
                     Some(PhaseUiAction::None) => None,
                     Some(PhaseUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
+                    Some(PhaseUiAction::UpdatePlacement {
+                        new_placement,
+                        old_placement,
+                    }) => Self::update_placement(&mut self.planner_core_service, key, &new_placement, &old_placement),
                 }
             }
             ProjectUiCommand::PlacementsUiCommand(command) => {
@@ -654,6 +717,10 @@ impl UiComponent for Project {
                 match placements_ui_action {
                     Some(PlacementsUiAction::None) => None,
                     Some(PlacementsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    Some(PlacementsUiAction::UpdatePlacement {
+                        new_placement,
+                        old_placement,
+                    }) => Self::update_placement(&mut self.planner_core_service, key, &new_placement, &old_placement),
                     None => None,
                 }
             }
@@ -962,4 +1029,8 @@ fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
         .get(1)?
         .to_string();
     Some(view_path)
+}
+
+fn exact_match(value: &str) -> Regex {
+    Regex::new(format!("^{}$", regex::escape(value).as_str()).as_str()).unwrap()
 }

@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
-    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg, ProcessOperationSetArg,
+    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg,
+    ProcessOperationSetArg, SetOrClearOperationArg,
 };
 use planner_app::Event;
 use planning::design::DesignName;
@@ -115,6 +116,10 @@ pub(crate) enum Command {
         /// Phase reference (e.g. 'top_1')
         #[arg(long)]
         phase: Reference,
+
+        /// Operation
+        #[arg(long)]
+        operation: SetOrClearOperationArg,
 
         /// Placements object path pattern (regexp)
         #[arg(long)]
@@ -247,9 +252,11 @@ impl TryFrom<Opts> for Event {
             }),
             Command::AssignPlacementsToPhase {
                 phase,
+                operation,
                 placements,
             } => Ok(Event::AssignPlacementsToPhase {
                 phase,
+                operation: operation.into(),
                 placements,
             }),
             Command::SetPlacementOrdering {

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use egui::{Modal, Ui};
+use egui::{Modal, RichText, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 
@@ -23,7 +23,10 @@ pub fn show_errors_modal(
             .unwrap()
             .to_str()
             .unwrap();
-        ui.heading(tr!("modal-errors-title", {file: file_name}));
+
+        ui.add(
+            egui::Label::new(RichText::from(tr!("modal-errors-title", {file: file_name})).heading()).selectable(false),
+        );
 
         let table = TableBuilder::new(ui)
             .striped(true)

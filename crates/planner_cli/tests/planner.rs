@@ -934,6 +934,7 @@ mod operation_sequence_1 {
             "-vv",
             "assign-placements-to-phase",
             "--phase top_1",
+            "--operation set",
             // By placement path pattern
             //"--placements pcb=panel::instance=1::unit=1::ref_des=R1"
             "--placements pcb=panel::instance=1::unit=1::ref_des=R.*",
@@ -2262,10 +2263,11 @@ mod help {
         let expected_output = indoc! {"
             Assign placements to a phase
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-placements-to-phase [OPTIONS] --phase <PHASE> --placements <PLACEMENTS>
+            Usage: planner_cli <--project <PROJECT_NAME>> assign-placements-to-phase [OPTIONS] --phase <PHASE> --operation <OPERATION> --placements <PLACEMENTS>
 
             Options:
                   --phase <PHASE>            Phase reference (e.g. 'top_1')
+                  --operation <OPERATION>    Operation [possible values: set, clear]
                   --placements <PLACEMENTS>  Placements object path pattern (regexp)
               -v, --verbose...               Increase logging verbosity
               -q, --quiet...                 Decrease logging verbosity

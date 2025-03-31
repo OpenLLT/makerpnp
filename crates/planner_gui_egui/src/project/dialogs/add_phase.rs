@@ -142,7 +142,7 @@ impl AddPhaseModal {
                                 egui::ComboBox::from_id_salt(pcb_side_id)
                                     .width(ui.available_width())
                                     .selected_text(match side {
-                                        None => tr!("form-common-combo-default"),
+                                        None => tr!("form-common-combo-select"),
                                         Some(PcbSideChoice::Top) => tr!("form-common-choice-pcb-side-top"),
                                         Some(PcbSideChoice::Bottom) => tr!("form-common-choice-pcb-side-bottom"),
                                     })
@@ -186,7 +186,7 @@ impl AddPhaseModal {
                                 egui::ComboBox::from_id_salt(pcb_side_id)
                                     .width(ui.available_width())
                                     .selected_text(process.clone().map_or_else(
-                                        || tr!("form-common-combo-default"),
+                                        || tr!("form-common-combo-select"),
                                         |process_name| process_name.to_string(),
                                     ))
                                     .show_ui(ui, move |ui| {

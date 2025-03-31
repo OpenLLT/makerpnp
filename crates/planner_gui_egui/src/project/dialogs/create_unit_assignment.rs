@@ -128,7 +128,7 @@ impl CreateUnitAssignmentModal {
                                 egui::ComboBox::from_id_salt(kind_id)
                                     .width(ui.available_width())
                                     .selected_text(match kind {
-                                        None => tr!("form-common-combo-default"),
+                                        None => tr!("form-common-combo-select"),
                                         Some(PcbKindChoice::Single) => tr!("form-common-choice-pcb-kind-single"),
                                         Some(PcbKindChoice::Panel) => {
                                             tr!("form-common-choice-pcb-kind-panel")

@@ -28,7 +28,7 @@ use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
 use crate::operation_history::{OperationHistoryItem, OperationHistoryKind};
-use crate::operations::AddOrRemoveOperation;
+use crate::operations::{AddOrRemoveOperation, SetOrClearOperation};
 use crate::part::PartState;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
 use crate::placement::{
@@ -477,7 +477,12 @@ pub fn store_phase_placements_as_csv(
     Ok(())
 }
 
-pub fn assign_placements_to_phase(project: &mut Project, phase: &Phase, placements_pattern: Regex) -> BTreeSet<Part> {
+pub fn assign_placements_to_phase(
+    project: &mut Project,
+    phase: &Phase,
+    operation: SetOrClearOperation,
+    placements_pattern: Regex,
+) -> BTreeSet<Part> {
     let mut required_load_out_parts = BTreeSet::new();
 
     for (placement_path, state) in project
@@ -493,19 +498,46 @@ pub fn assign_placements_to_phase(project: &mut Project, phase: &Phase, placemen
                     .eq(&phase.pcb_side)
         })
     {
-        let should_assign = match &state.phase {
-            Some(other) if !other.eq(&phase.reference) => true,
-            None => true,
-            _ => false,
-        };
+        // FUTURE consider refactoring this into the filter above, and then working on the remaining results...
+        match operation {
+            SetOrClearOperation::Set => {
+                let should_assign = match &state.phase {
+                    // different
+                    Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => true,
+                    // none
+                    None => true,
+                    // same (ignore)
+                    _ => false,
+                };
 
-        if should_assign {
-            info!(
-                "Assigning placement to phase. phase: {}, placement_path: {}",
-                phase.reference, placement_path
-            );
-            state.phase = Some(phase.reference.clone());
+                if should_assign {
+                    info!(
+                        "Assigning placement to phase. phase: {}, placement_path: {}",
+                        phase.reference, placement_path
+                    );
+                    state.phase = Some(phase.reference.clone());
+                }
+            }
+            SetOrClearOperation::Clear => {
+                let should_remove = match &state.phase {
+                    // different
+                    Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => false,
+                    // none (ignore)
+                    None => false,
+                    // same
+                    _ => true,
+                };
+
+                if should_remove {
+                    info!(
+                        "Removing placement from phase. phase: {}, placement_path: {}",
+                        phase.reference, placement_path
+                    );
+                    state.phase.take();
+                }
+            }
         }
+
         let _inserted = required_load_out_parts.insert(state.placement.part.clone());
     }
 

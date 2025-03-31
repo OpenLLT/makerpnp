@@ -8,7 +8,7 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
-pub use planning::operations::AddOrRemoveOperation;
+pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
 pub use planning::placement::PlacementState;
 pub use planning::placement::PlacementStatus;
 use planning::placement::{PlacementOperation, PlacementSortingItem};
@@ -256,6 +256,7 @@ pub enum Event {
     },
     AssignPlacementsToPhase {
         phase: Reference,
+        operation: SetOrClearOperation,
         #[serde(with = "serde_regex")]
         placements: Regex,
     },
@@ -499,6 +500,7 @@ impl Planner {
             }),
             Event::AssignPlacementsToPhase {
                 phase: phase_reference,
+                operation,
                 placements: placements_pattern,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -519,29 +521,35 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?
                     .clone();
 
-                let parts = project::assign_placements_to_phase(project, &phase, placements_pattern);
+                let parts = project::assign_placements_to_phase(project, &phase, operation.clone(), placements_pattern);
                 trace!("Required load_out parts: {:?}", parts);
 
                 *modified |= project::update_phase_operation_states(project);
 
-                for part in parts.iter() {
-                    let part_state = project
-                        .part_states
-                        .get_mut(&part)
-                        .ok_or_else(|| PartStateError::NoPartStateFound {
-                            part: part.clone(),
-                        })
-                        .map_err(AppError::PartError)?;
+                match operation {
+                    SetOrClearOperation::Set => {
+                        for part in parts.iter() {
+                            let part_state = project
+                                .part_states
+                                .get_mut(&part)
+                                .ok_or_else(|| PartStateError::NoPartStateFound {
+                                    part: part.clone(),
+                                })
+                                .map_err(AppError::PartError)?;
 
-                    *modified |= project::add_process_to_part(part_state, part, phase.process.clone());
+                            *modified |= project::add_process_to_part(part_state, part, phase.process.clone());
+                        }
+
+                        stores::load_out::add_parts_to_load_out(
+                            &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
+                            parts,
+                        )
+                        .map_err(AppError::LoadoutError)?;
+                    }
+                    SetOrClearOperation::Clear => {
+                        // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
+                    }
                 }
-
-                stores::load_out::add_parts_to_load_out(
-                    &LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                    parts,
-                )
-                .map_err(AppError::LoadoutError)?;
-
                 Ok(render::render())
             }),
             Event::AssignFeederToLoadOutItem {

@@ -97,6 +97,9 @@ form-create-unit-assignment-input-pcb-unit-placeholder = Un número > 0
 form-create-unit-assignment-input-placements-filename = Nombre de archivo de las ubicaciones
 form-create-unit-assignment-input-placements-directory = Directorio de ubicaciones
 
+form-common-combo-select = Seleccionar...
+form-common-combo-none = Ninguno
+
 form-common-choice-pcb-kind = Tipo
 form-common-choice-pcb-kind-single = Individual
 form-common-choice-pcb-kind-panel = Panel
