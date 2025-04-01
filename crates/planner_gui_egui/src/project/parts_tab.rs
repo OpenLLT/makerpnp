@@ -109,9 +109,12 @@ impl UiComponent for PartsUi {
 
         ui.separator();
 
-        let table_renderer =
-            egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
-        ui.add(table_renderer);
+        ui.vertical(|ui| {
+            ui.set_height(ui.available_height());
+            let table_renderer =
+                egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
+            ui.add(table_renderer);
+        });
     }
 
     fn update<'context>(
