@@ -438,7 +438,10 @@ impl Project {
 
                         ProjectAction::None
                     }
-                    ProjectView::PhasePlacementOrderings(_) | ProjectView::Process(_) | ProjectView::Parts(_) => {
+                    ProjectView::PhasePlacementOrderings(_)
+                    | ProjectView::Process(_)
+                    | ProjectView::Parts(_)
+                    | ProjectView::Phases(_) => {
                         todo!()
                     }
                 }
@@ -811,7 +814,7 @@ fn make_phase_placements_widget(dyn_placements: &Dynamic<PhasePlacements>) -> im
             phase_placements
                 .placements
                 .iter()
-                .map(|state| format!("{:?}", state.placement))
+                .map(|(path, state)| format!("{:?}", state.placement))
                 .collect::<WidgetList>()
         })
         .into_list()
