@@ -64,6 +64,11 @@ pub struct Capabilities {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct Phases {
+    pub phases: Vec<PhaseOverview>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
     pub phase_reference: Reference,
     pub process: ProcessName,
@@ -188,6 +193,7 @@ pub enum ProjectView {
     Overview(ProjectOverview),
     ProjectTree(ProjectTreeView),
     Placements(PlacementsList),
+    Phases(Phases),
     PhaseOverview(PhaseOverview),
     PhasePlacements(PhasePlacements),
     PhasePlacementOrderings(PhasePlacementOrderings),
@@ -201,6 +207,7 @@ pub enum ProjectViewRequest {
     ProjectTree,
     Overview,
     Placements,
+    Phases,
     PhaseOverview { phase: String },
     PhasePlacements { phase: String },
     Parts,
@@ -296,6 +303,7 @@ pub enum Event {
     RequestOverviewView {},
     RequestPlacementsView {},
     RequestProjectTreeView {},
+    RequestPhasesView {},
     RequestPhaseOverviewView {
         phase_reference: Reference,
     },
@@ -921,6 +929,32 @@ impl Planner {
 
                 Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
             }),
+            Event::RequestPhasesView {} => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let phases = project
+                    .phases
+                    .iter()
+                    .map(|(phase_reference, phase)| PhaseOverview {
+                        phase_reference: phase_reference.clone(),
+                        process: phase.process.clone(),
+                        load_out_source: phase.load_out_source.clone(),
+                        pcb_side: phase.pcb_side.clone(),
+                    })
+                    .collect::<Vec<PhaseOverview>>();
+
+                let phases = Phases {
+                    phases,
+                };
+
+                Ok(view_renderer::view(ProjectView::Phases(phases)))
+            }),
+
             Event::RequestPhaseOverviewView {
                 phase_reference,
             } => Box::new(|model: &mut Model| {
