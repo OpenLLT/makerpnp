@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PlacementState, PlacementsList, Reference};
+use planner_app::{ObjectPath, PhaseOverview, PlacementState, PlacementsList};
 use tracing::debug;
 
 use crate::project::tables::placements::{
@@ -38,7 +38,7 @@ impl PlacementsUi {
         }
     }
 
-    pub fn update_placements(&mut self, placements: PlacementsList, phases: Vec<Reference>) {
+    pub fn update_placements(&mut self, placements: PlacementsList, phases: Vec<PhaseOverview>) {
         self.placements_table_ui
             .update_placements(placements.placements, phases);
     }

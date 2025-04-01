@@ -8,8 +8,8 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, ObjectPath, PlacementState, ProcessName, ProjectOverview, ProjectView,
-    ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
+    AddOrRemoveOperation, DesignName, Event, ObjectPath, PhaseOverview, PlacementState, ProcessName, ProjectOverview,
+    ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -101,6 +101,9 @@ pub struct Project {
     /// initially empty until the OverviewView has been received and processed.
     processes: Vec<ProcessName>,
 
+    /// initially empty, requires fetching the PhaseOverviewView for each phase before it can be used.
+    phases: Vec<PhaseOverview>,
+
     // FIXME actually persist this, currently it should be treated as 'persistable_state'.
     project_tabs: Value<ProjectTabs>,
 
@@ -160,6 +163,7 @@ impl Project {
             modified: false,
             errors: Default::default(),
             processes: Default::default(),
+            phases: Default::default(),
             project_tabs,
             toolbar,
             component,
@@ -289,6 +293,19 @@ impl Project {
         }
 
         #[must_use]
+        fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            if path.eq(&"/project/phases".into()) {
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::Phases,
+                )));
+
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
         fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
@@ -320,7 +337,13 @@ impl Project {
             }
         }
 
-        let handlers = [handle_root, handle_parts, handle_placements, handle_phase];
+        let handlers = [
+            handle_root,
+            handle_parts,
+            handle_phases,
+            handle_placements,
+            handle_phase,
+        ];
 
         handlers
             .iter()
@@ -463,10 +486,33 @@ impl UiComponent for Project {
                     })
                     .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Loaded))
             }
-            ProjectUiCommand::Loaded => self
-                .planner_core_service
-                .update(key, Event::RequestOverviewView {})
-                .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
+            ProjectUiCommand::Loaded => {
+                match self
+                    .planner_core_service
+                    .update(key, Event::RequestOverviewView {})
+                    .into_actions()
+                {
+                    Ok(actions) => {
+                        let mut tasks = actions
+                            .into_iter()
+                            .map(Task::done)
+                            .collect::<Vec<Task<ProjectAction>>>();
+
+                        let additional_tasks = vec![
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                ProjectViewRequest::ProjectTree,
+                            ))),
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                ProjectViewRequest::Phases,
+                            ))),
+                        ];
+                        tasks.extend(additional_tasks);
+
+                        Some(ProjectAction::Task(key, Task::batch(tasks)))
+                    }
+                    Err(error_action) => Some(error_action),
+                }
+            }
             ProjectUiCommand::Create => {
                 let state = self.project_ui_state.lock().unwrap();
                 self.planner_core_service
@@ -500,6 +546,7 @@ impl UiComponent for Project {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::Parts => Event::RequestPartStatesView {},
                     ProjectViewRequest::Placements => Event::RequestPlacementsView {},
+                    ProjectViewRequest::Phases => Event::RequestPhasesView {},
                     ProjectViewRequest::ProjectTree => Event::RequestProjectTreeView {},
                     ProjectViewRequest::PhaseOverview {
                         phase,
@@ -539,11 +586,13 @@ impl UiComponent for Project {
                     ProjectView::Placements(placements) => {
                         debug!("placements: {:?}", placements);
                         let mut state = self.project_ui_state.lock().unwrap();
-                        // TODO get the phases from somewhere
-                        let phases = vec![Reference("bottom".to_string()), Reference("top".to_string())];
                         state
                             .placements_ui
-                            .update_placements(placements, phases)
+                            .update_placements(placements, self.phases.clone())
+                    }
+                    ProjectView::Phases(phases) => {
+                        debug!("phases: {:?}", phases);
+                        self.phases = phases.phases;
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         debug!("phase overview: {:?}", phase_overview);
@@ -565,9 +614,7 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_state = state.phases.get_mut(&phase).unwrap();
 
-                        // TODO get the phases from somewhere
-                        let phases = vec![Reference("bottom".to_string()), Reference("top".to_string())];
-                        phase_state.update_placements(phase_placements, phases);
+                        phase_state.update_placements(phase_placements, self.phases.clone());
                     }
                     ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
                         // TODO
@@ -841,18 +888,37 @@ impl UiComponent for Project {
                         None => None,
                         Some(AddPhaseModalAction::Submit(args)) => {
                             self.add_phase_modal.take();
-                            self.planner_core_service
+
+                            match self
+                                .planner_core_service
                                 .update(key, Event::CreatePhase {
                                     process: args.process,
                                     reference: args.reference,
                                     load_out: args.load_out,
                                     pcb_side: args.pcb_side,
                                 })
-                                .when_ok(|| {
-                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                        ProjectViewRequest::ProjectTree,
-                                    ))
-                                })
+                                .into_actions()
+                            {
+                                Ok(actions) => {
+                                    let mut tasks = actions
+                                        .into_iter()
+                                        .map(Task::done)
+                                        .collect::<Vec<Task<ProjectAction>>>();
+
+                                    let additional_tasks = vec![
+                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                            ProjectViewRequest::ProjectTree,
+                                        ))),
+                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                            ProjectViewRequest::Phases,
+                                        ))),
+                                    ];
+                                    tasks.extend(additional_tasks);
+
+                                    Some(ProjectAction::Task(key, Task::batch(tasks)))
+                                }
+                                Err(error_action) => Some(error_action),
+                            }
                         }
                         Some(AddPhaseModalAction::CloseDialog) => {
                             self.add_phase_modal.take();

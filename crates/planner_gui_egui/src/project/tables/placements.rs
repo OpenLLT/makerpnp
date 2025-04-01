@@ -9,7 +9,7 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{ObjectPath, Part, PcbSide, Placement, PlacementState, PlacementStatus, Reference};
+use planner_app::{ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, Reference};
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -34,7 +34,7 @@ impl PlacementsTableUi {
         }
     }
 
-    pub fn update_placements(&mut self, placements: BTreeMap<ObjectPath, PlacementState>, phases: Vec<Reference>) {
+    pub fn update_placements(&mut self, placements: BTreeMap<ObjectPath, PlacementState>, phases: Vec<PhaseOverview>) {
         let mut part_states_table = self.placements_table.lock().unwrap();
         let table: DataTable<PlacementsRow> = {
             placements
@@ -145,14 +145,17 @@ pub struct PlacementsRow {
 }
 
 pub struct PlacementsRowViewer {
-    phases: Vec<Reference>,
+    phases: Vec<PhaseOverview>,
     sender: Enqueue<PlacementsTableUiCommand>,
     pub(crate) filter: Filter,
 }
 
 impl PlacementsRowViewer {
-    pub fn new(sender: Enqueue<PlacementsTableUiCommand>, mut phases: Vec<Reference>) -> Self {
-        phases.sort();
+    pub fn new(sender: Enqueue<PlacementsTableUiCommand>, mut phases: Vec<PhaseOverview>) -> Self {
+        phases.sort_by(|a, b| {
+            a.phase_reference
+                .cmp(&b.phase_reference)
+        });
 
         let mut filter = Filter::default();
         filter
@@ -340,7 +343,6 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                             // Note: with the arguments to this method, there is no command we can send that will be able
                             //       to do anything useful with the row as there is probably no API to access the
                             //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
-
                             if ui
                                 .add(egui::SelectableLabel::new(
                                     row.placement_state.phase.is_none(),
@@ -351,15 +353,18 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                                 row.placement_state.phase = None;
                             }
 
-                            for phase in self.phases.iter() {
+                            trace!("phases: {:?}, placement_pcb_side: {:?}", self.phases, row.placement_state.placement.pcb_side);
+                            for phase in self.phases.iter()
+                                .filter(|phase|row.placement_state.placement.pcb_side.eq(&phase.pcb_side))
+                            {
                                 if ui
                                     .add(egui::SelectableLabel::new(
-                                        matches!(&row.placement_state.phase, Some(other_phase) if other_phase.eq(phase)),
-                                        phase.to_string(),
+                                        matches!(&row.placement_state.phase, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
+                                        phase.phase_reference.to_string(),
                                     ))
                                     .clicked()
                                 {
-                                    row.placement_state.phase = Some(phase.clone());
+                                    row.placement_state.phase = Some(phase.phase_reference.clone());
                                 }
                             }
                         }).response
