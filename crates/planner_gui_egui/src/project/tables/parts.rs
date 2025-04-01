@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use egui::{Response, Ui};
 use egui_data_table::RowViewer;
-use egui_data_table::viewer::CellWriteContext;
+use egui_data_table::viewer::{CellWriteContext, TableColumnConfig};
 use egui_i18n::tr;
 use egui_mobius::types::Enqueue;
 use planner_app::{Part, ProcessName};
@@ -47,6 +47,20 @@ impl PartStatesRowViewer {
 }
 
 impl RowViewer<PartStatesRow> for PartStatesRowViewer {
+    fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {
+        let _ = column;
+        if is_last_visible_column {
+            TableColumnConfig::remainder()
+                .at_least(24.0)
+                .resizable(false)
+                .auto_size_this_frame(true)
+        } else {
+            TableColumnConfig::auto()
+                .resizable(true)
+                .clip(true)
+        }
+    }
+
     fn num_columns(&mut self) -> usize {
         3
     }
