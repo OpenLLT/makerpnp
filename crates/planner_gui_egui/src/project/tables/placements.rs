@@ -472,8 +472,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             column, _current, _next, _context
         );
         match column {
+            9 => true,
             _ => false,
-            //_ => unreachable!(),
         }
     }
 
