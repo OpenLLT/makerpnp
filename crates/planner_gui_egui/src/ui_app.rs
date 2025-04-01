@@ -197,6 +197,11 @@ impl UiApp {
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         fonts::initialize(&cc.egui_ctx);
 
+        // Set solid scrollbars for the entire app
+        cc.egui_ctx.style_mut(|style| {
+            style.spacing.scroll = egui::style::ScrollStyle::solid();
+        });
+
         // Load previous app state (if any).
         // Note that you must enable the `persistence` feature for this to work.
         let mut instance = if let Some(storage) = cc.storage {
