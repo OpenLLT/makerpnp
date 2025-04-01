@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use derivative::Derivative;
+use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
 use egui_data_table::DataTable;
 use egui_i18n::tr;
@@ -109,12 +110,13 @@ impl UiComponent for PartsUi {
 
         ui.separator();
 
-        ui.vertical(|ui| {
-            ui.set_height(ui.available_height());
-            let table_renderer =
-                egui_data_table::Renderer::new(table, viewer).with_translator(Arc::new(FluentTranslator::default()));
-            ui.add(table_renderer);
-        });
+        let table_renderer = egui_data_table::Renderer::new(table, viewer)
+            .with_style_modify(|style| {
+                style.auto_shrink = [false, false].into();
+                style.scroll_bar_visibility = ScrollBarVisibility::AlwaysVisible;
+            })
+            .with_translator(Arc::new(FluentTranslator::default()));
+        ui.add(table_renderer);
     }
 
     fn update<'context>(
