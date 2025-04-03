@@ -39,17 +39,19 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
         .collect();
 
     if common_prefix == folder_components.len() {
-        // Case 2: folder is a prefix of the file path
         let difference_components_str = &file_components_str[common_prefix..];
         if difference_components_str.is_empty() {
             return String::new();
         }
 
         if let Some(max_len) = desired_length {
+            if difference_components_str.len() <= 2 {
+                return difference_components_str.join(sep_str);
+            }
+
             let mut best_candidate = String::new();
 
-            // Start from the longest possible suffix (including all components) and reduce until it fits
-            for k in (2..=difference_components_str.len()).rev() {
+            for k in (1..=difference_components_str.len()).rev() {
                 let start_index = difference_components_str
                     .len()
                     .saturating_sub(k);
@@ -61,7 +63,6 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
                 }
             }
 
-            // If no candidate found, fallback to the minimal case (last two components)
             if best_candidate.is_empty() {
                 let minimal_candidate = format!(
                     "...{}{}{}{}",
@@ -72,17 +73,15 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
                         .last()
                         .unwrap()
                 );
-                if minimal_candidate.len() <= max_len {
-                    best_candidate = minimal_candidate;
+                best_candidate = if minimal_candidate.len() <= max_len {
+                    minimal_candidate
                 } else {
-                    // If even minimal doesn't fit, truncate but this case may not be covered by tests
-                    best_candidate = format!("...{}", sep_str);
-                }
+                    format!("...{}", sep_str)
+                };
             }
 
             best_candidate
         } else {
-            // When no desired_length, use default: ... + last two components
             if difference_components_str.len() <= 2 {
                 difference_components_str.join(sep_str)
             } else {
@@ -98,7 +97,6 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
             }
         }
     } else {
-        // Case 1: different prefix
         if file_components_str.is_empty() {
             return String::new();
         }
@@ -119,23 +117,20 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
 
         if let Some(max_len) = desired_length {
             if default_clipped.len() <= max_len {
-                return default_clipped;
-            }
-
-            // Try reducing to first, ..., last
-            let reduced = if file_components_str.len() >= 2 {
-                format!(
-                    "{}{}...{}{}",
-                    file_components_str[0],
-                    sep_str,
-                    sep_str,
-                    file_components_str.last().unwrap()
-                )
+                default_clipped
             } else {
-                default_clipped.clone()
-            };
-
-            reduced
+                if file_components_str.len() >= 2 {
+                    format!(
+                        "{}{}...{}{}",
+                        file_components_str[0],
+                        sep_str,
+                        sep_str,
+                        file_components_str.last().unwrap()
+                    )
+                } else {
+                    default_clipped
+                }
+            }
         } else {
             default_clipped
         }
@@ -200,5 +195,21 @@ mod test {
         let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Project1\file.mpnp"#);
         let clipped_file_path2: String = clip_path(folder_path, file_path_2, Some(27));
         assert_eq!(clipped_file_path2, r#"D:\...\Project1\file.mpnp"#);
+    }
+
+    #[test]
+    pub fn real_world_test_1() {
+        let folder_path = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1"#);
+        let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1\loadout.csv"#);
+        let clipped_file_path2: String = clip_path(folder_path, file_path_2, None);
+        assert_eq!(clipped_file_path2, r#"loadout.csv"#);
+    }
+
+    #[test]
+    pub fn real_world_test_2() {
+        let folder_path = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1"#);
+        let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1\loadout.csv"#);
+        let clipped_file_path2: String = clip_path(folder_path, file_path_2, Some(27));
+        assert_eq!(clipped_file_path2, r#"loadout.csv"#);
     }
 }
