@@ -115,17 +115,13 @@ impl LoadOutSource {
     }
 
     pub fn try_from_path(project_path: PathBuf, path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        if !project_path.is_absolute() {
-            return Err(LoadOutSourceError::ProjectPathMustBeAbsolute(project_path));
-        }
-
-        if path.is_relative() {
-            if let Ok(result) = Self::try_from_relative_path(path.clone()) {
-                return Ok(result);
+        match path.is_absolute() {
+            true => Self::from_absolute_path(path.clone()),
+            false => {
+                let full_path = project_path.join(path);
+                Self::try_from_path_inner(full_path)
             }
         }
-        let full_path = project_path.join(path);
-        Self::try_from_absolute_path(full_path)
     }
 
     pub fn from_absolute_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
@@ -141,10 +137,10 @@ impl Display for LoadOutSource {
 }
 
 #[derive(Debug, Error)]
-#[error("Loadout source error. path: {0}")]
 pub enum LoadOutSourceError {
-    ProjectPathMustBeAbsolute(PathBuf),
+    #[error("Path does not exist. path: {0}")]
     PathDoesNotExist(PathBuf),
+    #[error("Path is not a file. path: {0}")]
     PathIsNotAFile(PathBuf),
 }
 
