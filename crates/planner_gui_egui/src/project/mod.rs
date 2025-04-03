@@ -652,7 +652,7 @@ impl UiComponent for Project {
 
                 self.planner_core_service
                     .update(key, event)
-                    .when_ok(|_|None)
+                    .when_ok(|_| None)
             }
             ProjectUiCommand::UpdateView(view) => {
                 match view {
@@ -926,12 +926,10 @@ impl UiComponent for Project {
                         self.show_explorer();
                         None
                     }
-                    Some(ProjectToolbarAction::GenerateArtifacts) => {
-                        self
-                            .planner_core_service
-                            .update(key, Event::GenerateArtifacts)
-                            .when_ok(|_|None)
-                    }
+                    Some(ProjectToolbarAction::GenerateArtifacts) => self
+                        .planner_core_service
+                        .update(key, Event::GenerateArtifacts)
+                        .when_ok(|_| None),
                     Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)

@@ -43,7 +43,7 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
             }
-            
+
             if ui
                 .button(tr!("project-toolbar-button-generate-artifacts"))
                 .clicked()
@@ -98,7 +98,7 @@ impl UiComponent for ProjectToolbar {
             ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
                 Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
             }
-            ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts)
+            ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
         }
     }
 }

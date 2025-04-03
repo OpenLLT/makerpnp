@@ -101,7 +101,7 @@ impl ResultHelper {
                 }
 
                 let action = ProjectAction::Task(self.project_key, Task::batch(tasks));
-    
+
                 Some(action)
             }
             Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),

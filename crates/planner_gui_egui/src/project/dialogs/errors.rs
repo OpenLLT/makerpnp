@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use egui::{Modal, RichText, Ui};
 use egui::scroll_area::ScrollBarVisibility;
+use egui::{Modal, RichText, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 
@@ -51,7 +51,7 @@ pub fn show_errors_modal(
                         });
                         row.col(|ui| {
                             let error_lines = error.lines().collect::<Vec<_>>();
-                            let (first_line, remaining)  = error_lines.split_first().unwrap();
+                            let (first_line, remaining) = error_lines.split_first().unwrap();
                             ui.label(first_line.to_string());
                             ui.collapsing(tr!("expanding-header-details"), |ui| {
                                 egui::ScrollArea::vertical()

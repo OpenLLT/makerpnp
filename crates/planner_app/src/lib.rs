@@ -9,6 +9,7 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
 pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
+use planning::phase::Phase;
 pub use planning::placement::PlacementState;
 pub use planning::placement::PlacementStatus;
 use planning::placement::{PlacementOperation, PlacementSortingItem};
@@ -963,7 +964,9 @@ impl Planner {
             }),
             Event::RequestPhasesView {} => Box::new(|model: &mut Model| {
                 let ModelProject {
-                    project, ..
+                    path,
+                    project,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
@@ -972,12 +975,7 @@ impl Planner {
                 let phases = project
                     .phases
                     .iter()
-                    .map(|(phase_reference, phase)| PhaseOverview {
-                        phase_reference: phase_reference.clone(),
-                        process: phase.process.clone(),
-                        load_out_source: LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                        pcb_side: phase.pcb_side.clone(),
-                    })
+                    .map(|(phase_reference, phase)| build_phase_overview(path, phase_reference.clone(), phase))
                     .collect::<Vec<PhaseOverview>>();
 
                 let phases = Phases {
@@ -991,7 +989,9 @@ impl Planner {
                 phase_reference,
             } => Box::new(|model: &mut Model| {
                 let ModelProject {
-                    project, ..
+                    path,
+                    project,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
@@ -1001,12 +1001,7 @@ impl Planner {
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                let phase_overview = PhaseOverview {
-                    phase_reference,
-                    process: phase.process.clone(),
-                    load_out_source: LoadOutSource::from_str(&phase.load_out_source).unwrap(),
-                    pcb_side: phase.pcb_side.clone(),
-                };
+                let phase_overview = build_phase_overview(path, phase_reference, phase);
 
                 Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
@@ -1202,5 +1197,19 @@ mod app_tests {
         let actual_view = &hello.view(&model);
         let expected_view = ProjectOperationViewModel::default();
         assert_eq!(actual_view, &expected_view);
+    }
+}
+
+fn build_phase_overview(project_path: &PathBuf, phase_reference: Reference, phase: &Phase) -> PhaseOverview {
+    let directory = project_path
+        .parent()
+        .unwrap()
+        .to_path_buf();
+
+    PhaseOverview {
+        phase_reference,
+        process: phase.process.clone(),
+        load_out_source: LoadOutSource::try_from_path(directory, PathBuf::from(&phase.load_out_source)).unwrap(),
+        pcb_side: phase.pcb_side.clone(),
     }
 }
