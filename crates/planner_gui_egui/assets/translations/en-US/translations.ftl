@@ -63,6 +63,12 @@ phase-load-out-source = Load-out source
 phase-pcb-side = PCB Side
 phase-process = Process
 
+project-load-out-header = Load-out
+
+table-load-out-column-reference = Reference
+table-load-out-column-manufacturer = Manufacturer
+table-load-out-column-mpn = MPN
+
 pcb-side-top = Top
 pcb-side-bottom = Bottom
 

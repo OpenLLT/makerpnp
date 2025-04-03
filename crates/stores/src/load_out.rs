@@ -78,7 +78,17 @@ pub fn ensure_load_out(load_out_source: &LoadOutSource) -> anyhow::Result<()> {
 }
 
 // FUTURE maybe this should be a url?
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
 pub struct LoadOutSource(String);
 
 impl FromStr for LoadOutSource {

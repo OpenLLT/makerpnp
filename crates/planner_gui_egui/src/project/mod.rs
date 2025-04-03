@@ -8,8 +8,8 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, ObjectPath, PhaseOverview, PlacementState, ProcessName, ProjectOverview,
-    ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
+    AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, ProcessName,
+    ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -22,6 +22,7 @@ use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
+use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
 use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
 use crate::project::phase_tab::{PhaseTab, PhaseUi, PhaseUiAction, PhaseUiCommand, PhaseUiContext};
@@ -35,6 +36,7 @@ use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod explorer_tab;
+mod load_out_tab;
 mod overview_tab;
 mod parts_tab;
 mod phase_tab;
@@ -215,12 +217,14 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
         project_tabs
-            .show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Phase(phase_tab) if phase_tab.eq(&tab)))
+            .show_tab(
+                |candidate_tab| matches!(candidate_tab, ProjectTabKind::Phase(candidate_tab) if candidate_tab.eq(&tab)),
+            )
             .inspect(|tab_key| {
                 debug!("showing existing phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .inspect_err(|_| {
-                self.ensure_phase(key, phase.clone());
+                self.ensure_phase(key, &phase);
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Phase(tab));
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
@@ -228,22 +232,41 @@ impl Project {
             .ok();
     }
 
-    pub fn show_loadout(&self, loadout_source: &String) {
-        debug!("show_loadout: {}", loadout_source);
+    pub fn show_loadout(&self, key: ProjectKey, load_out_source: &LoadOutSource) {
+        let project_directory = self.path.parent().unwrap();
+
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let tab = LoadOutTab::new(project_directory.into(), load_out_source.clone());
+        project_tabs
+            .show_tab(|candidate_tab| {
+                matches!(candidate_tab, ProjectTabKind::LoadOut(candidate_tab) if candidate_tab.eq(&tab))
+            })
+            .inspect(|tab_key| {
+                debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
+            })
+            .inspect_err(|_| {
+                self.ensure_load_out(key, &load_out_source);
+
+                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
+                debug!("adding load-out tab. phase: {:?}, tab_key: {:?}", load_out_source, tab_key);
+            })
+            .ok();
     }
 
-    fn ensure_phase(&self, key: ProjectKey, phase: Reference) {
+    fn ensure_phase(&self, key: ProjectKey, phase: &Reference) {
+        let phase = phase.clone();
         let mut state = self.project_ui_state.lock().unwrap();
         let _phase_state = state
             .phases
             .entry(phase.clone())
             .or_insert_with(|| {
+                debug!("ensuring phase ui. phase: {:?}", phase);
                 let mut phase_ui = PhaseUi::new();
                 phase_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
-                            debug!("placements ui mapper. command: {:?}", command);
+                            debug!("phase ui mapper. command: {:?}", command);
                             (key, ProjectUiCommand::PhaseUiCommand {
                                 phase: phase.clone(),
                                 command,
@@ -252,6 +275,31 @@ impl Project {
                     });
 
                 phase_ui
+            });
+    }
+
+    fn ensure_load_out(&self, key: ProjectKey, load_out_source: &LoadOutSource) {
+        let load_out_source = load_out_source.clone();
+        let mut state = self.project_ui_state.lock().unwrap();
+        let _load_out_ui = state
+            .load_outs
+            .entry(load_out_source.clone())
+            .or_insert_with(|| {
+                debug!("ensuring load out ui. source: {:?}", load_out_source);
+                let mut load_out_ui = LoadOutUi::new();
+                load_out_ui
+                    .component
+                    .configure_mapper(self.component.sender.clone(), {
+                        move |command| {
+                            debug!("load out ui mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::LoadOutUiCommand {
+                                load_out_source: load_out_source.clone(),
+                                command,
+                            })
+                        }
+                    });
+
+                load_out_ui
             });
     }
 
@@ -331,12 +379,12 @@ impl Project {
                 let tasks: Vec<_> = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhaseOverview {
-                            phase: phase_reference.clone(),
+                            phase: Reference::from(phase_reference.clone()),
                         },
                     ))),
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhasePlacements {
-                            phase: phase_reference.clone(),
+                            phase: Reference::from(phase_reference.clone()),
                         },
                     ))),
                 ];
@@ -588,12 +636,17 @@ impl UiComponent for Project {
                     ProjectViewRequest::PhaseOverview {
                         phase,
                     } => Event::RequestPhaseOverviewView {
-                        phase_reference: phase.into(),
+                        phase_reference: phase,
+                    },
+                    ProjectViewRequest::LoadOut {
+                        source,
+                    } => Event::RequestLoadOutView {
+                        load_out_source: source,
                     },
                     ProjectViewRequest::PhasePlacements {
                         phase,
                     } => Event::RequestPhasePlacementsView {
-                        phase_reference: phase.into(),
+                        phase_reference: phase,
                     },
                 };
 
@@ -635,23 +688,23 @@ impl UiComponent for Project {
                         debug!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
 
-                        self.ensure_phase(key.clone(), phase.clone());
+                        self.ensure_phase(key.clone(), &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.get_mut(&phase).unwrap();
+                        let phase_ui = state.phases.get_mut(&phase).unwrap();
 
-                        phase_state.update_overview(phase_overview);
+                        phase_ui.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
                         debug!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
 
-                        self.ensure_phase(key.clone(), phase.clone());
+                        self.ensure_phase(key.clone(), &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_state = state.phases.get_mut(&phase).unwrap();
+                        let phase_ui = state.phases.get_mut(&phase).unwrap();
 
-                        phase_state.update_placements(phase_placements, self.phases.clone());
+                        phase_ui.update_placements(phase_placements, self.phases.clone());
                     }
                     ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
                         // TODO
@@ -666,6 +719,20 @@ impl UiComponent for Project {
                         state
                             .parts_ui
                             .update_part_states(part_states, self.processes.clone())
+                    }
+                    ProjectView::LoadOut(load_out) => {
+                        debug!("load_out: {:?}", load_out);
+                        let load_out_source = load_out.source.clone();
+
+                        self.ensure_load_out(key.clone(), &load_out_source);
+
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        let load_out_ui = state
+                            .load_outs
+                            .get_mut(&load_out_source)
+                            .unwrap();
+
+                        load_out_ui.update_load_out(load_out);
                     }
                 }
                 None
@@ -796,6 +863,33 @@ impl UiComponent for Project {
                         &new_placement,
                         &old_placement,
                     ),
+                }
+            }
+            ProjectUiCommand::LoadOutUiCommand {
+                load_out_source,
+                command,
+            } => {
+                let mut state = self.project_ui_state.lock().unwrap();
+                let load_out_ui = state
+                    .load_outs
+                    .get_mut(&load_out_source)
+                    .unwrap();
+
+                let context = &mut LoadOutUiContext::default();
+                let phase_ui_action = load_out_ui.update(command, context);
+
+                match phase_ui_action {
+                    Some(LoadOutUiAction::None) => None,
+                    Some(LoadOutUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    None => None,
+                    Some(LoadOutUiAction::UpdateFeederForPart {
+                        part,
+                        feeder,
+                    }) => {
+                        debug!("update feeder. part: {:?}, feeder: {}", part, feeder);
+                        // TODO implement this
+                        None
+                    }
                 }
             }
             ProjectUiCommand::PlacementsUiCommand(command) => {
@@ -1007,9 +1101,18 @@ impl UiComponent for Project {
                     });
 
                 if let Some(phase_overview) = phase_overview {
-                    self.show_loadout(&phase_overview.load_out_source);
+                    self.show_loadout(key, &phase_overview.load_out_source);
+
+                    let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::LoadOut {
+                            source: phase_overview.load_out_source.clone(),
+                        },
+                    )));
+
+                    Some(ProjectAction::Task(key, task))
+                } else {
+                    None
                 }
-                None
             }
         }
     }
@@ -1025,6 +1128,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Parts(tab) => tab.label(),
             ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
+            ProjectTabKind::LoadOut(tab) => tab.label(),
         }
     }
 
@@ -1035,6 +1139,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
         }
     }
 
@@ -1045,6 +1150,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
         }
     }
 }
@@ -1060,6 +1166,7 @@ pub struct ProjectUiState {
     parts_ui: PartsUi,
     explorer_ui: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
+    load_outs: HashMap<LoadOutSource, LoadOutUi>,
 }
 
 impl ProjectUiState {
@@ -1072,6 +1179,7 @@ impl ProjectUiState {
         let mut instance = Self {
             name,
             phases: HashMap::default(),
+            load_outs: HashMap::default(),
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
             parts_ui: PartsUi::new(),
@@ -1122,6 +1230,7 @@ enum ProjectTabKind {
     Phase(PhaseTab),
     Placements(PlacementsTab),
     Parts(PartsTab),
+    LoadOut(LoadOutTab),
 }
 
 #[derive(Debug, Clone)]
@@ -1148,8 +1257,17 @@ pub enum ProjectUiCommand {
     PartsUiCommand(PartsUiCommand),
     OverviewUiCommand(OverviewUiCommand),
     PlacementsUiCommand(PlacementsUiCommand),
-    PhaseUiCommand { phase: Reference, command: PhaseUiCommand },
-    ShowPhaseLoadout { phase: Reference },
+    PhaseUiCommand {
+        phase: Reference,
+        command: PhaseUiCommand,
+    },
+    ShowPhaseLoadout {
+        phase: Reference,
+    },
+    LoadOutUiCommand {
+        load_out_source: LoadOutSource,
+        command: LoadOutUiCommand,
+    },
 }
 
 #[derive(Debug, Clone)]

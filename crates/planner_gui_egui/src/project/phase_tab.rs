@@ -30,7 +30,7 @@ impl PhaseUi {
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
-                debug!("placements table mapper. command: {:?}", placements_table_command);
+                debug!("phase placements table mapper. command: {:?}", placements_table_command);
                 PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 
@@ -141,7 +141,7 @@ impl Tab for PhaseTab {
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
-        if let Some(_phase) = state.phases.remove(&self.phase) {
+        if let Some(_phase_ui) = state.phases.remove(&self.phase) {
             debug!("removed orphaned phase: {:?}", &self.phase);
         }
         true

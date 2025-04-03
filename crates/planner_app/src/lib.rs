@@ -18,7 +18,7 @@ use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
 pub use planning::variant::VariantName;
-use pnp::load_out::LoadOutItem;
+pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
@@ -64,6 +64,12 @@ pub struct Capabilities {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct LoadOut {
+    pub source: LoadOutSource,
+    pub items: Vec<LoadOutItem>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct Phases {
     pub phases: Vec<PhaseOverview>,
 }
@@ -72,7 +78,7 @@ pub struct Phases {
 pub struct PhaseOverview {
     pub phase_reference: Reference,
     pub process: ProcessName,
-    pub load_out_source: String,
+    pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
 }
 
@@ -199,6 +205,7 @@ pub enum ProjectView {
     PhasePlacementOrderings(PhasePlacementOrderings),
     Process(Process),
     Parts(PartStates),
+    LoadOut(LoadOut),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -208,9 +215,10 @@ pub enum ProjectViewRequest {
     Overview,
     Placements,
     Phases,
-    PhaseOverview { phase: String },
-    PhasePlacements { phase: String },
+    PhaseOverview { phase: Reference },
+    PhasePlacements { phase: Reference },
     Parts,
+    LoadOut { source: LoadOutSource },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -314,6 +322,9 @@ pub enum Event {
         process_name: String,
     },
     RequestPartStatesView,
+    RequestLoadOutView {
+        load_out_source: LoadOutSource,
+    },
 }
 
 impl Planner {
@@ -964,7 +975,7 @@ impl Planner {
                     .map(|(phase_reference, phase)| PhaseOverview {
                         phase_reference: phase_reference.clone(),
                         process: phase.process.clone(),
-                        load_out_source: phase.load_out_source.clone(),
+                        load_out_source: LoadOutSource::from_str(&phase.load_out_source).unwrap(),
                         pcb_side: phase.pcb_side.clone(),
                     })
                     .collect::<Vec<PhaseOverview>>();
@@ -993,7 +1004,7 @@ impl Planner {
                 let phase_overview = PhaseOverview {
                     phase_reference,
                     process: phase.process.clone(),
-                    load_out_source: phase.load_out_source.clone(),
+                    load_out_source: LoadOutSource::from_str(&phase.load_out_source).unwrap(),
                     pcb_side: phase.pcb_side.clone(),
                 };
 
@@ -1081,6 +1092,18 @@ impl Planner {
                 };
 
                 Ok(view_renderer::view(ProjectView::Parts(part_states_view)))
+            }),
+            Event::RequestLoadOutView {
+                load_out_source,
+            } => Box::new(move |_model: &mut Model| {
+                let items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
+
+                let load_out_view = LoadOut {
+                    source: load_out_source,
+                    items,
+                };
+
+                Ok(view_renderer::view(ProjectView::LoadOut(load_out_view)))
             }),
         }
     }

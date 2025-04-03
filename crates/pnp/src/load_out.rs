@@ -1,8 +1,12 @@
 use crate::part::Part;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct LoadOutItem {
+    // TODO consider using Reference here
     pub reference: String,
+
+    // FUTURE consider using 'Part' here instead of these two fields.
     pub manufacturer: String,
     pub mpn: String,
 }

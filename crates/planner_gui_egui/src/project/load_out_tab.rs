@@ -1,0 +1,194 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use derivative::Derivative;
+use egui::scroll_area::ScrollBarVisibility;
+use egui::{Ui, WidgetText};
+use egui_data_table::DataTable;
+use egui_i18n::tr;
+use egui_mobius::types::Value;
+use planner_app::{LoadOut, LoadOutSource, Part, Reference};
+use tracing::debug;
+use util::path::clip_path;
+
+use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
+use crate::i18n::datatable_support::FluentTranslator;
+use crate::project::tables::load_out::{LoadOutRow, LoadOutRowViewer};
+use crate::project::tabs::ProjectTabContext;
+use crate::tabs::{Tab, TabKey};
+use crate::ui_component::{ComponentState, UiComponent};
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct LoadOutUi {
+    #[derivative(Debug = "ignore")]
+    load_out_table: Value<Option<(LoadOutRowViewer, DataTable<LoadOutRow>)>>,
+
+    pub component: ComponentState<LoadOutUiCommand>,
+}
+
+impl LoadOutUi {
+    pub fn new() -> Self {
+        Self {
+            load_out_table: Value::default(),
+
+            component: Default::default(),
+        }
+    }
+
+    pub fn update_load_out(&mut self, mut load_out: LoadOut) {
+        let mut load_out_table = self.load_out_table.lock().unwrap();
+        let table: DataTable<LoadOutRow> = {
+            load_out
+                .items
+                .drain(0..)
+                .map(|item| LoadOutRow {
+                    part: Part::new(item.manufacturer, item.mpn),
+                    feeder: Reference(item.reference),
+                })
+        }
+        .collect();
+
+        load_out_table.replace((LoadOutRowViewer::new(self.component.sender.clone()), table));
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LoadOutUiCommand {
+    None,
+
+    // internal
+    RowUpdated {
+        index: usize,
+        new_row: LoadOutRow,
+        old_row: LoadOutRow,
+    },
+    FilterCommand(FilterUiCommand),
+}
+
+#[derive(Debug, Clone)]
+pub enum LoadOutUiAction {
+    None,
+    UpdateFeederForPart { part: Part, feeder: Reference },
+    RequestRepaint,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct LoadOutUiContext {}
+
+impl UiComponent for LoadOutUi {
+    type UiContext<'context> = LoadOutUiContext;
+    type UiCommand = LoadOutUiCommand;
+    type UiAction = LoadOutUiAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        ui.label(tr!("project-load-out-header"));
+        let mut load_out_table = self.load_out_table.lock().unwrap();
+
+        if load_out_table.is_none() {
+            ui.spinner();
+            return;
+        }
+
+        let (viewer, table) = load_out_table.as_mut().unwrap();
+
+        viewer
+            .filter
+            .ui(ui, &mut FilterUiContext::default());
+
+        ui.separator();
+
+        let table_renderer = egui_data_table::Renderer::new(table, viewer)
+            .with_style_modify(|style| {
+                style.auto_shrink = [false, false].into();
+                style.scroll_bar_visibility = ScrollBarVisibility::AlwaysVisible;
+            })
+            .with_translator(Arc::new(FluentTranslator::default()));
+        ui.add(table_renderer);
+    }
+
+    fn update<'context>(
+        &mut self,
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
+        match command {
+            LoadOutUiCommand::None => Some(LoadOutUiAction::None),
+            LoadOutUiCommand::RowUpdated {
+                index,
+                new_row,
+                old_row,
+            } => {
+                let (_, _) = (index, old_row);
+
+                Some(LoadOutUiAction::UpdateFeederForPart {
+                    part: new_row.part,
+                    feeder: new_row.feeder,
+                })
+            }
+            LoadOutUiCommand::FilterCommand(command) => {
+                let mut table = self.load_out_table.lock().unwrap();
+                if let Some((viewer, _table)) = &mut *table {
+                    let action = viewer
+                        .filter
+                        .update(command, &mut FilterUiContext::default());
+                    debug!("filter action: {:?}", action);
+                    match action {
+                        Some(FilterUiAction::ApplyFilter) => Some(LoadOutUiAction::RequestRepaint),
+                        None => None,
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
+pub struct LoadOutTab {
+    load_out_source: LoadOutSource,
+
+    tab_label: String,
+}
+
+impl LoadOutTab {
+    pub fn new(project_directory: PathBuf, load_out_source: LoadOutSource) -> Self {
+        let load_out_source_path = PathBuf::from(load_out_source.to_string());
+
+        let clipped_load_out_source = clip_path(project_directory, load_out_source_path, None);
+
+        Self {
+            load_out_source,
+            tab_label: clipped_load_out_source,
+        }
+    }
+}
+
+impl Tab for LoadOutTab {
+    type Context = ProjectTabContext;
+
+    fn label(&self) -> WidgetText {
+        egui::widget_text::WidgetText::from(&self.tab_label)
+    }
+
+    fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
+        let state = context.state.lock().unwrap();
+        let load_out_ui = state
+            .load_outs
+            .get(&self.load_out_source)
+            .unwrap();
+        UiComponent::ui(load_out_ui, ui, &mut LoadOutUiContext::default());
+    }
+
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+        let mut state = context.state.lock().unwrap();
+        if let Some(_load_out_ui) = state
+            .load_outs
+            .remove(&self.load_out_source)
+        {
+            debug!("removed orphaned load out: {:?}", &self.load_out_source);
+        }
+        true
+    }
+}
