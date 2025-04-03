@@ -141,7 +141,13 @@ impl Project {
                 (key, ProjectUiCommand::ToolbarCommand(command))
             });
 
-        let project_ui_state = Value::new(ProjectUiState::new(key, name, component_sender.clone()));
+        let project_directory = path.parent().unwrap().to_path_buf();
+        let project_ui_state = Value::new(ProjectUiState::new(
+            key,
+            project_directory,
+            name,
+            component_sender.clone(),
+        ));
 
         let project_tabs = Value::new(ProjectTabs::default());
         {
@@ -222,6 +228,10 @@ impl Project {
             .ok();
     }
 
+    pub fn show_loadout(&self, loadout_source: &String) {
+        debug!("show_loadout: {}", loadout_source);
+    }
+
     fn ensure_phase(&self, key: ProjectKey, phase: Reference) {
         let mut state = self.project_ui_state.lock().unwrap();
         let _phase_state = state
@@ -252,7 +262,7 @@ impl Project {
 
         #[must_use]
         fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"/project/".into()) {
+            if path.eq(&"^/project/$".into()) {
                 project.show_overview();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Overview,
@@ -266,7 +276,7 @@ impl Project {
 
         #[must_use]
         fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"/project/placements".into()) {
+            if path.eq(&"^/project/placements$".into()) {
                 project.show_placements();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Placements,
@@ -280,7 +290,7 @@ impl Project {
 
         #[must_use]
         fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"/project/parts".into()) {
+            if path.eq(&"^/project/parts$".into()) {
                 project.show_parts();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Parts,
@@ -294,7 +304,7 @@ impl Project {
 
         #[must_use]
         fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"/project/phases".into()) {
+            if path.eq(&"/project/phases$".into()) {
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Phases,
                 )));
@@ -307,7 +317,7 @@ impl Project {
 
         #[must_use]
         fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            let phase_pattern = Regex::new(r"/project/phases/(?<phase>.*){1}").unwrap();
+            let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let phase_reference: String = captures
                     .name("phase")
@@ -337,10 +347,37 @@ impl Project {
             }
         }
 
+        #[must_use]
+        fn handle_phase_loadout(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}/loadout$").unwrap();
+            if let Some(captures) = phase_pattern.captures(&path) {
+                let phase_reference: String = captures
+                    .name("phase")
+                    .unwrap()
+                    .as_str()
+                    .to_string();
+                debug!("phase_reference: {}", phase_reference);
+
+                let tasks: Vec<_> = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::Phases,
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPhaseLoadout {
+                        phase: Reference(phase_reference),
+                    })),
+                ];
+
+                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+            } else {
+                None
+            }
+        }
+
         let handlers = [
             handle_root,
             handle_parts,
             handle_phases,
+            handle_phase_loadout,
             handle_placements,
             handle_phase,
         ];
@@ -957,6 +994,23 @@ impl UiComponent for Project {
                     None
                 }
             }
+            ProjectUiCommand::ShowPhaseLoadout {
+                phase,
+            } => {
+                let phase_overview = self
+                    .phases
+                    .iter()
+                    .find(|phase_overview| {
+                        phase_overview
+                            .phase_reference
+                            .eq(&phase)
+                    });
+
+                if let Some(phase_overview) = phase_overview {
+                    self.show_loadout(&phase_overview.load_out_source);
+                }
+                None
+            }
         }
     }
 }
@@ -1009,14 +1063,19 @@ pub struct ProjectUiState {
 }
 
 impl ProjectUiState {
-    pub fn new(key: ProjectKey, name: Option<String>, sender: Enqueue<(ProjectKey, ProjectUiCommand)>) -> Self {
+    pub fn new(
+        key: ProjectKey,
+        project_directory: PathBuf,
+        name: Option<String>,
+        sender: Enqueue<(ProjectKey, ProjectUiCommand)>,
+    ) -> Self {
         let mut instance = Self {
             name,
             phases: HashMap::default(),
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
             parts_ui: PartsUi::new(),
-            explorer_ui: ExplorerUi::new(),
+            explorer_ui: ExplorerUi::new(project_directory),
         };
 
         instance
@@ -1090,6 +1149,7 @@ pub enum ProjectUiCommand {
     OverviewUiCommand(OverviewUiCommand),
     PlacementsUiCommand(PlacementsUiCommand),
     PhaseUiCommand { phase: Reference, command: PhaseUiCommand },
+    ShowPhaseLoadout { phase: Reference },
 }
 
 #[derive(Debug, Clone)]

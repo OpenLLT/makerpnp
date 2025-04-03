@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::path::PathBuf;
+
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::{tr, translate_fluent};
@@ -6,7 +9,8 @@ use egui_mobius::types::Value;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
-use planner_app::{ProjectTreeItem, ProjectTreeView};
+use planner_app::{Arg, ProjectTreeItem, ProjectTreeView};
+use util::path::clip_path;
 
 use crate::project::tabs::ProjectTabContext;
 use crate::project::{ProjectPath, project_path_from_view_path, view_path_from_project_path};
@@ -16,6 +20,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ExplorerUi {
+    project_directory: PathBuf,
     project_tree_view: Option<ProjectTreeView>,
 
     #[derivative(Debug = "ignore")]
@@ -25,8 +30,9 @@ pub struct ExplorerUi {
 }
 
 impl ExplorerUi {
-    pub fn new() -> Self {
+    pub fn new(project_directory: PathBuf) -> Self {
         Self {
+            project_directory,
             project_tree_view: None,
             tree_view_state: Default::default(),
             component: Default::default(),
@@ -69,6 +75,49 @@ impl ExplorerUi {
         node: NodeIndex,
     ) {
         let item = &graph[node];
+
+        fn handle_phase_loadout<'p>(
+            item: &'p ProjectTreeItem,
+            project_directory: &'_ PathBuf,
+        ) -> Result<Cow<'p, ProjectTreeItem>, ()> {
+            if !item.key.eq("phase-loadout") {
+                return Err(());
+            }
+
+            //
+            // create a clipped load-out-source-path if possible
+            //
+            let Arg::String(load_out_source) = &item.args["source"] else {
+                return Err(());
+            };
+
+            let load_out_source_path = PathBuf::from(load_out_source);
+
+            let clipped_load_out_source = clip_path(project_directory.clone(), load_out_source_path, None);
+
+            let mut item = item.clone();
+            item.args
+                .insert("source".to_string(), Arg::String(clipped_load_out_source));
+
+            let item: Cow<'p, ProjectTreeItem> = Cow::Owned(item);
+
+            Ok(item)
+        }
+
+        fn default_handler<'p>(
+            item: &'p ProjectTreeItem,
+            _project_directory: &'_ PathBuf,
+        ) -> Result<Cow<'p, ProjectTreeItem>, ()> {
+            Ok(Cow::Borrowed(item))
+        }
+
+        // some items need additional processing
+        let handlers = [handle_phase_loadout, default_handler];
+
+        let item = handlers
+            .iter()
+            .find_map(|handler| handler(item, &self.project_directory).ok())
+            .unwrap();
 
         let key = format!("project-explorer-node-{}", item.key);
         let args = build_fluent_args(&item.args);

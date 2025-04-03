@@ -73,6 +73,7 @@ project-explorer-node-parts = Piezas
 project-explorer-node-placements = Ubicaciones
 project-explorer-node-phases = Fases
 project-explorer-node-phase = { $reference }
+project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Asignaciones de unidad
 project-explorer-node-unit-assignment = { $name } ({$design_name} - {$variant_name})
 project-explorer-node-pcbs = PCBs

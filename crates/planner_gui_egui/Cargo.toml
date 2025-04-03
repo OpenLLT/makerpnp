@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 planner_app = { path = "../planner_app" }
+util = { path = "../util" }
 
 # tasks/async
 tokio = { workspace = true, features = ["full"]}
