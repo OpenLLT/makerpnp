@@ -83,38 +83,26 @@ impl ResultHelper {
 
     pub fn when_ok<F>(self, f: F) -> Option<ProjectAction>
     where
-        F: FnOnce() -> ProjectAction,
+        F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>,
     {
-        self.into_action_inner(Some(f()))
-    }
-
-    pub fn into_inner(self) -> (ProjectKey, Result<Vec<ProjectAction>, ProjectError>) {
-        (self.project_key, self.result)
-    }
-
-    pub fn unwrap(self) -> Result<Vec<ProjectAction>, ProjectError> {
-        self.result
-    }
-
-    pub fn into_action(self) -> Option<ProjectAction> {
-        self.into_action_inner(None)
-    }
-
-    pub fn into_action_inner(self, additional_action: Option<ProjectAction>) -> Option<ProjectAction> {
         match self.result {
-            Ok(mut actions) => {
-                if let Some(additional_action) = additional_action {
-                    actions.push(additional_action);
-                }
-                let tasks: Vec<_> = actions
+            Ok(actions) => {
+                let mut tasks = vec![];
+                let effect_tasks: Vec<Task<ProjectAction>> = actions
                     .into_iter()
-                    .map(|action| Task::done(action))
+                    .map(Task::done)
                     .collect();
-                if tasks.is_empty() {
-                    None
-                } else {
-                    Some(ProjectAction::Task(self.project_key, Task::batch(tasks)))
+
+                tasks.extend(effect_tasks);
+
+                if let Some(command) = f(&mut tasks) {
+                    let final_task = Task::done(ProjectAction::UiCommand(command));
+                    tasks.push(final_task);
                 }
+
+                let action = ProjectAction::Task(self.project_key, Task::batch(tasks));
+    
+                Some(action)
             }
             Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
         }

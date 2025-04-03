@@ -569,7 +569,7 @@ impl UiComponent for Project {
                     .update(key, Event::Load {
                         path: self.path.clone(),
                     })
-                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Loaded))
+                    .when_ok(|_tasks| Some(ProjectUiCommand::Loaded))
             }
             ProjectUiCommand::Loaded => {
                 match self
@@ -605,17 +605,17 @@ impl UiComponent for Project {
                         name: state.name.clone().unwrap(),
                         path: self.path.clone(),
                     })
-                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Created))
+                    .when_ok(|_| Some(ProjectUiCommand::Created))
             }
             ProjectUiCommand::Created => self
                 .planner_core_service
                 .update(key, Event::RequestOverviewView {})
-                .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
+                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
             ProjectUiCommand::Save => {
                 debug!("saving project. path: {}", self.path.display());
                 self.planner_core_service
                     .update(key, Event::Save)
-                    .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::Saved))
+                    .when_ok(|_| Some(ProjectUiCommand::Saved))
             }
             ProjectUiCommand::Saved => {
                 debug!("saved");
@@ -652,7 +652,7 @@ impl UiComponent for Project {
 
                 self.planner_core_service
                     .update(key, event)
-                    .into_action()
+                    .when_ok(|_|None)
             }
             ProjectUiCommand::UpdateView(view) => {
                 match view {
@@ -930,12 +930,12 @@ impl UiComponent for Project {
                         self
                             .planner_core_service
                             .update(key, Event::GenerateArtifacts)
-                            .into_action()
+                            .when_ok(|_|None)
                     }
                     Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)
-                        .when_ok(|| ProjectAction::UiCommand(ProjectUiCommand::ProjectRefreshed)),
+                        .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         let mut modal = AddPcbModal::new(self.path.clone());
                         modal
@@ -1003,11 +1003,7 @@ impl UiComponent for Project {
                                     kind: args.kind,
                                     name: args.name,
                                 })
-                                .when_ok(|| {
-                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                        ProjectViewRequest::ProjectTree,
-                                    ))
-                                })
+                                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
                         }
                         Some(AddPcbModalAction::CloseDialog) => {
                             self.add_pcb_modal.take();
@@ -1079,11 +1075,7 @@ impl UiComponent for Project {
                                     variant: VariantName::from_str(&args.variant_name).unwrap(),
                                     unit: args.object_path,
                                 })
-                                .when_ok(|| {
-                                    ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                        ProjectViewRequest::ProjectTree,
-                                    ))
-                                })
+                                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
                         }
                         Some(CreateUnitAssignmentModalAction::CloseDialog) => {
                             self.create_unit_assignment_modal.take();
