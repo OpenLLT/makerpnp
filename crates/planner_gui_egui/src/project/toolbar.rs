@@ -10,6 +10,7 @@ pub enum ProjectToolbarUiCommand {
     AddPhaseClicked,
     CreateUnitAssignmentClicked,
     RefreshFromDesignVariantsClicked,
+    GenerateArtifactsClicked,
 }
 
 pub enum ProjectToolbarAction {
@@ -18,6 +19,7 @@ pub enum ProjectToolbarAction {
     ShowAddPhaseDialog,
     ShowCreateUnitAssignmentDialog,
     RefreshFromDesignVariants,
+    GenerateArtifacts,
 }
 
 #[derive(Default)]
@@ -40,6 +42,14 @@ impl UiComponent for ProjectToolbar {
             {
                 self.component
                     .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
+            }
+            
+            if ui
+                .button(tr!("project-toolbar-button-generate-artifacts"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::GenerateArtifactsClicked)
             }
 
             if ui
@@ -88,6 +98,7 @@ impl UiComponent for ProjectToolbar {
             ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
                 Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
             }
+            ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts)
         }
     }
 }

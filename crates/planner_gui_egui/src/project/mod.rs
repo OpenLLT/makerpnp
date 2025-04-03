@@ -926,6 +926,12 @@ impl UiComponent for Project {
                         self.show_explorer();
                         None
                     }
+                    Some(ProjectToolbarAction::GenerateArtifacts) => {
+                        self
+                            .planner_core_service
+                            .update(key, Event::GenerateArtifacts)
+                            .into_action()
+                    }
                     Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)

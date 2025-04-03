@@ -25,6 +25,7 @@ side-bar-footer = Pie de página de la barra lateral
 side-bar-item-path = Ruta
 
 project-toolbar-button-show-explorer = Mostrar explorador
+project-toolbar-button-generate-artifacts = Generar artefactos
 project-toolbar-button-refresh-from-variants = Actualizar desde variantes
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-add-phase = Añadir fase
