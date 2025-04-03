@@ -105,6 +105,9 @@ pub mod fluent_argument_helpers {
                     Arg::String(value) => {
                         fluent_args.set(key, FluentValue::String(value.into()));
                     }
+                    Arg::Integer(value) => {
+                        fluent_args.set(key, FluentValue::Number(value.into()));
+                    }
                 }
             }
             fluent_args

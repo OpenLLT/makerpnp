@@ -135,7 +135,7 @@ impl Default for ProjectTreeItem {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
 pub enum Arg {
     String(String),
-    // Add other types, like 'Number' here as required.
+    Integer(i64), // Add other types, like 'Number' here as required.
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
@@ -888,17 +888,38 @@ impl Planner {
                     .tree
                     .add_edge(root_node, phases_node, ());
 
-                for (reference, ..) in &project.phases {
+                for (reference, phase) in &project.phases {
+                    //
+                    // add phase node
+                    //
+                    let phase_path = format!("/phases/{}", reference).to_string();
                     let phase_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "phase".to_string(),
                             args: HashMap::from([("reference".to_string(), Arg::String(reference.to_string()))]),
-                            path: format!("/phases/{}", reference).to_string(),
+                            path: phase_path.clone(),
                         });
                     project_tree
                         .tree
-                        .add_edge(phases_node.clone(), phase_node, ());
+                        .add_edge(phases_node, phase_node, ());
+
+                    //
+                    // add loadout node to the phase
+                    //
+                    let loadout_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "phase-loadout".to_string(),
+                            args: HashMap::from([(
+                                "source".to_string(),
+                                Arg::String(phase.load_out_source.to_string()),
+                            )]),
+                            path: format!("{}/loadout", phase_path),
+                        });
+                    project_tree
+                        .tree
+                        .add_edge(phase_node, loadout_node, ());
 
                     if add_test_nodes {
                         let test_node = project_tree
