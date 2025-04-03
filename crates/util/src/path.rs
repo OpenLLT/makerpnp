@@ -137,6 +137,7 @@ pub fn clip_path(folder_path: PathBuf, file_path: PathBuf, desired_length: Optio
     }
 }
 
+#[cfg(test)]
 mod test {
     // Human generated test cases to match human generated method description.
     use super::*;
