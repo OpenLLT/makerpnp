@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use egui::{Modal, RichText, Ui};
+use egui::scroll_area::ScrollBarVisibility;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 
@@ -32,10 +33,10 @@ pub fn show_errors_modal(
 
         let table = TableBuilder::new(ui)
             .striped(true)
-            .resizable(true)
+            .auto_shrink(true)
+            .resizable(false)
             .column(Column::auto())
             .column(Column::remainder());
-
         table
             .header(20.0, |mut header| {
                 header.col(|ui| {
@@ -49,7 +50,17 @@ pub fn show_errors_modal(
                             ui.label(format!("{}", index));
                         });
                         row.col(|ui| {
-                            ui.label(error);
+                            let error_lines = error.lines().collect::<Vec<_>>();
+                            let (first_line, remaining)  = error_lines.split_first().unwrap();
+                            ui.label(first_line.to_string());
+                            ui.collapsing(tr!("expanding-header-details"), |ui| {
+                                egui::ScrollArea::vertical()
+                                    .min_scrolled_height(150.0)
+                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                    .show(ui, |ui| {
+                                        ui.label(remaining.join("\n"));
+                                    });
+                            });
                         });
                     })
                 }

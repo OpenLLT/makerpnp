@@ -154,6 +154,8 @@ table-parts-column-processes = Processes
 
 filter-expression = Search...
 
+expanding-header-details = Details
+
 #
 # egui-data-tables
 #
