@@ -27,6 +27,7 @@ side-bar-item-path = Ruta
 project-toolbar-button-show-explorer = Mostrar explorador
 project-toolbar-button-generate-artifacts = Generar artefactos
 project-toolbar-button-refresh-from-variants = Actualizar desde variantes
+project-toolbar-button-remove-unknown-placements = Eliminar ubicaciones desconocidas
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-add-phase = Añadir fase
 project-toolbar-button-create-unit-assignment = Crear asignacion de unidad

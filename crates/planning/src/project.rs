@@ -196,6 +196,31 @@ impl Project {
 
         unique_design_variants
     }
+
+    #[must_use]
+    pub fn remove_unknown_placements(&mut self, phase_reference: Option<Reference>) -> bool {
+        let mut modified = false;
+
+        self.placements
+            .retain(|object_path, state| match state.status {
+                PlacementStatus::Unknown => {
+                    let should_remove = match (&phase_reference, &state.phase) {
+                        (None, _) => true,
+                        (Some(phase), Some(candidate)) if phase.eq(candidate) => true,
+                        _ => false,
+                    };
+
+                    if should_remove {
+                        info!("Removing unknown placement, object_path: {:?}", object_path);
+                        modified |= true;
+                    }
+                    !should_remove
+                }
+                _ => true,
+            });
+
+        modified
+    }
 }
 
 #[derive(Error, Debug)]

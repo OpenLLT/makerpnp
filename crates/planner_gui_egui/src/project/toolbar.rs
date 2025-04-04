@@ -11,6 +11,7 @@ pub enum ProjectToolbarUiCommand {
     CreateUnitAssignmentClicked,
     RefreshFromDesignVariantsClicked,
     GenerateArtifactsClicked,
+    RemoveUnknownPlacements,
 }
 
 pub enum ProjectToolbarAction {
@@ -20,6 +21,7 @@ pub enum ProjectToolbarAction {
     ShowCreateUnitAssignmentDialog,
     RefreshFromDesignVariants,
     GenerateArtifacts,
+    RemoveUnknownPlacements,
 }
 
 #[derive(Default)]
@@ -43,7 +45,6 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::ProjectExplorerClicked)
             }
-
             if ui
                 .button(tr!("project-toolbar-button-generate-artifacts"))
                 .clicked()
@@ -51,13 +52,19 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::GenerateArtifactsClicked)
             }
-
             if ui
                 .button(tr!("project-toolbar-button-refresh-from-variants"))
                 .clicked()
             {
                 self.component
                     .send(ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked)
+            }
+            if ui
+                .button(tr!("project-toolbar-button-remove-unknown-placements"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::RemoveUnknownPlacements)
             }
             if ui
                 .button(tr!("project-toolbar-button-add-pcb"))
@@ -99,6 +106,7 @@ impl UiComponent for ProjectToolbar {
                 Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
             }
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
+            ProjectToolbarUiCommand::RemoveUnknownPlacements => Some(ProjectToolbarAction::RemoveUnknownPlacements),
         }
     }
 }

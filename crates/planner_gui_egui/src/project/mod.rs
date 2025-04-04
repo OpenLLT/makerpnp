@@ -944,6 +944,12 @@ impl UiComponent for Project {
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
+                    Some(ProjectToolbarAction::RemoveUnknownPlacements) => self
+                        .planner_core_service
+                        .update(key, Event::RemoveUnknownPlacements {
+                            phase: None,
+                        })
+                        .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::ShowAddPcbDialog) => {
                         let mut modal = AddPcbModal::new(self.path.clone());
                         modal

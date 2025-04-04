@@ -304,6 +304,9 @@ pub enum Event {
         object_path_patterns: Vec<Regex>,
         operation: PlacementOperation,
     },
+    RemoveUnknownPlacements {
+        phase: Option<Reference>,
+    },
     /// Reset operations
     ResetOperations {},
 
@@ -573,6 +576,22 @@ impl Planner {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
                     }
                 }
+                Ok(render::render())
+            }),
+            Event::RemoveUnknownPlacements {
+                phase: phase_reference,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                *modified |= project.remove_unknown_placements(phase_reference);
+
                 Ok(render::render())
             }),
             Event::AssignFeederToLoadOutItem {
