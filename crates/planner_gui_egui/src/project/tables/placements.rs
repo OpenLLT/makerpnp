@@ -372,7 +372,6 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                                 row.placement_state.phase = None;
                             }
 
-                            trace!("phases: {:?}, placement_pcb_side: {:?}", self.phases, row.placement_state.placement.pcb_side);
                             for phase in self.phases.iter()
                                 .filter(|phase|row.placement_state.placement.pcb_side.eq(&phase.pcb_side))
                             {
