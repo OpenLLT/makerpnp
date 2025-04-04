@@ -439,7 +439,10 @@ impl Planner {
                     })
                     .map_err(|cause| AppError::OperationError(cause.into()))?;
                 *modified |= true;
-                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+
+                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= refresh_result.modified;
+
                 Ok(render::render())
             }),
             Event::RefreshFromDesignVariants => Box::new(|model: &mut Model| {
@@ -454,8 +457,6 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
-
                 *modified |= refresh_result.modified;
 
                 Ok(render::render())
@@ -539,8 +540,8 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                *modified |= true;
+                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= refresh_result.modified;
 
                 let phase = project
                     .phases
@@ -645,8 +646,8 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let _refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
-                *modified |= true;
+                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                *modified |= refresh_result.modified;
 
                 *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
                     .map_err(AppError::OperationError)?;
@@ -1221,6 +1222,8 @@ impl Planner {
         let unique_design_variants = project.unique_design_variants();
         let design_variant_placement_map = stores::placements::load_all_placements(&unique_design_variants, directory)?;
         let refresh_result = project::refresh_from_design_variants(project, design_variant_placement_map);
+
+        trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
 
         Ok(refresh_result)
     }
