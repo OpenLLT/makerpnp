@@ -132,8 +132,12 @@ form-file-not-found = File not found
 
 placement-placed = Placed
 placement-pending = Pending
+
 placement-place = Place
 placement-no-place = No-place
+
+placement-status-known = Known
+placement-status-unknown = Unknown
 
 table-placements-column-index = #
 table-placements-column-object-path = Object path
@@ -147,6 +151,7 @@ table-placements-column-x = X
 table-placements-column-y = Y
 table-placements-column-pcb-side = Side
 table-placements-column-phase = Phase
+table-placements-column-status = Status
 
 table-parts-column-index = #
 table-parts-column-manufacturer = Manufacturer

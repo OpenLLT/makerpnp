@@ -14,7 +14,9 @@ use planner_app::{ObjectPath, Part, PcbSide, PhaseOverview, Placement, Placement
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::i18n::conversions::{pcb_side_to_i18n_key, placement_place_to_i18n_key, placement_placed_to_i18n_key};
+use crate::i18n::conversions::{
+    pcb_side_to_i18n_key, placement_place_to_i18n_key, placement_placed_to_i18n_key, placement_status_to_i18n_key,
+};
 use crate::i18n::datatable_support::FluentTranslator;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -194,7 +196,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     }
 
     fn num_columns(&mut self) -> usize {
-        11
+        12
     }
 
     fn is_sortable_column(&mut self, _column: usize) -> bool {
@@ -276,6 +278,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .placement_state
                 .placed
                 .cmp(&row_r.placement_state.placed),
+            11 => row_l
+                .placement_state
+                .status
+                .cmp(&row_r.placement_state.status),
             _ => unreachable!(),
         }
     }
@@ -293,6 +299,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             8 => tr!("table-placements-column-pcb-side"),
             9 => tr!("table-placements-column-phase"),
             10 => tr!("table-placements-column-placed"),
+            11 => tr!("table-placements-column-status"),
             _ => unreachable!(),
         }
         .into()
@@ -331,6 +338,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             }
             10 => {
                 let label = tr!(placement_placed_to_i18n_key(row.placement_state.placed));
+                ui.label(label)
+            }
+            11 => {
+                let label = tr!(placement_status_to_i18n_key(&row.placement_state.status));
                 ui.label(label)
             }
 
@@ -391,6 +402,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 Some(response)
             }
             10 => None,
+            11 => None,
             _ => unreachable!(),
         }
     }
@@ -455,6 +467,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .placement_state
                 .placed
                 .clone_from(&src.placement_state.placed),
+            11 => dst
+                .placement_state
+                .status
+                .clone_from(&src.placement_state.status),
             _ => unreachable!(),
         }
     }
@@ -534,7 +550,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn filter_row(&mut self, row: &PlacementsRow) -> bool {
         let haystack = format!(
-            "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}'",
+            "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}', status: '{}'",
             &row.object_path,
             &row.placement_state.placement.ref_des,
             &row.placement_state
@@ -548,7 +564,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .phase
                 .as_ref()
                 .map(|phase| phase.to_string())
-                .unwrap_or_default()
+                .unwrap_or_default(),
+            &row.placement_state.status,
         );
 
         // "Filter single row. If this returns false, the row will be hidden."

@@ -26,10 +26,19 @@ pub struct PlacementState {
     pub phase: Option<Reference>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlacementStatus {
     Known,
     Unknown,
+}
+
+impl Display for PlacementStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlacementStatus::Known => f.write_str("Known"),
+            PlacementStatus::Unknown => f.write_str("Unknown"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq, PartialOrd, Ord)]
