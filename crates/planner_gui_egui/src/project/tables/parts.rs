@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeSet;
 
 use egui::{Response, Ui};
 use egui_data_table::RowViewer;
@@ -15,6 +16,8 @@ use crate::project::parts_tab::PartsUiCommand;
 pub struct PartStatesRow {
     pub part: Part,
     pub enabled_processes: Vec<(ProcessName, bool)>,
+    pub ref_des_set: BTreeSet<String>,
+    pub quantity: usize,
 }
 
 pub struct PartStatesRowViewer {
@@ -62,11 +65,11 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn num_columns(&mut self) -> usize {
-        3
+        5
     }
 
     fn is_sortable_column(&mut self, column: usize) -> bool {
-        [true, true, true][column]
+        [true, true, true, true, true][column]
     }
 
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PartStatesRow) -> bool {
@@ -92,6 +95,10 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 .enabled_processes
                 .iter()
                 .cmp(&row_r.enabled_processes),
+            3 => row_l
+                .ref_des_set
+                .cmp(&row_r.ref_des_set),
+            4 => row_l.quantity.cmp(&row_r.quantity),
             _ => unreachable!(),
         }
     }
@@ -101,6 +108,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             0 => tr!("table-parts-column-manufacturer"),
             1 => tr!("table-parts-column-mpn"),
             2 => tr!("table-parts-column-processes"),
+            3 => tr!("table-parts-column-ref-des-set"),
+            4 => tr!("table-parts-column-quantity"),
             _ => unreachable!(),
         }
         .into()
@@ -124,6 +133,16 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 let processes_label: String = processes.join(", ");
                 ui.label(processes_label)
             }
+            3 => {
+                let label: String = row
+                    .ref_des_set
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<String>>()
+                    .join(", ");
+                ui.label(label)
+            }
+            4 => ui.label(format!("{}", row.quantity)),
             _ => unreachable!(),
         };
     }
@@ -147,6 +166,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 });
                 Some(response)
             }
+            3 => None,
+            4 => None,
             _ => unreachable!(),
         }
     }
@@ -164,6 +185,10 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 dst.enabled_processes
                     .clone_from(&src.enabled_processes);
             }
+            3 => dst
+                .ref_des_set
+                .clone_from(&src.ref_des_set),
+            4 => dst.quantity.clone_from(&src.quantity),
             _ => unreachable!(),
         }
     }
@@ -181,6 +206,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 mpn: "".to_string(),
             },
             enabled_processes,
+            ref_des_set: Default::default(),
+            quantity: 0,
         }
     }
 
@@ -199,6 +226,8 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             0 => false,
             1 => false,
             2 => true,
+            3 => false,
+            4 => false,
             _ => unreachable!(),
         }
     }

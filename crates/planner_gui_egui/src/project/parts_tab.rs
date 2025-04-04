@@ -50,6 +50,8 @@ impl PartsUi {
                     PartStatesRow {
                         part: part_state.part,
                         enabled_processes,
+                        ref_des_set: part_state.ref_des_set,
+                        quantity: part_state.quantity,
                     }
                 })
         }

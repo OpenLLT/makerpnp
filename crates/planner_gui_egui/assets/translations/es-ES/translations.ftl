@@ -144,7 +144,7 @@ placement-status-unknown = Desconocido
 
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto
-table-placements-column-refdes = Ref. Des.
+table-placements-column-refdes = Des. de Ref.
 table-placements-column-place = Coloca
 table-placements-column-placed = ¿Colocado?
 table-placements-column-manufacturer = Fabricante
@@ -160,6 +160,8 @@ table-parts-column-index = #
 table-parts-column-manufacturer = Fabricante
 table-parts-column-mpn = MPN
 table-parts-column-processes = Procesos
+table-parts-column-ref-des-set = Des. de Ref. Conjunto
+table-parts-column-quantity = Cantidad
 
 filter-expression = Buscar...
 

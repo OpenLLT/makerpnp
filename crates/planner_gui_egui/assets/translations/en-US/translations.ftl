@@ -160,6 +160,8 @@ table-parts-column-index = #
 table-parts-column-manufacturer = Manufacturer
 table-parts-column-mpn = MPN
 table-parts-column-processes = Processes
+table-parts-column-ref-des-set = Ref. Des. Set
+table-parts-column-quantity = Quantity
 
 filter-expression = Search...
 

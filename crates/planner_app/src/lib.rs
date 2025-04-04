@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -102,6 +102,8 @@ pub struct Process {
 pub struct PartWithState {
     pub part: Part,
     pub processes: Vec<ProcessName>,
+    pub ref_des_set: BTreeSet<String>,
+    pub quantity: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -1130,7 +1132,7 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let parts = project
+                let mut parts = project
                     .part_states
                     .iter()
                     .map(|(part, state)| {
@@ -1142,9 +1144,33 @@ impl Planner {
                         PartWithState {
                             part: part.clone(),
                             processes,
+                            ref_des_set: Default::default(),
+                            quantity: 0,
                         }
                     })
                     .collect::<Vec<_>>();
+
+                //
+                // add the set of ref_des and count the quantity for each part.
+                //
+                for (_object_path, placement_state) in project.placements.iter_mut() {
+                    if let Some(part) = parts
+                        .iter_mut()
+                        .find(|part_with_state| {
+                            part_with_state
+                                .part
+                                .eq(&placement_state.placement.part)
+                        })
+                    {
+                        part.quantity += 1;
+                        let _inserted = part.ref_des_set.insert(
+                            placement_state
+                                .placement
+                                .ref_des
+                                .clone(),
+                        );
+                    }
+                }
 
                 let part_states_view = PartStates {
                     parts,
