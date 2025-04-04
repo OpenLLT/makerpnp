@@ -887,9 +887,18 @@ impl UiComponent for Project {
                         part,
                         feeder,
                     }) => {
-                        debug!("update feeder. part: {:?}, feeder: {}", part, feeder);
-                        // TODO implement this
-                        None
+                        debug!(
+                            "update feeder. phase: {:?}, part: {:?}, feeder: {}",
+                            phase, part, feeder
+                        );
+                        self.planner_core_service
+                            .update(key, Event::AssignFeederToLoadOutItem {
+                                phase,
+                                feeder_reference: feeder,
+                                manufacturer: exact_match(&part.manufacturer),
+                                mpn: exact_match(&part.mpn),
+                            })
+                            .when_ok(|_| None)
                     }
                 }
             }
