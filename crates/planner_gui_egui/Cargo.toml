@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-planner_app = { path = "../planner_app" }
+planner_app = { path = "../planner_app", features = ["markdown"] }
+
 util = { path = "../util" }
 
 # tasks/async

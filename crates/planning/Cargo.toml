@@ -3,6 +3,9 @@ name = "planning"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+markdown = ["dep:json2markdown"]
+
 [dependencies]
 pnp = { path = "../pnp" }
 util = { path = "../util" }
@@ -17,6 +20,7 @@ rust_decimal_macros = { workspace = true }
 serde = { workspace = true,  features = ["derive"] }
 serde_json = { workspace = true,  features = ["preserve_order"] }
 serde_with = { workspace = true }
+json2markdown = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 

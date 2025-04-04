@@ -39,7 +39,7 @@ use crate::process::{
     ProcessOperationKind, ProcessOperationSetItem, ProcessOperationState, ProcessOperationStatus,
 };
 use crate::reference::Reference;
-use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
+use crate::report::{project_report_json_to_markdown, IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::{operation_history, placement, report};
 
 #[serde_as]
@@ -312,6 +312,9 @@ pub enum ArtifactGenerationError {
 
     #[error("Unable to generate report. error: {reason}")]
     ReportGenerationError { reason: Error },
+
+    #[error("Unable to save report. cause: {reason:}")]
+    UnableToSaveReport { reason: Error },
 }
 
 pub fn generate_artifacts(
@@ -331,10 +334,19 @@ pub fn generate_artifacts(
         generate_phase_artifacts(project, phase, load_out_items.as_slice(), directory, &mut issues)?;
     }
 
-    report::project_generate_report(project, directory, &phase_load_out_items_map, &mut issues).map_err(|err| {
-        ArtifactGenerationError::ReportGenerationError {
-            reason: err.into(),
+    let report = report::project_generate_report(project, &phase_load_out_items_map, &mut issues);
+
+    let report_file_path = report::build_report_file_path(&project.name, directory);
+
+    report::project_report_save_as_json(&report, &report_file_path).map_err(|err| {
+        ArtifactGenerationError::UnableToSaveReport {
+            reason: err,
         }
+    })?;
+
+    #[cfg(feature = "markdown")]
+    project_report_json_to_markdown(&report_file_path).map_err(|err| ArtifactGenerationError::UnableToSaveReport {
+        reason: err.into(),
     })?;
 
     info!("Generated artifacts.");

@@ -1,10 +1,12 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use anyhow::Error;
+#[cfg(feature = "markdown")]
+use json2markdown::MarkdownRenderer;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
@@ -12,7 +14,6 @@ use pnp::pcb::{Pcb, PcbKind};
 use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use thiserror::Error;
 use tracing::{error, info, trace};
 use util::sorting::SortOrder;
 
@@ -23,21 +24,14 @@ use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
 
-#[derive(Debug, Error)]
-pub enum ReportGenerationError {
-    #[error("Unable to save report. cause: {reason:}")]
-    UnableToSaveReport { reason: Error },
-}
-
 // FUTURE add a test to ensure that duplicate issues are not added to the report.
 //        currently a BTreeSet is used to prevent duplicate issues.
 
 pub fn project_generate_report(
     project: &Project,
-    directory: &Path,
     phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
     issue_set: &mut BTreeSet<ProjectReportIssue>,
-) -> Result<(), ReportGenerationError> {
+) -> ProjectReport {
     let mut report = ProjectReport::default();
 
     report.name.clone_from(&project.name);
@@ -179,13 +173,7 @@ pub fn project_generate_report(
 
     report.issues = issues;
 
-    let report_file_path = build_report_file_path(&project.name, directory);
-
-    project_report_save(&report, &report_file_path).map_err(|err| ReportGenerationError::UnableToSaveReport {
-        reason: err,
-    })?;
-
-    Ok(())
+    report
 }
 
 fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<ProjectReportIssue> {
@@ -843,13 +831,13 @@ pub enum IssueKind {
     },
 }
 
-fn build_report_file_path(name: &str, directory: &Path) -> PathBuf {
+pub(crate) fn build_report_file_path(name: &str, directory: &Path) -> PathBuf {
     let mut report_file_path: PathBuf = PathBuf::from(directory);
     report_file_path.push(format!("{}_report.json", name));
     report_file_path
 }
 
-fn project_report_save(report: &ProjectReport, report_file_path: &PathBuf) -> anyhow::Result<()> {
+pub(crate) fn project_report_save_as_json(report: &ProjectReport, report_file_path: &PathBuf) -> anyhow::Result<()> {
     let report_file = File::create(report_file_path)?;
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
     let mut ser = serde_json::Serializer::with_formatter(report_file, formatter);
@@ -858,7 +846,45 @@ fn project_report_save(report: &ProjectReport, report_file_path: &PathBuf) -> an
     let mut report_file = ser.into_inner();
     let _written = report_file.write(b"\n")?;
 
-    info!("Generated report. path: {:?}", report_file_path);
+    info!("Generated JSON report. path: {:?}", report_file_path);
+
+    Ok(())
+}
+
+#[cfg(feature = "markdown")]
+pub fn project_report_json_to_markdown(json_report_file_name: &PathBuf) -> anyhow::Result<()> {
+    let json_string = fs::read_to_string(json_report_file_name)?;
+
+    let json = serde_json::from_str(&json_string)?;
+
+    let renderer = MarkdownRenderer::default();
+    let markdown = renderer.render(&json);
+
+    /// Replace the file extension with a different one.
+    ///
+    /// * New extension should not start with a '.'.
+    /// * If there's no existing extension, it adds the new one
+    /// * If there is an extension, it replaces it.
+    fn replace_extension(mut path: PathBuf, extension: &str) -> PathBuf {
+        assert!(!extension.starts_with('.'));
+        if let Some(file_name) = path
+            .file_name()
+            .and_then(|n| n.to_str())
+        {
+            if let Some(new_name) = Path::new(file_name)
+                .with_extension(extension)
+                .to_str()
+            {
+                path.set_file_name(new_name);
+            }
+        }
+        path
+    }
+
+    let markdown_file_name = replace_extension(json_report_file_name.clone(), "md");
+    fs::write(&markdown_file_name, markdown)?;
+
+    info!("Generated Markdown report. path: {:?}", markdown_file_name);
 
     Ok(())
 }
