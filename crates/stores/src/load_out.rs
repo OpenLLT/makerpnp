@@ -6,7 +6,6 @@ use std::str::FromStr;
 
 use anyhow::{Context, Error};
 use csv::QuoteStyle;
-use planning::phase::Phase;
 use planning::process::{Process, ProcessName, ProcessOperationKind};
 use planning::reference::Reference;
 use pnp::load_out::LoadOutItem;
@@ -240,7 +239,7 @@ pub enum FeederAssignmentError {
 }
 
 pub fn assign_feeder_to_load_out_item(
-    phase: &Phase,
+    load_out_source: &LoadOutSource,
     process: &Process,
     feeder_reference: &Reference,
     manufacturer: Regex,
@@ -248,7 +247,7 @@ pub fn assign_feeder_to_load_out_item(
 ) -> anyhow::Result<Vec<Part>> {
     let mut parts: Vec<Part> = vec![];
 
-    perform_load_out_operation(&LoadOutSource(phase.load_out_source.clone()), |load_out_items| {
+    perform_load_out_operation(load_out_source, |load_out_items| {
         let mut items: Vec<_> = load_out_items
             .iter_mut()
             .filter(|item| manufacturer.is_match(&item.manufacturer) && mpn.is_match(&item.mpn))
@@ -263,7 +262,7 @@ pub fn assign_feeder_to_load_out_item(
 
         if process.has_operation(&ProcessOperationKind::AutomatedPnp) && items.len() > 1 {
             return Err(FeederAssignmentError::MultipleMatchingParts {
-                process: phase.process.clone(),
+                process: process.name.clone(),
                 manufacturer: manufacturer.clone(),
                 mpn: mpn.clone(),
             });
