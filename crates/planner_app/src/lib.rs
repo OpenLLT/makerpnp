@@ -909,7 +909,10 @@ impl Planner {
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "phase".to_string(),
-                            args: HashMap::from([("reference".to_string(), Arg::String(reference.to_string()))]),
+                            args: HashMap::from([
+                                ("reference".to_string(), Arg::String(reference.to_string())),
+                                ("process".to_string(), Arg::String(phase.process.to_string())),
+                            ]),
                             path: phase_path.clone(),
                         });
                     project_tree
