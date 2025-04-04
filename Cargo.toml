@@ -43,6 +43,10 @@ rust_decimal_macros = { version = "1.35"}
 derivative = { version = "2.2.0" }
 lexical-sort = { version = "0.3.1"}
 
+# time
+# Note: using `chrono`, because it has 13k dependents vs `time`'s 3k dependents (as of 2025/04/04) 
+chrono = { version = "0.4.40"}
+
 # cli
 clap = { version = "4.5.8" }
 clap-verbosity-flag = { version = "3.0.2" }

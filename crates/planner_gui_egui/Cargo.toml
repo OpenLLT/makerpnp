@@ -56,3 +56,4 @@ slotmap = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 petgraph = { workspace = true }
 derivative = { workspace = true }
+chrono = { workspace = true }

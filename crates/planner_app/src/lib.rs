@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 use crux_core::macros::Effect;
 use crux_core::render::Render;
@@ -52,7 +53,7 @@ pub struct ModelProject {
 pub struct Model {
     model_project: Option<ModelProject>,
 
-    error: Option<String>,
+    error: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
 #[derive(Effect)]
@@ -225,7 +226,7 @@ pub enum ProjectViewRequest {
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct ProjectOperationViewModel {
     pub modified: bool,
-    pub error: Option<String>,
+    pub error: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
 #[serde_as]
@@ -1146,7 +1147,9 @@ impl App for Planner {
 
         match try_fn(model) {
             Err(e) => {
-                model.error.replace(format!("{:?}", e));
+                model
+                    .error
+                    .replace((chrono::DateTime::from(SystemTime::now()), format!("{:?}", e)));
                 render::render()
             }
             Ok(command) => command,

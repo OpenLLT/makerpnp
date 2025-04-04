@@ -98,7 +98,7 @@ pub struct Project {
     modified: bool,
 
     /// list of errors to show
-    errors: Vec<String>,
+    errors: Vec<(chrono::DateTime<chrono::Utc>, String)>,
 
     /// initially empty until the OverviewView has been received and processed.
     processes: Vec<ProcessName>,
@@ -1282,7 +1282,7 @@ pub enum ProjectUiCommand {
 
 #[derive(Debug, Clone)]
 pub enum ProjectError {
-    CoreError(String),
+    CoreError((chrono::DateTime<chrono::Utc>, String)),
 }
 
 fn project_path_from_view_path(view_path: &String) -> ProjectPath {

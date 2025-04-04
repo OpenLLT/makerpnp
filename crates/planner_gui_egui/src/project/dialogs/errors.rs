@@ -12,7 +12,7 @@ pub fn show_errors_modal(
     ui: &mut Ui,
     key: ProjectKey,
     path: &PathBuf,
-    errors: &Vec<String>,
+    errors: &Vec<(chrono::DateTime<chrono::Utc>, String)>,
     component: &ComponentState<(ProjectKey, ProjectUiCommand)>,
 ) {
     let modal_id = ui.id().with("errors");
@@ -36,6 +36,7 @@ pub fn show_errors_modal(
             .auto_shrink(true)
             .resizable(false)
             .column(Column::auto())
+            .column(Column::auto())
             .column(Column::remainder());
         table
             .header(20.0, |mut header| {
@@ -50,7 +51,10 @@ pub fn show_errors_modal(
                             ui.label(format!("{}", index));
                         });
                         row.col(|ui| {
-                            let error_lines = error.lines().collect::<Vec<_>>();
+                            ui.label(format!("{}", error.0));
+                        });
+                        row.col(|ui| {
+                            let error_lines = error.1.lines().collect::<Vec<_>>();
                             let (first_line, remaining) = error_lines.split_first().unwrap();
                             ui.label(first_line.to_string());
                             ui.collapsing(tr!("expanding-header-details"), |ui| {

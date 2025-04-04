@@ -57,7 +57,7 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
             _render @ Effect::Render(_) => {
                 let view = core.view();
 
-                if let Some(error) = view.error {
+                if let Some((_date_time, error)) = view.error {
                     bail!(error)
                 }
 
