@@ -310,7 +310,7 @@ impl Project {
 
         #[must_use]
         fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"^/project/$".into()) {
+            if path.eq(&"/project/".into()) {
                 project.show_overview();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Overview,
@@ -324,7 +324,7 @@ impl Project {
 
         #[must_use]
         fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"^/project/placements$".into()) {
+            if path.eq(&"/project/placements".into()) {
                 project.show_placements();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Placements,
@@ -338,7 +338,7 @@ impl Project {
 
         #[must_use]
         fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"^/project/parts$".into()) {
+            if path.eq(&"/project/parts".into()) {
                 project.show_parts();
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Parts,
@@ -352,7 +352,7 @@ impl Project {
 
         #[must_use]
         fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
-            if path.eq(&"/project/phases$".into()) {
+            if path.eq(&"/project/phases".into()) {
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                     ProjectViewRequest::Phases,
                 )));
