@@ -21,6 +21,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct LoadOutUi {
+    phase: Reference,
     #[derivative(Debug = "ignore")]
     load_out_table: Value<Option<(LoadOutRowViewer, DataTable<LoadOutRow>)>>,
 
@@ -28,8 +29,9 @@ pub struct LoadOutUi {
 }
 
 impl LoadOutUi {
-    pub fn new() -> Self {
+    pub fn new(phase: Reference) -> Self {
         Self {
+            phase,
             load_out_table: Value::default(),
 
             component: Default::default(),
@@ -69,7 +71,11 @@ pub enum LoadOutUiCommand {
 #[derive(Debug, Clone)]
 pub enum LoadOutUiAction {
     None,
-    UpdateFeederForPart { part: Part, feeder: Reference },
+    UpdateFeederForPart {
+        phase: Reference,
+        part: Part,
+        feeder: Reference,
+    },
     RequestRepaint,
 }
 
@@ -122,6 +128,7 @@ impl UiComponent for LoadOutUi {
                 let (_, _) = (index, old_row);
 
                 Some(LoadOutUiAction::UpdateFeederForPart {
+                    phase: self.phase.clone(),
                     part: new_row.part,
                     feeder: new_row.feeder,
                 })

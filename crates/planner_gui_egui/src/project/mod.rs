@@ -232,7 +232,7 @@ impl Project {
             .ok();
     }
 
-    pub fn show_loadout(&self, key: ProjectKey, load_out_source: &LoadOutSource) {
+    pub fn show_loadout(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) {
         let project_directory = self.path.parent().unwrap();
 
         let mut project_tabs = self.project_tabs.lock().unwrap();
@@ -245,7 +245,7 @@ impl Project {
                 debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .inspect_err(|_| {
-                self.ensure_load_out(key, &load_out_source);
+                self.ensure_load_out(key, phase, &load_out_source);
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
                 debug!("adding load-out tab. phase: {:?}, tab_key: {:?}", load_out_source, tab_key);
@@ -278,7 +278,7 @@ impl Project {
             });
     }
 
-    fn ensure_load_out(&self, key: ProjectKey, load_out_source: &LoadOutSource) {
+    fn ensure_load_out(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) {
         let load_out_source = load_out_source.clone();
         let mut state = self.project_ui_state.lock().unwrap();
         let _load_out_ui = state
@@ -286,7 +286,7 @@ impl Project {
             .entry(load_out_source.clone())
             .or_insert_with(|| {
                 debug!("ensuring load out ui. source: {:?}", load_out_source);
-                let mut load_out_ui = LoadOutUi::new();
+                let mut load_out_ui = LoadOutUi::new(phase);
                 load_out_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -638,10 +638,10 @@ impl UiComponent for Project {
                     } => Event::RequestPhaseOverviewView {
                         phase_reference: phase,
                     },
-                    ProjectViewRequest::LoadOut {
-                        source,
-                    } => Event::RequestLoadOutView {
-                        load_out_source: source,
+                    ProjectViewRequest::PhaseLoadOut {
+                        phase,
+                    } => Event::RequestPhaseLoadOutView {
+                        phase_reference: phase,
                     },
                     ProjectViewRequest::PhasePlacements {
                         phase,
@@ -720,11 +720,11 @@ impl UiComponent for Project {
                             .parts_ui
                             .update_part_states(part_states, self.processes.clone())
                     }
-                    ProjectView::LoadOut(load_out) => {
+                    ProjectView::PhaseLoadOut(load_out) => {
                         debug!("load_out: {:?}", load_out);
                         let load_out_source = load_out.source.clone();
 
-                        self.ensure_load_out(key.clone(), &load_out_source);
+                        self.ensure_load_out(key.clone(), load_out.phase_reference.clone(), &load_out_source);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         let load_out_ui = state
@@ -883,6 +883,7 @@ impl UiComponent for Project {
                     Some(LoadOutUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
                     Some(LoadOutUiAction::UpdateFeederForPart {
+                        phase,
                         part,
                         feeder,
                     }) => {
@@ -1097,11 +1098,15 @@ impl UiComponent for Project {
                     });
 
                 if let Some(phase_overview) = phase_overview {
-                    self.show_loadout(key, &phase_overview.load_out_source);
+                    self.show_loadout(
+                        key,
+                        phase_overview.phase_reference.clone(),
+                        &phase_overview.load_out_source,
+                    );
 
                     let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::LoadOut {
-                            source: phase_overview.load_out_source.clone(),
+                        ProjectViewRequest::PhaseLoadOut {
+                            phase: phase_overview.phase_reference.clone(),
                         },
                     )));
 

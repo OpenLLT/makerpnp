@@ -66,6 +66,7 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct LoadOut {
+    pub phase_reference: Reference,
     pub source: LoadOutSource,
     pub items: Vec<LoadOutItem>,
 }
@@ -198,28 +199,27 @@ impl PartialEq for ProjectTreeView {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum ProjectView {
     Overview(ProjectOverview),
-    ProjectTree(ProjectTreeView),
-    Placements(PlacementsList),
-    Phases(Phases),
-    PhaseOverview(PhaseOverview),
-    PhasePlacements(PhasePlacements),
-    PhasePlacementOrderings(PhasePlacementOrderings),
-    Process(Process),
     Parts(PartStates),
-    LoadOut(LoadOut),
+    Phases(Phases),
+    PhaseLoadOut(LoadOut),
+    PhaseOverview(PhaseOverview),
+    PhasePlacementOrderings(PhasePlacementOrderings),
+    PhasePlacements(PhasePlacements),
+    Placements(PlacementsList),
+    ProjectTree(ProjectTreeView),
+    Process(Process),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum ProjectViewRequest {
-    // TODO add all the views and use this
-    ProjectTree,
     Overview,
-    Placements,
+    Parts,
     Phases,
+    PhaseLoadOut { phase: Reference },
     PhaseOverview { phase: Reference },
     PhasePlacements { phase: Reference },
-    Parts,
-    LoadOut { source: LoadOutSource },
+    Placements,
+    ProjectTree,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -323,8 +323,8 @@ pub enum Event {
         process_name: String,
     },
     RequestPartStatesView,
-    RequestLoadOutView {
-        load_out_source: LoadOutSource,
+    RequestPhaseLoadOutView {
+        phase_reference: Reference,
     },
 }
 
@@ -549,7 +549,8 @@ impl Planner {
 
                 *modified |= project::update_phase_operation_states(project);
 
-                let directory = path.parent().unwrap();
+                let load_out_source =
+                    try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 match operation {
                     SetOrClearOperation::Set => {
@@ -564,14 +565,8 @@ impl Planner {
 
                             *modified |= project::add_process_to_part(part_state, part, phase.process.clone());
                         }
-
-                        let source = &LoadOutSource::try_from_path(
-                            directory.into(),
-                            PathBuf::from_str(&phase.load_out_source).unwrap(),
-                        )
-                        .map_err(AppError::LoadoutSourceError)?;
-
-                        stores::load_out::add_parts_to_load_out(source, parts).map_err(AppError::LoadoutError)?;
+                        stores::load_out::add_parts_to_load_out(&load_out_source, parts)
+                            .map_err(AppError::LoadoutError)?;
                     }
                     SetOrClearOperation::Clear => {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
@@ -586,7 +581,9 @@ impl Planner {
                 mpn,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
-                    project, ..
+                    path,
+                    project,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
@@ -602,8 +599,11 @@ impl Planner {
                     .map_err(|cause| AppError::ProcessError(cause.into()))?
                     .clone();
 
+                let load_out_source =
+                    try_build_phase_load_out_source(path, phase).map_err(AppError::LoadoutSourceError)?;
+
                 stores::load_out::assign_feeder_to_load_out_item(
-                    &phase,
+                    &load_out_source,
                     &process,
                     &feeder_reference,
                     manufacturer,
@@ -975,7 +975,11 @@ impl Planner {
                 let phases = project
                     .phases
                     .iter()
-                    .map(|(phase_reference, phase)| build_phase_overview(path, phase_reference.clone(), phase))
+                    .map(|(phase_reference, phase)| {
+                        // FUTURE try and avoid the [`unwrap`] here, ideally by ensuring load-out sources are always correct
+                        //        for every situation instead of using [`try_build_phase_load_out_source`]
+                        try_build_phase_overview(path, phase_reference.clone(), phase).unwrap()
+                    })
                     .collect::<Vec<PhaseOverview>>();
 
                 let phases = Phases {
@@ -1001,7 +1005,8 @@ impl Planner {
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                let phase_overview = build_phase_overview(path, phase_reference, phase);
+                let phase_overview =
+                    try_build_phase_overview(path, phase_reference, phase).map_err(AppError::LoadoutSourceError)?;
 
                 Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
@@ -1088,17 +1093,34 @@ impl Planner {
 
                 Ok(view_renderer::view(ProjectView::Parts(part_states_view)))
             }),
-            Event::RequestLoadOutView {
-                load_out_source,
-            } => Box::new(move |_model: &mut Model| {
+            Event::RequestPhaseLoadOutView {
+                phase_reference,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    path,
+                    project,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let phase = project
+                    .phases
+                    .get(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+
+                let load_out_source =
+                    try_build_phase_load_out_source(path, &phase).map_err(AppError::LoadoutSourceError)?;
+
                 let items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
                 let load_out_view = LoadOut {
+                    phase_reference,
                     source: load_out_source,
                     items,
                 };
 
-                Ok(view_renderer::view(ProjectView::LoadOut(load_out_view)))
+                Ok(view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
         }
     }
@@ -1200,16 +1222,33 @@ mod app_tests {
     }
 }
 
-fn build_phase_overview(project_path: &PathBuf, phase_reference: Reference, phase: &Phase) -> PhaseOverview {
+/// Build a load-out source, where the load-out source *may* be a relative or absolute path.
+///
+/// 'project_path' is the project FILE (not directory).
+#[must_use]
+fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Result<LoadOutSource, LoadOutSourceError> {
+    assert!(project_path.is_file());
+
     let directory = project_path
         .parent()
         .unwrap()
         .to_path_buf();
 
-    PhaseOverview {
+    LoadOutSource::try_from_path(directory, PathBuf::from(&phase.load_out_source))
+}
+
+#[must_use]
+fn try_build_phase_overview(
+    project_path: &PathBuf,
+    phase_reference: Reference,
+    phase: &Phase,
+) -> Result<PhaseOverview, LoadOutSourceError> {
+    let load_out_source = try_build_phase_load_out_source(project_path, phase)?;
+
+    Ok(PhaseOverview {
         phase_reference,
         process: phase.process.clone(),
-        load_out_source: LoadOutSource::try_from_path(directory, PathBuf::from(&phase.load_out_source)).unwrap(),
+        load_out_source,
         pcb_side: phase.pcb_side.clone(),
-    }
+    })
 }
