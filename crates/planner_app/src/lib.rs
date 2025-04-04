@@ -1152,7 +1152,10 @@ impl App for Planner {
                     .replace((chrono::DateTime::from(SystemTime::now()), format!("{:?}", e)));
                 render::render()
             }
-            Ok(command) => command,
+            Ok(command) => {
+                model.error.take();
+                command
+            }
         }
     }
 
