@@ -1316,3 +1316,31 @@ fn reset_phase_operations(project: &mut Project) {
         info!("Phase operations reset. phase: {}", reference);
     }
 }
+
+pub fn find_phase_parts(
+    project: &Project,
+    phase_reference: &Reference,
+    manufacturer_pattern: Regex,
+    mpn_pattern: Regex,
+) -> BTreeSet<Part> {
+    project
+        .placements
+        .iter()
+        .filter_map(|(_object_path, placement_state)| match &placement_state.phase {
+            Some(candidate_phase) if candidate_phase.eq(phase_reference) => {
+                if manufacturer_pattern.is_match(
+                    &placement_state
+                        .placement
+                        .part
+                        .manufacturer,
+                ) && mpn_pattern.is_match(&placement_state.placement.part.mpn)
+                {
+                    Some(placement_state.placement.part.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}

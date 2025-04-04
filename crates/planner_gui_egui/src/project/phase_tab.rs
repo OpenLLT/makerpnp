@@ -2,6 +2,7 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference};
+use regex::Regex;
 use tracing::debug;
 
 use crate::project::placements_tab::PlacementsUiCommand;
@@ -55,6 +56,11 @@ impl PhaseUi {
 pub enum PhaseUiCommand {
     None,
     PlacementsTableUiCommand(PlacementsTableUiCommand),
+    AddPartsToLoadout {
+        phase: Reference,
+        manufacturer_pattern: Regex,
+        mpn_pattern: Regex,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +71,11 @@ pub enum PhaseUiAction {
         object_path: ObjectPath,
         new_placement: PlacementState,
         old_placement: PlacementState,
+    },
+    AddPartsToLoadout {
+        phase: Reference,
+        manufacturer_pattern: Regex,
+        mpn_pattern: Regex,
     },
 }
 
@@ -78,6 +89,27 @@ impl UiComponent for PhaseUi {
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("phase-placements-header"));
+
+        ui.horizontal(|ui| {
+            if ui
+                .button(tr!("phase-toolbar-add-parts-to-loadout"))
+                .clicked()
+            {
+                // FUTURE a nice feature here, would be to use the current manufacturer and mpn filters (if any)
+                //        currently there is a single filter, so adding support for per-column filters would make
+                //        implementing this feature easier.
+                // FUTURE disable the button if there are no visible parts.
+                if let Some(overview) = &self.overview {
+                    self.component
+                        .send(PhaseUiCommand::AddPartsToLoadout {
+                            phase: overview.phase_reference.clone(),
+                            manufacturer_pattern: Regex::new("^.*$").unwrap(),
+                            mpn_pattern: Regex::new("^.*$").unwrap(),
+                        })
+                }
+            }
+        });
+
         self.placements_table_ui
             .ui(ui, &mut PlacementsTableUiContext::default());
     }
@@ -108,6 +140,15 @@ impl UiComponent for PhaseUi {
                     None => None,
                 }
             }
+            PhaseUiCommand::AddPartsToLoadout {
+                phase,
+                manufacturer_pattern,
+                mpn_pattern,
+            } => Some(PhaseUiAction::AddPartsToLoadout {
+                phase,
+                manufacturer_pattern,
+                mpn_pattern,
+            }),
         }
     }
 }

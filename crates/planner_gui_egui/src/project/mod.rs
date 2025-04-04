@@ -863,6 +863,18 @@ impl UiComponent for Project {
                         &new_placement,
                         &old_placement,
                     ),
+                    Some(PhaseUiAction::AddPartsToLoadout {
+                        phase,
+                        manufacturer_pattern,
+                        mpn_pattern,
+                    }) => self
+                        .planner_core_service
+                        .update(key, Event::AddPartsToLoadout {
+                            phase,
+                            manufacturer: manufacturer_pattern,
+                            mpn: mpn_pattern,
+                        })
+                        .when_ok(|_| None),
                 }
             }
             ProjectUiCommand::LoadOutUiCommand {

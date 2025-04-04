@@ -55,6 +55,8 @@ project-placements-header = Ubicaciones de proyecto
 project-parts-tab-label = Piezas
 project-parts-header = Piezas de proyecto
 
+phase-toolbar-add-parts-to-loadout = Añadir piezas a la carga.
+
 phase-placements-header = Ubicaciones de fase
 
 phase-properties-header = Propiedades de fase

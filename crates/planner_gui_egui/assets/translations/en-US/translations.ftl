@@ -55,6 +55,8 @@ project-placements-header = Project placements
 project-parts-tab-label = Parts
 project-parts-header = Project Parts
 
+phase-toolbar-add-parts-to-loadout = Add parts to load-out.
+
 phase-placements-header = Phase Placements
 
 phase-properties-header = Phase properties

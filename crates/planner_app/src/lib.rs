@@ -280,6 +280,13 @@ pub enum Event {
         #[serde(with = "serde_regex")]
         placements: Regex,
     },
+    AddPartsToLoadout {
+        phase: Reference,
+        #[serde(with = "serde_regex")]
+        manufacturer: Regex,
+        #[serde(with = "serde_regex")]
+        mpn: Regex,
+    },
     AssignFeederToLoadOutItem {
         phase: Reference,
         feeder_reference: Reference,
@@ -577,6 +584,34 @@ impl Planner {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
                     }
                 }
+                Ok(render::render())
+            }),
+            Event::AddPartsToLoadout {
+                phase: phase_reference,
+                manufacturer: manufacturer_pattern,
+                mpn: mpn_pattern,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    path,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let phase = project
+                    .phases
+                    .get_mut(&phase_reference)
+                    .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+
+                let load_out_source =
+                    try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
+
+                let parts = project::find_phase_parts(project, &phase_reference, manufacturer_pattern, mpn_pattern);
+
+                stores::load_out::add_parts_to_load_out(&load_out_source, parts).map_err(AppError::LoadoutError)?;
+
                 Ok(render::render())
             }),
             Event::RemoveUnknownPlacements {
