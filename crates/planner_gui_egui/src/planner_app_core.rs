@@ -81,6 +81,7 @@ impl ResultHelper {
         }
     }
 
+    #[must_use]
     pub fn when_ok<F>(self, f: F) -> Option<ProjectAction>
     where
         F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>,
