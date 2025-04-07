@@ -3397,6 +3397,7 @@ dependencies = [
  "csv",
  "indoc",
  "planner_app",
+ "planner_cli",
  "planning",
  "pnp",
  "predicates",

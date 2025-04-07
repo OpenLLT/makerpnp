@@ -3,6 +3,12 @@ name = "planner_cli"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+markdown = ["planner_app/markdown"]
+
+# features required for testing
+testing = ["markdown"]
+
 [dependencies]
 cli = { path = "../cli", features = ["tracing"]}
 # FIXME remove planning dependency?
@@ -38,3 +44,7 @@ rust_decimal_macros = { workspace = true }
 serde = { workspace = true , features = ["derive"] }
 serde_json = { workspace = true  }
 time = { workspace = true  }
+
+# tests need 'testing' feature on *this* crate.
+# workaround found here: https://github.com/rust-lang/cargo/issues/2911#issuecomment-749580481
+planner_cli = { path = ".", features = ["testing"]}
