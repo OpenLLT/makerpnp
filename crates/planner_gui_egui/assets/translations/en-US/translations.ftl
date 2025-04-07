@@ -110,6 +110,8 @@ form-create-unit-assignment-input-pcb-unit-placeholder = A number > 0
 form-create-unit-assignment-input-placements-filename = Placements filename
 form-create-unit-assignment-input-placements-directory = Placements directory
 
+form-phase-placement-orderings-input-orderings = Orderings
+
 form-common-combo-select = Select...
 form-common-combo-none = None
 
