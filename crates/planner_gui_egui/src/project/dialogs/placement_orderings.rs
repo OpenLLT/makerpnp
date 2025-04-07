@@ -1,10 +1,15 @@
-use egui::{Modal, Ui};
+use std::backtrace;
+
+use egui::scroll_area::ScrollBarVisibility;
+use egui::{Id, Label, Modal, SelectableLabel, Sense, Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
-use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, tui};
+use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
+use egui_taffy::{Tui, TuiBuilderLogic, taffy, tui};
 use planner_app::{PlacementSortingItem, Reference};
+use tracing::{debug, error, trace};
+use util::sorting::SortOrder;
 use validator::Validate;
 
 use crate::forms::Form;
@@ -17,6 +22,8 @@ pub struct PlacementOrderingsModal {
 
     fields: Value<PlacementOrderingFields>,
 
+    sort_order: Value<SortOrder>,
+
     pub component: ComponentState<PlacementOrderingsModalUiCommand>,
 }
 
@@ -25,6 +32,7 @@ impl PlacementOrderingsModal {
         Self {
             phase_reference,
             fields: Value::default(),
+            sort_order: Value::new(SortOrder::Asc),
             component: ComponentState::default(),
         }
     }
@@ -65,15 +73,7 @@ impl PlacementOrderingsModal {
                                 })
                                 .add(|tui| {
                                     for column_index in 0..3 {
-                                        tui.style(Style {
-                                            flex_grow: 1.0,
-                                            ..default_style()
-                                        })
-                                        .with_border_style_from_egui_style()
-                                        .add_with_border(|tui: &mut Tui| {
-                                            tui.ui_add_manual(|ui| ui.label(column_index.to_string()), no_transform);
-                                            // end of cell
-                                        })
+                                        self.rename_me(tui, column_index);
                                         // end of column
                                     }
                                     // end of row
@@ -88,6 +88,137 @@ impl PlacementOrderingsModal {
                 // end of form
             });
     }
+
+    fn rename_me(&self, tui: &mut Tui, column_index: usize) {
+        let rename_this_style = || Style {
+            padding: length(2.),
+            gap: length(2.),
+            ..Default::default()
+        };
+
+        match column_index {
+            0 => {
+                tui.style(Style {
+                    flex_grow: 1.0,
+                    min_size: Size {
+                        width: percent(0.4),
+                        height: auto(),
+                    },
+                    ..rename_this_style()
+                })
+                .with_border_style_from_egui_style()
+                .add_with_border(|tui: &mut Tui| {
+                    let id = tui.current_id().with("available");
+                    list_box_with_id_tui(tui, id, vec!["1", "2", "3"]);
+                    // end of cell
+                })
+            }
+            1 => {
+                tui.style(Style {
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    min_size: Size {
+                        width: percent(0.2),
+                        height: auto(),
+                    },
+                    ..rename_this_style()
+                })
+                .add(|tui: &mut Tui| {
+                    tui.ui_add_manual(
+                        |ui| {
+                            ui.vertical_centered(|ui| {
+                                // TODO translations
+                                if ui
+                                    .add(egui::RadioButton::new(
+                                        self.sort_order.get() == SortOrder::Asc,
+                                        "Ascending",
+                                    ))
+                                    .clicked()
+                                {
+                                    self.sort_order.set(SortOrder::Asc);
+                                }
+                                if ui
+                                    .add(egui::RadioButton::new(
+                                        self.sort_order.get() == SortOrder::Desc,
+                                        "Descending",
+                                    ))
+                                    .clicked()
+                                {
+                                    self.sort_order.set(SortOrder::Desc);
+                                }
+                            });
+
+                            ui.response()
+                        },
+                        no_transform,
+                    );
+                    tui.ui_add(egui::Button::new(">"));
+                    tui.ui_add(egui::Button::new("<"));
+
+                    // end of cell
+                })
+            }
+            2 => {
+                tui.style(Style {
+                    flex_grow: 1.0,
+                    min_size: Size {
+                        width: percent(0.4),
+                        height: auto(),
+                    },
+                    ..rename_this_style()
+                })
+                .with_border_style_from_egui_style()
+                .add_with_border(|tui: &mut Tui| {
+                    let id = tui.current_id().with("selected");
+                    list_box_with_id_tui(tui, id, vec!["4", "5", "6"]);
+                    // end of cell
+                })
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub fn list_box_with_id_tui<I, S>(tui: &mut Tui, id: Id, items: I) -> Option<usize>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<WidgetText>,
+{
+    let mut selected_index = tui.egui_ui().memory(|mem| {
+        // NOTE It's CRITICAL that the correct type is specified for `get_temp`
+        mem.data
+            .get_temp::<Option<usize>>(id)
+            .unwrap_or_default()
+    });
+
+    tui.style(Style {
+        flex_direction: FlexDirection::Column,
+        align_items: Some(AlignItems::Stretch),
+        flex_grow: 1.0,
+        ..Default::default()
+    })
+    .add(|tui| {
+        for (index, item) in items.into_iter().enumerate() {
+            let is_selected = selected_index == Some(index);
+
+            let response = tui
+                .style(Style {
+                    ..Default::default()
+                })
+                .selectable(is_selected, |tui| {
+                    tui.label(item);
+                });
+
+            if response.clicked() {
+                selected_index = Some(index);
+                tui.egui_ui()
+                    .memory_mut(|mem| mem.data.insert_temp(id, selected_index));
+            }
+        }
+    });
+
+    // Return the current selection
+    selected_index
 }
 
 #[derive(Clone, Debug, Default, Validate, serde::Deserialize, serde::Serialize)]
@@ -127,7 +258,8 @@ impl UiComponent for PlacementOrderingsModal {
             .with("phase_placement_orderings_modal");
 
         Modal::new(modal_id).show(ui.ctx(), |ui| {
-            ui.set_width(ui.available_width() * 0.8);
+            ui.set_min_width(400.0);
+            ui.set_max_width(ui.ctx().screen_rect().width() * 0.5);
 
             ui.heading(tr!("modal-phase-placement-orderings-title", { phase: self.phase_reference.to_string() }));
 
