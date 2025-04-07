@@ -155,6 +155,7 @@ table-placements-column-y = Y
 table-placements-column-pcb-side = Side
 table-placements-column-phase = Phase
 table-placements-column-status = Status
+table-placements-column-ordering = Ordering
 
 table-parts-column-index = #
 table-parts-column-manufacturer = Manufacturer

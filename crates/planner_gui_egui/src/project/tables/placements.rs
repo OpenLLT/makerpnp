@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -10,7 +9,9 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, Reference};
+use planner_app::{
+    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, PlacementsItem, Reference,
+};
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -37,15 +38,20 @@ impl PlacementsTableUi {
         }
     }
 
-    pub fn update_placements(&mut self, placements: BTreeMap<ObjectPath, PlacementState>, phases: Vec<PhaseOverview>) {
+    pub fn update_placements(&mut self, placements: Vec<PlacementsItem>, phases: Vec<PhaseOverview>) {
         let mut part_states_table = self.placements_table.lock().unwrap();
         let table: DataTable<PlacementsRow> = {
-            placements
-                .into_iter()
-                .map(|(object_path, placement_state)| PlacementsRow {
+            placements.into_iter().map(
+                |PlacementsItem {
+                     path: object_path,
+                     state: placement_state,
+                     ordering,
+                 }| PlacementsRow {
                     object_path,
                     placement_state,
-                })
+                    ordering,
+                },
+            )
         }
         .collect();
 
@@ -149,6 +155,7 @@ impl UiComponent for PlacementsTableUi {
 pub struct PlacementsRow {
     pub object_path: ObjectPath,
     pub placement_state: PlacementState,
+    pub ordering: usize,
 }
 
 pub struct PlacementsRowViewer {
@@ -180,6 +187,26 @@ impl PlacementsRowViewer {
     }
 }
 
+mod columns {
+    pub const OBJECT_PATH_COL: usize = 0;
+    pub const ORDERING_COL: usize = 1;
+    pub const REF_DES_COL: usize = 2;
+    pub const PLACE_COL: usize = 3;
+    pub const MANUFACTURER_COL: usize = 4;
+    pub const MPN_COL: usize = 5;
+    pub const ROTATION_COL: usize = 6;
+    pub const X_COL: usize = 7;
+    pub const Y_COL: usize = 8;
+    pub const PCB_SIDE_COL: usize = 9;
+    pub const PHASE_COL: usize = 10;
+    pub const PLACED_COL: usize = 11;
+    pub const STATUS_COL: usize = 12;
+
+    /// count of columns
+    pub const COLUMN_COUNT: usize = 13;
+}
+use columns::*;
+
 impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {
         let _ = column;
@@ -196,7 +223,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     }
 
     fn num_columns(&mut self) -> usize {
-        12
+        COLUMN_COUNT
     }
 
     fn is_sortable_column(&mut self, _column: usize) -> bool {
@@ -205,7 +232,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PlacementsRow) -> bool {
         match column {
-            9 => true,
+            PHASE_COL => true,
             _ => false,
         }
     }
@@ -220,19 +247,19 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn compare_cell(&self, row_l: &PlacementsRow, row_r: &PlacementsRow, column: usize) -> std::cmp::Ordering {
         match column {
-            0 => row_l
+            OBJECT_PATH_COL => row_l
                 .object_path
                 .cmp(&row_r.object_path),
-            1 => row_l
+            REF_DES_COL => row_l
                 .placement_state
                 .placement
                 .ref_des
                 .cmp(&row_r.placement_state.placement.ref_des),
-            2 => row_l
+            PLACE_COL => row_l
                 .placement_state
                 .placed
                 .cmp(&row_r.placement_state.placement.place),
-            3 => row_l
+            MANUFACTURER_COL => row_l
                 .placement_state
                 .placement
                 .part
@@ -244,62 +271,64 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                         .part
                         .manufacturer,
                 ),
-            4 => row_l
+            MPN_COL => row_l
                 .placement_state
                 .placement
                 .part
                 .mpn
                 .cmp(&row_r.placement_state.placement.part.mpn),
-            5 => row_l
+            ROTATION_COL => row_l
                 .placement_state
                 .placement
                 .rotation
                 .cmp(&row_r.placement_state.placement.rotation),
-            6 => row_l
+            X_COL => row_l
                 .placement_state
                 .placement
                 .x
                 .cmp(&row_r.placement_state.placement.x),
-            7 => row_l
+            Y_COL => row_l
                 .placement_state
                 .placement
                 .y
                 .cmp(&row_r.placement_state.placement.y),
-            8 => row_l
+            PCB_SIDE_COL => row_l
                 .placement_state
                 .placement
                 .pcb_side
                 .cmp(&row_r.placement_state.placement.pcb_side),
-            9 => row_l
+            PHASE_COL => row_l
                 .placement_state
                 .phase
                 .cmp(&row_r.placement_state.phase),
-            10 => row_l
+            PLACED_COL => row_l
                 .placement_state
                 .placed
                 .cmp(&row_r.placement_state.placed),
-            11 => row_l
+            STATUS_COL => row_l
                 .placement_state
                 .status
                 .cmp(&row_r.placement_state.status),
+            ORDERING_COL => row_l.ordering.cmp(&row_r.ordering),
             _ => unreachable!(),
         }
     }
 
     fn column_name(&mut self, column: usize) -> Cow<'static, str> {
         match column {
-            0 => tr!("table-placements-column-object-path"),
-            1 => tr!("table-placements-column-refdes"),
-            2 => tr!("table-placements-column-place"),
-            3 => tr!("table-placements-column-manufacturer"),
-            4 => tr!("table-placements-column-mpn"),
-            5 => tr!("table-placements-column-rotation"),
-            6 => tr!("table-placements-column-x"),
-            7 => tr!("table-placements-column-y"),
-            8 => tr!("table-placements-column-pcb-side"),
-            9 => tr!("table-placements-column-phase"),
-            10 => tr!("table-placements-column-placed"),
-            11 => tr!("table-placements-column-status"),
+            OBJECT_PATH_COL => tr!("table-placements-column-object-path"),
+            REF_DES_COL => tr!("table-placements-column-refdes"),
+            PLACE_COL => tr!("table-placements-column-place"),
+            MANUFACTURER_COL => tr!("table-placements-column-manufacturer"),
+            MPN_COL => tr!("table-placements-column-mpn"),
+            ROTATION_COL => tr!("table-placements-column-rotation"),
+            X_COL => tr!("table-placements-column-x"),
+            Y_COL => tr!("table-placements-column-y"),
+            PCB_SIDE_COL => tr!("table-placements-column-pcb-side"),
+            PHASE_COL => tr!("table-placements-column-phase"),
+            PLACED_COL => tr!("table-placements-column-placed"),
+            STATUS_COL => tr!("table-placements-column-status"),
+            ORDERING_COL => tr!("table-placements-column-ordering"),
             _ => unreachable!(),
         }
         .into()
@@ -307,27 +336,32 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn show_cell_view(&mut self, ui: &mut Ui, row: &PlacementsRow, column: usize) {
         let _ = match column {
-            0 => ui.label(&row.object_path.to_string()),
-            1 => ui.label(&row.placement_state.placement.ref_des),
-            2 => {
+            OBJECT_PATH_COL => ui.label(&row.object_path.to_string()),
+            REF_DES_COL => ui.label(
+                row.placement_state
+                    .placement
+                    .ref_des
+                    .to_string(),
+            ),
+            PLACE_COL => {
                 let label = tr!(placement_place_to_i18n_key(row.placement_state.placement.place));
                 ui.label(label)
             }
-            3 => ui.label(
+            MANUFACTURER_COL => ui.label(
                 &row.placement_state
                     .placement
                     .part
                     .manufacturer,
             ),
-            4 => ui.label(&row.placement_state.placement.part.mpn),
-            5 => ui.label(format!("{}", &row.placement_state.placement.rotation)),
-            6 => ui.label(format!("{}", &row.placement_state.placement.x)),
-            7 => ui.label(format!("{}", &row.placement_state.placement.y)),
-            8 => {
+            MPN_COL => ui.label(&row.placement_state.placement.part.mpn),
+            ROTATION_COL => ui.label(format!("{}", &row.placement_state.placement.rotation)),
+            X_COL => ui.label(format!("{}", &row.placement_state.placement.x)),
+            Y_COL => ui.label(format!("{}", &row.placement_state.placement.y)),
+            PCB_SIDE_COL => {
                 let key = pcb_side_to_i18n_key(&row.placement_state.placement.pcb_side);
                 ui.label(tr!(key))
             }
-            9 => {
+            PHASE_COL => {
                 let phase = &row
                     .placement_state
                     .phase
@@ -336,14 +370,15 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     .unwrap_or_default();
                 ui.label(phase)
             }
-            10 => {
+            PLACED_COL => {
                 let label = tr!(placement_placed_to_i18n_key(row.placement_state.placed));
                 ui.label(label)
             }
-            11 => {
+            STATUS_COL => {
                 let label = tr!(placement_status_to_i18n_key(&row.placement_state.status));
                 ui.label(label)
             }
+            ORDERING_COL => ui.label(row.ordering.to_string()),
 
             _ => unreachable!(),
         };
@@ -351,16 +386,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn show_cell_editor(&mut self, ui: &mut Ui, row: &mut PlacementsRow, column: usize) -> Option<Response> {
         match column {
-            0 => None,
-            1 => None,
-            2 => None,
-            3 => None,
-            4 => None,
-            5 => None,
-            6 => None,
-            7 => None,
-            8 => None,
-            9 => {
+            PHASE_COL => {
                 let response = ui.add(|ui: &mut Ui| {
                     let pcb_side_id = ui.id();
                     egui::ComboBox::from_id_salt(pcb_side_id)
@@ -401,28 +427,26 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
                 Some(response)
             }
-            10 => None,
-            11 => None,
-            _ => unreachable!(),
+            _ => None,
         }
     }
 
     fn set_cell_value(&mut self, src: &PlacementsRow, dst: &mut PlacementsRow, column: usize) {
         match column {
-            0 => dst
+            OBJECT_PATH_COL => dst
                 .object_path
                 .clone_from(&src.object_path),
-            1 => dst
+            REF_DES_COL => dst
                 .placement_state
                 .placement
                 .ref_des
                 .clone_from(&src.placement_state.placement.ref_des),
-            2 => dst
+            PLACE_COL => dst
                 .placement_state
                 .placement
                 .place
                 .clone_from(&src.placement_state.placement.place),
-            3 => dst
+            MANUFACTURER_COL => dst
                 .placement_state
                 .placement
                 .part
@@ -433,44 +457,45 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                         .part
                         .manufacturer,
                 ),
-            4 => dst
+            MPN_COL => dst
                 .placement_state
                 .placement
                 .part
                 .mpn
                 .clone_from(&src.placement_state.placement.part.mpn),
-            5 => dst
+            ROTATION_COL => dst
                 .placement_state
                 .placement
                 .rotation
                 .clone_from(&src.placement_state.placement.rotation),
-            6 => dst
+            X_COL => dst
                 .placement_state
                 .placement
                 .x
                 .clone_from(&src.placement_state.placement.x),
-            7 => dst
+            Y_COL => dst
                 .placement_state
                 .placement
                 .y
                 .clone_from(&src.placement_state.placement.y),
-            8 => dst
+            PCB_SIDE_COL => dst
                 .placement_state
                 .placement
                 .pcb_side
                 .clone_from(&src.placement_state.placement.pcb_side),
-            9 => dst
+            PHASE_COL => dst
                 .placement_state
                 .phase
                 .clone_from(&src.placement_state.phase),
-            10 => dst
+            PLACED_COL => dst
                 .placement_state
                 .placed
                 .clone_from(&src.placement_state.placed),
-            11 => dst
+            STATUS_COL => dst
                 .placement_state
                 .status
                 .clone_from(&src.placement_state.status),
+            ORDERING_COL => dst.ordering.clone_from(&src.ordering),
             _ => unreachable!(),
         }
     }
@@ -481,7 +506,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             placement_state: PlacementState {
                 unit_path: Default::default(),
                 placement: Placement {
-                    ref_des: "".to_string(),
+                    ref_des: "".into(),
                     part: Part {
                         manufacturer: "".to_string(),
                         mpn: "".to_string(),
@@ -496,6 +521,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 status: PlacementStatus::Unknown,
                 phase: None,
             },
+            ordering: Default::default(),
         }
     }
 
@@ -511,7 +537,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             column, _current, _next, _context
         );
         match column {
-            9 => true,
+            PHASE_COL => true,
             _ => false,
         }
     }

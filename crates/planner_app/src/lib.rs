@@ -87,10 +87,17 @@ pub struct PhaseOverview {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PlacementsItem {
+    pub path: ObjectPath,
+    pub state: PlacementState,
+    pub ordering: usize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhasePlacements {
     pub phase_reference: Reference,
 
-    pub placements: BTreeMap<ObjectPath, PlacementState>,
+    pub placements: Vec<PlacementsItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -121,7 +128,7 @@ pub struct PhasePlacementOrderings {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PlacementsList {
-    pub placements: BTreeMap<ObjectPath, PlacementState>,
+    pub placements: Vec<PlacementsItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
@@ -809,8 +816,19 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
+                let placements = project
+                    .placements
+                    .iter()
+                    .enumerate()
+                    .map(|(ordering, (path, state))| PlacementsItem {
+                        path: path.clone(),
+                        state: state.clone(),
+                        ordering,
+                    })
+                    .collect();
+
                 let placements = PlacementsList {
-                    placements: project.placements.clone(),
+                    placements,
                 };
 
                 Ok(view_renderer::view(ProjectView::Placements(placements)))
@@ -1076,23 +1094,41 @@ impl Planner {
                 phase_reference,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
-                    project, ..
+                    path,
+                    project,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let _phase = project
+                let phase = project
                     .phases
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                let placements = project
+                let load_out_source =
+                    try_build_phase_load_out_source(path, &phase).map_err(AppError::LoadoutSourceError)?;
+
+                let loadout_items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
+
+                let mut placements: Vec<(&ObjectPath, &PlacementState)> = project
                     .placements
-                    .clone()
-                    .into_iter()
+                    .iter()
                     .filter(|(_path, state)| match &state.phase {
                         Some(candidate_phase) if phase_reference == *candidate_phase => true,
                         _ => false,
+                    })
+                    .collect();
+
+                project::sort_placements(&mut placements, &phase.placement_orderings, &loadout_items);
+
+                let placements = placements
+                    .into_iter()
+                    .enumerate()
+                    .map(|(ordering, (path, state))| PlacementsItem {
+                        path: path.clone(),
+                        state: state.clone(),
+                        ordering,
                     })
                     .collect();
 

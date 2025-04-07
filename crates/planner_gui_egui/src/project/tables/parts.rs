@@ -6,7 +6,7 @@ use egui_data_table::RowViewer;
 use egui_data_table::viewer::{CellWriteContext, TableColumnConfig};
 use egui_i18n::tr;
 use egui_mobius::types::Enqueue;
-use planner_app::{Part, ProcessName};
+use planner_app::{Part, ProcessName, RefDes};
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
@@ -16,7 +16,7 @@ use crate::project::parts_tab::PartsUiCommand;
 pub struct PartStatesRow {
     pub part: Part,
     pub enabled_processes: Vec<(ProcessName, bool)>,
-    pub ref_des_set: BTreeSet<String>,
+    pub ref_des_set: BTreeSet<RefDes>,
     pub quantity: usize,
 }
 
@@ -138,6 +138,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                     .ref_des_set
                     .iter()
                     .cloned()
+                    .map(|meh| meh.to_string())
                     .collect::<Vec<String>>()
                     .join(", ");
                 ui.label(label)
