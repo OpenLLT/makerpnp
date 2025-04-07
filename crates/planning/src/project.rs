@@ -370,63 +370,11 @@ fn generate_phase_artifacts(
         })
         .collect();
 
-    placement_states.sort_by(
-        |(object_path_a, placement_state_a), (object_path_b, placement_state_b)| {
-            phase
-                .placement_orderings
-                .iter()
-                .fold(Ordering::Equal, |mut acc, sort_ordering| {
-                    if !matches!(acc, Ordering::Equal) {
-                        return acc;
-                    }
-                    acc = match sort_ordering.mode {
-                        PlacementSortingMode::FeederReference => {
-                            let feeder_reference_a = match pnp::load_out::find_load_out_item_by_part(
-                                &load_out_items,
-                                &placement_state_a.placement.part,
-                            ) {
-                                Some(load_out_item) => load_out_item.reference.clone(),
-                                _ => "".to_string(),
-                            };
-                            let feeder_reference_b = match pnp::load_out::find_load_out_item_by_part(
-                                &load_out_items,
-                                &placement_state_b.placement.part,
-                            ) {
-                                Some(load_out_item) => load_out_item.reference.clone(),
-                                _ => "".to_string(),
-                            };
-
-                            trace!(
-                                "Comparing feeder references. feeder_reference_a: '{}' feeder_reference_a: '{}'",
-                                feeder_reference_a,
-                                feeder_reference_b
-                            );
-                            feeder_reference_a.cmp(&feeder_reference_b)
-                        }
-                        PlacementSortingMode::PcbUnit => {
-                            let pcb_unit_a = object_path_a.pcb_unit();
-                            let pcb_unit_b = object_path_b.pcb_unit();
-
-                            trace!(
-                                "Comparing pcb units, pcb_unit_a: '{:?}', pcb_unit_b: '{:?}'",
-                                pcb_unit_a,
-                                pcb_unit_b
-                            );
-                            pcb_unit_a.cmp(&pcb_unit_b)
-                        }
-                    };
-
-                    match sort_ordering.sort_order {
-                        SortOrder::Asc => acc,
-                        SortOrder::Desc => acc.reverse(),
-                    }
-                })
-        },
-    );
+    sort_placements(&mut placement_states, &phase.placement_orderings, load_out_items);
 
     for (_object_path, placement_state) in placement_states.iter() {
         let feeder_reference =
-            match pnp::load_out::find_load_out_item_by_part(&load_out_items, &placement_state.placement.part) {
+            match pnp::load_out::find_load_out_item_by_part(load_out_items, &placement_state.placement.part) {
                 Some(load_out_item) => load_out_item.reference.clone(),
                 _ => "".to_string(),
             };
@@ -455,6 +403,77 @@ fn generate_phase_artifacts(
     );
 
     Ok(())
+}
+
+pub fn sort_placements(
+    placement_states: &mut Vec<(&ObjectPath, &PlacementState)>,
+    placement_orderings: &[PlacementSortingItem],
+    load_out_items: &[LoadOutItem],
+) {
+    placement_states.sort_by(
+        |(object_path_a, placement_state_a), (object_path_b, placement_state_b)| {
+            placement_orderings
+                .iter()
+                .fold(Ordering::Equal, |mut acc, sort_ordering| {
+                    if !matches!(acc, Ordering::Equal) {
+                        return acc;
+                    }
+                    acc = match sort_ordering.mode {
+                        PlacementSortingMode::FeederReference => {
+                            let feeder_reference_a = match pnp::load_out::find_load_out_item_by_part(
+                                load_out_items,
+                                &placement_state_a.placement.part,
+                            ) {
+                                Some(load_out_item) => load_out_item.reference.clone(),
+                                _ => "".to_string(),
+                            };
+                            let feeder_reference_b = match pnp::load_out::find_load_out_item_by_part(
+                                load_out_items,
+                                &placement_state_b.placement.part,
+                            ) {
+                                Some(load_out_item) => load_out_item.reference.clone(),
+                                _ => "".to_string(),
+                            };
+
+                            trace!(
+                                "Comparing feeder references. feeder_reference_a: '{}' feeder_reference_a: '{}'",
+                                feeder_reference_a,
+                                feeder_reference_b
+                            );
+                            feeder_reference_a.cmp(&feeder_reference_b)
+                        }
+                        PlacementSortingMode::PcbUnit => {
+                            let pcb_unit_a = object_path_a.pcb_unit();
+                            let pcb_unit_b = object_path_b.pcb_unit();
+
+                            trace!(
+                                "Comparing pcb units, pcb_unit_a: '{:?}', pcb_unit_b: '{:?}'",
+                                pcb_unit_a,
+                                pcb_unit_b
+                            );
+                            pcb_unit_a.cmp(&pcb_unit_b)
+                        }
+                        PlacementSortingMode::RefDes => {
+                            trace!(
+                                "Comparing ref-des, ref_des_a: '{:?}', ref_des_b: '{:?}'",
+                                placement_state_a.placement.ref_des,
+                                placement_state_b.placement.ref_des,
+                            );
+
+                            placement_state_a
+                                .placement
+                                .ref_des
+                                .cmp(&placement_state_b.placement.ref_des)
+                        }
+                    };
+
+                    match sort_ordering.sort_order {
+                        SortOrder::Asc => acc,
+                        SortOrder::Desc => acc.reverse(),
+                    }
+                })
+        },
+    );
 }
 
 #[serde_as]

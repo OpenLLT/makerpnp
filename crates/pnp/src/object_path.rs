@@ -7,6 +7,7 @@ use serde_with::{DeserializeFromStr, SerializeDisplay};
 use thiserror::Error;
 
 use crate::pcb::PcbKind;
+use crate::placement::RefDes;
 
 #[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
 struct ObjectPathChunk {
@@ -121,10 +122,10 @@ impl ObjectPath {
         }
     }
 
-    pub fn set_ref_des(&mut self, ref_des: String) {
+    pub fn set_ref_des(&mut self, ref_des: RefDes) {
         self.set_chunk(ObjectPathChunk {
             key: "ref_des".to_string(),
-            value: ref_des,
+            value: ref_des.to_string(),
         })
     }
 
@@ -300,7 +301,7 @@ mod pcb_unit_tests {
         // given
         let mut object_path = ObjectPath::default();
         object_path.set_pcb_kind_and_instance(PcbKind::Panel, 1);
-        object_path.set_ref_des("R1".to_ascii_lowercase());
+        object_path.set_ref_des("R1".to_ascii_lowercase().into());
 
         // when
         let result = object_path.pcb_unit();
@@ -318,7 +319,7 @@ mod pcb_unit_tests {
         let expected_result = ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").expect("always ok");
 
         // when
-        object_path.set_ref_des("R1".to_string());
+        object_path.set_ref_des("R1".to_string().into());
 
         // then
         assert_eq!(object_path, expected_result);
@@ -333,7 +334,7 @@ mod pcb_unit_tests {
         let expected_result = ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").expect("always ok");
 
         // when
-        object_path.set_ref_des("R1".to_string());
+        object_path.set_ref_des("R1".to_string().into());
 
         // then
         assert_eq!(object_path, expected_result);
@@ -380,7 +381,7 @@ mod pcb_unit_tests {
         // when
         object_path.set_pcb_kind_and_instance(PcbKind::Panel, 1);
         object_path.set_pcb_unit(1);
-        object_path.set_ref_des("R1".to_string());
+        object_path.set_ref_des("R1".to_string().into());
 
         // then
         assert_eq!(object_path, expected_result);

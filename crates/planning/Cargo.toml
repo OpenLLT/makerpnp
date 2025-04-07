@@ -28,5 +28,7 @@ indexmap = { workspace = true, features = ["serde"] }
 heck = { workspace = true }
 csv = { workspace = true }
 
+lexical-sort = { workspace = true }
+
 [dev-dependencies]
 rstest = { workspace = true }

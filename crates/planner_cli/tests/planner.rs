@@ -240,10 +240,10 @@ mod operation_sequence_1 {
         // and
         let design_a_variant_a_placements_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
-            "R1","RES_MFR1","RES1","true","Top","10","110","0"
+            "R3","RES_MFR1","RES1","true","Top","5","105","90"
             "C1","CAP_MFR1","CAP1","true","Bottom","30","130","180"
             "J1","CONN_MFR1","CONN1","true","Bottom","40","140","-90"
-            "R3","RES_MFR1","RES1","true","Top","5","105","90"
+            "R1","RES_MFR1","RES1","true","Top","10","110","0"
         "#};
         // two refdes on the same side should use the same part (R1, R3)
 
@@ -343,10 +343,10 @@ mod operation_sequence_1 {
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
             "New part. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }\n",
-            "New placement. placement: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }\n",
+            "New placement. placement: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }\n",
             "New placement. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 30, y: 130, rotation: 180 }\n",
             "New placement. placement: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 40, y: 140, rotation: -90 }\n",
-            "New placement. placement: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }\n",
+            "New placement. placement: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }\n",
         ]);
 
         // and
@@ -367,12 +367,13 @@ mod operation_sequence_1 {
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
+        // R2 should be before R1.
         let design_a_variant_a_placements_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
-            "R1","RES_MFR1","RES1","true","Top","110","1110","1"
+            "R3","RES_MFR1","RES1","true","Top","105","1105","91"
             "R2","RES_MFR2","RES2","true","Top","120","1120","91"
             "J1","CONN_MFR1","CONN1","true","Bottom","130","1130","-179"
-            "R3","RES_MFR1","RES1","true","Top","105","1105","91"
+            "R1","RES_MFR1","RES1","true","Top","110","1110","1"
         "#};
 
         let mut placements_path = ctx.temp_dir.path().to_path_buf();
@@ -476,10 +477,10 @@ mod operation_sequence_1 {
         assert_contains_inorder!(trace_content, [
             "New part. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }\n",
             "Removing unused part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
-            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 110, y: 1110, rotation: 1 }\n",
+            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 105, y: 1105, rotation: 91 }\n",
             "New placement. placement: Placement { ref_des: \"R2\", part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, place: true, pcb_side: Top, x: 120, y: 1120, rotation: 91 }\n",
             "Updating placement. old: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 40, y: 140, rotation: -90 }, new: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 130, y: 1130, rotation: -179 }\n",
-            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 105, y: 1105, rotation: 91 }\n",
+            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 110, y: 1110, rotation: 1 }\n",
             "Marking placement as unused. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 30, y: 130, rotation: 180 }\n",
             "Added process. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, applicable_processes: [\"manual\"]",
         ]);
@@ -1129,7 +1130,7 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     "top",
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -1222,7 +1223,7 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "set-placement-ordering",
             "--phase top_1",
-            "--placement-orderings PCB_UNIT:ASC,FEEDER_REFERENCE:ASC",
+            "--placement-orderings PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:DESC",
             // example for PnP machine placement
             //"--orderings PCB_UNIT:ASC,COST:ASC,AREA:ASC,HEIGHT;ASC,FEEDER_REFERENCE:ASC",
             // example for manual placement
@@ -1242,7 +1243,7 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Phase placement orderings set. phase: 'top_1', orderings: [PCB_UNIT:ASC, FEEDER_REFERENCE:ASC]",
+            "Phase placement orderings set. phase: 'top_1', orderings: [PCB_UNIT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
         ]);
 
         // and
@@ -1276,15 +1277,6 @@ mod operation_sequence_1 {
                     rotation: dec!(91),
                 },
                 TestPhasePlacementRecord {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
-                    feeder_reference: "FEEDER_1".to_string(),
-                    manufacturer: "RES_MFR1".to_string(),
-                    mpn: "RES1".to_string(),
-                    x: dec!(110),
-                    y: dec!(1110),
-                    rotation: dec!(1),
-                },
-                TestPhasePlacementRecord {
                     object_path: "pcb=panel::instance=1::unit=1::ref_des=R3".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
@@ -1292,6 +1284,15 @@ mod operation_sequence_1 {
                     x: dec!(105),
                     y: dec!(1105),
                     rotation: dec!(91),
+                },
+                TestPhasePlacementRecord {
+                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
+                    feeder_reference: "FEEDER_1".to_string(),
+                    manufacturer: "RES_MFR1".to_string(),
+                    mpn: "RES1".to_string(),
+                    x: dec!(110),
+                    y: dec!(1110),
+                    rotation: dec!(1),
                 },
             ])
             .as_string();
@@ -1532,7 +1533,7 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     "top",
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -1711,7 +1712,7 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     "top",
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -1913,7 +1914,7 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     "top",
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc")],
+                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -2343,7 +2344,7 @@ mod help {
                   --phase <PHASE>
                       Phase reference (e.g. 'top_1')
                   --placement-orderings [<PLACEMENT_ORDERINGS>...]
-                      Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC')
+                      Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:ASC')
               -v, --verbose...
                       Increase logging verbosity
               -q, --quiet...

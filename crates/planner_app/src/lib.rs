@@ -25,6 +25,7 @@ pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
 pub use pnp::placement::Placement;
+pub use pnp::placement::RefDes;
 use regex::Regex;
 use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
@@ -102,7 +103,7 @@ pub struct Process {
 pub struct PartWithState {
     pub part: Part,
     pub processes: Vec<ProcessName>,
-    pub ref_des_set: BTreeSet<String>,
+    pub ref_des_set: BTreeSet<RefDes>,
     pub quantity: usize,
 }
 

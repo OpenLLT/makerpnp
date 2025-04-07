@@ -51,7 +51,7 @@ impl From<&PcbSide> for PlacementRecordPcbSide {
 impl PlacementRecord {
     pub fn as_placement(&self) -> Placement {
         Placement {
-            ref_des: self.ref_des.clone(),
+            ref_des: self.ref_des.clone().into(),
             part: Part {
                 manufacturer: self.manufacturer.clone(),
                 mpn: self.mpn.clone(),

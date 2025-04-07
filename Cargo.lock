@@ -3459,6 +3459,7 @@ dependencies = [
  "heck",
  "indexmap 2.7.1",
  "json2markdown",
+ "lexical-sort",
  "pnp",
  "regex",
  "rstest",

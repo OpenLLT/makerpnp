@@ -31,6 +31,7 @@ impl SortOrderArg {
 pub enum PlacementSortingModeArg {
     FeederReference,
     PcbUnit,
+    RefDes,
     // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, DESIGN_X, DESIGN_Y, PANEL_X, PANEL_Y, DESCRIPTION
 }
 
@@ -39,6 +40,7 @@ impl PlacementSortingModeArg {
         match self {
             PlacementSortingModeArg::FeederReference => PlacementSortingMode::FeederReference,
             PlacementSortingModeArg::PcbUnit => PlacementSortingMode::PcbUnit,
+            PlacementSortingModeArg::RefDes => PlacementSortingMode::RefDes,
         }
     }
 }

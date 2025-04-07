@@ -45,6 +45,7 @@ impl Display for PlacementStatus {
 pub enum PlacementSortingMode {
     FeederReference,
     PcbUnit,
+    RefDes,
     // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, DESIGN_X, DESIGN_Y, PANEL_X, PANEL_Y, DESCRIPTION
 }
 
@@ -53,6 +54,7 @@ impl Display for PlacementSortingMode {
         match self {
             Self::FeederReference => write!(f, "FeederReference"),
             Self::PcbUnit => write!(f, "PcbUnit"),
+            Self::RefDes => write!(f, "RefDes"),
         }
     }
 }
