@@ -13,6 +13,7 @@ modal-errors-title = Errors - { $file }
 modal-add-pcb-title = Add PCB - { $file }
 modal-add-phase-title = Add phase - { $file }
 modal-create-unit-assignment-title = Create unit assignment - { $file }
+modal-phase-placement-orderings-title = Phase placement orderings - { $phase }
 
 toolbar-button-home = Home
 toolbar-button-new = New
@@ -56,6 +57,7 @@ project-parts-tab-label = Parts
 project-parts-header = Project Parts
 
 phase-toolbar-add-parts-to-loadout = Add parts to load-out.
+phase-toolbar-placement-orderings = Placement orderings.
 
 phase-placements-header = Phase Placements
 

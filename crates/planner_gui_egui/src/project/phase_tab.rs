@@ -5,6 +5,9 @@ use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Re
 use regex::Regex;
 use tracing::{debug, trace};
 
+use crate::project::dialogs::placement_orderings::{
+    PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
+};
 use crate::project::placements_tab::PlacementsUiCommand;
 use crate::project::tables::placements::{
     PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
@@ -19,6 +22,8 @@ pub struct PhaseUi {
     overview: Option<PhaseOverview>,
     #[derivative(Debug = "ignore")]
     placements_table_ui: PlacementsTableUi,
+
+    placement_orderings_modal: Option<PlacementOrderingsModal>,
 
     pub component: ComponentState<PhaseUiCommand>,
 }
@@ -38,6 +43,7 @@ impl PhaseUi {
         Self {
             overview: None,
             placements_table_ui,
+            placement_orderings_modal: None,
             component: Default::default(),
         }
     }
@@ -61,6 +67,8 @@ pub enum PhaseUiCommand {
         manufacturer_pattern: Regex,
         mpn_pattern: Regex,
     },
+    ShowPhasePlacementsOrderingsDialog,
+    PlacementOrderingsModalUiCommand(PlacementOrderingsModalUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +98,9 @@ impl UiComponent for PhaseUi {
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("phase-placements-header"));
 
+        //
+        // Toolbar
+        //
         ui.horizontal(|ui| {
             if ui
                 .button(tr!("phase-toolbar-add-parts-to-loadout"))
@@ -108,10 +119,28 @@ impl UiComponent for PhaseUi {
                         })
                 }
             }
+
+            if ui
+                .button(tr!("phase-toolbar-placement-orderings"))
+                .clicked()
+            {
+                self.component
+                    .send(PhaseUiCommand::ShowPhasePlacementsOrderingsDialog)
+            }
         });
 
+        //
+        // Table
+        //
         self.placements_table_ui
             .ui(ui, &mut PlacementsTableUiContext::default());
+
+        //
+        // Modals
+        //
+        if let Some(dialog) = &self.placement_orderings_modal {
+            dialog.ui(ui, &mut ());
+        }
     }
 
     fn update<'context>(
@@ -149,6 +178,41 @@ impl UiComponent for PhaseUi {
                 manufacturer_pattern,
                 mpn_pattern,
             }),
+            PhaseUiCommand::ShowPhasePlacementsOrderingsDialog => {
+                if let Some(overview) = &self.overview {
+                    let mut modal = PlacementOrderingsModal::new(overview.phase_reference.clone());
+                    modal
+                        .component
+                        .configure_mapper(self.component.sender.clone(), move |command| {
+                            trace!("placement orderings modal mapper. command: {:?}", command);
+                            PhaseUiCommand::PlacementOrderingsModalUiCommand(command)
+                        });
+
+                    self.placement_orderings_modal = Some(modal);
+                    None
+                } else {
+                    None
+                }
+            }
+            PhaseUiCommand::PlacementOrderingsModalUiCommand(command) => {
+                if let Some(modal) = self.placement_orderings_modal.as_mut() {
+                    let action = modal.update(command, &mut ());
+                    trace!("placement ordering model action: {:?}", action);
+                    match action {
+                        None => None,
+                        Some(PlacementOrderingsModalAction::Submit(args)) => {
+                            self.placement_orderings_modal.take();
+                            None
+                        }
+                        Some(PlacementOrderingsModalAction::CloseDialog) => {
+                            self.placement_orderings_modal.take();
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
         }
     }
 }
