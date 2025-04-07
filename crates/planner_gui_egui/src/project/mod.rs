@@ -13,7 +13,7 @@ use planner_app::{
 };
 use regex::Regex;
 use slotmap::new_key_type;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use crate::planner_app_core::PlannerCoreService;
 use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
@@ -139,7 +139,7 @@ impl Project {
         toolbar
             .component
             .configure_mapper(component_sender.clone(), move |command| {
-                debug!("project toolbar mapper. command: {:?}", command);
+                trace!("project toolbar mapper. command: {:?}", command);
                 (key, ProjectUiCommand::ToolbarCommand(command))
             });
 
@@ -157,7 +157,7 @@ impl Project {
             project_tabs
                 .component
                 .configure_mapper(component_sender, move |command| {
-                    debug!("project inner-tab mapper. command: {:?}", command);
+                    trace!("project inner-tab mapper. command: {:?}", command);
                     (key, ProjectUiCommand::TabCommand(command))
                 });
             project_tabs.add_tab(ProjectTabKind::Explorer(ExplorerTab::default()));
@@ -266,7 +266,7 @@ impl Project {
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
-                            debug!("phase ui mapper. command: {:?}", command);
+                            trace!("phase ui mapper. command: {:?}", command);
                             (key, ProjectUiCommand::PhaseUiCommand {
                                 phase: phase.clone(),
                                 command,
@@ -291,7 +291,7 @@ impl Project {
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
-                            debug!("load out ui mapper. command: {:?}", command);
+                            trace!("load out ui mapper. command: {:?}", command);
                             (key, ProjectUiCommand::LoadOutUiCommand {
                                 load_out_source: load_out_source.clone(),
                                 command,
@@ -657,7 +657,7 @@ impl UiComponent for Project {
             ProjectUiCommand::UpdateView(view) => {
                 match view {
                     ProjectView::Overview(project_overview) => {
-                        debug!("project overview: {:?}", project_overview);
+                        trace!("project overview: {:?}", project_overview);
                         self.update_processes(&project_overview);
 
                         let mut state = self.project_ui_state.lock().unwrap();
@@ -667,25 +667,25 @@ impl UiComponent for Project {
                             .update_overview(project_overview);
                     }
                     ProjectView::ProjectTree(project_tree) => {
-                        debug!("project tree: {:?}", project_tree);
+                        trace!("project tree: {:?}", project_tree);
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
                             .explorer_ui
                             .update_tree(project_tree);
                     }
                     ProjectView::Placements(placements) => {
-                        debug!("placements: {:?}", placements);
+                        trace!("placements: {:?}", placements);
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
                             .placements_ui
                             .update_placements(placements, self.phases.clone())
                     }
                     ProjectView::Phases(phases) => {
-                        debug!("phases: {:?}", phases);
+                        trace!("phases: {:?}", phases);
                         self.phases = phases.phases;
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
-                        debug!("phase overview: {:?}", phase_overview);
+                        trace!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
 
                         self.ensure_phase(key.clone(), &phase);
@@ -696,7 +696,7 @@ impl UiComponent for Project {
                         phase_ui.update_overview(phase_overview);
                     }
                     ProjectView::PhasePlacements(phase_placements) => {
-                        debug!("phase placements: {:?}", phase_placements);
+                        trace!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
 
                         self.ensure_phase(key.clone(), &phase);
@@ -713,7 +713,7 @@ impl UiComponent for Project {
                         // TODO
                     }
                     ProjectView::Parts(part_states) => {
-                        debug!("parts: {:?}", part_states);
+                        trace!("parts: {:?}", part_states);
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         state
@@ -721,7 +721,7 @@ impl UiComponent for Project {
                             .update_part_states(part_states, self.processes.clone())
                     }
                     ProjectView::PhaseLoadOut(load_out) => {
-                        debug!("load_out: {:?}", load_out);
+                        trace!("load_out: {:?}", load_out);
                         let load_out_source = load_out.source.clone();
 
                         self.ensure_load_out(key.clone(), load_out.phase_reference.clone(), &load_out_source);
@@ -967,7 +967,7 @@ impl UiComponent for Project {
                         modal
                             .component
                             .configure_mapper(self.component.sender.clone(), move |command| {
-                                debug!("add pcb modal mapper. command: {:?}", command);
+                                trace!("add pcb modal mapper. command: {:?}", command);
                                 (key, ProjectUiCommand::AddPcbModalCommand(command))
                             });
 
@@ -979,7 +979,7 @@ impl UiComponent for Project {
                         modal
                             .component
                             .configure_mapper(self.component.sender.clone(), move |command| {
-                                debug!("add phase modal mapper. command: {:?}", command);
+                                trace!("add phase modal mapper. command: {:?}", command);
                                 (key, ProjectUiCommand::AddPhaseModalCommand(command))
                             });
 
@@ -991,7 +991,7 @@ impl UiComponent for Project {
                         modal
                             .component
                             .configure_mapper(self.component.sender.clone(), move |command| {
-                                debug!("create unit assignment modal mapper. command: {:?}", command);
+                                trace!("create unit assignment modal mapper. command: {:?}", command);
                                 (key, ProjectUiCommand::CreateUnitAssignmentModalCommand(command))
                             });
 
@@ -1218,7 +1218,7 @@ impl ProjectUiState {
             .explorer_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                debug!("explorer ui mapper. command: {:?}", command);
+                trace!("explorer ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::ExplorerUiCommand(command))
             });
 
@@ -1226,7 +1226,7 @@ impl ProjectUiState {
             .overview_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                debug!("overview ui mapper. command: {:?}", command);
+                trace!("overview ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::OverviewUiCommand(command))
             });
 
@@ -1234,7 +1234,7 @@ impl ProjectUiState {
             .parts_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                debug!("parts ui mapper. command: {:?}", command);
+                trace!("parts ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::PartsUiCommand(command))
             });
 
@@ -1242,7 +1242,7 @@ impl ProjectUiState {
             .placements_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                debug!("placements ui mapper. command: {:?}", command);
+                trace!("placements ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::PlacementsUiCommand(command))
             });
 

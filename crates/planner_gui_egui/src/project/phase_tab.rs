@@ -3,7 +3,7 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference};
 use regex::Regex;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::project::placements_tab::PlacementsUiCommand;
 use crate::project::tables::placements::{
@@ -31,7 +31,7 @@ impl PhaseUi {
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
-                debug!("phase placements table mapper. command: {:?}", placements_table_command);
+                trace!("phase placements table mapper. command: {:?}", placements_table_command);
                 PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 

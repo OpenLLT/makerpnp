@@ -168,7 +168,7 @@ impl PlacementsRowViewer {
         filter
             .component_state
             .configure_mapper(sender.clone(), |filter_ui_command| {
-                debug!("filter ui mapper. command: {:?}", filter_ui_command);
+                trace!("filter ui mapper. command: {:?}", filter_ui_command);
                 PlacementsTableUiCommand::FilterCommand(filter_ui_command)
             });
 

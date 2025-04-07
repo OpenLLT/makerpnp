@@ -209,7 +209,6 @@ fn handle_toolbar_action(
                             },
                         }),
                     };
-                    debug!("save command: {:?}", command);
                     Task::done(command)
                 }
                 _ => Task::none(),

@@ -2,7 +2,6 @@ use std::fmt::{Debug, Formatter};
 
 use egui_mobius::slot::Slot;
 use egui_mobius::types::Enqueue;
-use tracing::debug;
 
 pub struct ComponentState<UiCommand> {
     pub sender: Enqueue<UiCommand>,
@@ -36,7 +35,7 @@ impl<UiCommand: Send + Clone + Debug + 'static> ComponentState<UiCommand> {
     {
         self.slot.start({
             move |command| {
-                debug!("command: {:?}", command);
+                //trace!("command: {:?}", command);
                 sender
                     .send(wrapper(command))
                     .expect("sent");

@@ -2,7 +2,7 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use planner_app::{ObjectPath, PhaseOverview, PlacementState, PlacementsList};
-use tracing::debug;
+use tracing::trace;
 
 use crate::project::tables::placements::{
     PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
@@ -28,7 +28,7 @@ impl PlacementsUi {
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
-                debug!("placements table mapper. command: {:?}", placements_table_command);
+                trace!("placements table mapper. command: {:?}", placements_table_command);
                 PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 

@@ -3,7 +3,7 @@ use egui_dock::{DockArea, DockState, Style};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
-use tracing::debug;
+use tracing::trace;
 
 use crate::config::Config;
 use crate::project::{Project, ProjectKey};
@@ -373,7 +373,7 @@ impl AppTabs {
         match tabs.tabs.get_mut(&tab_key).unwrap() {
             TabKind::NewProject(new_project_tab, tab_kind_component) => {
                 tab_kind_component.configure_mapper(tab_kind_sender, move |command| {
-                    debug!("tab kind mapper. command: {:?}", command);
+                    trace!("tab kind mapper. command: {:?}", command);
                     (tab_key, TabUiCommand::TabKindCommand(command))
                 });
 
@@ -382,7 +382,7 @@ impl AppTabs {
                 new_project_tab
                     .component
                     .configure_mapper(tab_kind_component_sender, move |command| {
-                        debug!("new project tab mapper. command: {:?}", command);
+                        trace!("new project tab mapper. command: {:?}", command);
                         TabKindUiCommand::NewProjectTabCommand {
                             command,
                         }
@@ -420,7 +420,7 @@ impl AppTabs {
         match tabs.tabs.get_mut(&tab_key).unwrap() {
             TabKind::Home(home_tab, tab_kind_component) => {
                 tab_kind_component.configure_mapper(tab_kind_sender, move |command| {
-                    debug!("tab kind mapper. command: {:?}", command);
+                    trace!("tab kind mapper. command: {:?}", command);
                     (tab_key, TabUiCommand::TabKindCommand(command))
                 });
 
@@ -429,7 +429,7 @@ impl AppTabs {
                 home_tab
                     .component
                     .configure_mapper(tab_kind_component_sender, move |command| {
-                        debug!("home tab mapper. command: {:?}", command);
+                        trace!("home tab mapper. command: {:?}", command);
                         TabKindUiCommand::HomeTabCommand {
                             command,
                         }

@@ -8,7 +8,7 @@ use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use futures::StreamExt;
 use slotmap::SlotMap;
-use tracing::{debug, info};
+use tracing::{debug, info, trace};
 
 use crate::config::Config;
 use crate::file_picker::Picker;
@@ -60,7 +60,7 @@ impl AppState {
         toolbar
             .component
             .configure_mapper(sender.clone(), |command: ToolbarUiCommand| {
-                debug!("app toolbar mapper. command: {:?}", command);
+                trace!("app toolbar mapper. command: {:?}", command);
                 UiCommand::ToolbarCommand(command)
             });
 
@@ -96,7 +96,7 @@ impl AppState {
         project_tab
             .component
             .configure_mapper(tab_kind_sender, |command| {
-                debug!("project tab mapper. command: {:?}", command);
+                trace!("project tab mapper. command: {:?}", command);
                 TabKindUiCommand::ProjectTabCommand {
                     command,
                 }
@@ -270,7 +270,7 @@ impl UiApp {
         app_tabs
             .component
             .configure_mapper(app_message_sender, |(tab_key, command)| {
-                debug!("app tabs mapper. command: {:?}", command);
+                trace!("app tabs mapper. command: {:?}", command);
                 UiCommand::TabCommand {
                     tab_key,
                     command,
@@ -562,7 +562,7 @@ fn configure_project_component(app_command_sender: Sender<UiCommand>, tab_key: T
     project
         .component
         .configure_mapper(app_command_sender, move |(key, command)| {
-            debug!("project mapper. command: {:?}", command);
+            trace!("project mapper. command: {:?}", command);
             UiCommand::TabCommand {
                 tab_key,
                 command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {

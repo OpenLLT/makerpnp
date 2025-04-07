@@ -1,7 +1,6 @@
 use egui::Ui;
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
-use tracing::debug;
 
 use crate::project::{ProjectTabKind, ProjectUiState};
 use crate::tabs::{AppTabViewer, TabKey, Tabs};
@@ -94,7 +93,6 @@ impl UiComponent for ProjectTabs {
         command: Self::UiCommand,
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
-        debug!("project tab. command: {:?}", command);
         match command {
             ProjectTabUiCommand::None => Some(ProjectTabAction::None),
         }
