@@ -150,7 +150,7 @@ pub(crate) enum Command {
         phase: Reference,
 
         /// Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC')
-        #[arg(long, num_args = 0.., value_delimiter = ',', value_parser = cli::parsers::PlacementSortingItemParser::default())]
+        #[arg(long, required = true, num_args = 0.., value_delimiter = ',', value_parser = cli::parsers::PlacementSortingItemParser::default())]
         placement_orderings: Vec<PlacementSortingItem>,
     },
 

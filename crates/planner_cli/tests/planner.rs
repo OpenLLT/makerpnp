@@ -1026,6 +1026,7 @@ mod operation_sequence_1 {
         Ok(())
     }
 
+    //noinspection MissingFeatures
     #[test]
     fn sequence_08_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
@@ -2336,7 +2337,7 @@ mod help {
         let expected_output = indoc! {"
             Set placement ordering for a phase
 
-            Usage: planner_cli <--project <PROJECT_NAME>> set-placement-ordering [OPTIONS] --phase <PHASE>
+            Usage: planner_cli <--project <PROJECT_NAME>> set-placement-ordering [OPTIONS] --phase <PHASE> --placement-orderings [<PLACEMENT_ORDERINGS>...]
 
             Options:
                   --phase <PHASE>
