@@ -1,15 +1,20 @@
+use std::collections::BTreeMap;
+use std::ops::Index;
+
 use egui::{Id, Modal, Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{PlacementSortingItem, Reference};
+use planner_app::{PlacementSortingItem, PlacementSortingMode, Reference};
+use tracing::debug;
 use util::sorting::SortOrder;
 use validator::Validate;
 
 use crate::forms::Form;
 use crate::forms::transforms::no_transform;
+use crate::i18n::conversions::{placement_place_to_i18n_key, placement_sorting_mode_to_i18n_key};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
@@ -58,6 +63,48 @@ impl PlacementOrderingsModal {
                         tui,
                         {
                             move |tui: &mut Tui, fields, sender| {
+                                let all_items = BTreeMap::from([
+                                    (
+                                        PlacementSortingMode::PcbUnit,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::PcbUnit)),
+                                    ),
+                                    (
+                                        PlacementSortingMode::FeederReference,
+                                        tr!(placement_sorting_mode_to_i18n_key(
+                                            &PlacementSortingMode::FeederReference
+                                        )),
+                                    ),
+                                    (
+                                        PlacementSortingMode::RefDes,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::RefDes)),
+                                    ),
+                                ]);
+
+                                fn selected_item_mapper(
+                                    (k, v): (&PlacementSortingMode, &SortOrder),
+                                ) -> (PlacementSortingMode, (String, SortOrder)) {
+                                    let label =
+                                        format!("{} - {:?}", tr!(placement_sorting_mode_to_i18n_key(k)), v).to_string();
+                                    (k.clone(), (label, v.clone()))
+                                }
+
+                                let selected_items: BTreeMap<PlacementSortingMode, (String, SortOrder)> = fields
+                                    .ordering
+                                    .iter()
+                                    .map(selected_item_mapper)
+                                    .collect();
+
+                                let available_items: BTreeMap<PlacementSortingMode, String> = all_items
+                                    .iter()
+                                    .filter_map(|(k, v)| {
+                                        if !selected_items.contains_key(k) {
+                                            Some((k.clone(), v.clone()))
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect();
+
                                 tui.style(Style {
                                     display: Display::Flex,
                                     align_content: Some(AlignContent::Stretch),
@@ -65,11 +112,34 @@ impl PlacementOrderingsModal {
                                     ..default_style()
                                 })
                                 .add(|tui| {
+                                    let id = tui.current_id();
+                                    let available_item_id = id.with("available_item_index");
+                                    let selected_item_id = id.with("selected_item_index");
+
                                     for column_index in 0..3 {
                                         match column_index {
-                                            0 => Self::left_column(tui, default_style),
-                                            1 => Self::center_column(tui, default_style),
-                                            2 => Self::right_column(tui, default_style),
+                                            0 => Self::left_column(
+                                                tui,
+                                                default_style,
+                                                available_item_id,
+                                                &available_items,
+                                            ),
+                                            1 => Self::center_column(
+                                                tui,
+                                                default_style,
+                                                available_item_id,
+                                                selected_item_id,
+                                                &all_items,
+                                                &selected_items,
+                                                SortOrder::Asc,
+                                                Self::sort_order_buttons,
+                                            ),
+                                            2 => Self::right_column(
+                                                tui,
+                                                default_style,
+                                                selected_item_id,
+                                                &selected_items,
+                                            ),
                                             _ => unreachable!(),
                                         }
                                         // end of column
@@ -87,7 +157,27 @@ impl PlacementOrderingsModal {
             });
     }
 
-    fn right_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
+    fn sort_order_buttons(ui: &mut Ui, v: SortOrder) -> Option<SortOrder> {
+        let mut result = None;
+
+        // TODO translations
+        if ui
+            .add(egui::RadioButton::new(v == SortOrder::Asc, "Ascending"))
+            .clicked()
+        {
+            result = Some(SortOrder::Asc);
+        }
+        if ui
+            .add(egui::RadioButton::new(v == SortOrder::Desc, "Descending"))
+            .clicked()
+        {
+            result = Some(SortOrder::Desc);
+        }
+
+        result
+    }
+
+    fn left_column<T>(tui: &mut Tui, rename_this_style: fn() -> Style, id: Id, available_items: &BTreeMap<T, String>) {
         tui.style(Style {
             flex_grow: 1.0,
             min_size: Size {
@@ -98,20 +188,60 @@ impl PlacementOrderingsModal {
         })
         .with_border_style_from_egui_style()
         .add_with_border(|tui: &mut Tui| {
-            let id = tui.current_id().with("selected");
-            list_box_with_id_tui(tui, id, vec!["4", "5", "6"]);
+            let names = available_items
+                .iter()
+                .map(|(k, v)| v)
+                .collect::<Vec<_>>();
+
+            list_box_with_id_tui(tui, id, names);
+            // end of cell
+        });
+    }
+
+    fn right_column<K, V>(
+        tui: &mut Tui,
+        rename_this_style: fn() -> Style,
+        id: Id,
+        selected_items: &BTreeMap<K, (String, V)>,
+    ) {
+        tui.style(Style {
+            flex_grow: 1.0,
+            min_size: Size {
+                width: percent(0.4),
+                height: auto(),
+            },
+            ..rename_this_style()
+        })
+        .with_border_style_from_egui_style()
+        .add_with_border(|tui: &mut Tui| {
+            let items = selected_items
+                .iter()
+                .map(|(_k, (s, _v))| s)
+                .collect::<Vec<_>>();
+            list_box_with_id_tui(tui, id, items);
             // end of cell
         })
     }
 
-    fn center_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
+    fn center_column<K, V: Clone + Send + Sync + 'static, F>(
+        tui: &mut Tui,
+        rename_this_style: fn() -> Style,
+        available_item_id: Id,
+        selected_item_id: Id,
+        available_items: &BTreeMap<K, String>,
+        selected_items: &BTreeMap<K, (String, V)>,
+        default_v: V,
+        v_selector: F,
+    ) where
+        F: Fn(&mut Ui, V) -> Option<V>,
+    {
         let id = tui.current_id().with("sort_order");
 
-        let mut sort_order = tui.egui_ui().memory(|mem| {
+        let mut v = tui.egui_ui().memory(|mem| {
             // NOTE It's CRITICAL that the correct type is specified for `get_temp`
             mem.data
-                .get_temp::<SortOrder>(id)
-                .unwrap_or(SortOrder::Asc)
+                .get_temp::<V>(id)
+                .unwrap_or(default_v)
         });
 
         tui.style(Style {
@@ -127,18 +257,8 @@ impl PlacementOrderingsModal {
             tui.ui_add_manual(
                 |ui| {
                     ui.vertical_centered(|ui| {
-                        // TODO translations
-                        if ui
-                            .add(egui::RadioButton::new(sort_order == SortOrder::Asc, "Ascending"))
-                            .clicked()
-                        {
-                            sort_order = SortOrder::Asc;
-                        }
-                        if ui
-                            .add(egui::RadioButton::new(sort_order == SortOrder::Desc, "Descending"))
-                            .clicked()
-                        {
-                            sort_order = SortOrder::Desc;
+                        if let Some(new_v) = v_selector(ui, v.clone()) {
+                            v = new_v;
                         }
                     });
 
@@ -146,31 +266,41 @@ impl PlacementOrderingsModal {
                 },
                 no_transform,
             );
-            tui.ui_add(egui::Button::new(">"));
-            tui.ui_add(egui::Button::new("<"));
+
+            let available_index = tui.egui_ui().memory(|mem| {
+                // NOTE It's CRITICAL that the correct type is specified for `get_temp`
+                mem.data
+                    .get_temp::<Option<usize>>(available_item_id)
+                    .unwrap_or_default()
+            });
+
+            let selected_index = tui.egui_ui().memory(|mem| {
+                // NOTE It's CRITICAL that the correct type is specified for `get_temp`
+                mem.data
+                    .get_temp::<Option<usize>>(selected_item_id)
+                    .unwrap_or_default()
+            });
+
+            if tui
+                .enabled_ui(available_index.is_some())
+                .ui_add(egui::Button::new(">"))
+                .clicked()
+            {
+                debug!(">, {:?}", available_index);
+            };
+            if tui
+                .enabled_ui(selected_index.is_some())
+                .ui_add(egui::Button::new("<"))
+                .clicked()
+            {
+                debug!("<, {:?}", selected_index);
+            };
 
             // end of cell
         });
 
         tui.egui_ui()
-            .memory_mut(|mem| mem.data.insert_temp(id, sort_order));
-    }
-
-    fn left_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
-        tui.style(Style {
-            flex_grow: 1.0,
-            min_size: Size {
-                width: percent(0.4),
-                height: auto(),
-            },
-            ..rename_this_style()
-        })
-        .with_border_style_from_egui_style()
-        .add_with_border(|tui: &mut Tui| {
-            let id = tui.current_id().with("available");
-            list_box_with_id_tui(tui, id, vec!["1", "2", "3"]);
-            // end of cell
-        })
+            .memory_mut(|mem| mem.data.insert_temp(id, v));
     }
 }
 
@@ -217,7 +347,9 @@ where
 }
 
 #[derive(Clone, Debug, Default, Validate, serde::Deserialize, serde::Serialize)]
-pub struct PlacementOrderingFields {}
+pub struct PlacementOrderingFields {
+    ordering: BTreeMap<PlacementSortingMode, SortOrder>,
+}
 
 #[derive(Debug, Clone)]
 pub enum PlacementOrderingsModalUiCommand {

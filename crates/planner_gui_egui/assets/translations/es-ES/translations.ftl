@@ -146,6 +146,10 @@ placement-no-place = No-lugar
 placement-status-known = Conocido
 placement-status-unknown = Desconocido
 
+sort-mode-feeder-reference = Referencia del alimentador
+sort-mode-pcb-unit = Unidad PCB
+sort-mode-ref-des = Des. de Ref.
+
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto
 table-placements-column-refdes = Des. de Ref.

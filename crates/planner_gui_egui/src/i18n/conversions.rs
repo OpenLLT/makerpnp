@@ -1,4 +1,4 @@
-use planner_app::{PcbSide, PlacementStatus};
+use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus};
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
     match pcb_side {
@@ -25,5 +25,13 @@ pub fn placement_status_to_i18n_key(status: &PlacementStatus) -> &'static str {
     match status {
         PlacementStatus::Known => "placement-status-known",
         PlacementStatus::Unknown => "placement-status-unknown",
+    }
+}
+
+pub fn placement_sorting_mode_to_i18n_key(mode: &PlacementSortingMode) -> &'static str {
+    match mode {
+        PlacementSortingMode::FeederReference => "sort-mode-feeder-reference",
+        PlacementSortingMode::PcbUnit => "sort-mode-pcb-unit",
+        PlacementSortingMode::RefDes => "sort-mode-ref-des",
     }
 }
