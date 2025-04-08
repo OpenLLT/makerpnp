@@ -3435,6 +3435,7 @@ dependencies = [
  "fluent-bundle",
  "futures",
  "i18n",
+ "indexmap 2.7.1",
  "petgraph",
  "planner_app",
  "regex",
