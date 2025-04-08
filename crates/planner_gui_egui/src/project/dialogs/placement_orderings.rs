@@ -88,7 +88,7 @@ impl PlacementOrderingsModal {
                                     (k.clone(), (label, v.clone()))
                                 }
 
-                                let selected_items: BTreeMap<PlacementSortingMode, (String, SortOrder)> = fields
+                                let mut selected_items: BTreeMap<PlacementSortingMode, (String, SortOrder)> = fields
                                     .ordering
                                     .iter()
                                     .map(selected_item_mapper)
@@ -129,10 +129,16 @@ impl PlacementOrderingsModal {
                                                 default_style,
                                                 available_item_id,
                                                 selected_item_id,
-                                                &all_items,
+                                                &available_items,
                                                 &selected_items,
                                                 SortOrder::Asc,
                                                 Self::sort_order_buttons,
+                                                |k, v| {
+                                                    debug!("add. k: {:?}, v: {:?}", k, v);
+                                                },
+                                                |k, v| {
+                                                    debug!("remove. k: {:?}, v: {:?}", k, v);
+                                                },
                                             ),
                                             2 => Self::right_column(
                                                 tui,
@@ -223,7 +229,7 @@ impl PlacementOrderingsModal {
         })
     }
 
-    fn center_column<K, V: Clone + Send + Sync + 'static, F>(
+    fn center_column<K: Ord + Clone, V: Clone + Send + Sync + 'static, F>(
         tui: &mut Tui,
         rename_this_style: fn() -> Style,
         available_item_id: Id,
@@ -232,10 +238,12 @@ impl PlacementOrderingsModal {
         selected_items: &BTreeMap<K, (String, V)>,
         default_v: V,
         v_selector: F,
+        added_fn: fn(&K, &V),
+        removed_fn: fn(&K, &V),
     ) where
         F: Fn(&mut Ui, V) -> Option<V>,
     {
-        let id = tui.current_id().with("sort_order");
+        let id = tui.current_id().with("v");
 
         let mut v = tui.egui_ui().memory(|mem| {
             // NOTE It's CRITICAL that the correct type is specified for `get_temp`
@@ -286,14 +294,25 @@ impl PlacementOrderingsModal {
                 .ui_add(egui::Button::new(">"))
                 .clicked()
             {
+                let (k, s) = available_items
+                    .iter()
+                    .nth(available_index.unwrap())
+                    .unwrap();
+
                 debug!(">, {:?}", available_index);
+                added_fn(k, &v);
             };
             if tui
                 .enabled_ui(selected_index.is_some())
                 .ui_add(egui::Button::new("<"))
                 .clicked()
             {
+                let (k, (s, v)) = selected_items
+                    .iter()
+                    .nth(available_index.unwrap())
+                    .unwrap();
                 debug!("<, {:?}", selected_index);
+                removed_fn(k, v);
             };
 
             // end of cell
