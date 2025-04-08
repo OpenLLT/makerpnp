@@ -13,3 +13,5 @@ pub mod toolbar;
 pub mod ui_app;
 pub mod ui_commands;
 pub mod ui_component;
+
+pub mod widgets;
