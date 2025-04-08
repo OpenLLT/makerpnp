@@ -133,11 +133,19 @@ impl PlacementOrderingsModal {
                                                 &selected_items,
                                                 SortOrder::Asc,
                                                 Self::sort_order_buttons,
-                                                |k, v| {
-                                                    debug!("add. k: {:?}, v: {:?}", k, v);
+                                                {
+                                                    let sender = sender.clone();
+                                                    move |k, v| {
+                                                        debug!("add. k: {:?}, v: {:?}", k, v);
+                                                        sender.send(PlacementOrderingsModalUiCommand::AddOrdering(k.clone(), v.clone())).expect("sent");
+                                                    }
                                                 },
-                                                |k, v| {
-                                                    debug!("remove. k: {:?}, v: {:?}", k, v);
+                                                {
+                                                    let sender = sender.clone();
+                                                    move |k, v| {
+                                                        debug!("remove. k: {:?}, v: {:?}", k, v);
+                                                        sender.send(PlacementOrderingsModalUiCommand::RemoveOrdering(k.clone(), v.clone())).expect("sent");
+                                                    }
                                                 },
                                             ),
                                             2 => Self::right_column(
@@ -229,7 +237,7 @@ impl PlacementOrderingsModal {
         })
     }
 
-    fn center_column<K: Ord + Clone, V: Clone + Send + Sync + 'static, F>(
+    fn center_column<K: Ord + Clone, V: Clone + Send + Sync + 'static, F, AF, RF>(
         tui: &mut Tui,
         rename_this_style: fn() -> Style,
         available_item_id: Id,
@@ -238,10 +246,12 @@ impl PlacementOrderingsModal {
         selected_items: &BTreeMap<K, (String, V)>,
         default_v: V,
         v_selector: F,
-        added_fn: fn(&K, &V),
-        removed_fn: fn(&K, &V),
+        added_fn: AF,
+        removed_fn: RF,
     ) where
         F: Fn(&mut Ui, V) -> Option<V>,
+        AF: Fn(&K, &V),
+        RF: Fn(&K, &V),
     {
         let id = tui.current_id().with("v");
 
@@ -299,7 +309,7 @@ impl PlacementOrderingsModal {
                     .nth(available_index.unwrap())
                     .unwrap();
 
-                debug!(">, {:?}", available_index);
+                //trace!(">, {:?}", available_index);
                 added_fn(k, &v);
             };
             if tui
@@ -311,7 +321,7 @@ impl PlacementOrderingsModal {
                     .iter()
                     .nth(available_index.unwrap())
                     .unwrap();
-                debug!("<, {:?}", selected_index);
+                //trace!("<, {:?}", selected_index);
                 removed_fn(k, v);
             };
 
@@ -374,6 +384,8 @@ pub struct PlacementOrderingFields {
 pub enum PlacementOrderingsModalUiCommand {
     Submit,
     Cancel,
+    AddOrdering(PlacementSortingMode, SortOrder),
+    RemoveOrdering(PlacementSortingMode, SortOrder),
 }
 
 #[derive(Debug, Clone)]
@@ -453,6 +465,18 @@ impl UiComponent for PlacementOrderingsModal {
                 Some(PlacementOrderingsModalAction::Submit(args))
             }
             PlacementOrderingsModalUiCommand::Cancel => Some(PlacementOrderingsModalAction::CloseDialog),
+            PlacementOrderingsModalUiCommand::AddOrdering(item, order) => {
+                let mut fields = self.fields.lock().unwrap();
+                fields.ordering.insert(item, order);
+                
+                None
+            }
+            PlacementOrderingsModalUiCommand::RemoveOrdering(item, order) => {
+                let mut fields = self.fields.lock().unwrap();
+                fields.ordering.remove(&item);
+
+                None
+            }
         }
     }
 }
