@@ -1,14 +1,10 @@
-use std::backtrace;
-
-use egui::scroll_area::ScrollBarVisibility;
-use egui::{Id, Label, Modal, SelectableLabel, Sense, Ui, WidgetText};
+use egui::{Id, Modal, Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
-use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, taffy, tui};
+use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
+use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{PlacementSortingItem, Reference};
-use tracing::{debug, error, trace};
 use util::sorting::SortOrder;
 use validator::Validate;
 
@@ -22,8 +18,6 @@ pub struct PlacementOrderingsModal {
 
     fields: Value<PlacementOrderingFields>,
 
-    sort_order: Value<SortOrder>,
-
     pub component: ComponentState<PlacementOrderingsModalUiCommand>,
 }
 
@@ -32,7 +26,6 @@ impl PlacementOrderingsModal {
         Self {
             phase_reference,
             fields: Value::default(),
-            sort_order: Value::new(SortOrder::Asc),
             component: ComponentState::default(),
         }
     }
@@ -73,7 +66,12 @@ impl PlacementOrderingsModal {
                                 })
                                 .add(|tui| {
                                     for column_index in 0..3 {
-                                        self.rename_me(tui, column_index);
+                                        match column_index {
+                                            0 => Self::left_column(tui, default_style),
+                                            1 => Self::center_column(tui, default_style),
+                                            2 => Self::right_column(tui, default_style),
+                                            _ => unreachable!(),
+                                        }
                                         // end of column
                                     }
                                     // end of row
@@ -89,93 +87,90 @@ impl PlacementOrderingsModal {
             });
     }
 
-    fn rename_me(&self, tui: &mut Tui, column_index: usize) {
-        let rename_this_style = || Style {
-            padding: length(2.),
-            gap: length(2.),
-            ..Default::default()
-        };
+    fn right_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
+        tui.style(Style {
+            flex_grow: 1.0,
+            min_size: Size {
+                width: percent(0.4),
+                height: auto(),
+            },
+            ..rename_this_style()
+        })
+        .with_border_style_from_egui_style()
+        .add_with_border(|tui: &mut Tui| {
+            let id = tui.current_id().with("selected");
+            list_box_with_id_tui(tui, id, vec!["4", "5", "6"]);
+            // end of cell
+        })
+    }
 
-        match column_index {
-            0 => {
-                tui.style(Style {
-                    flex_grow: 1.0,
-                    min_size: Size {
-                        width: percent(0.4),
-                        height: auto(),
-                    },
-                    ..rename_this_style()
-                })
-                .with_border_style_from_egui_style()
-                .add_with_border(|tui: &mut Tui| {
-                    let id = tui.current_id().with("available");
-                    list_box_with_id_tui(tui, id, vec!["1", "2", "3"]);
-                    // end of cell
-                })
-            }
-            1 => {
-                tui.style(Style {
-                    flex_grow: 1.0,
-                    flex_direction: FlexDirection::Column,
-                    min_size: Size {
-                        width: percent(0.2),
-                        height: auto(),
-                    },
-                    ..rename_this_style()
-                })
-                .add(|tui: &mut Tui| {
-                    tui.ui_add_manual(
-                        |ui| {
-                            ui.vertical_centered(|ui| {
-                                // TODO translations
-                                if ui
-                                    .add(egui::RadioButton::new(
-                                        self.sort_order.get() == SortOrder::Asc,
-                                        "Ascending",
-                                    ))
-                                    .clicked()
-                                {
-                                    self.sort_order.set(SortOrder::Asc);
-                                }
-                                if ui
-                                    .add(egui::RadioButton::new(
-                                        self.sort_order.get() == SortOrder::Desc,
-                                        "Descending",
-                                    ))
-                                    .clicked()
-                                {
-                                    self.sort_order.set(SortOrder::Desc);
-                                }
-                            });
+    fn center_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
+        let id = tui.current_id().with("sort_order");
 
-                            ui.response()
-                        },
-                        no_transform,
-                    );
-                    tui.ui_add(egui::Button::new(">"));
-                    tui.ui_add(egui::Button::new("<"));
+        let mut sort_order = tui.egui_ui().memory(|mem| {
+            // NOTE It's CRITICAL that the correct type is specified for `get_temp`
+            mem.data
+                .get_temp::<SortOrder>(id)
+                .unwrap_or(SortOrder::Asc)
+        });
 
-                    // end of cell
-                })
-            }
-            2 => {
-                tui.style(Style {
-                    flex_grow: 1.0,
-                    min_size: Size {
-                        width: percent(0.4),
-                        height: auto(),
-                    },
-                    ..rename_this_style()
-                })
-                .with_border_style_from_egui_style()
-                .add_with_border(|tui: &mut Tui| {
-                    let id = tui.current_id().with("selected");
-                    list_box_with_id_tui(tui, id, vec!["4", "5", "6"]);
-                    // end of cell
-                })
-            }
-            _ => unreachable!(),
-        }
+        tui.style(Style {
+            flex_grow: 1.0,
+            flex_direction: FlexDirection::Column,
+            min_size: Size {
+                width: percent(0.2),
+                height: auto(),
+            },
+            ..rename_this_style()
+        })
+        .add(|tui: &mut Tui| {
+            tui.ui_add_manual(
+                |ui| {
+                    ui.vertical_centered(|ui| {
+                        // TODO translations
+                        if ui
+                            .add(egui::RadioButton::new(sort_order == SortOrder::Asc, "Ascending"))
+                            .clicked()
+                        {
+                            sort_order = SortOrder::Asc;
+                        }
+                        if ui
+                            .add(egui::RadioButton::new(sort_order == SortOrder::Desc, "Descending"))
+                            .clicked()
+                        {
+                            sort_order = SortOrder::Desc;
+                        }
+                    });
+
+                    ui.response()
+                },
+                no_transform,
+            );
+            tui.ui_add(egui::Button::new(">"));
+            tui.ui_add(egui::Button::new("<"));
+
+            // end of cell
+        });
+
+        tui.egui_ui()
+            .memory_mut(|mem| mem.data.insert_temp(id, sort_order));
+    }
+
+    fn left_column(tui: &mut Tui, rename_this_style: fn() -> Style) {
+        tui.style(Style {
+            flex_grow: 1.0,
+            min_size: Size {
+                width: percent(0.4),
+                height: auto(),
+            },
+            ..rename_this_style()
+        })
+        .with_border_style_from_egui_style()
+        .add_with_border(|tui: &mut Tui| {
+            let id = tui.current_id().with("available");
+            list_box_with_id_tui(tui, id, vec!["1", "2", "3"]);
+            // end of cell
+        })
     }
 }
 
