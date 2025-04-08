@@ -13,6 +13,7 @@ pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
 use planning::phase::Phase;
 use planning::placement::PlacementOperation;
 pub use planning::placement::PlacementSortingItem;
+pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::PlacementState;
 pub use planning::placement::PlacementStatus;
 pub use planning::process::ProcessName;
