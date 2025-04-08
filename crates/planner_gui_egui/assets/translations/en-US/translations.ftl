@@ -150,6 +150,9 @@ sort-mode-feeder-reference = Feeder reference
 sort-mode-pcb-unit = PCB unit
 sort-mode-ref-des = Ref. Des.
 
+sort-order-ascending = Ascending
+sort-order-descending = Descending
+
 table-placements-column-index = #
 table-placements-column-object-path = Object path
 table-placements-column-refdes = Ref. Des.

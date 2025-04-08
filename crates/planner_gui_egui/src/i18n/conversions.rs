@@ -1,4 +1,5 @@
 use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus};
+use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
     match pcb_side {
@@ -33,5 +34,12 @@ pub fn placement_sorting_mode_to_i18n_key(mode: &PlacementSortingMode) -> &'stat
         PlacementSortingMode::FeederReference => "sort-mode-feeder-reference",
         PlacementSortingMode::PcbUnit => "sort-mode-pcb-unit",
         PlacementSortingMode::RefDes => "sort-mode-ref-des",
+    }
+}
+
+pub fn sort_order_to_i18n_key(sort_order: &SortOrder) -> &'static str {
+    match sort_order {
+        SortOrder::Asc => "sort-order-ascending",
+        SortOrder::Desc => "sort-order-descending",
     }
 }

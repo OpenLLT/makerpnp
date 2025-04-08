@@ -14,7 +14,9 @@ use validator::Validate;
 
 use crate::forms::Form;
 use crate::forms::transforms::no_transform;
-use crate::i18n::conversions::{placement_place_to_i18n_key, placement_sorting_mode_to_i18n_key};
+use crate::i18n::conversions::{
+    placement_place_to_i18n_key, placement_sorting_mode_to_i18n_key, sort_order_to_i18n_key,
+};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
@@ -83,8 +85,12 @@ impl PlacementOrderingsModal {
                                 fn selected_item_mapper(
                                     (k, v): (&PlacementSortingMode, &SortOrder),
                                 ) -> (PlacementSortingMode, (String, SortOrder)) {
-                                    let label =
-                                        format!("{} - {:?}", tr!(placement_sorting_mode_to_i18n_key(k)), v).to_string();
+                                    let label = format!(
+                                        "{} ({})",
+                                        tr!(placement_sorting_mode_to_i18n_key(k)),
+                                        tr!(sort_order_to_i18n_key(v))
+                                    )
+                                    .to_string();
                                     (k.clone(), (label, v.clone()))
                                 }
 
@@ -137,14 +143,24 @@ impl PlacementOrderingsModal {
                                                     let sender = sender.clone();
                                                     move |k, v| {
                                                         debug!("add. k: {:?}, v: {:?}", k, v);
-                                                        sender.send(PlacementOrderingsModalUiCommand::AddOrdering(k.clone(), v.clone())).expect("sent");
+                                                        sender
+                                                            .send(PlacementOrderingsModalUiCommand::AddOrdering(
+                                                                k.clone(),
+                                                                v.clone(),
+                                                            ))
+                                                            .expect("sent");
                                                     }
                                                 },
                                                 {
                                                     let sender = sender.clone();
                                                     move |k, v| {
                                                         debug!("remove. k: {:?}, v: {:?}", k, v);
-                                                        sender.send(PlacementOrderingsModalUiCommand::RemoveOrdering(k.clone(), v.clone())).expect("sent");
+                                                        sender
+                                                            .send(PlacementOrderingsModalUiCommand::RemoveOrdering(
+                                                                k.clone(),
+                                                                v.clone(),
+                                                            ))
+                                                            .expect("sent");
                                                     }
                                                 },
                                             ),
@@ -174,15 +190,20 @@ impl PlacementOrderingsModal {
     fn sort_order_buttons(ui: &mut Ui, v: SortOrder) -> Option<SortOrder> {
         let mut result = None;
 
-        // TODO translations
         if ui
-            .add(egui::RadioButton::new(v == SortOrder::Asc, "Ascending"))
+            .add(egui::RadioButton::new(
+                v == SortOrder::Asc,
+                tr!(sort_order_to_i18n_key(&SortOrder::Asc)),
+            ))
             .clicked()
         {
             result = Some(SortOrder::Asc);
         }
         if ui
-            .add(egui::RadioButton::new(v == SortOrder::Desc, "Descending"))
+            .add(egui::RadioButton::new(
+                v == SortOrder::Desc,
+                tr!(sort_order_to_i18n_key(&SortOrder::Desc)),
+            ))
             .clicked()
         {
             result = Some(SortOrder::Desc);
@@ -468,7 +489,7 @@ impl UiComponent for PlacementOrderingsModal {
             PlacementOrderingsModalUiCommand::AddOrdering(item, order) => {
                 let mut fields = self.fields.lock().unwrap();
                 fields.ordering.insert(item, order);
-                
+
                 None
             }
             PlacementOrderingsModalUiCommand::RemoveOrdering(item, order) => {
