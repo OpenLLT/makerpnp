@@ -25,10 +25,21 @@ pub struct PlacementOrderingsModal {
 }
 
 impl PlacementOrderingsModal {
-    pub fn new(phase_reference: Reference) -> Self {
+    pub fn new(phase_reference: Reference, orderings: &[PlacementSortingItem]) -> Self {
+        let orderings = orderings
+            .iter()
+            .map(|item| (item.mode.clone(), item.sort_order.clone()))
+            .collect::<Vec<(PlacementSortingMode, SortOrder)>>();
+
+        let orderings: IndexMap<PlacementSortingMode, SortOrder> = IndexMap::from_iter(orderings);
+
+        let fields = PlacementOrderingFields {
+            orderings,
+        };
+
         Self {
             phase_reference,
-            fields: Value::default(),
+            fields: Value::new(fields),
             component: ComponentState::default(),
         }
     }
@@ -116,7 +127,7 @@ impl PlacementOrderingsModal {
                                 augmented_list_selector::AugmentedListSelector::show(
                                     tui,
                                     default_style,
-                                    &fields.ordering,
+                                    &fields.orderings,
                                     &all_items,
                                     selected_item_mapper,
                                     SortOrder::Asc,
@@ -163,7 +174,7 @@ impl PlacementOrderingsModal {
 
 #[derive(Clone, Debug, Default, Validate, serde::Deserialize, serde::Serialize)]
 pub struct PlacementOrderingFields {
-    ordering: IndexMap<PlacementSortingMode, SortOrder>,
+    orderings: IndexMap<PlacementSortingMode, SortOrder>,
 }
 
 #[derive(Debug, Clone)]
@@ -230,7 +241,7 @@ impl UiComponent for PlacementOrderingsModal {
                         && is_form_valid
                     {
                         self.component
-                            .send(PlacementOrderingsModalUiCommand::Cancel);
+                            .send(PlacementOrderingsModalUiCommand::Submit);
                     }
                 },
             );
@@ -244,22 +255,27 @@ impl UiComponent for PlacementOrderingsModal {
     ) -> Option<Self::UiAction> {
         match command {
             PlacementOrderingsModalUiCommand::Submit => {
+                let fields = self.fields.lock().unwrap();
+                let orderings = fields
+                    .orderings
+                    .iter()
+                    .map(|k_v| k_v.into())
+                    .collect::<Vec<_>>();
                 let args = PlacementOrderingsArgs {
-                    // TODO build the orderings from the UI
-                    orderings: vec![],
+                    orderings,
                 };
                 Some(PlacementOrderingsModalAction::Submit(args))
             }
             PlacementOrderingsModalUiCommand::Cancel => Some(PlacementOrderingsModalAction::CloseDialog),
             PlacementOrderingsModalUiCommand::AddOrdering(item, order) => {
                 let mut fields = self.fields.lock().unwrap();
-                fields.ordering.insert(item, order);
+                fields.orderings.insert(item, order);
 
                 None
             }
             PlacementOrderingsModalUiCommand::RemoveOrdering(item, _order) => {
                 let mut fields = self.fields.lock().unwrap();
-                fields.ordering.shift_remove(&item);
+                fields.orderings.shift_remove(&item);
 
                 None
             }

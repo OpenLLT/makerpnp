@@ -6,7 +6,7 @@ use regex::Regex;
 use tracing::{debug, trace};
 
 use crate::project::dialogs::placement_orderings::{
-    PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
+    PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
 use crate::project::placements_tab::PlacementsUiCommand;
 use crate::project::tables::placements::{
@@ -85,6 +85,7 @@ pub enum PhaseUiAction {
         manufacturer_pattern: Regex,
         mpn_pattern: Regex,
     },
+    SetPlacementOrderings(PlacementOrderingsArgs),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -180,7 +181,10 @@ impl UiComponent for PhaseUi {
             }),
             PhaseUiCommand::ShowPhasePlacementsOrderingsDialog => {
                 if let Some(overview) = &self.overview {
-                    let mut modal = PlacementOrderingsModal::new(overview.phase_reference.clone());
+                    let mut modal = PlacementOrderingsModal::new(
+                        overview.phase_reference.clone(),
+                        &overview.phase_placement_orderings,
+                    );
                     modal
                         .component
                         .configure_mapper(self.component.sender.clone(), move |command| {
@@ -202,7 +206,7 @@ impl UiComponent for PhaseUi {
                         None => None,
                         Some(PlacementOrderingsModalAction::Submit(args)) => {
                             self.placement_orderings_modal.take();
-                            None
+                            Some(PhaseUiAction::SetPlacementOrderings(args))
                         }
                         Some(PlacementOrderingsModalAction::CloseDialog) => {
                             self.placement_orderings_modal.take();

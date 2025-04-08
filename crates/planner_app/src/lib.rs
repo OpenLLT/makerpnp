@@ -86,6 +86,7 @@ pub struct PhaseOverview {
     pub process: ProcessName,
     pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
+    pub phase_placement_orderings: Vec<PlacementSortingItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -119,13 +120,6 @@ pub struct PartWithState {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PartStates {
     pub parts: Vec<PartWithState>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct PhasePlacementOrderings {
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    #[serde(default)]
-    pub placement_orderings: Vec<PlacementSortingItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -216,7 +210,6 @@ pub enum ProjectView {
     Phases(Phases),
     PhaseLoadOut(LoadOut),
     PhaseOverview(PhaseOverview),
-    PhasePlacementOrderings(PhasePlacementOrderings),
     PhasePlacements(PhasePlacements),
     Placements(PlacementsList),
     ProjectTree(ProjectTreeView),
@@ -1381,5 +1374,6 @@ fn try_build_phase_overview(
         process: phase.process.clone(),
         load_out_source,
         pcb_side: phase.pcb_side.clone(),
+        phase_placement_orderings: phase.placement_orderings.clone(),
     })
 }

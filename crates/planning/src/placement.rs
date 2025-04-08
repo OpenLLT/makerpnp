@@ -81,6 +81,24 @@ pub enum PlacementSortingError {
     Invalid(String),
 }
 
+impl From<(&PlacementSortingMode, &SortOrder)> for PlacementSortingItem {
+    fn from(value: (&PlacementSortingMode, &SortOrder)) -> Self {
+        Self {
+            mode: value.0.clone(),
+            sort_order: value.1.clone(),
+        }
+    }
+}
+
+impl From<(PlacementSortingMode, SortOrder)> for PlacementSortingItem {
+    fn from(value: (PlacementSortingMode, SortOrder)) -> Self {
+        Self {
+            mode: value.0,
+            sort_order: value.1,
+        }
+    }
+}
+
 pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>) -> Vec<Part> {
     let mut unique_parts: Vec<Part> = vec![];
     for placements in design_variant_placement_map.values() {

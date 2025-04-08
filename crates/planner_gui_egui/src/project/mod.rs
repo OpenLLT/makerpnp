@@ -706,9 +706,6 @@ impl UiComponent for Project {
 
                         phase_ui.update_placements(phase_placements, self.phases.clone());
                     }
-                    ProjectView::PhasePlacementOrderings(_phase_placement_orderings) => {
-                        // TODO
-                    }
                     ProjectView::Process(_process) => {
                         // TODO
                     }
@@ -875,6 +872,13 @@ impl UiComponent for Project {
                             mpn: mpn_pattern,
                         })
                         .when_ok(|_| None),
+                    Some(PhaseUiAction::SetPlacementOrderings(args)) => self
+                        .planner_core_service
+                        .update(key, Event::SetPlacementOrdering {
+                            phase: phase.clone(),
+                            placement_orderings: args.orderings,
+                        })
+                        .when_ok(|_| Some(ProjectUiCommand::RefreshPhase(phase))),
                 }
             }
             ProjectUiCommand::LoadOutUiCommand {
@@ -1142,6 +1146,21 @@ impl UiComponent for Project {
                     None
                 }
             }
+            ProjectUiCommand::RefreshPhase(phase) => {
+                let tasks = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhaseOverview {
+                            phase: phase.clone(),
+                        },
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhasePlacements {
+                            phase: phase.clone(),
+                        },
+                    ))),
+                ];
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
         }
     }
 }
@@ -1296,6 +1315,7 @@ pub enum ProjectUiCommand {
         load_out_source: LoadOutSource,
         command: LoadOutUiCommand,
     },
+    RefreshPhase(Reference),
 }
 
 #[derive(Debug, Clone)]
