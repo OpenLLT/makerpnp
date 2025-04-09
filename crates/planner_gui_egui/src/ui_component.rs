@@ -4,8 +4,6 @@ use egui_mobius::slot::Slot;
 use egui_mobius::types::Enqueue;
 use tracing::trace;
 
-use crate::ui_commands::UiCommand;
-
 pub struct ComponentState<UiCommand> {
     pub sender: Enqueue<UiCommand>,
     #[allow(dead_code)]
