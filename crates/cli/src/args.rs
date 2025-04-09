@@ -133,12 +133,15 @@ impl EdaToolArg {
 pub enum PlacementOperationArg {
     #[value(name("placed"))]
     Placed,
+    #[value(name("reset"))]
+    Reset,
 }
 
 impl From<PlacementOperationArg> for PlacementOperation {
     fn from(value: PlacementOperationArg) -> Self {
         match value {
             PlacementOperationArg::Placed => Self::Placed,
+            PlacementOperationArg::Reset => Self::Reset,
         }
     }
 }

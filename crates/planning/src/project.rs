@@ -936,37 +936,53 @@ pub fn update_placements_operation(
         }
 
         for (object_path, placement_state) in placements {
-            match operation {
+            let should_log = match operation {
                 PlacementOperation::Placed => {
                     if placement_state.placed {
                         warn!("Placed flag already set. object_path: {}", object_path);
+                        false
                     } else {
                         info!("Setting placed flag. object_path: {}", object_path);
                         placement_state.placed = true;
-
-                        let now = OffsetDateTime::now_utc();
-
-                        let phase = placement_state.phase.as_ref().unwrap();
-
-                        let history_item = OperationHistoryItem {
-                            date_time: now,
-                            phase: phase.clone(),
-                            operation: OperationHistoryKind::PlacementOperation {
-                                object_path: object_path.clone(),
-                                operation: operation.clone(),
-                            },
-                            extra: Default::default(),
-                        };
-
-                        let history_items = history_item_map
-                            .entry(phase.clone())
-                            .or_default();
-
-                        history_items.push(history_item);
-
                         modified = true;
+                        true
                     }
                 }
+                PlacementOperation::Reset => {
+                    if !placement_state.placed {
+                        warn!("Placed flag already reset. object_path: {}", object_path);
+                        false
+                    } else {
+                        info!("Resetting placed flag. object_path: {}", object_path);
+                        placement_state.placed = false;
+                        modified = true;
+                        true
+                    }
+                }
+            };
+
+            if should_log {
+                let now = OffsetDateTime::now_utc();
+
+                let phase = placement_state.phase.as_ref().unwrap();
+
+                let history_item = OperationHistoryItem {
+                    date_time: now,
+                    phase: phase.clone(),
+                    operation: OperationHistoryKind::PlacementOperation {
+                        object_path: object_path.clone(),
+                        operation: operation.clone(),
+                    },
+                    extra: Default::default(),
+                };
+
+                let history_items = history_item_map
+                    .entry(phase.clone())
+                    .or_default();
+
+                history_items.push(history_item);
+
+                modified = true;
             }
         }
     }

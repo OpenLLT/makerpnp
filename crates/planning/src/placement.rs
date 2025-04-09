@@ -115,4 +115,14 @@ pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant,
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
 pub enum PlacementOperation {
     Placed,
+    Reset,
+}
+
+impl From<bool> for PlacementOperation {
+    fn from(value: bool) -> Self {
+        match value {
+            true => PlacementOperation::Placed,
+            false => PlacementOperation::Reset,
+        }
+    }
 }

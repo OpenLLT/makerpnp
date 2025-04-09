@@ -443,20 +443,18 @@ impl Project {
         planner_core_service: &mut PlannerCoreService,
         key: ProjectKey,
         object_path: ObjectPath,
-        new_placement: &PlacementState,
-        old_placement: &PlacementState,
+        new_placement: PlacementState,
+        old_placement: PlacementState,
     ) -> Option<ProjectAction> {
         let mut tasks = vec![];
 
-        #[derive(Debug)]
-        enum Operations {
-            AddOrRemovePhase,
-        }
-
-        let operations = vec![Operations::AddOrRemovePhase];
-
-        for operation in operations.into_iter() {
-            debug!("update placement, operation: {:?}", operation);
+        fn handle_phase(
+            planner_core_service: &mut PlannerCoreService,
+            key: &ProjectKey,
+            object_path: &ObjectPath,
+            new_placement: &PlacementState,
+            old_placement: &PlacementState,
+        ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
             if !new_placement
                 .phase
                 .eq(&old_placement.phase)
@@ -468,14 +466,63 @@ impl Project {
                     _ => unreachable!(),
                 };
 
-                match planner_core_service
-                    .update(key, Event::AssignPlacementsToPhase {
-                        phase: phase.clone(),
-                        operation,
-                        placements: exact_match(&object_path.to_string()),
-                    })
-                    .into_actions()
-                {
+                Some(
+                    planner_core_service
+                        .update(key.clone(), Event::AssignPlacementsToPhase {
+                            phase: phase.clone(),
+                            operation,
+                            placements: exact_match(&object_path.to_string()),
+                        })
+                        .into_actions(),
+                )
+            } else {
+                None
+            }
+        }
+
+        fn handle_placed(
+            planner_core_service: &mut PlannerCoreService,
+            key: &ProjectKey,
+            object_path: &ObjectPath,
+            new_placement: &PlacementState,
+            old_placement: &PlacementState,
+        ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
+            if new_placement.placed != old_placement.placed {
+                Some(
+                    planner_core_service
+                        .update(key.clone(), Event::RecordPlacementsOperation {
+                            object_path_patterns: vec![exact_match(&object_path.to_string())],
+
+                            operation: new_placement.placed.into(),
+                        })
+                        .into_actions(),
+                )
+            } else {
+                None
+            }
+        }
+
+        #[derive(Debug)]
+        enum Operations {
+            AddOrRemovePhase,
+            SetOrResetPlaced,
+        }
+
+        // FUTURE find a solution to keep the operation with the handler, instead of two separate arrays.
+        //        a tuple was tried, but results in a compile error: "expected fn item, found a different fn item"
+        let operations = [Operations::AddOrRemovePhase, Operations::SetOrResetPlaced];
+
+        let operation_handlers = [handle_phase, handle_placed];
+
+        for (operation, handler) in operations
+            .into_iter()
+            .zip(operation_handlers.into_iter())
+        {
+            debug!("update placement, operation: {:?}", operation);
+
+            if let Some(core_result) = handler(planner_core_service, &key, &object_path, &new_placement, &old_placement)
+            {
+                match core_result {
                     Ok(actions) => {
                         debug!("actions: {:?}", actions);
                         let effect_tasks: Vec<Task<ProjectAction>> = actions
@@ -857,8 +904,8 @@ impl UiComponent for Project {
                         &mut self.planner_core_service,
                         key,
                         object_path,
-                        &new_placement,
-                        &old_placement,
+                        new_placement,
+                        old_placement,
                     ),
                     Some(PhaseUiAction::AddPartsToLoadout {
                         phase,
@@ -937,8 +984,8 @@ impl UiComponent for Project {
                         &mut self.planner_core_service,
                         key,
                         object_path,
-                        &new_placement,
-                        &old_placement,
+                        new_placement,
+                        old_placement,
                     ),
                     None => None,
                 }

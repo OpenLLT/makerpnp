@@ -233,6 +233,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PlacementsRow) -> bool {
         match column {
             PHASE_COL => true,
+            PLACED_COL => true,
             _ => false,
         }
     }
@@ -427,6 +428,15 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
                 Some(response)
             }
+            PLACED_COL => {
+                let response = ui.add(|ui: &mut Ui| {
+                    let placed = &mut row.placement_state.placed;
+                    let label = tr!(placement_placed_to_i18n_key(*placed));
+                    ui.toggle_value(placed, label)
+                });
+
+                Some(response)
+            }
             _ => None,
         }
     }
@@ -538,6 +548,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         );
         match column {
             PHASE_COL => true,
+            PLACED_COL => true,
             _ => false,
         }
     }
