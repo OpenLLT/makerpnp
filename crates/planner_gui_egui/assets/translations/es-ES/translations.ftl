@@ -153,6 +153,15 @@ sort-mode-ref-des = Des. de Ref.
 sort-order-ascending = Ascendente
 sort-order-descending = Descendente
 
+process-operation-kind-load-pcbs = Cargar PCBs
+process-operation-kind-automated-pnp = PnP Automatizado
+process-operation-kind-reflow-components = Soldadura de reflujo
+process-operation-kind-manually-solder-components = Soldadura manual
+
+process-operation-status-pending = Pendiente
+process-operation-status-incomplete = Incompleto
+process-operation-status-complete = Completo
+
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto
 table-placements-column-refdes = Des. de Ref.

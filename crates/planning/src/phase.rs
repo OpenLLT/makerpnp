@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
 use indexmap::IndexSet;
@@ -31,6 +30,8 @@ pub enum PhaseError {
 
     #[error("Invalid operation for phase. phase: '{0:}', operation: {1:?}")]
     InvalidOperationForPhase(Reference, ProcessOperationKind),
+    #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
+    PrecedingOperationIncomplete(Reference, ProcessOperationKind),
 }
 
 pub struct PhaseOrderings<'a>(pub &'a IndexSet<Reference>);
@@ -49,18 +50,19 @@ impl<'a> Display for PhaseOrderings<'a> {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct PhaseState {
-    pub operation_state: BTreeMap<ProcessOperationKind, ProcessOperationState>,
+    // the order of operations must be preserved.
+    pub operation_state: Vec<(ProcessOperationKind, ProcessOperationState)>,
 }
 
 impl PhaseState {
     pub fn from_process(process: &Process) -> Self {
-        let mut operation_state = BTreeMap::new();
-
-        for process_kind in process.operations.iter() {
-            operation_state.insert(process_kind.clone(), ProcessOperationState::default());
-        }
+        let operation_state = process
+            .operations
+            .iter()
+            .map(|kind| (kind.clone(), ProcessOperationState::default()))
+            .collect::<Vec<_>>();
 
         Self {
             operation_state,

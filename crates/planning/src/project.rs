@@ -23,7 +23,7 @@ use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use thiserror::Error;
 use time::OffsetDateTime;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
@@ -1014,8 +1014,8 @@ pub fn update_phase_operation_states(project: &mut Project) -> bool {
         for (operation, operation_state) in phase_state.operation_state.iter_mut() {
             trace!("operation: {:?}, operation_state: {:?}", operation, operation_state);
 
-            let maybe_state = if operation.eq(&ProcessOperationKind::AutomatedPnp)
-                || operation.eq(&ProcessOperationKind::ManuallySolderComponents)
+            let maybe_state = if (*operation).eq(&ProcessOperationKind::AutomatedPnp)
+                || (*operation).eq(&ProcessOperationKind::ManuallySolderComponents)
             {
                 let placements_state = project.placements.iter().fold(
                     PlacementsState::default(),
@@ -1049,7 +1049,7 @@ pub fn update_phase_operation_states(project: &mut Project) -> bool {
 
             let original_operation_state = operation_state.clone();
 
-            match (&maybe_state, operation) {
+            match (&maybe_state, &operation) {
                 (Some((placements_state, status)), ProcessOperationKind::AutomatedPnp) => {
                     operation_state.status = status.clone();
                     operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
@@ -1115,22 +1115,60 @@ pub fn update_phase_operation(
 
     let mut modified = false;
 
-    let state = phase_state
+    // We can only complete an operation if all preceding operation have been completed
+    let (is_complete, _preceeding_operation, state) = phase_state
         .operation_state
-        .get_mut(&operation)
-        .ok_or(PhaseError::InvalidOperationForPhase(
-            phase_reference.clone(),
-            operation.clone(),
-        ))?;
+        .iter_mut()
+        .try_fold(
+            (true, None, None),
+            |(preceeding_phase_complete, preceding_operation, found_state), (candidate_operation, state)| {
+                let is_this_state_complete = state.status == ProcessOperationStatus::Complete;
+
+                match (preceeding_phase_complete, preceding_operation, found_state) {
+                    (true, _, Some(state)) => Ok((true, Some(candidate_operation), Some(state))),
+                    result @ (false, _, Some(_)) => {
+                        // we found what we were looking for on a previous iteration
+                        // FUTURE find someway to shortcut this try_fold, no need to look at remaining operations
+                        Ok(result)
+                    }
+                    (_, preceding_operation, None) => {
+                        if (*candidate_operation).eq(&operation) {
+                            if preceeding_phase_complete {
+                                Ok((is_this_state_complete, Some(candidate_operation), Some(state)))
+                            } else {
+                                // Safety: the `unwrap` here is safe, as the first iteration will prevent this branch from being executed, and all other branches set the value to `Some`
+                                Err(PhaseError::PrecedingOperationIncomplete(
+                                    phase_reference.clone(),
+                                    preceding_operation.unwrap().clone(),
+                                ))
+                            }
+                        } else {
+                            Ok((is_this_state_complete, Some(candidate_operation), None))
+                        }
+                    }
+                }
+            },
+        )?;
+
+    // If we didn't find the operation we were looking, bail.
+    let state = state.ok_or(PhaseError::InvalidOperationForPhase(
+        phase_reference.clone(),
+        operation.clone(),
+    ))?;
 
     match set_item {
         ProcessOperationSetItem::Completed => {
-            if state
-                .status
-                .ne(&ProcessOperationStatus::Complete)
-            {
+            if !is_complete {
+                // TODO make sure the operation CAN be completed.
+                //      other reasons why it might not be possible include:
+                //      1) trying to complete AutomatedPnp/ManuallySolderComponents when not all components have been placed (or skipped)
+                // FUTURE It feels like the ProcessOperationKind enum should be replaced with a ProcessOperation struct,
+                //        with a name and attributes, like 'has placements' or 'is_automated_pnp'
+                info!("Marking phase operation as complete");
                 state.status = ProcessOperationStatus::Complete;
                 modified = true;
+            } else {
+                error!("Phase operation is already complete");
             }
         }
     }

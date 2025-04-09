@@ -178,7 +178,7 @@ impl<'a> TestProjectBuilder<'a> {
                     let operation_state_entries =
                         operation_states
                             .iter()
-                            .fold(Map::new(), |mut map, (operation, status, extra_state)| {
+                            .fold(Vec::new(), |mut values, (operation, status, extra_state)| {
                                 let mut operation_state_map = Map::new();
 
                                 operation_state_map.insert("status".to_string(), Value::String(status.to_string()));
@@ -213,13 +213,20 @@ impl<'a> TestProjectBuilder<'a> {
                                     _ => {}
                                 }
 
-                                map.insert(operation.to_string(), Value::Object(operation_state_map));
+                                // create the tuple
+                                let array = Value::Array(vec![
+                                    Value::String(operation.to_string()),
+                                    Value::Object(operation_state_map),
+                                ]);
 
-                                map
+                                // add to the array of tuples
+                                values.push(array);
+
+                                values
                             });
 
                     let mut phase_state = Map::new();
-                    phase_state.insert("operation_state".to_string(), Value::Object(operation_state_entries));
+                    phase_state.insert("operation_state".to_string(), Value::Array(operation_state_entries));
 
                     Value::Array(vec![Value::String(reference.to_string()), Value::Object(phase_state)])
                 })

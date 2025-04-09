@@ -10,14 +10,15 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
 pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
-use planning::phase::Phase;
+use planning::phase::{Phase, PhaseState};
 use planning::placement::PlacementOperation;
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::PlacementState;
 pub use planning::placement::PlacementStatus;
 pub use planning::process::ProcessName;
-use planning::process::{ProcessOperationKind, ProcessOperationSetItem};
+use planning::process::ProcessOperationSetItem;
+pub use planning::process::{ProcessOperationKind, ProcessOperationStatus};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -87,6 +88,7 @@ pub struct PhaseOverview {
     pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
     pub phase_placement_orderings: Vec<PlacementSortingItem>,
+    pub state: PhaseState,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -1051,9 +1053,13 @@ impl Planner {
                     .phases
                     .iter()
                     .map(|(phase_reference, phase)| {
+                        let phase_state = project
+                            .phase_states
+                            .get(phase_reference)
+                            .unwrap();
                         // FUTURE try and avoid the [`unwrap`] here, ideally by ensuring load-out sources are always correct
                         //        for every situation instead of using [`try_build_phase_load_out_source`]
-                        try_build_phase_overview(path, phase_reference.clone(), phase).unwrap()
+                        try_build_phase_overview(path, phase_reference.clone(), phase, phase_state).unwrap()
                     })
                     .collect::<Vec<PhaseOverview>>();
 
@@ -1079,9 +1085,13 @@ impl Planner {
                     .phases
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
+                let phase_state = project
+                    .phase_states
+                    .get(&phase_reference)
+                    .unwrap();
 
-                let phase_overview =
-                    try_build_phase_overview(path, phase_reference, phase).map_err(AppError::LoadoutSourceError)?;
+                let phase_overview = try_build_phase_overview(path, phase_reference, phase, phase_state)
+                    .map_err(AppError::LoadoutSourceError)?;
 
                 Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
@@ -1366,6 +1376,7 @@ fn try_build_phase_overview(
     project_path: &PathBuf,
     phase_reference: Reference,
     phase: &Phase,
+    state: &PhaseState,
 ) -> Result<PhaseOverview, LoadOutSourceError> {
     let load_out_source = try_build_phase_load_out_source(project_path, phase)?;
 
@@ -1375,5 +1386,6 @@ fn try_build_phase_overview(
         load_out_source,
         pcb_side: phase.pcb_side.clone(),
         phase_placement_orderings: phase.placement_orderings.clone(),
+        state: state.clone(),
     })
 }

@@ -263,8 +263,8 @@ fn build_phase_specification(
 
     let operations = phase_state
         .operation_state
-        .keys()
-        .map(|operation| match operation {
+        .iter()
+        .map(|(operation, _state)| match operation {
             ProcessOperationKind::LoadPcbs => build_operation_load_pcbs(project),
             ProcessOperationKind::AutomatedPnp => PhaseOperation::PlaceComponents {},
             ProcessOperationKind::ReflowComponents => PhaseOperation::ReflowComponents {},

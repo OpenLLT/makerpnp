@@ -1655,7 +1655,10 @@ mod operation_sequence_1 {
 
         let log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
-        assert_contains_inorder!(trace_content, [&log_file_message,]);
+        assert_contains_inorder!(trace_content, [
+            "Marking phase operation as complete\n",
+            &log_file_message,
+        ]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;

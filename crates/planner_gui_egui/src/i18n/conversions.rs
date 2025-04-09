@@ -1,4 +1,4 @@
-use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus};
+use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus, ProcessOperationKind, ProcessOperationStatus};
 use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
@@ -41,5 +41,22 @@ pub fn sort_order_to_i18n_key(sort_order: &SortOrder) -> &'static str {
     match sort_order {
         SortOrder::Asc => "sort-order-ascending",
         SortOrder::Desc => "sort-order-descending",
+    }
+}
+
+pub fn process_operation_status_to_i18n_key(status: &ProcessOperationStatus) -> &'static str {
+    match status {
+        ProcessOperationStatus::Pending => "process-operation-status-pending",
+        ProcessOperationStatus::Incomplete => "process-operation-status-incomplete",
+        ProcessOperationStatus::Complete => "process-operation-status-complete",
+    }
+}
+
+pub fn process_operation_kind_to_i18n_key(kind: &ProcessOperationKind) -> &'static str {
+    match kind {
+        ProcessOperationKind::LoadPcbs => "process-operation-kind-load-pcbs",
+        ProcessOperationKind::AutomatedPnp => "process-operation-kind-automated-pnp",
+        ProcessOperationKind::ReflowComponents => "process-operation-kind-reflow-components",
+        ProcessOperationKind::ManuallySolderComponents => "process-operation-kind-manually-solder-components",
     }
 }
