@@ -8,7 +8,6 @@ use tracing::{debug, trace};
 use crate::project::dialogs::placement_orderings::{
     PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
-use crate::project::placements_tab::PlacementsUiCommand;
 use crate::project::tables::placements::{
     PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
 };
@@ -30,21 +29,21 @@ pub struct PhaseUi {
 
 impl PhaseUi {
     pub fn new() -> Self {
-        let component: ComponentState<PlacementsUiCommand> = Default::default();
+        let component: ComponentState<PhaseUiCommand> = Default::default();
 
         let mut placements_table_ui = PlacementsTableUi::new();
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
                 trace!("phase placements table mapper. command: {:?}", placements_table_command);
-                PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
+                PhaseUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 
         Self {
             overview: None,
             placements_table_ui,
             placement_orderings_modal: None,
-            component: Default::default(),
+            component,
         }
     }
 

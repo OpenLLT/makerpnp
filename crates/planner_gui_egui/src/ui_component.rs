@@ -2,6 +2,9 @@ use std::fmt::{Debug, Formatter};
 
 use egui_mobius::slot::Slot;
 use egui_mobius::types::Enqueue;
+use tracing::trace;
+
+use crate::ui_commands::UiCommand;
 
 pub struct ComponentState<UiCommand> {
     pub sender: Enqueue<UiCommand>,
@@ -45,6 +48,12 @@ impl<UiCommand: Send + Clone + Debug + 'static> ComponentState<UiCommand> {
 
     pub fn send(&self, command: UiCommand) {
         self.sender.send(command).expect("sent");
+    }
+}
+
+impl<UiCommand> Drop for ComponentState<UiCommand> {
+    fn drop(&mut self) {
+        trace!("dropping component state");
     }
 }
 
