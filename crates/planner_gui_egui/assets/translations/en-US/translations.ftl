@@ -28,7 +28,7 @@ side-bar-item-path = Path
 project-toolbar-button-show-explorer = Show explorer
 project-toolbar-button-generate-artifacts = Generate artifacts
 project-toolbar-button-refresh-from-variants = Refresh from variants
-project-toolbar-button-remove-unknown-placements = Remove unknown placements
+project-toolbar-button-remove-unused-placements = Remove unused placements
 project-toolbar-button-add-pcb = Add PCB
 project-toolbar-button-add-phase = Add phase
 project-toolbar-button-create-unit-assignment = Create unit assignment
@@ -139,12 +139,13 @@ form-file-not-found = File not found
 
 placement-placed = Placed
 placement-pending = Pending
+placement-skipped = Skipped
 
 placement-place = Place
 placement-no-place = No-place
 
-placement-status-known = Known
-placement-status-unknown = Unknown
+placement-project-status-used = Used
+placement-project-status-unused = Unused
 
 sort-mode-feeder-reference = Feeder reference
 sort-mode-pcb-unit = PCB unit

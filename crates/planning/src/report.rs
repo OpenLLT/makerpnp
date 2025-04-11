@@ -18,8 +18,8 @@ use tracing::{error, info, trace};
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
-use crate::placement::{PlacementState, PlacementStatus};
-use crate::process::{ProcessOperationExtraState, ProcessOperationKind, ProcessOperationStatus};
+use crate::placement::{PlacementState, ProjectPlacementStatus};
+use crate::process::{OperationTaskStatus, ProcessOperationReference};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -60,58 +60,13 @@ pub fn project_generate_report(
 
                     let mut operations_overview = vec![];
 
-                    let phase_status = phase_state.operation_state.iter().fold(
+                    let phase_status = phase_state.operation_states.iter().fold(
                         PhaseStatus::Complete,
-                        |mut phase_status, (operation, operation_state)| {
-                            let overview = match (operation, &operation_state.extra) {
-                                (
-                                    ProcessOperationKind::AutomatedPnp,
-                                    Some(ProcessOperationExtraState::PlacementOperation {
-                                        placements_state,
-                                    }),
-                                ) => {
-                                    if phase_status == PhaseStatus::Complete
-                                        && operation_state.status != ProcessOperationStatus::Complete
-                                    {
-                                        phase_status = PhaseStatus::Incomplete;
-                                    }
+                        |mut phase_status, operation_state| {
 
-                                    let placements_message = format!(
-                                        "{}/{} placements placed",
-                                        placements_state.placed, placements_state.total
-                                    );
-
-                                    Some(PhaseOperationOverview {
-                                        operation: PhaseOperationKind::PlaceComponents,
-                                        message: placements_message.clone(),
-                                        status: operation_state.status.clone(),
-                                    })
-                                }
-                                (
-                                    ProcessOperationKind::ManuallySolderComponents,
-                                    Some(ProcessOperationExtraState::PlacementOperation {
-                                        placements_state,
-                                    }),
-                                ) => {
-                                    if phase_status == PhaseStatus::Complete
-                                        && operation_state.status != ProcessOperationStatus::Complete
-                                    {
-                                        phase_status = PhaseStatus::Incomplete;
-                                    }
-
-                                    let placements_message = format!(
-                                        "{}/{} placements placed",
-                                        placements_state.placed, placements_state.total
-                                    );
-
-                                    Some(PhaseOperationOverview {
-                                        operation: PhaseOperationKind::ManuallySolderComponents,
-                                        message: placements_message.clone(),
-                                        status: operation_state.status.clone(),
-                                    })
-                                }
-                                (_, _) => None,
-                            };
+                            let overview: Option<PhaseOperationOverview> = None;
+                            
+                            // TODO use operation_state.tasks to build something
 
                             if let Some(overview) = overview {
                                 operations_overview.push(overview)
@@ -262,13 +217,11 @@ fn build_phase_specification(
     }).collect();
 
     let operations = phase_state
-        .operation_state
+        .operation_states
         .iter()
-        .map(|(operation, _state)| match operation {
-            ProcessOperationKind::LoadPcbs => build_operation_load_pcbs(project),
-            ProcessOperationKind::AutomatedPnp => PhaseOperation::PlaceComponents {},
-            ProcessOperationKind::ReflowComponents => PhaseOperation::ReflowComponents {},
-            ProcessOperationKind::ManuallySolderComponents => PhaseOperation::ManuallySolderComponents {},
+        .filter_map(|process_operation_state| {
+            // TODO build reports
+            None
         })
         .collect();
 
@@ -279,7 +232,7 @@ fn build_phase_specification(
     }
 }
 
-fn build_operation_load_pcbs(project: &Project) -> PhaseOperation {
+fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
     let unit_paths_with_placements = build_unit_paths_with_placements(&project.placements);
 
     let pcbs: Vec<PcbReportItem> = unit_paths_with_placements
@@ -319,10 +272,7 @@ fn build_operation_load_pcbs(project: &Project) -> PhaseOperation {
         .into_iter()
         .collect();
 
-    let operation = PhaseOperation::PreparePcbs {
-        pcbs,
-    };
-    operation
+    pcbs
 }
 
 fn build_unit_paths_with_placements(placement_states: &BTreeMap<ObjectPath, PlacementState>) -> BTreeSet<ObjectPath> {
@@ -348,7 +298,7 @@ fn project_report_add_placement_issues(project: &Project, issues: &mut BTreeSet<
         .placements
         .iter()
         .filter(|(_object_path, placement_state)| {
-            placement_state.phase.is_none() && placement_state.status == PlacementStatus::Known
+            placement_state.phase.is_none() && placement_state.project_status == ProjectPlacementStatus::Used
         })
     {
         issues.insert(ProjectReportIssue {
@@ -742,7 +692,8 @@ pub struct PhaseOverview {
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseSpecification {
     pub phase_name: String,
-    pub operations: Vec<PhaseOperation>,
+    // TODO make this a tuple of some dynamic operation report based on the tasks
+    pub operations: Vec<ProcessOperationReference>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
@@ -750,7 +701,7 @@ pub struct PhaseSpecification {
 pub struct PhaseOperationOverview {
     pub operation: PhaseOperationKind,
     pub message: String,
-    pub status: ProcessOperationStatus,
+    pub status: OperationTaskStatus,
 }
 
 #[serde_as]
@@ -778,7 +729,7 @@ pub enum PcbReportItem {
 
 #[derive(Clone, serde::Serialize)]
 pub enum PhaseOperation {
-    PreparePcbs { pcbs: Vec<PcbReportItem> },
+    PreparePcbs {  },
     PlaceComponents {},
     ReflowComponents {},
     ManuallySolderComponents {},

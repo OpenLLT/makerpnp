@@ -1,8 +1,8 @@
 use clap::ValueEnum;
 use eda::EdaTool;
 use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
-use planning::placement::{PlacementOperation, PlacementSortingMode};
-use planning::process::{ProcessOperationKind, ProcessOperationSetItem};
+use planning::placement::{PlacementStatus, PlacementSortingMode};
+use planning::process::{ProcessOperationAttribute, ProcessOperationSetItem};
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
 
@@ -137,11 +137,11 @@ pub enum PlacementOperationArg {
     Reset,
 }
 
-impl From<PlacementOperationArg> for PlacementOperation {
+impl From<PlacementOperationArg> for PlacementStatus {
     fn from(value: PlacementOperationArg) -> Self {
         match value {
             PlacementOperationArg::Placed => Self::Placed,
-            PlacementOperationArg::Reset => Self::Reset,
+            PlacementOperationArg::Reset => Self::Pending,
         }
     }
 }
@@ -159,20 +159,20 @@ pub enum ProcessOperationArg {
     ManuallySolderComponents,
 }
 
-impl From<ProcessOperationArg> for ProcessOperationKind {
+impl From<ProcessOperationArg> for ProcessOperationAttribute {
     fn from(value: ProcessOperationArg) -> Self {
         match value {
-            ProcessOperationArg::LoadPcbs => ProcessOperationKind::LoadPcbs,
-            ProcessOperationArg::AutomatedPnp => ProcessOperationKind::AutomatedPnp,
-            ProcessOperationArg::ReflowComponents => ProcessOperationKind::ReflowComponents,
-            ProcessOperationArg::ManuallySolderComponents => ProcessOperationKind::ManuallySolderComponents,
+            ProcessOperationArg::LoadPcbs => ProcessOperationAttribute::LoadPcbs,
+            ProcessOperationArg::AutomatedPnp => ProcessOperationAttribute::AutomatedPnp,
+            ProcessOperationArg::ReflowComponents => ProcessOperationAttribute::ReflowComponents,
+            ProcessOperationArg::ManuallySolderComponents => ProcessOperationAttribute::ManuallySolderComponents,
         }
     }
 }
 
 #[cfg(test)]
 mod from_process_operation_arg_for_process_operation_kind_tests {
-    use planning::process::ProcessOperationKind;
+    use planning::process::ProcessOperationAttribute;
     use rstest::rstest;
 
     use super::ProcessOperationArg;
@@ -185,9 +185,9 @@ mod from_process_operation_arg_for_process_operation_kind_tests {
         ProcessOperationArg::ManuallySolderComponents,
         ProcessOperationKind::ManuallySolderComponents
     )]
-    pub fn from(#[case] arg: ProcessOperationArg, #[case] expected_kind: ProcessOperationKind) {
+    pub fn from(#[case] arg: ProcessOperationArg, #[case] expected_kind: ProcessOperationAttribute) {
         // expect
-        assert_eq!(ProcessOperationKind::from(arg), expected_kind)
+        assert_eq!(ProcessOperationAttribute::from(arg), expected_kind)
     }
 }
 

@@ -10,13 +10,13 @@ use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
 use planner_app::{
-    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, PlacementsItem, Reference,
+    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, ProjectPlacementStatus, PlacementsItem, Reference,
 };
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
 use crate::i18n::conversions::{
-    pcb_side_to_i18n_key, placement_place_to_i18n_key, placement_placed_to_i18n_key, placement_status_to_i18n_key,
+    pcb_side_to_i18n_key, placement_place_to_i18n_key, placement_operation_status_to_i18n_key, placement_project_status_to_i18n_key,
 };
 use crate::i18n::datatable_support::FluentTranslator;
 use crate::ui_component::{ComponentState, UiComponent};
@@ -258,7 +258,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .cmp(&row_r.placement_state.placement.ref_des),
             PLACE_COL => row_l
                 .placement_state
-                .placed
+                .operation_status
                 .cmp(&row_r.placement_state.placement.place),
             MANUFACTURER_COL => row_l
                 .placement_state
@@ -304,12 +304,12 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .cmp(&row_r.placement_state.phase),
             PLACED_COL => row_l
                 .placement_state
-                .placed
-                .cmp(&row_r.placement_state.placed),
+                .operation_status
+                .cmp(&row_r.placement_state.operation_status),
             STATUS_COL => row_l
                 .placement_state
-                .status
-                .cmp(&row_r.placement_state.status),
+                .project_status
+                .cmp(&row_r.placement_state.project_status),
             ORDERING_COL => row_l.ordering.cmp(&row_r.ordering),
             _ => unreachable!(),
         }
@@ -372,11 +372,11 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 ui.label(phase)
             }
             PLACED_COL => {
-                let label = tr!(placement_placed_to_i18n_key(row.placement_state.placed));
+                let label = tr!(placement_operation_status_to_i18n_key(&row.placement_state.operation_status));
                 ui.label(label)
             }
             STATUS_COL => {
-                let label = tr!(placement_status_to_i18n_key(&row.placement_state.status));
+                let label = tr!(placement_project_status_to_i18n_key(&row.placement_state.project_status));
                 ui.label(label)
             }
             ORDERING_COL => ui.label(row.ordering.to_string()),
@@ -430,8 +430,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
             }
             PLACED_COL => {
                 let response = ui.add(|ui: &mut Ui| {
-                    let placed = &mut row.placement_state.placed;
-                    let label = tr!(placement_placed_to_i18n_key(*placed));
+                    let placed = &mut row.placement_state.operation_status;
+                    let label = tr!(placement_operation_status_to_i18n_key(*placed));
                     ui.toggle_value(placed, label)
                 });
 
@@ -499,12 +499,12 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .clone_from(&src.placement_state.phase),
             PLACED_COL => dst
                 .placement_state
-                .placed
-                .clone_from(&src.placement_state.placed),
+                .operation_status
+                .clone_from(&src.placement_state.operation_status),
             STATUS_COL => dst
                 .placement_state
-                .status
-                .clone_from(&src.placement_state.status),
+                .project_status
+                .clone_from(&src.placement_state.project_status),
             ORDERING_COL => dst.ordering.clone_from(&src.ordering),
             _ => unreachable!(),
         }
@@ -527,8 +527,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     y: Default::default(),
                     rotation: Default::default(),
                 },
-                placed: false,
-                status: PlacementStatus::Unknown,
+                operation_status: false,
+                project_status: ProjectPlacementStatus::Unused,
                 phase: None,
             },
             ordering: Default::default(),
@@ -596,13 +596,13 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .manufacturer,
             &row.placement_state.placement.part.mpn,
             &row.placement_state.placement.place,
-            &row.placement_state.placed,
+            &row.placement_state.operation_status,
             &row.placement_state
                 .phase
                 .as_ref()
                 .map(|phase| phase.to_string())
                 .unwrap_or_default(),
-            &row.placement_state.status,
+            &row.placement_state.project_status,
         );
 
         // "Filter single row. If this returns false, the row will be hidden."

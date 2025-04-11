@@ -1,4 +1,4 @@
-use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus, ProcessOperationKind, ProcessOperationStatus};
+use planner_app::{PcbSide, PlacementSortingMode, ProjectPlacementStatus, OperationTaskStatus, PlacementStatus};
 use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
@@ -8,10 +8,11 @@ pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
     }
 }
 
-pub fn placement_placed_to_i18n_key(placed: bool) -> &'static str {
-    match placed {
-        true => "placement-placed",
-        false => "placement-pending",
+pub fn placement_operation_status_to_i18n_key(placement_operation_status: &PlacementStatus) -> &'static str {
+    match placement_operation_status {
+        PlacementStatus::Placed => "placement-placed",
+        PlacementStatus::Skipped => "placement-skipped",
+        PlacementStatus::Pending => "placement-pending",
     }
 }
 
@@ -22,10 +23,10 @@ pub fn placement_place_to_i18n_key(placed: bool) -> &'static str {
     }
 }
 
-pub fn placement_status_to_i18n_key(status: &PlacementStatus) -> &'static str {
+pub fn placement_project_status_to_i18n_key(status: &ProjectPlacementStatus) -> &'static str {
     match status {
-        PlacementStatus::Known => "placement-status-known",
-        PlacementStatus::Unknown => "placement-status-unknown",
+        ProjectPlacementStatus::Used => "placement-project-status-used",
+        ProjectPlacementStatus::Unused => "placement-project-status-unused",
     }
 }
 
@@ -44,19 +45,11 @@ pub fn sort_order_to_i18n_key(sort_order: &SortOrder) -> &'static str {
     }
 }
 
-pub fn process_operation_status_to_i18n_key(status: &ProcessOperationStatus) -> &'static str {
+pub fn process_operation_status_to_i18n_key(status: &OperationTaskStatus) -> &'static str {
     match status {
-        ProcessOperationStatus::Pending => "process-operation-status-pending",
-        ProcessOperationStatus::Incomplete => "process-operation-status-incomplete",
-        ProcessOperationStatus::Complete => "process-operation-status-complete",
-    }
-}
-
-pub fn process_operation_kind_to_i18n_key(kind: &ProcessOperationKind) -> &'static str {
-    match kind {
-        ProcessOperationKind::LoadPcbs => "process-operation-kind-load-pcbs",
-        ProcessOperationKind::AutomatedPnp => "process-operation-kind-automated-pnp",
-        ProcessOperationKind::ReflowComponents => "process-operation-kind-reflow-components",
-        ProcessOperationKind::ManuallySolderComponents => "process-operation-kind-manually-solder-components",
+        OperationTaskStatus::Pending => "process-operation-status-pending",
+        OperationTaskStatus::Incomplete => "process-operation-status-incomplete",
+        OperationTaskStatus::Complete => "process-operation-status-complete",
+        OperationTaskStatus::Abandoned => "process-operation-status-abandoned",
     }
 }

@@ -18,8 +18,9 @@ pub struct PlacementState {
     #[serde_as(as = "DisplayFromStr")]
     pub unit_path: ObjectPath,
     pub placement: Placement,
-    pub placed: bool,
-    pub status: PlacementStatus,
+    pub operation_status: PlacementStatus,
+    /// Status of the placement in the project 
+    pub project_status: ProjectPlacementStatus,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -27,16 +28,16 @@ pub struct PlacementState {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum PlacementStatus {
-    Known,
-    Unknown,
+pub enum ProjectPlacementStatus {
+    Used,
+    Unused,
 }
 
-impl Display for PlacementStatus {
+impl Display for ProjectPlacementStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            PlacementStatus::Known => f.write_str("Known"),
-            PlacementStatus::Unknown => f.write_str("Unknown"),
+            ProjectPlacementStatus::Used => f.write_str("Used"),
+            ProjectPlacementStatus::Unused => f.write_str("Unused"),
         }
     }
 }
@@ -113,16 +114,15 @@ pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
-pub enum PlacementOperation {
+pub enum PlacementStatus {
     Placed,
-    Reset,
+    Skipped,
+    Pending,
 }
 
-impl From<bool> for PlacementOperation {
-    fn from(value: bool) -> Self {
-        match value {
-            true => PlacementOperation::Placed,
-            false => PlacementOperation::Reset,
-        }
-    }
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+pub enum PlacementOperation {
+    Place,
+    Skip,
+    Reset,
 }

@@ -9,7 +9,7 @@ use cli::args::{
 use planner_app::Event;
 use planning::design::DesignName;
 use planning::placement::PlacementSortingItem;
-use planning::process::ProcessName;
+use planning::process::ProcessReference;
 use planning::reference::Reference;
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
@@ -79,7 +79,7 @@ pub(crate) enum Command {
     AssignProcessToParts {
         /// Process name
         #[arg(long)]
-        process: ProcessName,
+        process: ProcessReference,
 
         /// Operation
         #[arg(long)]
@@ -97,7 +97,7 @@ pub(crate) enum Command {
     CreatePhase {
         /// Process name
         #[arg(long)]
-        process: ProcessName,
+        process: ProcessReference,
 
         /// Phase reference (e.g. 'top_1')
         #[arg(long)]

@@ -8,7 +8,7 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, ProcessName,
+    AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, ProcessReference,
     ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
 };
 use regex::Regex;
@@ -101,7 +101,7 @@ pub struct Project {
     errors: Vec<(chrono::DateTime<chrono::Utc>, String)>,
 
     /// initially empty until the OverviewView has been received and processed.
-    processes: Vec<ProcessName>,
+    processes: Vec<ProcessReference>,
 
     /// initially empty, requires fetching the PhaseOverviewView for each phase before it can be used.
     phases: Vec<PhaseOverview>,
@@ -487,13 +487,13 @@ impl Project {
             new_placement: &PlacementState,
             old_placement: &PlacementState,
         ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
-            if new_placement.placed != old_placement.placed {
+            if new_placement.operation_status != old_placement.operation_status {
                 Some(
                     planner_core_service
                         .update(key.clone(), Event::RecordPlacementsOperation {
                             object_path_patterns: vec![exact_match(&object_path.to_string())],
 
-                            operation: new_placement.placed.into(),
+                            operation: new_placement.operation_status.into(),
                         })
                         .into_actions(),
                 )
@@ -1007,9 +1007,9 @@ impl UiComponent for Project {
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
-                    Some(ProjectToolbarAction::RemoveUnknownPlacements) => self
+                    Some(ProjectToolbarAction::RemoveUnusedPlacements) => self
                         .planner_core_service
-                        .update(key, Event::RemoveUnknownPlacements {
+                        .update(key, Event::RemoveUsedPlacements {
                             phase: None,
                         })
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),

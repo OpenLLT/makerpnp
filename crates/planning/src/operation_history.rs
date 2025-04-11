@@ -1,8 +1,11 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::fs::File;
 use std::path::PathBuf;
 
 use anyhow::Error;
+use as_any::AsAny;
+use dyn_eq::DynEq;
 use pnp::object_path::ObjectPath;
 use serde::Serialize;
 use serde_json::Value;
@@ -12,42 +15,44 @@ use time::serde::rfc3339;
 use time::OffsetDateTime;
 use tracing::info;
 
-use crate::placement::PlacementOperation;
-use crate::process::ProcessOperationStatus;
+use crate::placement::{PlacementOperation, PlacementStatus};
+use crate::process::{OperationTaskReference, OperationTaskStatus, ProcessOperationReference};
 use crate::reference::Reference;
 
-#[serde_as]
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-#[cfg_attr(test, derive(PartialEq))]
-pub enum OperationHistoryKind {
-    LoadPcbs {
-        status: ProcessOperationStatus,
-    },
-    AutomatedPnp {
-        status: ProcessOperationStatus,
-    },
-    ReflowComponents {
-        status: ProcessOperationStatus,
-    },
-    ManuallySolderComponents {
-        status: ProcessOperationStatus,
-    },
-    PlacementOperation {
-        #[serde_as(as = "DisplayFromStr")]
-        object_path: ObjectPath,
-        operation: PlacementOperation,
-    },
+#[typetag::serde(tag = "type")]
+pub trait OperationHistoryKind: AsAny + Debug {}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct LoadPcbsOperationTaskHistoryKind {
+    pub(crate) status: OperationTaskStatus,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[typetag::serde(name = "load_pcbs_operation")]
+impl OperationHistoryKind for LoadPcbsOperationTaskHistoryKind {}
+
+#[serde_as]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct PlacementOperationHistoryKind {
+    #[serde_as(as = "DisplayFromStr")]
+    pub object_path: ObjectPath,
+    pub operation: PlacementOperation,
+}
+
+#[typetag::serde(name = "placement_operation")]
+impl OperationHistoryKind for PlacementOperationHistoryKind {}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct OperationHistoryItem {
     #[serde(with = "rfc3339")]
     pub date_time: OffsetDateTime,
     pub phase: Reference,
-    pub operation: OperationHistoryKind,
 
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
+    
+    pub operation_reference: ProcessOperationReference,
+    pub task_reference: OperationTaskReference,
+    pub task_history: Box<dyn OperationHistoryKind>,
 }
 
 pub fn write(phase_log_path: PathBuf, operation_history: &Vec<OperationHistoryItem>) -> Result<(), Error> {

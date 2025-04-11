@@ -403,7 +403,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -538,7 +538,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -700,7 +700,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -880,7 +880,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -1169,7 +1169,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -1572,7 +1572,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -1754,7 +1754,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (
@@ -1956,7 +1956,7 @@ mod operation_sequence_1 {
                     "pcb=panel::instance=1::unit=1",
                     ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
                     false,
-                    "Unknown",
+                    "Unused",
                     None,
                 ),
                 (

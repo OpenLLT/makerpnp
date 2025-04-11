@@ -1,17 +1,22 @@
 use std::fmt::{Display, Formatter};
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use pnp::pcb::PcbSide;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
-use crate::process::{Process, ProcessName, ProcessOperationKind, ProcessOperationState};
+use crate::process::{Process, ProcessReference, ProcessOperationReference, ProcessOperationState, PlacementOperationState, SerializableOperationTaskState, OperationTaskReference, ProcessOperation};
 use crate::reference::Reference;
+
+// TODO
+//pub type PhaseReference = Reference;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Phase {
+    // TODO
+    //pub reference: PhaseReference,
     pub reference: Reference,
-    pub process: ProcessName,
+    pub process: ProcessReference,
 
     pub load_out_source: String,
 
@@ -29,9 +34,9 @@ pub enum PhaseError {
     UnknownPhase(Reference),
 
     #[error("Invalid operation for phase. phase: '{0:}', operation: {1:?}")]
-    InvalidOperationForPhase(Reference, ProcessOperationKind),
+    InvalidOperationForPhase(Reference, ProcessOperationReference),
     #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
-    PrecedingOperationIncomplete(Reference, ProcessOperationKind),
+    PrecedingOperationIncomplete(Reference, ProcessOperationReference),
 }
 
 pub struct PhaseOrderings<'a>(pub &'a IndexSet<Reference>);
@@ -53,19 +58,47 @@ impl<'a> Display for PhaseOrderings<'a> {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct PhaseState {
     // the order of operations must be preserved.
-    pub operation_state: Vec<(ProcessOperationKind, ProcessOperationState)>,
+    pub operation_states: Vec<ProcessOperationState>,
 }
 
 impl PhaseState {
+    
+    // Safety: all process must be valid
     pub fn from_process(process: &Process) -> Self {
-        let operation_state = process
+        let operation_states = process
             .operations
             .iter()
-            .map(|kind| (kind.clone(), ProcessOperationState::default()))
+            .map(|process_operation| {
+
+                let task_states = process_operation.tasks.iter().map(|task_reference|{
+
+                    let mut task_state: Option<Box<dyn SerializableOperationTaskState>> = None;
+                    if task_reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
+                        task_state = Some(Box::new(PlacementOperationState::default()) as Box<dyn SerializableOperationTaskState>)
+                    } else {
+                        panic!("unknown task reference {:?}", task_reference);
+                    }
+                    (task_reference.clone(), task_state.unwrap())
+                    
+                }).collect::<IndexMap<_, _>>();
+                
+                ProcessOperationState {
+                    reference: process_operation.reference.clone(),
+                    task_states
+                }
+            })
             .collect::<Vec<_>>();
 
         Self {
-            operation_state,
+            operation_states,
+        }
+    }
+    
+    pub fn reset(&mut self) {
+        for state in self.operation_states.iter_mut() {
+            for (_task_reference, task_state) in state.task_states.iter_mut() {
+                task_state.reset()
+            }
         }
     }
 }

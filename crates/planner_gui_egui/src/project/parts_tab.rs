@@ -7,7 +7,7 @@ use egui::{Ui, WidgetText};
 use egui_data_table::DataTable;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
-use planner_app::{Part, PartStates, ProcessName};
+use planner_app::{Part, PartStates, ProcessReference};
 use tracing::debug;
 
 use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -35,7 +35,7 @@ impl PartsUi {
         }
     }
 
-    pub fn update_part_states(&mut self, mut part_states: PartStates, processes: Vec<ProcessName>) {
+    pub fn update_part_states(&mut self, mut part_states: PartStates, processes: Vec<ProcessReference>) {
         let mut part_states_table = self.part_states_table.lock().unwrap();
         let table: DataTable<PartStatesRow> = {
             part_states
@@ -45,7 +45,7 @@ impl PartsUi {
                     let enabled_processes = processes
                         .iter()
                         .map(|process| (process.clone(), part_state.processes.contains(process)))
-                        .collect::<Vec<(ProcessName, bool)>>();
+                        .collect::<Vec<(ProcessReference, bool)>>();
 
                     PartStatesRow {
                         part: part_state.part,
@@ -82,7 +82,7 @@ pub enum PartsUiAction {
     None,
     UpdateProcessesForPart {
         part: Part,
-        processes: HashMap<ProcessName, bool>,
+        processes: HashMap<ProcessReference, bool>,
     },
     RequestRepaint,
 }
@@ -134,7 +134,7 @@ impl UiComponent for PartsUi {
                 old_row,
             } => {
                 let (_, _) = (index, old_row);
-                let processes: HashMap<ProcessName, bool> = new_row
+                let processes: HashMap<ProcessReference, bool> = new_row
                     .enabled_processes
                     .into_iter()
                     .collect();

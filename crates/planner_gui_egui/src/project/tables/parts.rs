@@ -6,7 +6,7 @@ use egui_data_table::RowViewer;
 use egui_data_table::viewer::{CellWriteContext, TableColumnConfig};
 use egui_i18n::tr;
 use egui_mobius::types::Enqueue;
-use planner_app::{Part, ProcessName, RefDes};
+use planner_app::{Part, ProcessReference, RefDes};
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
@@ -15,20 +15,20 @@ use crate::project::parts_tab::PartsUiCommand;
 #[derive(Debug, Clone)]
 pub struct PartStatesRow {
     pub part: Part,
-    pub enabled_processes: Vec<(ProcessName, bool)>,
+    pub enabled_processes: Vec<(ProcessReference, bool)>,
     pub ref_des_set: BTreeSet<RefDes>,
     pub quantity: usize,
 }
 
 pub struct PartStatesRowViewer {
-    processes: Vec<ProcessName>,
+    processes: Vec<ProcessReference>,
     sender: Enqueue<PartsUiCommand>,
 
     pub(crate) filter: Filter,
 }
 
 impl PartStatesRowViewer {
-    pub fn new(sender: Enqueue<PartsUiCommand>, mut processes: Vec<ProcessName>) -> Self {
+    pub fn new(sender: Enqueue<PartsUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
         // sorting the processes here helps to ensure that the view vs edit list of processes has the same
         // ordering.
         processes.sort();
@@ -199,7 +199,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             .processes
             .iter()
             .map(|process| (process.clone(), false))
-            .collect::<Vec<(ProcessName, bool)>>();
+            .collect::<Vec<(ProcessReference, bool)>>();
 
         PartStatesRow {
             part: Part {
@@ -286,7 +286,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 }
 
-fn enabled_processes_to_string(enabled_processes: &Vec<(ProcessName, bool)>) -> String {
+fn enabled_processes_to_string(enabled_processes: &Vec<(ProcessReference, bool)>) -> String {
     format!(
         "[{}]",
         enabled_processes

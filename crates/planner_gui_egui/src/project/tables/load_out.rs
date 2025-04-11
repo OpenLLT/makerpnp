@@ -115,7 +115,8 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
                     .text_edit_singleline(&mut reference)
                     .changed()
                 {
-                    row.feeder = Reference::from(reference);
+                    // FIXME validate the reference, don't assume it's valid
+                    row.feeder = Reference::from_raw(reference);
                 }
 
                 Some(ui.response())
@@ -144,7 +145,7 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
                 manufacturer: "".to_string(),
                 mpn: "".to_string(),
             },
-            feeder: Reference::from("".to_string()),
+            feeder: Reference::from_raw_str(""),
         }
     }
 

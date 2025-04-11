@@ -9,7 +9,7 @@ use egui_mobius::types::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, taffy, tui};
-use planner_app::{LoadOutSource, PcbSide, ProcessName, Reference};
+use planner_app::{LoadOutSource, PcbSide, ProcessReference, Reference};
 use taffy::Size;
 use validator::Validate;
 
@@ -23,7 +23,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derivative(Debug)]
 pub struct AddPhaseModal {
     fields: Value<AddPhaseFields>,
-    processes: Vec<ProcessName>,
+    processes: Vec<ProcessReference>,
     path: PathBuf,
 
     #[derivative(Debug = "ignore")]
@@ -33,7 +33,7 @@ pub struct AddPhaseModal {
 }
 
 impl AddPhaseModal {
-    pub fn new(path: PathBuf, processes: Vec<ProcessName>) -> Self {
+    pub fn new(path: PathBuf, processes: Vec<ProcessReference>) -> Self {
         Self {
             fields: Default::default(),
             processes,
@@ -229,9 +229,9 @@ pub struct AddPhaseFields {
     #[validate(required(code = "form-option-error-required"))]
     pcb_side: Option<PcbSideChoice>,
 
-    // TODO need additional validation (conversion to `ProcessName`)
+    // TODO need additional validation (conversion to `ProcessReference`)
     #[validate(required(code = "form-option-error-required"))]
-    process: Option<ProcessName>,
+    process: Option<ProcessReference>,
 
     // TODO need additional validation (conversion to `LoadOutSource`)
     #[validate(required(code = "form-option-error-required"))]
@@ -246,7 +246,7 @@ pub enum AddPhaseModalUiCommand {
     ReferenceChanged(String),
     PcbSideChanged(PcbSideChoice),
     PickLoadoutSourceClicked,
-    ProcessChanged(ProcessName),
+    ProcessChanged(ProcessReference),
     LoadoutSourcePicked(String),
 }
 
@@ -259,7 +259,7 @@ pub enum AddPhaseModalAction {
 /// Value object
 #[derive(Debug, Clone)]
 pub struct AddPhaseArgs {
-    pub process: ProcessName,
+    pub process: ProcessReference,
     pub reference: Reference,
     pub load_out: LoadOutSource,
     pub pcb_side: PcbSide,
