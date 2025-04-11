@@ -12,28 +12,28 @@ use std::fmt::Display;
     Hash
 )]
 #[serde(rename_all = "lowercase")]
-pub enum AddOrRemoveOperation {
+pub enum AddOrRemoveAction {
     Add,
     Remove,
 }
 
-impl TryFrom<&String> for AddOrRemoveOperation {
+impl TryFrom<&String> for AddOrRemoveAction {
     type Error = ();
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
-            "add" => Ok(AddOrRemoveOperation::Add),
-            "remove" => Ok(AddOrRemoveOperation::Remove),
+            "add" => Ok(AddOrRemoveAction::Add),
+            "remove" => Ok(AddOrRemoveAction::Remove),
             _ => Err(()),
         }
     }
 }
 
-impl Display for AddOrRemoveOperation {
+impl Display for AddOrRemoveAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AddOrRemoveOperation::Add => f.write_str("add"),
-            AddOrRemoveOperation::Remove => f.write_str("remove"),
+            AddOrRemoveAction::Add => f.write_str("add"),
+            AddOrRemoveAction::Remove => f.write_str("remove"),
         }
     }
 }
@@ -50,28 +50,28 @@ impl Display for AddOrRemoveOperation {
     Hash
 )]
 #[serde(rename_all = "lowercase")]
-pub enum SetOrClearOperation {
+pub enum SetOrClearAction {
     Set,
     Clear,
 }
 
-impl TryFrom<&String> for SetOrClearOperation {
+impl TryFrom<&String> for SetOrClearAction {
     type Error = ();
 
     fn try_from(value: &String) -> Result<Self, Self::Error> {
         match value.to_lowercase().as_str() {
-            "add" => Ok(SetOrClearOperation::Set),
-            "remove" => Ok(SetOrClearOperation::Clear),
+            "add" => Ok(SetOrClearAction::Set),
+            "remove" => Ok(SetOrClearAction::Clear),
             _ => Err(()),
         }
     }
 }
 
-impl Display for SetOrClearOperation {
+impl Display for SetOrClearAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SetOrClearOperation::Set => f.write_str("add"),
-            SetOrClearOperation::Clear => f.write_str("remove"),
+            SetOrClearAction::Set => f.write_str("add"),
+            SetOrClearAction::Clear => f.write_str("remove"),
         }
     }
 }

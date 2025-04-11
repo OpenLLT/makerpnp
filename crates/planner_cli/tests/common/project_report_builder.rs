@@ -1,3 +1,5 @@
+use dyn_clone::DynClone;
+use planning::report::PcbReportItem;
 use serde::Serialize;
 
 use crate::common::project_builder::TestProcessOperationStatus;
@@ -60,7 +62,7 @@ pub struct TestProjectReport {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseOverview {
-    pub phase_name: String,
+    pub phase: String,
     pub status: String,
     pub process: String,
     pub operations_overview: Vec<TestPhaseOperationOverview>,
@@ -68,31 +70,79 @@ pub struct TestPhaseOverview {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseOperationOverview {
-    pub operation: TestPhaseOperationKind,
-    pub message: String,
+    pub operation: String,
     pub status: TestProcessOperationStatus,
+    pub tasks: Vec<(String, Box<dyn TestTaskOverview>)>,
 }
 
+#[typetag::serialize(tag = "type")]
+pub trait TestTaskOverview: DynClone {}
+dyn_clone::clone_trait_object!(TestTaskOverview);
+
+macro_rules! generic_test_task_overview {
+    ($name:ident, $key:literal) => {
+        #[typetag::serialize(name = $key)]
+        impl TestTaskOverview for $name {}
+
+        #[derive(Clone, serde::Serialize)]
+        pub struct $name {}
+    };
+}
+
+generic_test_task_overview!(TestLoadPcbsTaskOverview, "load_pcbs_overview");
+generic_test_task_overview!(TestManualSolderingTaskOverview, "manual_soldering_overview");
+generic_test_task_overview!(TestAutomatedSolderingTaskOverview, "automated_soldering_overview");
+
+#[typetag::serialize(name = "place_components_overview")]
+impl TestTaskOverview for TestPlaceComponentsTaskOverview {}
+
 #[derive(Clone, serde::Serialize)]
-pub enum TestPhaseOperationKind {
-    PlaceComponents,
-    ManuallySolderComponents,
+pub struct TestPlaceComponentsTaskOverview {
+    pub placed: usize,
+    pub skipped: usize,
+    pub total: usize,
 }
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseSpecification {
-    pub phase_name: String,
+    pub phase: String,
     pub operations: Vec<TestPhaseOperation>,
     pub load_out_assignments: Vec<TestPhaseLoadOutAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
-pub enum TestPhaseOperation {
-    PreparePcbs { pcbs: Vec<TestPcb> },
-    PlaceComponents {},
-    ManuallySolderComponents {},
-    ReflowComponents {},
-    // FUTURE add `LoadFeeders {...}`
+pub struct TestPhaseOperation {
+    pub operation: String,
+    pub task_specifications: Vec<(String, Box<dyn TestTaskSpecification>)>,
+}
+
+#[typetag::serialize(tag = "type")]
+pub trait TestTaskSpecification: DynClone {}
+dyn_clone::clone_trait_object!(TestTaskSpecification);
+
+macro_rules! generic_test_task_specification {
+    ($name:ident, $key:literal) => {
+        #[typetag::serialize(name = $key)]
+        impl TestTaskSpecification for $name {}
+
+        #[derive(Clone, serde::Serialize)]
+        pub struct $name {}
+    };
+}
+
+generic_test_task_specification!(TestManualSolderingTaskSpecification, "manual_soldering_specification");
+generic_test_task_specification!(
+    TestAutomatedSolderingTaskSpecification,
+    "automated_soldering_specification"
+);
+generic_test_task_specification!(TestPlaceComponentsTaskSpecification, "place_components_specification");
+
+#[typetag::serialize(name = "load_pcbs_specification")]
+impl TestTaskSpecification for TestLoadPcbsTaskSpecification {}
+
+#[derive(Clone, serde::Serialize)]
+pub struct TestLoadPcbsTaskSpecification {
+    pub pcbs: Vec<TestPcb>,
 }
 
 #[derive(Clone, serde::Serialize)]

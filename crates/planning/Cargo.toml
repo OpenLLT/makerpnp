@@ -20,6 +20,11 @@ rust_decimal_macros = { workspace = true }
 serde = { workspace = true,  features = ["derive"] }
 serde_json = { workspace = true,  features = ["preserve_order"] }
 serde_with = { workspace = true }
+typetag = { workspace = true }
+dyn-eq = { workspace = true }
+dyn-clone = { workspace = true }
+
+as-any = { workspace = true }
 json2markdown = { workspace = true, optional = true }
 
 tracing = { workspace = true }

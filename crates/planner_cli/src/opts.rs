@@ -3,13 +3,12 @@ use std::path::{Path, PathBuf};
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
-    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg,
-    ProcessOperationSetArg, SetOrClearOperationArg,
+    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg, TaskActionArg,
 };
 use planner_app::Event;
 use planning::design::DesignName;
 use planning::placement::PlacementSortingItem;
-use planning::process::ProcessName;
+use planning::process::ProcessReference;
 use planning::reference::Reference;
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
@@ -79,7 +78,7 @@ pub(crate) enum Command {
     AssignProcessToParts {
         /// Process name
         #[arg(long)]
-        process: ProcessName,
+        process: ProcessReference,
 
         /// Operation
         #[arg(long)]
@@ -97,7 +96,7 @@ pub(crate) enum Command {
     CreatePhase {
         /// Process name
         #[arg(long)]
-        process: ProcessName,
+        process: ProcessReference,
 
         /// Phase reference (e.g. 'top_1')
         #[arg(long)]
@@ -163,13 +162,17 @@ pub(crate) enum Command {
         #[arg(long)]
         phase: Reference,
 
-        /// The operation to update
+        /// Operation reference
         #[arg(long)]
-        operation: ProcessOperationArg,
+        operation: Reference,
 
-        /// The process operation to set
+        /// The task to update
         #[arg(long)]
-        set: ProcessOperationSetArg,
+        task: Reference,
+
+        /// The task action to apply
+        #[arg(long)]
+        action: TaskActionArg,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -278,15 +281,16 @@ impl TryFrom<Opts> for Event {
                 manufacturer,
                 mpn,
             }),
-
             Command::RecordPhaseOperation {
                 phase,
                 operation,
-                set,
+                task,
+                action,
             } => Ok(Event::RecordPhaseOperation {
                 phase,
                 operation: operation.into(),
-                set: set.into(),
+                task: task.into(),
+                action: action.into(),
             }),
             Command::RecordPlacementsOperation {
                 object_path_patterns,

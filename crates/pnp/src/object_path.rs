@@ -97,6 +97,7 @@ pub struct ObjectPath {
 impl ObjectPath {
     /// pcb_instance is a 1-based index.
     pub fn set_pcb_kind_and_instance(&mut self, pcb_kind: PcbKind, instance: u16) {
+        assert!(instance > 0);
         self.set_chunk(ObjectPathChunk {
             key: "pcb".to_string(),
             value: pcb_kind.to_string(),
@@ -113,6 +114,7 @@ impl ObjectPath {
     /// only applicable to panels
     /// pcb_unit is a 1-based index.
     pub fn set_pcb_unit(&mut self, unit: u16) {
+        assert!(unit > 0);
         self.set_chunk(ObjectPathChunk {
             key: "unit".to_string(),
             value: unit.to_string(),

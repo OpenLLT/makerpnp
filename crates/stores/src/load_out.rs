@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, Error};
 use csv::QuoteStyle;
-use planning::process::{Process, ProcessName, ProcessOperationKind};
+use planning::process::{ProcessDefinition, ProcessReference, ProcessRuleReference};
 use planning::reference::Reference;
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
@@ -232,7 +232,7 @@ pub enum FeederAssignmentError {
 
     #[error("Multiple matching parts; patterns must match exactly one part for the process. process: {process}, manufacturer: {manufacturer}, mpn: {mpn}")]
     MultipleMatchingParts {
-        process: ProcessName,
+        process: ProcessReference,
         manufacturer: Regex,
         mpn: Regex,
     },
@@ -240,7 +240,7 @@ pub enum FeederAssignmentError {
 
 pub fn assign_feeder_to_load_out_item(
     load_out_source: &LoadOutSource,
-    process: &Process,
+    process: &ProcessDefinition,
     feeder_reference: &Reference,
     manufacturer: Regex,
     mpn: Regex,
@@ -260,9 +260,9 @@ pub fn assign_feeder_to_load_out_item(
             });
         }
 
-        if process.has_operation(&ProcessOperationKind::AutomatedPnp) && items.len() > 1 {
+        if process.has_rule(&ProcessRuleReference::from_raw_str("core::unique_feeder_references")) && items.len() > 1 {
             return Err(FeederAssignmentError::MultipleMatchingParts {
-                process: process.name.clone(),
+                process: process.reference.clone(),
                 manufacturer: manufacturer.clone(),
                 mpn: mpn.clone(),
             });

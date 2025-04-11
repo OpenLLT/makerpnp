@@ -8,7 +8,7 @@ use egui_data_table::DataTable;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
-use tracing::debug;
+use tracing::{debug, error};
 use util::path::clip_path;
 
 use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -46,7 +46,7 @@ impl LoadOutUi {
                 .drain(0..)
                 .map(|item| LoadOutRow {
                     part: Part::new(item.manufacturer, item.mpn),
-                    feeder: Reference(item.reference),
+                    feeder: item.reference.to_string(),
                 })
         }
         .collect();
@@ -127,11 +127,19 @@ impl UiComponent for LoadOutUi {
             } => {
                 let (_, _) = (index, old_row);
 
-                Some(LoadOutUiAction::UpdateFeederForPart {
-                    phase: self.phase.clone(),
-                    part: new_row.part,
-                    feeder: new_row.feeder,
-                })
+                // TODO how to handle invalid feeder reference properly?
+
+                if let Ok(feeder_reference) = Reference::try_from(new_row.feeder)
+                    .inspect_err(|err| error!("Invalid feeder reference. cause: {:?}", err))
+                {
+                    Some(LoadOutUiAction::UpdateFeederForPart {
+                        phase: self.phase.clone(),
+                        part: new_row.part,
+                        feeder: feeder_reference,
+                    })
+                } else {
+                    None
+                }
             }
             LoadOutUiCommand::FilterCommand(command) => {
                 let mut table = self.load_out_table.lock().unwrap();

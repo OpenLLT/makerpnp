@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 
 use clap_verbosity_flag::{LogLevel, Verbosity};
@@ -11,7 +11,10 @@ pub fn configure_tracing<IL: LogLevel>(path: Option<PathBuf>, verbosity: Verbosi
     match path {
         Some(path) => {
             //println!("using file_subscriber");
-            let trace_file: File = File::create(path)?;
+            let trace_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)?;
 
             let file_subscriber = FmtSubscriber::builder()
                 .with_writer(trace_file)

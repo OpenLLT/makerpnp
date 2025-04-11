@@ -1,8 +1,8 @@
 use clap::ValueEnum;
 use eda::EdaTool;
-use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
+use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 use planning::placement::{PlacementOperation, PlacementSortingMode};
-use planning::process::{ProcessOperationKind, ProcessOperationSetItem};
+use planning::process::TaskAction;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
 
@@ -83,7 +83,7 @@ pub enum AddOrRemoveOperationArg {
     Remove,
 }
 
-impl From<AddOrRemoveOperationArg> for AddOrRemoveOperation {
+impl From<AddOrRemoveOperationArg> for AddOrRemoveAction {
     fn from(value: AddOrRemoveOperationArg) -> Self {
         match value {
             AddOrRemoveOperationArg::Add => Self::Add,
@@ -98,7 +98,7 @@ pub enum SetOrClearOperationArg {
     Clear,
 }
 
-impl From<SetOrClearOperationArg> for SetOrClearOperation {
+impl From<SetOrClearOperationArg> for SetOrClearAction {
     fn from(value: SetOrClearOperationArg) -> Self {
         match value {
             SetOrClearOperationArg::Set => Self::Set,
@@ -133,6 +133,8 @@ impl EdaToolArg {
 pub enum PlacementOperationArg {
     #[value(name("placed"))]
     Placed,
+    #[value(name("skipped"))]
+    Skipped,
     #[value(name("reset"))]
     Reset,
 }
@@ -140,7 +142,8 @@ pub enum PlacementOperationArg {
 impl From<PlacementOperationArg> for PlacementOperation {
     fn from(value: PlacementOperationArg) -> Self {
         match value {
-            PlacementOperationArg::Placed => Self::Placed,
+            PlacementOperationArg::Placed => Self::Place,
+            PlacementOperationArg::Skipped => Self::Skip,
             PlacementOperationArg::Reset => Self::Reset,
         }
     }
@@ -148,60 +151,21 @@ impl From<PlacementOperationArg> for PlacementOperation {
 
 #[derive(Clone, Debug)]
 #[derive(ValueEnum)]
-pub enum ProcessOperationArg {
-    #[value(name("loadpcbs"))]
-    LoadPcbs,
-    #[value(name("automatedpnp"))]
-    AutomatedPnp,
-    #[value(name("reflowcomponents"))]
-    ReflowComponents,
-    #[value(name("manuallysoldercomponents"))]
-    ManuallySolderComponents,
+pub enum TaskActionArg {
+    #[value(name("start"))]
+    Start,
+    #[value(name("complete"))]
+    Complete,
+    #[value(name("abandon"))]
+    Abandon,
 }
 
-impl From<ProcessOperationArg> for ProcessOperationKind {
-    fn from(value: ProcessOperationArg) -> Self {
+impl From<TaskActionArg> for TaskAction {
+    fn from(value: TaskActionArg) -> Self {
         match value {
-            ProcessOperationArg::LoadPcbs => ProcessOperationKind::LoadPcbs,
-            ProcessOperationArg::AutomatedPnp => ProcessOperationKind::AutomatedPnp,
-            ProcessOperationArg::ReflowComponents => ProcessOperationKind::ReflowComponents,
-            ProcessOperationArg::ManuallySolderComponents => ProcessOperationKind::ManuallySolderComponents,
-        }
-    }
-}
-
-#[cfg(test)]
-mod from_process_operation_arg_for_process_operation_kind_tests {
-    use planning::process::ProcessOperationKind;
-    use rstest::rstest;
-
-    use super::ProcessOperationArg;
-
-    #[rstest]
-    #[case(ProcessOperationArg::LoadPcbs, ProcessOperationKind::LoadPcbs)]
-    #[case(ProcessOperationArg::AutomatedPnp, ProcessOperationKind::AutomatedPnp)]
-    #[case(ProcessOperationArg::ReflowComponents, ProcessOperationKind::ReflowComponents)]
-    #[case(
-        ProcessOperationArg::ManuallySolderComponents,
-        ProcessOperationKind::ManuallySolderComponents
-    )]
-    pub fn from(#[case] arg: ProcessOperationArg, #[case] expected_kind: ProcessOperationKind) {
-        // expect
-        assert_eq!(ProcessOperationKind::from(arg), expected_kind)
-    }
-}
-
-#[derive(Clone, Debug)]
-#[derive(ValueEnum)]
-pub enum ProcessOperationSetArg {
-    #[value(name("completed"))]
-    Completed,
-}
-
-impl From<ProcessOperationSetArg> for ProcessOperationSetItem {
-    fn from(value: ProcessOperationSetArg) -> Self {
-        match value {
-            ProcessOperationSetArg::Completed => ProcessOperationSetItem::Completed,
+            TaskActionArg::Start => TaskAction::Start,
+            TaskActionArg::Complete => TaskAction::Complete,
+            TaskActionArg::Abandon => TaskAction::Abandon,
         }
     }
 }

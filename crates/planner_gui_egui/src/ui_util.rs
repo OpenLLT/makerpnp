@@ -1,6 +1,6 @@
 use egui::{Color32, Style};
 
-pub fn green_orange_red_from_style(style: &Style) -> (Color32, Color32, Color32) {
+pub fn green_orange_red_grey_from_style(style: &Style) -> (Color32, Color32, Color32, Color32) {
     let visual = &style.visuals;
 
     // Credit: following snippet from egui-data-tables
@@ -11,5 +11,5 @@ pub fn green_orange_red_from_style(style: &Style) -> (Color32, Color32, Color32)
         Color32::GREEN
     };
 
-    (green, Color32::ORANGE, Color32::RED)
+    (green, Color32::ORANGE, Color32::RED, Color32::LIGHT_GRAY)
 }

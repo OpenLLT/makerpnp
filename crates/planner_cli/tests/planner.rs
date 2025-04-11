@@ -4,33 +4,48 @@ extern crate util;
 pub mod common;
 
 mod operation_sequence_1 {
-    use std::collections::BTreeMap;
     use std::fs::{read_to_string, File};
     use std::io::Write;
     use std::path::PathBuf;
+    use std::str::FromStr;
 
     use assert_cmd::Command;
     use indoc::indoc;
+    use planning::design::DesignVariant;
+    use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
+    use planning::process::TaskStatus;
+    use pnp::object_path::ObjectPath;
+    use pnp::pcb::{PcbKind, PcbSide};
     use rust_decimal_macros::dec;
     use stores::test::load_out_builder::{LoadOutCSVBuilder, TestLoadOutRecord};
     use tempfile::tempdir;
     use util::test::{build_temp_file, prepare_args, print};
 
     use crate::common::operation_history::{
-        TestOperationHistoryItem, TestOperationHistoryKind, TestOperationHistoryPlacementOperation,
+        TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind,
+        TestPlaceComponentsOperationTaskHistoryKind, TestPlacementOperationHistoryKind,
     };
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
+    use crate::common::project_builder as project;
     use crate::common::project_builder::{
-        TestPlacementsState, TestProcessOperationExtraState, TestProcessOperationStatus, TestProjectBuilder,
+        TestAutomatedSolderingTaskState, TestLoadPcbsTaskState, TestManualSolderingTaskState, TestOperationState,
+        TestPartState, TestPhase, TestPlacement, TestPlacementState, TestPlacementTaskState,
+        TestProcessOperationStatus, TestProjectBuilder, TestSerializableTaskState,
     };
+    use crate::common::project_report_builder as report;
     use crate::common::project_report_builder::{
-        ProjectReportBuilder, TestIssue, TestIssueKind, TestIssueSeverity, TestPart, TestPcb, TestPcbUnitAssignment,
-        TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationKind, TestPhaseOperationOverview,
-        TestPhaseOverview, TestPhaseSpecification,
+        ProjectReportBuilder, TestAutomatedSolderingTaskOverview, TestAutomatedSolderingTaskSpecification, TestIssue,
+        TestIssueKind, TestIssueSeverity, TestLoadPcbsTaskOverview, TestLoadPcbsTaskSpecification,
+        TestManualSolderingTaskOverview, TestManualSolderingTaskSpecification, TestPart, TestPcbUnitAssignment,
+        TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationOverview, TestPhaseOverview,
+        TestPhaseSpecification, TestPlaceComponentsTaskOverview, TestPlaceComponentsTaskSpecification,
+        TestTaskOverview, TestTaskSpecification,
     };
 
     /// A context, which will be dropped when the tests are completed.
     mod context {
+        use std::fs;
+        use std::path::Path;
         use std::sync::{Mutex, MutexGuard};
         use std::thread::sleep;
         use std::time::Duration;
@@ -91,6 +106,18 @@ mod operation_sequence_1 {
                     phase_2_load_out_path,
                 }
             }
+
+            pub fn delete_trace_log(&self) {
+                if Path::new(&self.test_trace_log_path).exists() {
+                    println!(
+                        "deleting trace log: {}",
+                        self.test_trace_log_path
+                            .to_str()
+                            .unwrap()
+                    );
+                    fs::remove_file(&self.test_trace_log_path).unwrap();
+                }
+            }
         }
 
         impl Drop for Context {
@@ -108,7 +135,7 @@ mod operation_sequence_1 {
         /// Use a mutex to prevent multiple test threads interacting with the same static state.
         /// This can happen when tests use the same mock context.  Without this mechanism tests will
         /// interact with each other causing unexpected results and test failures.
-        pub fn aquire(sequence: usize) -> MutexGuard<'static, (usize, Option<Context>)> {
+        pub fn acquire(sequence: usize) -> MutexGuard<'static, (usize, Option<Context>)> {
             let mut lock = loop {
                 let mut lock = LOCK
                     .lock()
@@ -133,7 +160,7 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_01_create_job() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(1);
+        let mut ctx_guard = context::acquire(1);
         let ctx = ctx_guard.1.as_mut().unwrap();
 
         // and
@@ -181,8 +208,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_02_add_pcb() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(2);
+        let mut ctx_guard = context::acquire(2);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -191,7 +219,10 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
             .content();
 
         // and
@@ -231,8 +262,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_03_assign_variant_to_unit() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(3);
+        let mut ctx_guard = context::acquire(3);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -260,57 +292,98 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CAP_MFR1", "CAP1"), &[]),
-                (("CONN_MFR1", "CONN1"), &[]),
-                (("RES_MFR1", "RES1"), &[]),
+            .with_part_states(vec![
+                (project::TestPart::new("CAP_MFR1", "CAP1"), TestPartState::default()),
+                (project::TestPart::new("CONN_MFR1", "CONN1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::default()),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(40),
-                        dec!(140),
-                        dec!(-90),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(40),
+                            dec!(140),
+                            dec!(-90),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(10), dec!(110), dec!(0)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(10),
+                            dec!(110),
+                            dec!(0),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(5), dec!(105), dec!(90)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(5),
+                            dec!(105),
+                            dec!(90),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
             ])
             .content();
@@ -361,8 +434,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_04_assign_process_to_parts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(4);
+        let mut ctx_guard = context::acquire(4);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -387,65 +461,120 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &[]),
-                (("RES_MFR2", "RES2"), &[]),
+            .with_part_states(vec![
+                (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::default()),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
             ])
             .content();
@@ -497,8 +626,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_05_create_phase_top() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(5);
+        let mut ctx_guard = context::acquire(5);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -507,80 +637,145 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &[]),
-                (("RES_MFR2", "RES2"), &[]),
+            .with_part_states(vec![
+                (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::default()),
             ])
-            .with_phases(&[(
+            .with_phases(vec![TestPhase::new(
                 "top_1",
                 "pnp",
                 ctx.phase_1_load_out_path
                     .to_str()
                     .unwrap(),
-                "top",
+                PcbSide::Top,
                 &[],
             )])
             .with_phase_orderings(&["top_1"])
-            .with_phase_states(&[("top_1", &[
-                ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                ("AutomatedPnp", TestProcessOperationStatus::Pending, None),
-                ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+            .with_phase_states(vec![("top_1", vec![
+                TestOperationState::new("load_pcbs", vec![(
+                    "core::load_pcbs",
+                    Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                )]),
+                TestOperationState::new("automated_pnp", vec![(
+                    "core::place_components",
+                    Box::new(TestPlacementTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                )]),
+                TestOperationState::new("reflow_oven_soldering", vec![(
+                    "core::automated_soldering",
+                    Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                        as Box<dyn TestSerializableTaskState>,
+                )]),
             ])])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
             ])
             .content();
@@ -642,8 +837,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_06_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(6);
+        let mut ctx_guard = context::acquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -652,97 +848,177 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &[]),
-                (("RES_MFR2", "RES2"), &[]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::default()),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    ("ManuallySolderComponents", TestProcessOperationStatus::Pending, None),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    ("AutomatedPnp", TestProcessOperationStatus::Pending, None),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
                 ),
             ])
             .content();
@@ -804,8 +1080,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_07_assign_placements_to_phase() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(7);
+        let mut ctx_guard = context::acquire(7);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -814,115 +1091,177 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &["pnp"]),
-                (("RES_MFR2", "RES2"), &["pnp"]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::new(&["pnp"])),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::new(&["pnp"])),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "ManuallySolderComponents",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 0,
-                            },
-                        }),
-                    ),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "AutomatedPnp",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 3,
-                            },
-                        }),
-                    ),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Pending).with_total(3))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
             ])
             .content();
@@ -997,10 +1336,8 @@ mod operation_sequence_1 {
             "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R2",
             "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R3",
             // all phase status should be updated
-            "Updating phase status. phase: bottom_1\n",
-            "Phase operation pending. phase: bottom_1, operation: ManuallySolderComponents\n",
-            "Updating phase status. phase: top_1\n",
-            "Phase operation pending. phase: top_1, operation: AutomatedPnp\n",
+            "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
+            "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Pending, updated: true\n",
             // part process should be updated
             "Added process. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, applicable_processes: [\"pnp\"]",
             "Added process. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, applicable_processes: [\"pnp\"]",
@@ -1031,8 +1368,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_08_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(8);
+        let mut ctx_guard = context::acquire(8);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1093,8 +1431,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_09_set_placement_ordering() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(9);
+        let mut ctx_guard = context::acquire(9);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1103,115 +1442,177 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &["pnp"]),
-                (("RES_MFR2", "RES2"), &["pnp"]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::new(&["pnp"])),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::new(&["pnp"])),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "ManuallySolderComponents",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 0,
-                            },
-                        }),
-                    ),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "AutomatedPnp",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 3,
-                            },
-                        }),
-                    ),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Pending).with_total(3))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
             ])
             .content();
@@ -1258,8 +1659,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_10_generate_artifacts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(10);
+        let mut ctx_guard = context::acquire(10);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1302,45 +1704,108 @@ mod operation_sequence_1 {
             .with_status("Incomplete")
             .with_phases_overview(&[
                 TestPhaseOverview {
-                    phase_name: "top_1".to_string(),
+                    phase: "top_1".to_string(),
                     status: "Incomplete".to_string(),
                     process: "pnp".to_string(),
                     operations_overview: vec![
-                        // TODO add Prepare/Load PCBs and ensure it's incomplete
                         TestPhaseOperationOverview {
-                            operation: TestPhaseOperationKind::PlaceComponents,
-                            message: "0/3 placements placed".to_string(),
+                            operation: "load_pcbs".to_string(),
                             status: TestProcessOperationStatus::Pending,
+                            tasks: vec![(
+                                "core::load_pcbs".to_string(),
+                                Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>,
+                            )],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "automated_pnp".to_string(),
+                            status: TestProcessOperationStatus::Pending,
+                            tasks: vec![(
+                                "core::place_components".to_string(),
+                                Box::new(TestPlaceComponentsTaskOverview {
+                                    placed: 0,
+                                    skipped: 0,
+                                    total: 3,
+                                }) as Box<dyn TestTaskOverview>,
+                            )],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "reflow_oven_soldering".to_string(),
+                            status: TestProcessOperationStatus::Pending,
+                            tasks: vec![(
+                                "core::automated_soldering".to_string(),
+                                Box::new(TestAutomatedSolderingTaskOverview {}) as Box<dyn TestTaskOverview>,
+                            )],
                         },
                     ],
                 },
                 TestPhaseOverview {
-                    phase_name: "bottom_1".to_string(),
+                    phase: "bottom_1".to_string(),
                     status: "Incomplete".to_string(),
                     process: "manual".to_string(),
-                    operations_overview: vec![TestPhaseOperationOverview {
-                        operation: TestPhaseOperationKind::ManuallySolderComponents,
-                        message: "0/0 placements placed".to_string(),
-                        status: TestProcessOperationStatus::Pending,
-                    }],
+                    operations_overview: vec![
+                        TestPhaseOperationOverview {
+                            operation: "load_pcbs".to_string(),
+                            status: TestProcessOperationStatus::Pending,
+                            tasks: vec![(
+                                "core::load_pcbs".to_string(),
+                                Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>,
+                            )],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "manually_solder_components".to_string(),
+                            status: TestProcessOperationStatus::Pending,
+                            tasks: vec![
+                                (
+                                    "core::place_components".to_string(),
+                                    Box::new(TestPlaceComponentsTaskOverview {
+                                        placed: 0,
+                                        skipped: 0,
+                                        total: 0,
+                                    }) as Box<dyn TestTaskOverview>,
+                                ),
+                                (
+                                    "core::manual_soldering".to_string(),
+                                    Box::new(TestManualSolderingTaskOverview {}) as Box<dyn TestTaskOverview>,
+                                ),
+                            ],
+                        },
+                    ],
                 },
             ])
             .with_phase_specification(&[
                 TestPhaseSpecification {
-                    phase_name: "top_1".to_string(),
+                    phase: "top_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs {
-                            pcbs: vec![TestPcb::Panel {
-                                name: "panel_a".to_string(),
-                                unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
-                                    design_name: "design_a".to_string(),
-                                    variant_name: "variant_a".to_string(),
-                                }],
-                            }],
+                        TestPhaseOperation {
+                            operation: "load_pcbs".to_string(),
+                            task_specifications: vec![(
+                                "core::load_pcbs".to_string(),
+                                Box::new(TestLoadPcbsTaskSpecification {
+                                    pcbs: vec![report::TestPcb::Panel {
+                                        name: "panel_a".to_string(),
+                                        unit_assignments: vec![TestPcbUnitAssignment {
+                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            design_name: "design_a".to_string(),
+                                            variant_name: "variant_a".to_string(),
+                                        }],
+                                    }],
+                                }) as Box<dyn TestTaskSpecification>,
+                            )],
                         },
-                        TestPhaseOperation::PlaceComponents {},
-                        TestPhaseOperation::ReflowComponents {},
+                        TestPhaseOperation {
+                            operation: "automated_pnp".to_string(),
+                            task_specifications: vec![(
+                                "core::place_components".to_string(),
+                                Box::new(TestPlaceComponentsTaskSpecification {}) as Box<dyn TestTaskSpecification>,
+                            )],
+                        },
+                        TestPhaseOperation {
+                            operation: "reflow_oven_soldering".to_string(),
+                            task_specifications: vec![(
+                                "core::automated_soldering".to_string(),
+                                Box::new(TestAutomatedSolderingTaskSpecification {}) as Box<dyn TestTaskSpecification>,
+                            )],
+                        },
                     ],
                     load_out_assignments: vec![
                         TestPhaseLoadOutAssignmentItem {
@@ -1358,19 +1823,37 @@ mod operation_sequence_1 {
                     ],
                 },
                 TestPhaseSpecification {
-                    phase_name: "bottom_1".to_string(),
+                    phase: "bottom_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs {
-                            pcbs: vec![TestPcb::Panel {
-                                name: "panel_a".to_string(),
-                                unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
-                                    design_name: "design_a".to_string(),
-                                    variant_name: "variant_a".to_string(),
-                                }],
-                            }],
+                        TestPhaseOperation {
+                            operation: "load_pcbs".to_string(),
+                            task_specifications: vec![(
+                                "core::load_pcbs".to_string(),
+                                Box::new(TestLoadPcbsTaskSpecification {
+                                    pcbs: vec![report::TestPcb::Panel {
+                                        name: "panel_a".to_string(),
+                                        unit_assignments: vec![TestPcbUnitAssignment {
+                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            design_name: "design_a".to_string(),
+                                            variant_name: "variant_a".to_string(),
+                                        }],
+                                    }],
+                                }) as Box<dyn TestTaskSpecification>,
+                            )],
                         },
-                        TestPhaseOperation::ManuallySolderComponents {},
+                        TestPhaseOperation {
+                            operation: "manually_solder_components".to_string(),
+                            task_specifications: vec![
+                                (
+                                    "core::place_components".to_string(),
+                                    Box::new(TestPlaceComponentsTaskSpecification {}) as Box<dyn TestTaskSpecification>,
+                                ),
+                                (
+                                    "core::manual_soldering".to_string(),
+                                    Box::new(TestManualSolderingTaskSpecification {}) as Box<dyn TestTaskSpecification>,
+                                ),
+                            ],
+                        },
                     ],
                     load_out_assignments: vec![],
                 },
@@ -1402,6 +1885,7 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "generate-artifacts",
+            "-vv",
         ]);
         // when
         cmd.args(args)
@@ -1494,127 +1978,193 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_11_record_phase_operation() -> Result<(), anyhow::Error> {
+    fn sequence_11_record_phase_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(11);
+        let mut ctx_guard = context::acquire(11);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_1 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_2 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_3 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &["pnp"]),
-                (("RES_MFR2", "RES2"), &["pnp"]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::new(&["pnp"])),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::new(&["pnp"])),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "ManuallySolderComponents",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 0,
-                            },
-                        }),
-                    ),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Complete, None),
-                    (
-                        "AutomatedPnp",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 3,
-                            },
-                        }),
-                    ),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Complete))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Started).with_total(3))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
             ])
             .content();
@@ -1623,26 +2173,94 @@ mod operation_sequence_1 {
         let operation_expectations = vec![
             (
                 "require",
-                Some(("top_1".to_string(), TestOperationHistoryKind::LoadPcbs {
-                    status: TestProcessOperationStatus::Complete,
-                })),
+                Some((
+                    "top_1".to_string(),
+                    "load_pcbs".to_string(),
+                    Box::new(TestLoadPcbsOperationTaskHistoryKind {
+                        status: TaskStatus::Started,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
+            ),
+            (
+                "require",
+                Some((
+                    "top_1".to_string(),
+                    "load_pcbs".to_string(),
+                    Box::new(TestLoadPcbsOperationTaskHistoryKind {
+                        status: TaskStatus::Complete,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
+            ),
+            (
+                "require",
+                Some((
+                    "top_1".to_string(),
+                    "automated_pnp".to_string(),
+                    Box::new(TestPlaceComponentsOperationTaskHistoryKind {
+                        status: TaskStatus::Started,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
             ),
             ("eof", None),
         ];
 
         // and
-        let args = prepare_args(vec![
+        let args_1 = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-phase-operation",
             "--phase top_1",
-            "--operation loadpcbs",
-            "--set completed",
+            "--operation load_pcbs",
+            "--task core::load_pcbs",
+            "--action start",
         ]);
+        let message_1 = "Marking task as started. phase: top_1, operation: load_pcbs, task: core::load_pcbs";
+
+        let args_2 = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "record-phase-operation",
+            "--phase top_1",
+            "--operation load_pcbs",
+            "--task core::load_pcbs",
+            "--action complete",
+        ]);
+        let message_2 = "Marking task as completed. phase: top_1, operation: load_pcbs, task: core::load_pcbs";
+
+        let args_3 = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "record-phase-operation",
+            "--phase top_1",
+            "--operation automated_pnp",
+            "--task core::place_components",
+            "--action start",
+        ]);
+        let message_3 = "Marking task as started. phase: top_1, operation: automated_pnp, task: core::place_components";
 
         // when
-        cmd.args(args)
+        cmd_1
+            .args(args_1)
+            // then
+            .assert()
+            .success()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+
+        // and when
+        cmd_2
+            .args(args_2)
+            // then
+            .assert()
+            .success()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+        // and when
+        cmd_3
+            .args(args_3)
             // then
             .assert()
             .success()
@@ -1651,12 +2269,17 @@ mod operation_sequence_1 {
 
         // and
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        println!("trace:\n{}", trace_content);
 
-        let log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
+        let initial_log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
+        let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
-            "Marking phase operation as complete\n",
+            message_1,
+            &initial_log_file_message,
+            message_2,
+            &log_file_message,
+            message_3,
             &log_file_message,
         ]);
 
@@ -1678,8 +2301,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_12_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(12);
+        let mut ctx_guard = context::acquire(12);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1688,142 +2312,223 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &["pnp"]),
-                (("RES_MFR2", "RES2"), &["pnp"]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::new(&["pnp"])),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::new(&["pnp"])),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "ManuallySolderComponents",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 0,
-                            },
-                        }),
-                    ),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Complete, None),
-                    (
-                        "AutomatedPnp",
-                        TestProcessOperationStatus::Complete,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 3,
-                                total: 3,
-                            },
-                        }),
-                    ),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Complete))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(
+                            TestPlacementTaskState::new(TaskStatus::Complete)
+                                .with_placed(3)
+                                .with_total(3),
+                        ) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    true,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Placed,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    true,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Placed,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    true,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Placed,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
             ])
             .content();
 
         // and
+
         let operation_expectations = vec![
+            ("ignore", None),
+            ("ignore", None),
             ("ignore", None),
             (
                 "require",
-                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
-                    operation: TestOperationHistoryPlacementOperation::Placed,
-                })),
+                Some((
+                    "top_1".to_string(),
+                    "automated_pnp".to_string(),
+                    Box::new(TestPlacementOperationHistoryKind {
+                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").unwrap(),
+                        operation: PlacementOperation::Place,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
             ),
             (
                 "require",
-                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R2".to_string(),
-                    operation: TestOperationHistoryPlacementOperation::Placed,
-                })),
+                Some((
+                    "top_1".to_string(),
+                    "automated_pnp".to_string(),
+                    Box::new(TestPlacementOperationHistoryKind {
+                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R2").unwrap(),
+                        operation: PlacementOperation::Place,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
             ),
             (
                 "require",
-                Some(("top_1".to_string(), TestOperationHistoryKind::PlacementOperation {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R3".to_string(),
-                    operation: TestOperationHistoryPlacementOperation::Placed,
-                })),
+                Some((
+                    "top_1".to_string(),
+                    "automated_pnp".to_string(),
+                    Box::new(TestPlacementOperationHistoryKind {
+                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R3").unwrap(),
+                        operation: PlacementOperation::Place,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
             ),
             ("eof", None),
         ];
@@ -1852,12 +2557,12 @@ mod operation_sequence_1 {
         let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
-            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R1\n",
-            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
-            "Setting placed flag. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
+            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R1\n",
+            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
+            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
             "Unmatched object path pattern. object_path_pattern: pcb=panel::instance=1::unit=2::ref_des=.*\n",
-            "Updating phase status. phase: top_1\n",
-            "Phase operation complete. phase: top_1, operation: AutomatedPnp\n",
+            "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
+            "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Complete, updated: true\n",
             &log_file_message,
         ]);
 
@@ -1880,8 +2585,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_13_reset_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(13);
+        let mut ctx_guard = context::acquire(13);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1890,115 +2596,177 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(&[("panel", "panel_a")])
-            .with_unit_assignments(&[(
-                "pcb=panel::instance=1::unit=1",
-                BTreeMap::from([("design_name", "design_a"), ("variant_name", "variant_a")]),
+            .with_pcbs(vec![project::TestPcb {
+                kind: PcbKind::Panel,
+                name: "panel_a".to_string(),
+            }])
+            .with_unit_assignments(vec![(
+                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
+                DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                },
             )])
-            .with_part_states(&[
-                (("CONN_MFR1", "CONN1"), &["manual"]),
-                (("RES_MFR1", "RES1"), &["pnp"]),
-                (("RES_MFR2", "RES2"), &["pnp"]),
-            ])
-            .with_phases(&[
+            .with_part_states(vec![
                 (
+                    project::TestPart::new("CONN_MFR1", "CONN1"),
+                    TestPartState::new(&["manual"]),
+                ),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::new(&["pnp"])),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::new(&["pnp"])),
+            ])
+            .with_phases(vec![
+                TestPhase::new(
                     "bottom_1",
                     "manual",
                     ctx.phase_2_load_out_path
                         .to_str()
                         .unwrap(),
-                    "bottom",
+                    PcbSide::Bottom,
                     &[],
                 ),
-                (
+                TestPhase::new(
                     "top_1",
                     "pnp",
                     ctx.phase_1_load_out_path
                         .to_str()
                         .unwrap(),
-                    "top",
+                    PcbSide::Top,
                     &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
-            .with_phase_states(&[
-                ("bottom_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "ManuallySolderComponents",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 0,
-                            },
-                        }),
-                    ),
+            .with_phase_states(vec![
+                ("bottom_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        (
+                            "core::place_components",
+                            Box::new(TestPlacementTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                        (
+                            "core::manual_soldering",
+                            Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending))
+                                as Box<dyn TestSerializableTaskState>,
+                        ),
+                    ]),
                 ]),
-                ("top_1", &[
-                    ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    (
-                        "AutomatedPnp",
-                        TestProcessOperationStatus::Pending,
-                        Some(TestProcessOperationExtraState::PlacementOperation {
-                            placements_state: TestPlacementsState {
-                                placed: 0,
-                                total: 3,
-                            },
-                        }),
-                    ),
-                    ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                ("top_1", vec![
+                    TestOperationState::new("load_pcbs", vec![(
+                        "core::load_pcbs",
+                        Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("automated_pnp", vec![(
+                        "core::place_components",
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Pending).with_total(3))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
+                    TestOperationState::new("reflow_oven_soldering", vec![(
+                        "core::automated_soldering",
+                        Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending))
+                            as Box<dyn TestSerializableTaskState>,
+                    )]),
                 ]),
             ])
-            .with_placements(&[
+            .with_placements(vec![
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=C1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("C1", "CAP_MFR1", "CAP1", true, "bottom", dec!(30), dec!(130), dec!(180)),
-                    false,
-                    "Unknown",
-                    None,
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(30),
+                            dec!(130),
+                            dec!(180),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=J1",
-                    "pcb=panel::instance=1::unit=1",
-                    (
-                        "J1",
-                        "CONN_MFR1",
-                        "CONN1",
-                        true,
-                        "bottom",
-                        dec!(130),
-                        dec!(1130),
-                        dec!(-179),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(130),
+                            dec!(1130),
+                            dec!(-179),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
                     ),
-                    false,
-                    "Known",
-                    None,
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R1",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R1", "RES_MFR1", "RES1", true, "top", dec!(110), dec!(1110), dec!(1)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(110),
+                            dec!(1110),
+                            dec!(1),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R2",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R2", "RES_MFR2", "RES2", true, "top", dec!(120), dec!(1120), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(120),
+                            dec!(1120),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
                 (
                     "pcb=panel::instance=1::unit=1::ref_des=R3",
-                    "pcb=panel::instance=1::unit=1",
-                    ("R3", "RES_MFR1", "RES1", true, "top", dec!(105), dec!(1105), dec!(91)),
-                    false,
-                    "Known",
-                    Some("top_1"),
+                    TestPlacementState::new(
+                        "pcb=panel::instance=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(105),
+                            dec!(1105),
+                            dec!(91),
+                        ),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        Some("top_1"),
+                    ),
                 ),
             ])
             .content();
@@ -2038,7 +2806,7 @@ mod operation_sequence_1 {
     }
     fn assert_operation_history(
         mut operation_history: Vec<TestOperationHistoryItem>,
-        operation_expectations: Vec<(&str, Option<(String, TestOperationHistoryKind)>)>,
+        operation_expectations: Vec<(&str, Option<(String, String, Box<dyn TestOperationHistoryKind>)>)>,
     ) {
         for (index, (&ref expectation_operation, expectation)) in operation_expectations
             .iter()
@@ -2062,7 +2830,11 @@ mod operation_sequence_1 {
                 "ignore" => {}
                 "require" => {
                     assert_eq!(
-                        &(item.phase.clone(), item.operation.clone()),
+                        &(
+                            item.phase.clone(),
+                            item.operation_reference.to_string(),
+                            dyn_clone::clone_box(&*item.task_history)
+                        ),
                         expectation.as_ref().unwrap()
                     );
                 }
@@ -2075,7 +2847,7 @@ mod operation_sequence_1 {
 
     #[test]
     fn sequence_14_cleanup() {
-        let mut ctx_guard = context::aquire(14);
+        let mut ctx_guard = context::acquire(14);
         let ctx = ctx_guard.1.take().unwrap();
         drop(ctx);
     }
@@ -2400,12 +3172,13 @@ mod help {
         let expected_output = indoc! {"
             Record phase operation
 
-            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --set <SET>
+            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --task <TASK> --action <ACTION>
 
             Options:
                   --phase <PHASE>          Phase reference (e.g. 'top_1')
-                  --operation <OPERATION>  The operation to update [possible values: loadpcbs, automatedpnp, reflowcomponents, manuallysoldercomponents]
-                  --set <SET>              The process operation to set [possible values: completed]
+                  --operation <OPERATION>  Operation reference
+                  --task <TASK>            The task to update
+                  --action <ACTION>        The task action to apply [possible values: start, complete, abandon]
               -v, --verbose...             Increase logging verbosity
               -q, --quiet...               Decrease logging verbosity
               -h, --help                   Print help
@@ -2435,7 +3208,7 @@ mod help {
                   --object-path-patterns <OBJECT_PATH_PATTERNS>...
                       List of reference designators to apply the operation to
                   --operation <OPERATION>
-                      The completed operation to apply [possible values: placed, reset]
+                      The completed operation to apply [possible values: placed, skipped, reset]
               -v, --verbose...
                       Increase logging verbosity
               -q, --quiet...

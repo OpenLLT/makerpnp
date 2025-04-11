@@ -26,20 +26,27 @@ use time::OffsetDateTime;
 use tracing::{debug, error, info, trace, warn};
 use util::sorting::SortOrder;
 
+use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::DesignVariant;
-use crate::operation_history::{OperationHistoryItem, OperationHistoryKind};
-use crate::operations::{AddOrRemoveOperation, SetOrClearOperation};
+use crate::operation_history::{
+    AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
+    ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
+    PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
+};
 use crate::part::PartState;
-use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
+use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
+    ProjectPlacementStatus,
 };
 use crate::process::{
-    PlacementsState, Process, ProcessError, ProcessName, ProcessNameError, ProcessOperationExtraState,
-    ProcessOperationKind, ProcessOperationSetItem, ProcessOperationState, ProcessOperationStatus,
+    OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessError, ProcessReference,
+    ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
 };
-use crate::reference::Reference;
-use crate::report::{project_report_json_to_markdown, IssueKind, IssueSeverity, ProjectReportIssue};
+use crate::reference::{Reference, ReferenceError};
+#[cfg(feature = "markdown")]
+use crate::report::project_report_json_to_markdown;
+use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::{operation_history, placement, report};
 
 #[serde_as]
@@ -48,7 +55,8 @@ use crate::{operation_history, placement, report};
 pub struct Project {
     pub name: String,
 
-    pub processes: Vec<Process>,
+    /// The *definition* of the processes used by this project.
+    pub processes: Vec<ProcessDefinition>,
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
@@ -73,6 +81,7 @@ pub struct Project {
     #[serde(default)]
     pub phase_orderings: IndexSet<Reference>,
 
+    /// The state of the phases, and the process operations
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
@@ -92,9 +101,9 @@ impl Project {
         }
     }
 
-    pub fn ensure_process(&mut self, process: &Process) -> anyhow::Result<()> {
+    pub fn ensure_process(&mut self, process: &ProcessDefinition) -> anyhow::Result<()> {
         if !self.processes.contains(process) {
-            info!("Adding process to project.  process: '{}'", process.name);
+            info!("Adding process to project.  process: '{}'", process.reference);
             self.processes.push(process.clone())
         }
         Ok(())
@@ -130,8 +139,8 @@ impl Project {
 
     pub fn update_phase(
         &mut self,
-        reference: Reference,
-        process_name: ProcessName,
+        reference: PhaseReference,
+        process_name: ProcessReference,
         load_out_source: String,
         pcb_side: PcbSide,
     ) -> anyhow::Result<()> {
@@ -172,13 +181,13 @@ impl Project {
         Ok(())
     }
 
-    pub fn find_process(&self, process_name: &ProcessName) -> Result<&Process, ProcessError> {
+    pub fn find_process(&self, process_reference: &ProcessReference) -> Result<&ProcessDefinition, ProcessError> {
         self.processes
             .iter()
-            .find(|&process| process.name.eq(&process_name))
+            .find(|&process| process.reference.eq(&process_reference))
             .ok_or(ProcessError::UndefinedProcessError {
                 processes: self.processes.clone(),
-                process: process_name.to_string(),
+                process: process_reference.to_string(),
             })
     }
 
@@ -198,12 +207,12 @@ impl Project {
     }
 
     #[must_use]
-    pub fn remove_unknown_placements(&mut self, phase_reference: Option<Reference>) -> bool {
+    pub fn remove_unused_placements(&mut self, phase_reference: Option<Reference>) -> bool {
         let mut modified = false;
 
         self.placements
-            .retain(|object_path, state| match state.status {
-                PlacementStatus::Unknown => {
+            .retain(|object_path, state| match state.project_status {
+                ProjectPlacementStatus::Unused => {
                     let should_remove = match (&phase_reference, &state.phase) {
                         (None, _) => true,
                         (Some(phase), Some(candidate)) if phase.eq(candidate) => true,
@@ -226,36 +235,57 @@ impl Project {
 #[derive(Error, Debug)]
 pub enum ProcessFactoryError {
     #[error("Unknown error, reason: {reason:?}")]
-    ErrorCreatingProcessName { reason: ProcessNameError },
-    #[error("unknown process name.  process: {}", process)]
+    ErrorCreatingProcessReference { reason: ReferenceError },
+    #[error("unknown process.  process: {}", process)]
     UnknownProcessName { process: String },
 }
 
 pub struct ProcessFactory {}
 
 impl ProcessFactory {
-    pub fn by_name(name: &str) -> Result<Process, ProcessFactoryError> {
-        let process_name = ProcessName::from_str(name).map_err(|e| ProcessFactoryError::ErrorCreatingProcessName {
-            reason: e,
-        })?;
+    pub fn by_name(name: &str) -> Result<ProcessDefinition, ProcessFactoryError> {
+        let process_name =
+            ProcessReference::from_str(name).map_err(|e| ProcessFactoryError::ErrorCreatingProcessReference {
+                reason: e,
+            })?;
 
         // FUTURE add support for more named processes
 
         match name {
-            "pnp" => Ok(Process {
-                name: process_name,
+            "pnp" => Ok(ProcessDefinition {
+                reference: process_name,
                 operations: vec![
-                    ProcessOperationKind::LoadPcbs,
-                    ProcessOperationKind::AutomatedPnp,
-                    ProcessOperationKind::ReflowComponents,
+                    OperationDefinition {
+                        reference: Reference::from_raw_str("load_pcbs"),
+                        tasks: vec![TaskReference::from_raw_str("core::load_pcbs")],
+                    },
+                    OperationDefinition {
+                        reference: Reference::from_raw_str("automated_pnp"),
+                        tasks: vec![TaskReference::from_raw_str("core::place_components")],
+                    },
+                    OperationDefinition {
+                        reference: Reference::from_raw_str("reflow_oven_soldering"),
+                        tasks: vec![TaskReference::from_raw_str("core::automated_soldering")],
+                    },
                 ],
+                rules: vec![ProcessRuleReference::from_raw_str("core::unique_feeder_references")],
             }),
-            "manual" => Ok(Process {
-                name: process_name,
+            "manual" => Ok(ProcessDefinition {
+                reference: process_name,
                 operations: vec![
-                    ProcessOperationKind::LoadPcbs,
-                    ProcessOperationKind::ManuallySolderComponents,
+                    OperationDefinition {
+                        reference: Reference::from_raw_str("load_pcbs"),
+                        tasks: vec![TaskReference::from_raw_str("core::load_pcbs")],
+                    },
+                    OperationDefinition {
+                        reference: Reference::from_raw_str("manually_solder_components"),
+                        tasks: vec![
+                            TaskReference::from_raw_str("core::place_components"),
+                            TaskReference::from_raw_str("core::manual_soldering"),
+                        ],
+                    },
                 ],
+                rules: vec![],
             }),
             _ => Err(ProcessFactoryError::UnknownProcessName {
                 process: process_name.to_string(),
@@ -536,14 +566,14 @@ pub fn store_phase_placements_as_csv(
 pub fn assign_placements_to_phase(
     project: &mut Project,
     phase: &Phase,
-    operation: SetOrClearOperation,
+    action: SetOrClearAction,
     placements_pattern: Regex,
 ) -> BTreeSet<Part> {
     let mut required_load_out_parts = BTreeSet::new();
 
     debug!(
-        "Assigning phase placements to {:?}, operation: {:?}, pattern: {:?}",
-        phase, operation, placements_pattern
+        "Assigning phase placements to {:?}, action: {:?}, pattern: {:?}",
+        phase, action, placements_pattern
     );
     let matched_placements: Vec<(&ObjectPath, &mut PlacementState)> = project
         .placements
@@ -563,8 +593,8 @@ pub fn assign_placements_to_phase(
 
     for (placement_path, state) in matched_placements {
         // FUTURE consider refactoring this into the filter above, and then working on the remaining results...
-        match operation {
-            SetOrClearOperation::Set => {
+        match action {
+            SetOrClearAction::Set => {
                 let should_assign = match &state.phase {
                     // different
                     Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => true,
@@ -582,7 +612,7 @@ pub fn assign_placements_to_phase(
                     state.phase = Some(phase.reference.clone());
                 }
             }
-            SetOrClearOperation::Clear => {
+            SetOrClearAction::Clear => {
                 let should_remove = match &state.phase {
                     // different
                     Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => false,
@@ -652,8 +682,8 @@ fn refresh_placements(
                 let placement_state = PlacementState {
                     unit_path: unit_path.clone(),
                     placement: placement.clone(),
-                    placed: false,
-                    status: PlacementStatus::Known,
+                    operation_status: PlacementStatus::Pending,
+                    project_status: ProjectPlacementStatus::Used,
                     phase: None,
                 };
 
@@ -673,7 +703,7 @@ fn refresh_placements(
                 modified |= true;
 
                 placement_state_entry.and_modify(|ps| {
-                    ps.status = PlacementStatus::Unknown;
+                    ps.project_status = ProjectPlacementStatus::Unused;
                 });
             }
         }
@@ -736,9 +766,9 @@ fn find_placement_changes(
                         }
                         None => {
                             trace!("unknown placement");
-                            match state.status {
-                                PlacementStatus::Unknown => (),
-                                PlacementStatus::Known => {
+                            match state.project_status {
+                                ProjectPlacementStatus::Unused => (),
+                                ProjectPlacementStatus::Used => {
                                     changes.push((Change::Unused, unit_path.clone(), state.placement.clone()))
                                 }
                             }
@@ -814,8 +844,8 @@ fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, 
 pub fn update_applicable_processes(
     project: &mut Project,
     all_parts: &[Part],
-    process: Process,
-    operation: AddOrRemoveOperation,
+    process: ProcessDefinition,
+    action: AddOrRemoveAction,
     manufacturer_pattern: Regex,
     mpn_pattern: Regex,
 ) -> bool {
@@ -831,12 +861,12 @@ pub fn update_applicable_processes(
                         .part_states
                         .entry(part.clone())
                         .and_modify(|part_state| {
-                            modified |= match operation {
-                                AddOrRemoveOperation::Add => {
-                                    add_process_to_part(part_state, part, process.name.clone())
+                            modified |= match action {
+                                AddOrRemoveAction::Add => {
+                                    add_process_to_part(part_state, part, process.reference.clone())
                                 }
-                                AddOrRemoveOperation::Remove => {
-                                    remove_process_from_part(part_state, part, process.name.clone())
+                                AddOrRemoveAction::Remove => {
+                                    remove_process_from_part(part_state, part, process.reference.clone())
                                 }
                             }
                         });
@@ -852,7 +882,7 @@ pub fn update_applicable_processes(
 }
 
 #[must_use]
-pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: ProcessName) -> bool {
+pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: ProcessReference) -> bool {
     let inserted = part_state
         .applicable_processes
         .insert(process);
@@ -873,7 +903,7 @@ pub fn add_process_to_part(part_state: &mut PartState, part: &Part, process: Pro
 }
 
 #[must_use]
-pub fn remove_process_from_part(part_state: &mut PartState, part: &Part, process: ProcessName) -> bool {
+pub fn remove_process_from_part(part_state: &mut PartState, part: &Part, process: ProcessReference) -> bool {
     let removed = part_state
         .applicable_processes
         .remove(&process);
@@ -916,10 +946,40 @@ pub fn update_placements_operation(
     project: &mut Project,
     directory: &Path,
     object_path_patterns: Vec<Regex>,
-    operation: PlacementOperation,
+    placement_operation: PlacementOperation,
 ) -> anyhow::Result<bool> {
     let mut modified = false;
-    let mut history_item_map: HashMap<Reference, Vec<OperationHistoryItem>> = HashMap::new();
+
+    // first, find the only tasks for each phase that allow placement changes.
+
+    let phase_operation_task_map = project
+        .phase_states
+        .iter()
+        .filter_map(|(phase_reference, phase_state)| {
+            let operation_and_task_references = phase_state
+                .operation_states
+                .iter()
+                .find_map(|operation_state| {
+                    operation_state
+                        .task_states
+                        .iter()
+                        .find_map(|(task_reference, task_state)| {
+                            match task_state.requires_placements() && task_state.status() != TaskStatus::Abandoned {
+                                true => Some((operation_state.reference.clone(), task_reference.clone())),
+                                false => None,
+                            }
+                        })
+                });
+            operation_and_task_references.map(|(operation_reference, task_reference)| {
+                (
+                    phase_reference.clone(),
+                    (operation_reference.clone(), task_reference.clone()),
+                )
+            })
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
     for object_path_pattern in object_path_patterns.iter() {
         let placements: Vec<_> = project
@@ -936,51 +996,81 @@ pub fn update_placements_operation(
         }
 
         for (object_path, placement_state) in placements {
-            let should_log = match operation {
-                PlacementOperation::Placed => {
-                    if placement_state.placed {
-                        warn!("Placed flag already set. object_path: {}", object_path);
+            if placement_state.phase.is_none() {
+                // we cannot modify placement state when no phase is assigned.
+                continue;
+            }
+
+            let placement_phase_reference = placement_state.phase.as_ref().unwrap();
+
+            let phase_map_entry = phase_operation_task_map.get(placement_phase_reference);
+            if phase_map_entry.is_none() {
+                // if a phase doesn't have a map entry then we cannot update any placement with that phase reference
+                continue;
+            }
+
+            let should_log = match placement_operation {
+                PlacementOperation::Place => match placement_state.operation_status {
+                    PlacementStatus::Placed => {
+                        warn!("Placement already marked as placed. object_path: {}", object_path);
                         false
-                    } else {
-                        info!("Setting placed flag. object_path: {}", object_path);
-                        placement_state.placed = true;
+                    }
+                    PlacementStatus::Skipped => {
+                        warn!("Placement was previously skipped. object_path: {}", object_path);
+                        placement_state.operation_status = PlacementStatus::Placed;
                         modified = true;
                         true
                     }
-                }
-                PlacementOperation::Reset => {
-                    if !placement_state.placed {
-                        warn!("Placed flag already reset. object_path: {}", object_path);
-                        false
-                    } else {
+                    PlacementStatus::Pending => {
+                        info!("Placement marked as placed. object_path: {}", object_path);
+                        placement_state.operation_status = PlacementStatus::Placed;
+                        modified = true;
+                        true
+                    }
+                },
+                PlacementOperation::Reset => match placement_state.operation_status {
+                    PlacementStatus::Placed | PlacementStatus::Skipped => {
                         info!("Resetting placed flag. object_path: {}", object_path);
-                        placement_state.placed = false;
+                        placement_state.operation_status = PlacementStatus::Pending;
                         modified = true;
                         true
                     }
-                }
+                    PlacementStatus::Pending => {
+                        warn!("Placed flag already pending. object_path: {}", object_path);
+                        false
+                    }
+                },
+                PlacementOperation::Skip => match placement_state.operation_status {
+                    PlacementStatus::Placed => {
+                        warn!("Placement was previously placed. object_path: {}", object_path);
+                        placement_state.operation_status = PlacementStatus::Skipped;
+                        modified = true;
+                        true
+                    }
+                    PlacementStatus::Skipped => {
+                        warn!("Placement already marked as skipped. object_path: {}", object_path);
+                        false
+                    }
+                    PlacementStatus::Pending => {
+                        info!("Placement marked as skipped. object_path: {}", object_path);
+                        placement_state.operation_status = PlacementStatus::Skipped;
+                        modified = true;
+                        true
+                    }
+                },
             };
 
             if should_log {
-                let now = OffsetDateTime::now_utc();
-
-                let phase = placement_state.phase.as_ref().unwrap();
-
-                let history_item = OperationHistoryItem {
-                    date_time: now,
-                    phase: phase.clone(),
-                    operation: OperationHistoryKind::PlacementOperation {
-                        object_path: object_path.clone(),
-                        operation: operation.clone(),
-                    },
-                    extra: Default::default(),
-                };
+                let task_history = Box::new(PlacementOperationHistoryKind {
+                    object_path: object_path.clone(),
+                    operation: placement_operation.clone(),
+                }) as Box<dyn OperationHistoryKind>;
 
                 let history_items = history_item_map
-                    .entry(phase.clone())
+                    .entry(placement_phase_reference.clone())
                     .or_default();
 
-                history_items.push(history_item);
+                history_items.push(task_history);
 
                 modified = true;
             }
@@ -988,9 +1078,30 @@ pub fn update_placements_operation(
     }
 
     if modified {
-        update_phase_operation_states(project);
+        let states_modified = refresh_phase_operation_states(project);
+        // redundant, but consistent.
+        modified |= states_modified;
 
-        for (phase_reference, history_items) in history_item_map {
+        for (phase_reference, task_histories) in history_item_map {
+            // Safety: code above should prevent this unwrap from failing
+            let (operation_reference, _task_reference) = phase_operation_task_map
+                .get(&phase_reference)
+                .unwrap();
+
+            let now = OffsetDateTime::now_utc();
+
+            let history_items = task_histories
+                .into_iter()
+                .map(|task_history| OperationHistoryItem {
+                    date_time: now,
+                    phase: phase_reference.clone(),
+                    extra: Default::default(),
+                    operation_reference: operation_reference.clone(),
+                    task_reference: TaskReference::from_raw_str("core::place_components"),
+                    task_history,
+                })
+                .collect::<Vec<_>>();
+
             let mut phase_log_path = PathBuf::from(directory);
             phase_log_path.push(format!("{}_log.json", phase_reference));
 
@@ -1005,93 +1116,77 @@ pub fn update_placements_operation(
     Ok(modified)
 }
 
-pub fn update_phase_operation_states(project: &mut Project) -> bool {
+/// Sometimes it's necessary to refresh the phase operation states
+///
+/// e.g.
+/// 1) adding a placements may make a complete phase incomplete and removing
+/// 2) and removing placements my make a phase complete
+pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
     let mut modified = false;
 
-    for (reference, phase_state) in project.phase_states.iter_mut() {
-        trace!("reference: {:?}, phase_state: {:?}", reference, phase_state);
+    for (phase_reference, phase_state) in project.phase_states.iter_mut() {
+        trace!("reference: {:?}, phase_state: {:?}", phase_reference, phase_state);
 
-        for (operation, operation_state) in phase_state.operation_state.iter_mut() {
-            trace!("operation: {:?}, operation_state: {:?}", operation, operation_state);
+        for operation_state in phase_state.operation_states.iter_mut() {
+            trace!(
+                "operation: {:?}, operation_state: {:?}",
+                operation_state.reference,
+                operation_state
+            );
 
-            let maybe_state = if (*operation).eq(&ProcessOperationKind::AutomatedPnp)
-                || (*operation).eq(&ProcessOperationKind::ManuallySolderComponents)
-            {
-                let placements_state = project.placements.iter().fold(
-                    PlacementsState::default(),
-                    |mut state, (_object_path, placement_status)| {
-                        if let Some(placement_phase) = &placement_status.phase {
-                            if placement_phase.eq(reference) {
-                                if placement_status.placed {
-                                    state.placed += 1;
-                                }
-                                state.total += 1;
-                            }
+            // FUTURE optimize this if there's ever more then one task that needs placements
+
+            for (task_reference, task_state) in operation_state.task_states.iter_mut() {
+                trace!("task: {:?}, task_state: {:?}", task_reference, task_state);
+
+                if task_state.requires_placements() {
+                    let original_task_state = dyn_clone::clone(task_state);
+
+                    {
+                        let placement_api = task_state
+                            .placements_state_mut()
+                            .unwrap();
+                        placement_api.reset();
+
+                        let phase_placements = project.placements
+                            .iter()
+                            .filter(|(_object_path, placement_state)|
+                                matches!(&placement_state.phase, Some(candidate_phase_reference) if candidate_phase_reference.eq(phase_reference))
+                            ).collect::<Vec<_>>();
+
+                        let total = phase_placements.len();
+                        placement_api.set_total_placements(total);
+
+                        for (_object_path, placement) in phase_placements {
+                            placement_api
+                                .on_placement_status_change(&PlacementStatus::Pending, &placement.operation_status);
                         }
 
-                        state
-                    },
-                );
-
-                let status = if placements_state.total == 0 || placements_state.placed == 0 {
-                    ProcessOperationStatus::Pending
-                } else if placements_state.are_all_placements_placed() {
-                    ProcessOperationStatus::Complete
-                } else {
-                    ProcessOperationStatus::Incomplete
-                };
-
-                Some((placements_state, status))
-            } else {
-                None
-            };
-            trace!("maybe_state: {:?}", maybe_state);
-
-            let original_operation_state = operation_state.clone();
-
-            match (&maybe_state, &operation) {
-                (Some((placements_state, status)), ProcessOperationKind::AutomatedPnp) => {
-                    operation_state.status = status.clone();
-                    operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
-                        placements_state: placements_state.clone(),
-                    });
-                }
-                (Some((placements_state, status)), ProcessOperationKind::ManuallySolderComponents) => {
-                    operation_state.status = status.clone();
-                    operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
-                        placements_state: placements_state.clone(),
-                    });
-                }
-                (_, _) => {}
-            };
-
-            let phase_operation_modified = !original_operation_state.eq(operation_state);
-
-            if phase_operation_modified {
-                info!("Updating phase status. phase: {}", reference);
-
-                if let Some((_maybe_state, status)) = maybe_state {
-                    match status {
-                        ProcessOperationStatus::Complete => info!(
-                            "Phase operation complete. phase: {}, operation: {:?}",
-                            reference, operation
-                        ),
-                        ProcessOperationStatus::Incomplete => info!(
-                            "Phase operation incomplete. phase: {}, operation: {:?}",
-                            reference, operation
-                        ),
-                        ProcessOperationStatus::Pending => info!(
-                            "Phase operation pending. phase: {}, operation: {:?}",
-                            reference, operation
-                        ),
+                        debug!("summary: {:?}", placement_api.summary());
                     }
+
+                    trace!(
+                        "Refreshing placement task state complete.  before: {:?}, after: {:?}",
+                        original_task_state,
+                        task_state
+                    );
+
+                    let state_updated = task_state != &original_task_state;
+
+                    info!(
+                        "Refreshed placement task state. phase: {}, operation: {}, task: {}, status: {}, updated: {}",
+                        phase_reference,
+                        operation_state.reference,
+                        task_reference,
+                        task_state.status(),
+                        state_updated
+                    );
+
+                    modified |= state_updated;
                 }
             }
-
-            modified |= phase_operation_modified;
         }
     }
-
     modified
 }
 
@@ -1101,222 +1196,508 @@ pub enum PartStateError {
     NoPartStateFound { part: Part },
 }
 
-pub fn update_phase_operation(
+#[cfg(test)]
+mod apply_phase_operation_task_action_tests {
+    use indexmap::IndexMap;
+    use rstest::rstest;
+
+    use crate::phase;
+    use crate::phase::PhaseState;
+    use crate::process::TaskAction;
+    use crate::process::{OperationState, SerializableTaskState, TaskReference, TaskStatus};
+    use crate::project::{Project, TaskActionError};
+    use crate::reference::Reference;
+
+    #[rstest]
+    #[case(
+        TaskAction::Start,
+        ("p1", "o1", "core::load_pcbs"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Pending),
+                ])
+            ])
+        ],
+        Ok(true)
+    )]
+    #[case(
+        TaskAction::Start,
+        ("p1", "o1", "core::place_components"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete),
+                    ("core::place_components", TaskStatus::Pending),
+                ])
+            ]),
+        ],
+        Ok(true)
+    )]
+    #[case(
+        TaskAction::Start,
+        ("p2", "o2", "core::manual_soldering"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete),
+                ]),
+                ("o2", vec![
+                    // Cannot create place_components task with completed state, requires placements to be placed.
+                    //("core::place_components", TaskStatus::Complete),
+                    // Instead use a test-only task.
+                    ("core::test_task", TaskStatus::Complete),
+                ]),
+                ("o3", vec![
+                    ("core::automated_soldering", TaskStatus::Complete),
+                ]),
+            ]),
+            ("p2", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete),
+                ]),
+                ("o2", vec![
+                    // Cannot create place_components task with completed state, requires placements to be placed.
+                    //("core::place_components", TaskStatus::Complete),
+                    // Instead use a test-only task.
+                    ("core::test_task", TaskStatus::Complete),
+                    ("core::manual_soldering", TaskStatus::Pending),
+                ])
+            ])
+        ],
+        Ok(true)
+    )]
+    #[case(
+        TaskAction::Complete,
+        ("p1", "o1", "core::place_components"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete),
+                    ("core::place_components", TaskStatus::Started),
+                ])
+            ])
+        ],
+        Ok(true)
+    )]
+    #[case(
+        TaskAction::Abandon,
+        ("p1", "o1", "core::place_components"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete),
+                    ("core::place_components", TaskStatus::Started),
+                ])
+            ])
+        ],
+        Ok(true)
+    )]
+    #[case(
+        TaskAction::Start,
+        ("p1", "o2", "core::place_components"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Started)
+                ]),
+                ("o2", vec![
+                    ("core::place_components", TaskStatus::Pending)
+                ]),
+            ])
+        ],
+        Err(TaskActionError::PrecedingOperationNotComplete)
+    )]
+    #[case(
+        TaskAction::Start,
+        ("p1", "o1", "core::place_components"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Pending),
+                    ("core::place_components", TaskStatus::Pending),
+                ])
+            ])
+        ],
+        Err(TaskActionError::PrecedingTaskNotComplete)
+    )]
+    #[case(
+        TaskAction::Start,
+        ("p1", "o1", "core::load_pcbs"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Started)
+                ])
+            ])
+        ],
+        Err(TaskActionError::TaskAlreadyStarted)
+    )]
+    #[case(
+        TaskAction::Complete,
+        ("p1", "o1", "core::load_pcbs"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Complete)
+                ])
+            ])
+        ],
+        Err(TaskActionError::TaskAlreadyComplete)
+    )]
+    #[case(
+        TaskAction::Abandon,
+        ("p1", "o1", "core::load_pcbs"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Abandoned)
+                ])
+            ])
+        ],
+        Err(TaskActionError::TaskAlreadyAbandoned)
+    )]
+    #[case(
+        TaskAction::Complete,
+        ("p1", "o1", "core::load_pcbs"),
+        vec![
+            ("p1", vec![
+                ("o1", vec![
+                    ("core::load_pcbs", TaskStatus::Pending)
+                ])
+            ])
+        ],
+        Err(TaskActionError::TaskNotStarted)
+    )]
+    pub fn can_apply_action(
+        #[case] action: TaskAction,
+        #[case] references: (&str, &str, &str),
+        #[case] phase_operation_task_status_map: Vec<(&str, Vec<(&str, Vec<(&str, TaskStatus)>)>)>,
+        #[case] expected_result: Result<bool, TaskActionError>,
+    ) {
+        let (phase_reference, operation_reference, task_reference) = {
+            (
+                Reference::from_raw_str(references.0),
+                Reference::from_raw_str(references.1),
+                TaskReference::from_raw_str(references.2),
+            )
+        };
+
+        let mut project = Project::default();
+        for (phase_reference, operation_task_status_map) in phase_operation_task_status_map.iter() {
+            let operation_states = operation_task_status_map
+                .iter()
+                .map(|(operation_reference, task_status_map)| {
+                    let task_states = task_status_map
+                        .iter()
+                        .map(|(task_reference, task_status)| {
+                            let mut task_state = phase::make_task_state(&TaskReference::from_raw_str(task_reference));
+                            match task_status {
+                                // Default state is pending
+                                TaskStatus::Pending => {}
+
+                                TaskStatus::Started => task_state.set_started(),
+                                TaskStatus::Complete => task_state.set_completed(),
+                                TaskStatus::Abandoned => task_state.set_abandoned(),
+                            }
+
+                            (TaskReference::from_raw_str(task_reference), task_state)
+                        })
+                        .collect::<Vec<(TaskReference, Box<dyn SerializableTaskState>)>>();
+                    let operation_state = OperationState {
+                        reference: Reference::from_raw_str(operation_reference),
+                        task_states: IndexMap::from_iter(task_states),
+                    };
+                    operation_state
+                })
+                .collect::<Vec<OperationState>>();
+
+            let phase_state = PhaseState {
+                operation_states,
+            };
+            let _ = project
+                .phase_states
+                .insert(Reference::from_raw_str(phase_reference), phase_state);
+        }
+
+        // when
+        let result = super::can_apply_action(
+            &mut project,
+            &phase_reference,
+            &operation_reference,
+            &task_reference,
+            &action,
+        );
+
+        // then
+        let result = result.map(|_task_state| true);
+
+        assert_eq!(result, expected_result);
+    }
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum TaskActionError {
+    #[error("Preceding operation not complete.")]
+    PrecedingOperationNotComplete,
+    #[error("Preceding task not complete.")]
+    PrecedingTaskNotComplete,
+    #[error("Task already started.")]
+    TaskAlreadyStarted,
+    #[error("Task already complete.")]
+    TaskAlreadyComplete,
+    #[error("Task already abandoned.")]
+    TaskAlreadyAbandoned,
+    #[error("Task not started.")]
+    TaskNotStarted,
+}
+
+/// Safety: assumes all references are valid.
+fn can_apply_action<'p>(
+    project: &'p mut Project,
+    phase_reference: &Reference,
+    operation_reference: &OperationReference,
+    task_reference: &TaskReference,
+    task_action: &TaskAction,
+) -> Result<&'p mut Box<dyn SerializableTaskState>, TaskActionError> {
+    let phase_state = project
+        .phase_states
+        .get_mut(phase_reference)
+        .unwrap();
+
+    let operation_state = phase_state
+        .operation_states
+        .iter_mut()
+        .try_fold(None, |mut acc, operation_state| {
+            if acc.is_some() {
+                // already found the operation state
+                return Ok(acc);
+            }
+
+            if operation_state
+                .reference
+                .eq(operation_reference)
+            {
+                acc = Some(operation_state);
+                return Ok(acc);
+            }
+
+            //
+            // check overall-state of preceding operation
+            //
+            let preceding_operation_status = operation_state.status();
+            if preceding_operation_status != OperationStatus::Complete {
+                return Err(TaskActionError::PrecedingOperationNotComplete);
+            }
+
+            Ok(acc)
+        })?
+        .unwrap();
+
+    let task_state = operation_state
+        .task_states
+        .iter_mut()
+        .try_fold(None, |mut acc, (candidate_task_reference, task_state)| {
+            if acc.is_some() {
+                return Ok(acc);
+            }
+
+            if task_reference.eq(candidate_task_reference) {
+                //
+                // check the state of this task
+                //
+                match (task_action, task_state.status()) {
+                    (TaskAction::Start, TaskStatus::Started) => return Err(TaskActionError::TaskAlreadyStarted),
+                    (TaskAction::Complete, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
+                    (TaskAction::Abandon, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
+
+                    // 'start' with wrong state
+                    (TaskAction::Start, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyStarted),
+                    (TaskAction::Start, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
+
+                    // 'complete' with wrong state
+                    (TaskAction::Complete, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
+                    (TaskAction::Complete, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
+
+                    // 'abandon' with wrong state
+                    (TaskAction::Abandon, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
+                    _ => {}
+                }
+                acc = Some(task_state);
+            } else {
+                //
+                // check the state of the preceding task
+                //
+                let preceding_task_status = task_state.status();
+                if preceding_task_status != TaskStatus::Complete {
+                    return Err(TaskActionError::PrecedingTaskNotComplete);
+                }
+            }
+
+            Ok(acc)
+        })?
+        .unwrap();
+
+    Ok(task_state)
+}
+
+pub fn apply_phase_operation_task_action(
     project: &mut Project,
     directory: &Path,
     phase_reference: &Reference,
-    operation: ProcessOperationKind,
-    set_item: ProcessOperationSetItem,
+    operation_reference: OperationReference,
+    task_reference: TaskReference,
+    action: TaskAction,
 ) -> anyhow::Result<bool> {
+    let mut modified = false;
+
     let phase_state = project
         .phase_states
         .get_mut(phase_reference)
         .ok_or(PhaseError::UnknownPhase(phase_reference.clone()))?;
 
-    let mut modified = false;
+    // in case of an error, we need to help the user by giving them a list of the possible operation references
+    let possible_operation_references = phase_state
+        .operation_states
+        .iter()
+        .map(|state| state.reference.clone())
+        .collect::<Vec<_>>();
 
-    // We can only complete an operation if all preceding operation have been completed
-    let (is_complete, _preceeding_operation, state) = phase_state
-        .operation_state
+    let operation_state = phase_state
+        .operation_states
         .iter_mut()
-        .try_fold(
-            (true, None, None),
-            |(preceeding_phase_complete, preceding_operation, found_state), (candidate_operation, state)| {
-                let is_this_state_complete = state.status == ProcessOperationStatus::Complete;
-
-                match (preceeding_phase_complete, preceding_operation, found_state) {
-                    (true, _, Some(state)) => Ok((true, Some(candidate_operation), Some(state))),
-                    result @ (false, _, Some(_)) => {
-                        // we found what we were looking for on a previous iteration
-                        // FUTURE find someway to shortcut this try_fold, no need to look at remaining operations
-                        Ok(result)
-                    }
-                    (_, preceding_operation, None) => {
-                        if (*candidate_operation).eq(&operation) {
-                            if preceeding_phase_complete {
-                                Ok((is_this_state_complete, Some(candidate_operation), Some(state)))
-                            } else {
-                                // Safety: the `unwrap` here is safe, as the first iteration will prevent this branch from being executed, and all other branches set the value to `Some`
-                                Err(PhaseError::PrecedingOperationIncomplete(
-                                    phase_reference.clone(),
-                                    preceding_operation.unwrap().clone(),
-                                ))
-                            }
-                        } else {
-                            Ok((is_this_state_complete, Some(candidate_operation), None))
-                        }
-                    }
-                }
-            },
-        )?;
+        .find(|state| state.reference.eq(&operation_reference));
 
     // If we didn't find the operation we were looking, bail.
-    let state = state.ok_or(PhaseError::InvalidOperationForPhase(
+    let operation_state = operation_state.ok_or(PhaseError::InvalidOperationForPhase(
         phase_reference.clone(),
-        operation.clone(),
+        operation_reference.clone(),
+        possible_operation_references,
     ))?;
 
-    match set_item {
-        ProcessOperationSetItem::Completed => {
-            if !is_complete {
-                // TODO make sure the operation CAN be completed.
-                //      other reasons why it might not be possible include:
-                //      1) trying to complete AutomatedPnp/ManuallySolderComponents when not all components have been placed (or skipped)
-                // FUTURE It feels like the ProcessOperationKind enum should be replaced with a ProcessOperation struct,
-                //        with a name and attributes, like 'has placements' or 'is_automated_pnp'
-                info!("Marking phase operation as complete");
-                state.status = ProcessOperationStatus::Complete;
-                modified = true;
-            } else {
-                error!("Phase operation is already complete");
-            }
+    // in case of an error, we need to help the user by giving them a list of the possible task references
+    let possible_task_references = operation_state
+        .task_states
+        .iter()
+        .map(|(reference, _state)| reference.clone())
+        .collect::<Vec<_>>();
+
+    let task_ref_and_state = operation_state
+        .task_states
+        .iter_mut()
+        .find(|(&ref reference, _state)| reference.eq(&task_reference));
+
+    // If we didn't find the task we were looking, bail.
+    let _task_ref_and_state = task_ref_and_state.ok_or(PhaseError::InvalidTaskForOperation(
+        phase_reference.clone(),
+        operation_reference.clone(),
+        task_reference.clone(),
+        possible_task_references,
+    ))?;
+
+    // make sure the operation's CAN be changed.
+    // reasons why it might not be possible include:
+    // 1) trying to change a task where preceding tasks or operations are not in the correct state
+    // 2) trying to complete AutomatedPnp/ManuallySolderComponents when not all components have been placed (or skipped)
+    // 3) some other task-defined reason.
+
+    let task_state = can_apply_action(project, phase_reference, &operation_reference, &task_reference, &action)?;
+
+    match action {
+        TaskAction::Start => {
+            info!(
+                "Marking task as started. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
+            task_state.set_started()
+        }
+        TaskAction::Complete => {
+            info!(
+                "Marking task as completed. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
+            task_state.set_completed()
+        }
+        TaskAction::Abandon => {
+            info!(
+                "Marking task as abandoned. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
+            task_state.set_abandoned()
         }
     }
 
-    if modified {
-        let history_operation = build_history_operation_kind(&operation, state);
+    let mut task_history_items: Vec<(&TaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
 
-        let now = OffsetDateTime::now_utc();
+    if let Some(task_history_item) = build_operation_task_history_item(&task_reference, task_state.status()) {
+        task_history_items.push(task_history_item);
+    }
 
-        let history_item = OperationHistoryItem {
-            date_time: now,
-            phase: phase_reference.clone(),
-            operation: history_operation,
-            extra: Default::default(),
-        };
+    fn build_operation_task_history_item(
+        reference: &TaskReference,
+        new_status: TaskStatus,
+    ) -> Option<(&TaskReference, Box<dyn OperationHistoryKind>)> {
+        if reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+            Some((
+                reference,
+                Box::new(LoadPcbsOperationTaskHistoryKind {
+                    status: new_status,
+                }) as Box<dyn OperationHistoryKind>,
+            ))
+        } else if reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+            Some((
+                reference,
+                Box::new(PlaceComponentsOperationTaskHistoryKind {
+                    status: new_status,
+                }) as Box<dyn OperationHistoryKind>,
+            ))
+        } else if reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+            Some((
+                reference,
+                Box::new(ManualSolderingOperationTaskHistoryKind {
+                    status: new_status,
+                }) as Box<dyn OperationHistoryKind>,
+            ))
+        } else if reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+            Some((
+                reference,
+                Box::new(AutomatedSolderingOperationTaskHistoryKind {
+                    status: new_status,
+                }) as Box<dyn OperationHistoryKind>,
+            ))
+        } else {
+            warn!("Unable to build history. task_reference: {:?}", reference);
+            None
+        }
+    }
 
-        let mut phase_log_path = PathBuf::from(directory);
-        phase_log_path.push(format!("{}_log.json", phase_reference));
+    if !task_history_items.is_empty() {
+        modified = true;
 
-        let mut operation_history: Vec<OperationHistoryItem> = operation_history::read_or_default(&phase_log_path)?;
+        for (task_reference, task_history) in task_history_items.into_iter() {
+            let now = OffsetDateTime::now_utc();
 
-        operation_history.push(history_item);
+            let history_item = OperationHistoryItem {
+                date_time: now,
+                phase: phase_reference.clone(),
+                operation_reference: operation_reference.clone(),
+                task_reference: task_reference.clone(),
+                task_history,
+                extra: Default::default(),
+            };
 
-        operation_history::write(phase_log_path, &operation_history)?;
+            let mut phase_log_path = PathBuf::from(directory);
+            phase_log_path.push(format!("{}_log.json", phase_reference));
+
+            let mut operation_history: Vec<OperationHistoryItem> = operation_history::read_or_default(&phase_log_path)?;
+
+            operation_history.push(history_item);
+
+            operation_history::write(phase_log_path, &operation_history)?;
+        }
     }
 
     Ok(modified)
-}
-
-fn build_history_operation_kind(
-    operation: &ProcessOperationKind,
-    state: &ProcessOperationState,
-) -> OperationHistoryKind {
-    match operation {
-        ProcessOperationKind::LoadPcbs => OperationHistoryKind::LoadPcbs {
-            status: state.status.clone(),
-        },
-        ProcessOperationKind::AutomatedPnp => OperationHistoryKind::AutomatedPnp {
-            status: state.status.clone(),
-        },
-        ProcessOperationKind::ReflowComponents => OperationHistoryKind::ReflowComponents {
-            status: state.status.clone(),
-        },
-        ProcessOperationKind::ManuallySolderComponents => OperationHistoryKind::ManuallySolderComponents {
-            status: state.status.clone(),
-        },
-    }
-}
-
-#[cfg(test)]
-mod build_history_operation_kind {
-    use rstest::rstest;
-
-    use crate::operation_history::OperationHistoryKind;
-    use crate::process::{ProcessOperationKind, ProcessOperationState, ProcessOperationStatus};
-    use crate::project::build_history_operation_kind;
-
-    #[rstest]
-    #[case(ProcessOperationStatus::Pending)]
-    #[case(ProcessOperationStatus::Incomplete)]
-    #[case(ProcessOperationStatus::Complete)]
-    pub fn for_load_pcbs(#[case] status: ProcessOperationStatus) {
-        // given
-        let state = ProcessOperationState {
-            status: status.clone(),
-            extra: None,
-        };
-
-        // and
-        let expected_result: OperationHistoryKind = OperationHistoryKind::LoadPcbs {
-            status: status.clone(),
-        };
-
-        // when
-        let result = build_history_operation_kind(&ProcessOperationKind::LoadPcbs, &state);
-
-        // then
-        assert_eq!(result, expected_result)
-    }
-
-    #[rstest]
-    #[case(ProcessOperationStatus::Pending)]
-    #[case(ProcessOperationStatus::Incomplete)]
-    #[case(ProcessOperationStatus::Complete)]
-    pub fn for_automated_pnp(#[case] status: ProcessOperationStatus) {
-        // given
-        let state = ProcessOperationState {
-            status: status.clone(),
-            extra: None,
-        };
-
-        // and
-        let expected_result: OperationHistoryKind = OperationHistoryKind::AutomatedPnp {
-            status: status.clone(),
-        };
-
-        // when
-        let result = build_history_operation_kind(&ProcessOperationKind::AutomatedPnp, &state);
-
-        // then
-        assert_eq!(result, expected_result)
-    }
-
-    #[rstest]
-    #[case(ProcessOperationStatus::Pending)]
-    #[case(ProcessOperationStatus::Incomplete)]
-    #[case(ProcessOperationStatus::Complete)]
-    pub fn for_manually_solder_components(#[case] status: ProcessOperationStatus) {
-        // given
-        let state = ProcessOperationState {
-            status: status.clone(),
-            extra: None,
-        };
-
-        // and
-        let expected_result: OperationHistoryKind = OperationHistoryKind::ManuallySolderComponents {
-            status: status.clone(),
-        };
-
-        // when
-        let result = build_history_operation_kind(&ProcessOperationKind::ManuallySolderComponents, &state);
-
-        // then
-        assert_eq!(result, expected_result)
-    }
-
-    #[rstest]
-    #[case(ProcessOperationStatus::Pending)]
-    #[case(ProcessOperationStatus::Incomplete)]
-    #[case(ProcessOperationStatus::Complete)]
-    pub fn for_reflow_components(#[case] status: ProcessOperationStatus) {
-        // given
-        let state = ProcessOperationState {
-            status: status.clone(),
-            extra: None,
-        };
-
-        // and
-        let expected_result: OperationHistoryKind = OperationHistoryKind::ReflowComponents {
-            status: status.clone(),
-        };
-
-        // when
-        let result = build_history_operation_kind(&ProcessOperationKind::ReflowComponents, &state);
-
-        // then
-        assert_eq!(result, expected_result)
-    }
 }
 
 pub fn update_placement_orderings(
@@ -1368,14 +1749,14 @@ pub fn reset_operations(project: &mut Project) -> anyhow::Result<()> {
     reset_placement_operations(project);
     reset_phase_operations(project);
 
-    update_phase_operation_states(project);
+    refresh_phase_operation_states(project);
 
     Ok(())
 }
 
 fn reset_placement_operations(project: &mut Project) {
     for (_object_path, placement_state) in project.placements.iter_mut() {
-        placement_state.placed = false;
+        placement_state.operation_status = PlacementStatus::Pending;
     }
 
     info!("Placement operations reset.");
@@ -1383,9 +1764,7 @@ fn reset_placement_operations(project: &mut Project) {
 
 fn reset_phase_operations(project: &mut Project) {
     for (reference, phase_state) in project.phase_states.iter_mut() {
-        for (_kind, state) in phase_state.operation_state.iter_mut() {
-            state.status = ProcessOperationStatus::Pending;
-        }
+        phase_state.reset();
         info!("Phase operations reset. phase: {}", reference);
     }
 }

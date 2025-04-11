@@ -8,17 +8,18 @@ use crux_core::render::Render;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
+pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignName, DesignVariant};
-pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
-use planning::phase::{Phase, PhaseState};
-use planning::placement::PlacementOperation;
+use planning::phase::{Phase, PhaseReference, PhaseState};
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
-pub use planning::placement::PlacementState;
 pub use planning::placement::PlacementStatus;
-pub use planning::process::ProcessName;
-use planning::process::ProcessOperationSetItem;
-pub use planning::process::{ProcessOperationKind, ProcessOperationStatus};
+pub use planning::placement::ProjectPlacementStatus;
+pub use planning::placement::{PlacementOperation, PlacementState};
+pub use planning::process::ProcessReference;
+use planning::process::TaskReference;
+pub use planning::process::TaskStatus;
+pub use planning::process::{OperationReference, ProcessDefinition, TaskAction};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -71,7 +72,7 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct LoadOut {
-    pub phase_reference: Reference,
+    pub phase_reference: PhaseReference,
     pub source: LoadOutSource,
     pub items: Vec<LoadOutItem>,
 }
@@ -83,8 +84,8 @@ pub struct Phases {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
-    pub phase_reference: Reference,
-    pub process: ProcessName,
+    pub phase_reference: PhaseReference,
+    pub process: ProcessReference,
     pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
     pub phase_placement_orderings: Vec<PlacementSortingItem>,
@@ -100,21 +101,15 @@ pub struct PlacementsItem {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhasePlacements {
-    pub phase_reference: Reference,
+    pub phase_reference: PhaseReference,
 
     pub placements: Vec<PlacementsItem>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct Process {
-    pub name: ProcessName,
-    pub operations: Vec<ProcessOperationKind>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PartWithState {
     pub part: Part,
-    pub processes: Vec<ProcessName>,
+    pub processes: Vec<ProcessReference>,
     pub ref_des_set: BTreeSet<RefDes>,
     pub quantity: usize,
 }
@@ -158,7 +153,7 @@ pub enum Arg {
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
 pub struct ProjectOverview {
     pub name: String,
-    pub processes: Vec<ProcessName>,
+    pub processes: Vec<ProcessReference>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
@@ -215,7 +210,7 @@ pub enum ProjectView {
     PhasePlacements(PhasePlacements),
     Placements(PlacementsList),
     ProjectTree(ProjectTreeView),
-    Process(Process),
+    Process(ProcessDefinition),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -223,9 +218,9 @@ pub enum ProjectViewRequest {
     Overview,
     Parts,
     Phases,
-    PhaseLoadOut { phase: Reference },
-    PhaseOverview { phase: Reference },
-    PhasePlacements { phase: Reference },
+    PhaseLoadOut { phase: PhaseReference },
+    PhaseOverview { phase: PhaseReference },
+    PhasePlacements { phase: PhaseReference },
     Placements,
     ProjectTree,
 }
@@ -266,36 +261,36 @@ pub enum Event {
     },
     RefreshFromDesignVariants,
     AssignProcessToParts {
-        process: ProcessName,
-        operation: AddOrRemoveOperation,
+        process: ProcessReference,
+        operation: AddOrRemoveAction,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
         mpn: Regex,
     },
     CreatePhase {
-        process: ProcessName,
-        reference: Reference,
+        process: ProcessReference,
+        reference: PhaseReference,
         load_out: LoadOutSource,
         pcb_side: PcbSide,
     },
     AssignPlacementsToPhase {
-        phase: Reference,
-        operation: SetOrClearOperation,
+        phase: PhaseReference,
+        operation: SetOrClearAction,
 
         /// to apply to object path (not refdes)
         #[serde(with = "serde_regex")]
         placements: Regex,
     },
     AddPartsToLoadout {
-        phase: Reference,
+        phase: PhaseReference,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
         mpn: Regex,
     },
     AssignFeederToLoadOutItem {
-        phase: Reference,
+        phase: PhaseReference,
         feeder_reference: Reference,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
@@ -303,14 +298,15 @@ pub enum Event {
         mpn: Regex,
     },
     SetPlacementOrdering {
-        phase: Reference,
+        phase: PhaseReference,
         placement_orderings: Vec<PlacementSortingItem>,
     },
     GenerateArtifacts,
     RecordPhaseOperation {
-        phase: Reference,
-        operation: ProcessOperationKind,
-        set: ProcessOperationSetItem,
+        phase: PhaseReference,
+        operation: OperationReference,
+        task: TaskReference,
+        action: TaskAction,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -318,8 +314,8 @@ pub enum Event {
         object_path_patterns: Vec<Regex>,
         operation: PlacementOperation,
     },
-    RemoveUnknownPlacements {
-        phase: Option<Reference>,
+    RemoveUsedPlacements {
+        phase: Option<PhaseReference>,
     },
     /// Reset operations
     ResetOperations {},
@@ -332,17 +328,17 @@ pub enum Event {
     RequestProjectTreeView {},
     RequestPhasesView {},
     RequestPhaseOverviewView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
     RequestPhasePlacementsView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
     RequestProcessView {
-        process_name: String,
+        process_reference: String,
     },
     RequestPartStatesView,
     RequestPhaseLoadOutView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
 }
 
@@ -535,7 +531,7 @@ impl Planner {
                 stores::load_out::ensure_load_out(&load_out).map_err(AppError::OperationError)?;
 
                 project
-                    .update_phase(reference, process.name.clone(), load_out.to_string(), pcb_side)
+                    .update_phase(reference, process.reference.clone(), load_out.to_string(), pcb_side)
                     .map_err(AppError::OperationError)?;
 
                 Ok(render::render())
@@ -566,13 +562,13 @@ impl Planner {
                 let parts = project::assign_placements_to_phase(project, &phase, operation.clone(), placements_pattern);
                 trace!("Required load_out parts: {:?}", parts);
 
-                *modified |= project::update_phase_operation_states(project);
+                *modified |= project::refresh_phase_operation_states(project);
 
                 let load_out_source =
                     try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 match operation {
-                    SetOrClearOperation::Set => {
+                    SetOrClearAction::Set => {
                         for part in parts.iter() {
                             let part_state = project
                                 .part_states
@@ -587,7 +583,7 @@ impl Planner {
                         stores::load_out::add_parts_to_load_out(&load_out_source, parts)
                             .map_err(AppError::LoadoutError)?;
                     }
-                    SetOrClearOperation::Clear => {
+                    SetOrClearAction::Clear => {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
                     }
                 }
@@ -621,7 +617,7 @@ impl Planner {
 
                 Ok(render::render())
             }),
-            Event::RemoveUnknownPlacements {
+            Event::RemoveUsedPlacements {
                 phase: phase_reference,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -633,7 +629,7 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                *modified |= project.remove_unknown_placements(phase_reference);
+                *modified |= project.remove_unused_placements(phase_reference);
 
                 Ok(render::render())
             }),
@@ -707,7 +703,7 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                *modified |= project::update_phase_operation_states(project);
+                *modified |= project::refresh_phase_operation_states(project);
 
                 let directory = path.parent().unwrap();
 
@@ -734,7 +730,8 @@ impl Planner {
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
-                set,
+                task,
+                action,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project,
@@ -747,8 +744,9 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let directory = path.parent().unwrap();
-                *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
-                    .map_err(AppError::OperationError)?;
+                *modified |=
+                    project::apply_phase_operation_task_action(project, directory, &reference, operation, task, action)
+                        .map_err(AppError::OperationError)?;
                 Ok(render::render())
             }),
             Event::RecordPlacementsOperation {
@@ -800,7 +798,7 @@ impl Planner {
                     processes: project
                         .processes
                         .iter()
-                        .map(|process| process.name.clone())
+                        .map(|process| process.reference.clone())
                         .collect(),
                 };
                 Ok(view_renderer::view(ProjectView::Overview(overview)))
@@ -954,7 +952,7 @@ impl Planner {
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "process".to_string(),
-                            args: HashMap::from([("name".to_string(), Arg::String(process.name.to_string()))]),
+                            args: HashMap::from([("name".to_string(), Arg::String(process.reference.to_string()))]),
                             path: format!("/processes/{}", index).to_string(),
                         });
 
@@ -1144,7 +1142,7 @@ impl Planner {
                 Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
             }),
             Event::RequestProcessView {
-                process_name,
+                process_reference,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project, ..
@@ -1153,18 +1151,14 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let process_name = ProcessName(process_name);
+                let process_reference =
+                    ProcessReference::try_from(process_reference).map_err(|err| AppError::ProcessError(err.into()))?;
 
                 let process = project
-                    .find_process(&process_name)
+                    .find_process(&process_reference)
                     .map_err(|err| AppError::ProcessError(err.into()))?;
 
-                let process_view = Process {
-                    name: process_name,
-                    operations: process.operations.clone(),
-                };
-
-                Ok(view_renderer::view(ProjectView::Process(process_view)))
+                Ok(view_renderer::view(ProjectView::Process(process.clone())))
             }),
             Event::RequestPartStatesView {} => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -1374,7 +1368,7 @@ fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Res
 #[must_use]
 fn try_build_phase_overview(
     project_path: &PathBuf,
-    phase_reference: Reference,
+    phase_reference: PhaseReference,
     phase: &Phase,
     state: &PhaseState,
 ) -> Result<PhaseOverview, LoadOutSourceError> {

@@ -1,11 +1,11 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, ProcessOperationStatus, Reference};
+use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference, TaskStatus};
 use regex::Regex;
 use tracing::{debug, trace};
 
-use crate::i18n::conversions::{process_operation_kind_to_i18n_key, process_operation_status_to_i18n_key};
+use crate::i18n::conversions::process_operation_status_to_i18n_key;
 use crate::project::dialogs::placement_orderings::{
     PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
@@ -15,7 +15,7 @@ use crate::project::tables::placements::{
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
-use crate::ui_util::green_orange_red_from_style;
+use crate::ui_util::green_orange_red_grey_from_style;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -135,27 +135,37 @@ impl UiComponent for PhaseUi {
         // State operation progress
         //
         ui.horizontal(|ui| {
+            let (green, orange, red, grey) = green_orange_red_grey_from_style(ui.style());
+
             if let Some(overview) = &self.overview {
-                for (index, (kind, state)) in overview
+                for (index, state) in overview
                     .state
-                    .operation_state
+                    .operation_states
                     .iter()
                     .enumerate()
                 {
-                    let (green, orange, red) = green_orange_red_from_style(ui.style());
-                    let color = match state.status {
-                        ProcessOperationStatus::Pending => red,
-                        ProcessOperationStatus::Incomplete => orange,
-                        ProcessOperationStatus::Complete => green,
-                    };
                     if index > 0 {
                         ui.label(">");
                     }
-                    let kind = tr!(process_operation_kind_to_i18n_key(&kind));
-                    ui.label(kind);
 
-                    let status = tr!(process_operation_status_to_i18n_key(&state.status));
-                    ui.colored_label(color, status);
+                    ui.label(state.reference.to_string());
+
+                    for (task_index, (reference, task)) in state.task_states.iter().enumerate() {
+                        let status = task.status();
+                        let color = match status {
+                            TaskStatus::Pending => grey,
+                            TaskStatus::Abandoned => red,
+                            TaskStatus::Started => orange,
+                            TaskStatus::Complete => green,
+                        };
+                        if task_index > 0 {
+                            ui.label("::");
+                        }
+                        ui.label(reference.to_string());
+
+                        let status = tr!(process_operation_status_to_i18n_key(&status));
+                        ui.colored_label(color, status);
+                    }
                 }
             }
         });

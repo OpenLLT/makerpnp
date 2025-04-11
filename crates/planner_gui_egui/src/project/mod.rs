@@ -8,8 +8,9 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, ProcessName,
-    ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
+    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementOperation, PlacementState,
+    PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
+    VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -101,7 +102,7 @@ pub struct Project {
     errors: Vec<(chrono::DateTime<chrono::Utc>, String)>,
 
     /// initially empty until the OverviewView has been received and processed.
-    processes: Vec<ProcessName>,
+    processes: Vec<ProcessReference>,
 
     /// initially empty, requires fetching the PhaseOverviewView for each phase before it can be used.
     phases: Vec<PhaseOverview>,
@@ -374,17 +375,19 @@ impl Project {
                     .to_string();
                 debug!("phase_reference: {}", phase_reference);
 
-                project.show_phase(key.clone(), phase_reference.clone().into());
+                let reference = Reference::from_raw(phase_reference);
+
+                project.show_phase(key.clone(), reference.clone());
 
                 let tasks: Vec<_> = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhaseOverview {
-                            phase: Reference::from(phase_reference.clone()),
+                            phase: reference.clone(),
                         },
                     ))),
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhasePlacements {
-                            phase: Reference::from(phase_reference.clone()),
+                            phase: reference.clone(),
                         },
                     ))),
                 ];
@@ -460,9 +463,9 @@ impl Project {
                 .eq(&old_placement.phase)
             {
                 let (phase, operation) = match (&new_placement.phase, &old_placement.phase) {
-                    (Some(new_phase), None) => (new_phase, SetOrClearOperation::Set),
-                    (Some(new_phase), Some(_old_phase)) => (new_phase, SetOrClearOperation::Set),
-                    (None, Some(old_phase)) => (old_phase, SetOrClearOperation::Clear),
+                    (Some(new_phase), None) => (new_phase, SetOrClearAction::Set),
+                    (Some(new_phase), Some(_old_phase)) => (new_phase, SetOrClearAction::Set),
+                    (None, Some(old_phase)) => (old_phase, SetOrClearAction::Clear),
                     _ => unreachable!(),
                 };
 
@@ -487,13 +490,18 @@ impl Project {
             new_placement: &PlacementState,
             old_placement: &PlacementState,
         ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
-            if new_placement.placed != old_placement.placed {
+            if new_placement.operation_status != old_placement.operation_status {
+                let operation = match new_placement.operation_status {
+                    PlacementStatus::Placed => PlacementOperation::Place,
+                    PlacementStatus::Skipped => PlacementOperation::Skip,
+                    PlacementStatus::Pending => PlacementOperation::Place,
+                };
+
                 Some(
                     planner_core_service
                         .update(key.clone(), Event::RecordPlacementsOperation {
                             object_path_patterns: vec![exact_match(&object_path.to_string())],
-
-                            operation: new_placement.placed.into(),
+                            operation,
                         })
                         .into_actions(),
                 )
@@ -503,22 +511,22 @@ impl Project {
         }
 
         #[derive(Debug)]
-        enum Operations {
+        enum Actions {
             AddOrRemovePhase,
             SetOrResetPlaced,
         }
 
         // FUTURE find a solution to keep the operation with the handler, instead of two separate arrays.
         //        a tuple was tried, but results in a compile error: "expected fn item, found a different fn item"
-        let operations = [Operations::AddOrRemovePhase, Operations::SetOrResetPlaced];
+        let actions = [Actions::AddOrRemovePhase, Actions::SetOrResetPlaced];
 
-        let operation_handlers = [handle_phase, handle_placed];
+        let action_handlers = [handle_phase, handle_placed];
 
-        for (operation, handler) in operations
+        for (action, handler) in actions
             .into_iter()
-            .zip(operation_handlers.into_iter())
+            .zip(action_handlers.into_iter())
         {
-            debug!("update placement, operation: {:?}", operation);
+            debug!("update placement, action: {:?}", action);
 
             if let Some(core_result) = handler(planner_core_service, &key, &object_path, &new_placement, &old_placement)
             {
@@ -841,8 +849,8 @@ impl UiComponent for Project {
                         let mut tasks = vec![];
                         for (process, enabled) in processes {
                             let operation = match enabled {
-                                true => AddOrRemoveOperation::Add,
-                                false => AddOrRemoveOperation::Remove,
+                                true => AddOrRemoveAction::Add,
+                                false => AddOrRemoveAction::Remove,
                             };
 
                             match self
@@ -1007,9 +1015,9 @@ impl UiComponent for Project {
                         .planner_core_service
                         .update(key, Event::RefreshFromDesignVariants)
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
-                    Some(ProjectToolbarAction::RemoveUnknownPlacements) => self
+                    Some(ProjectToolbarAction::RemoveUnusedPlacements) => self
                         .planner_core_service
-                        .update(key, Event::RemoveUnknownPlacements {
+                        .update(key, Event::RemoveUsedPlacements {
                             phase: None,
                         })
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
