@@ -123,7 +123,7 @@ pub struct PlacementOperationState {
     status: OperationTaskStatus,
 }
 
-#[typetag::serde(name = "placement_operation_state")]
+#[typetag::serde(name = "core::placement_operation_state")]
 impl SerializableOperationTaskState for PlacementOperationState {}
 
 impl PlacementOperationState {
@@ -152,34 +152,45 @@ impl OperationTaskState for PlacementOperationState {
     }
 }
 
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum ProcessOperationSetItem {
     Completed,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct LoadPcbsOperationState {
-    status: OperationTaskStatus,
+macro_rules! generic_operation_impl {
+    ( $name:ident, $key:literal ) => {
+        #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
+        pub struct $name {
+            status: OperationTaskStatus,
+        }
+        
+        #[typetag::serde(name = $key)]
+        impl SerializableOperationTaskState for $name {}
+        
+        
+        impl OperationTaskState for $name {
+            fn status(&self) -> OperationTaskStatus {
+                self.status.clone()
+            }
+        
+            fn reset(&mut self) {
+                *self = Self::default()
+            }
+        
+            fn can_complete(&self) -> bool {
+                true
+            }
+        
+            fn set_completed(&mut self) {
+                self.status = OperationTaskStatus::Complete;
+            }
+        }
+        
+    }
 }
 
-#[typetag::serde(name = "load_pcbs_operation_state")]
-impl SerializableOperationTaskState for LoadPcbsOperationState {}
+generic_operation_impl!(LoadPcbsOperationState, "core::load_pcbs_operation_state");
+generic_operation_impl!(AutomatedSolderingOperationState, "core::automated_soldering_operation_state");
+generic_operation_impl!(ManualSolderingOperationState, "core::manual_soldering_operation_state");
 
-
-impl OperationTaskState for LoadPcbsOperationState {
-    fn status(&self) -> OperationTaskStatus {
-        self.status.clone()
-    }
-
-    fn reset(&mut self) {
-        *self = Self::default()
-    }
-
-    fn can_complete(&self) -> bool {
-        true
-    }
-
-    fn set_completed(&mut self) {
-        self.status = OperationTaskStatus::Complete;
-    }
-}

@@ -13,7 +13,7 @@ use crate::project::load_out_tab::LoadOutUiCommand;
 
 #[derive(Debug, Clone)]
 pub struct LoadOutRow {
-    pub feeder: Reference,
+    pub feeder: String,
     pub part: Part,
 }
 
@@ -115,8 +115,7 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
                     .text_edit_singleline(&mut reference)
                     .changed()
                 {
-                    // FIXME validate the reference, don't assume it's valid
-                    row.feeder = Reference::from_raw(reference);
+                    row.feeder = reference;
                 }
 
                 Some(ui.response())
@@ -145,7 +144,7 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
                 manufacturer: "".to_string(),
                 mpn: "".to_string(),
             },
-            feeder: Reference::from_raw_str(""),
+            feeder: "".to_string(),
         }
     }
 
@@ -161,7 +160,10 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
             column, _current, _next, _context
         );
         match column {
-            0 => true,
+            0 => {
+                // TODO validate the feeder reference here?
+                true
+            },
             1 => false,
             2 => false,
             _ => unreachable!(),

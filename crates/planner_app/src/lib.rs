@@ -14,7 +14,7 @@ use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementStatus;
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
-pub use planning::placement::PlacementState;
+pub use planning::placement::{PlacementState, PlacementOperation};
 pub use planning::placement::ProjectPlacementStatus;
 pub use planning::process::ProcessReference;
 pub use planning::process::{Process, ProcessOperationReference, ProcessOperationSetItem};
@@ -35,7 +35,6 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{info, trace};
-use planning::placement::PlacementOperation;
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 

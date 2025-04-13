@@ -32,9 +32,11 @@ use crate::operations::{AddOrRemoveOperation, SetOrClearOperation};
 use crate::part::PartState;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
 use crate::placement::{PlacementStatus, PlacementSortingItem, PlacementSortingMode, PlacementState, ProjectPlacementStatus, PlacementOperation};
-use crate::process::{Process, ProcessError, ProcessReference, ProcessOperationState, OperationTaskStatus, ProcessOperation, ProcessRuleReference, OperationTaskReference, ProcessOperationReference, ProcessOperationSetItem};
+use crate::process::{Process, ProcessError, ProcessReference, OperationTaskStatus, ProcessOperation, ProcessRuleReference, OperationTaskReference, ProcessOperationReference, ProcessOperationSetItem};
 use crate::reference::{Reference, ReferenceError};
-use crate::report::{project_report_json_to_markdown, IssueKind, IssueSeverity, ProjectReportIssue};
+#[cfg(feature = "markdown")]
+use crate::report::project_report_json_to_markdown;
+use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::{operation_history, placement, report};
 
 #[serde_as]
@@ -1156,7 +1158,7 @@ pub fn update_phase_operation(
                 // 1) trying to complete AutomatedPnp/ManuallySolderComponents when not all components have been placed (or skipped)
                 // 2) some other task-defined reason.
 
-                let uncompletable_tasks = state.task_states.iter().filter(|(reference, state)| {
+                let uncompletable_tasks = state.task_states.iter().filter(|(_reference, state)| {
                     !state.is_complete() && !state.can_complete()
                 }).collect::<Vec<_>>();
 
@@ -1166,8 +1168,8 @@ pub fn update_phase_operation(
 
                     let stuff = state.task_states
                         .iter_mut()
-                        .filter(|(reference, state)| state.can_complete())
-                        .map(|(reference, state)| {
+                        .filter(|(_reference, state)| state.can_complete())
+                        .map(|(reference, _state)| {
 
                             if reference.eq(&OperationTaskReference::from_raw_str("core::load_pcbs")) {
                                 (
@@ -1176,6 +1178,8 @@ pub fn update_phase_operation(
                                         status: OperationTaskStatus::Complete,
                                     }) as Box<dyn OperationHistoryKind>
                                 )
+                            } else if reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
+                                todo!()
                             } else {
                                 todo!()
                             }
@@ -1186,7 +1190,7 @@ pub fn update_phase_operation(
 
                 } else {
 
-                    let task_references: Vec<&OperationTaskReference> = uncompletable_tasks.iter().map(|(reference, state)|*reference).collect::<Vec<_>>();
+                    let task_references: Vec<&OperationTaskReference> = uncompletable_tasks.iter().map(|(reference, _state)|*reference).collect::<Vec<_>>();
                     error!("Incomplete tasks.  references:  {:?}", task_references);
                 }
             } else {

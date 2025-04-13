@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
-    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, ProcessOperationArg,
+    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg,
     ProcessOperationSetArg, SetOrClearOperationArg,
 };
 use planner_app::Event;
@@ -165,7 +165,7 @@ pub(crate) enum Command {
 
         /// The operation to update
         #[arg(long)]
-        operation: ProcessOperationArg,
+        operation: Reference,
 
         /// The process operation to set
         #[arg(long)]

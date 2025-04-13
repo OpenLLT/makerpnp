@@ -5,7 +5,7 @@ use pnp::pcb::PcbSide;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
-use crate::process::{Process, ProcessReference, ProcessOperationReference, ProcessOperationState, PlacementOperationState, SerializableOperationTaskState, OperationTaskReference, ProcessOperation};
+use crate::process::{Process, ProcessReference, ProcessOperationReference, ProcessOperationState, PlacementOperationState, SerializableOperationTaskState, OperationTaskReference, LoadPcbsOperationState, AutomatedSolderingOperationState, ManualSolderingOperationState};
 use crate::reference::Reference;
 
 // TODO
@@ -73,8 +73,14 @@ impl PhaseState {
                 let task_states = process_operation.tasks.iter().map(|task_reference|{
 
                     let mut task_state: Option<Box<dyn SerializableOperationTaskState>> = None;
-                    if task_reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
+                    if task_reference.eq(&OperationTaskReference::from_raw_str("core::load_pcbs")) {
+                        task_state = Some(Box::new(LoadPcbsOperationState::default()) as Box<dyn SerializableOperationTaskState>)
+                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
                         task_state = Some(Box::new(PlacementOperationState::default()) as Box<dyn SerializableOperationTaskState>)
+                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::automated_soldering")) {
+                        task_state = Some(Box::new(AutomatedSolderingOperationState::default()) as Box<dyn SerializableOperationTaskState>)
+                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::manual_soldering")) {
+                        task_state = Some(Box::new(ManualSolderingOperationState::default()) as Box<dyn SerializableOperationTaskState>)
                     } else {
                         panic!("unknown task reference {:?}", task_reference);
                     }

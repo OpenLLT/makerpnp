@@ -9,9 +9,7 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{
-    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, ProjectPlacementStatus, PlacementsItem, Reference,
-};
+use planner_app::{ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, ProjectPlacementStatus, PlacementsItem, Reference, PlacementStatus};
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -258,7 +256,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .cmp(&row_r.placement_state.placement.ref_des),
             PLACE_COL => row_l
                 .placement_state
-                .operation_status
+                .placement.place
                 .cmp(&row_r.placement_state.placement.place),
             MANUFACTURER_COL => row_l
                 .placement_state
@@ -429,13 +427,11 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 Some(response)
             }
             PLACED_COL => {
-                let response = ui.add(|ui: &mut Ui| {
-                    let placed = &mut row.placement_state.operation_status;
-                    let label = tr!(placement_operation_status_to_i18n_key(*placed));
-                    ui.toggle_value(placed, label)
-                });
+                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Pending, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)));
+                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Placed, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)));
+                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Skipped, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)));
 
-                Some(response)
+                Some(ui.response())
             }
             _ => None,
         }
@@ -527,7 +523,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     y: Default::default(),
                     rotation: Default::default(),
                 },
-                operation_status: false,
+                operation_status: PlacementStatus::Pending,
                 project_status: ProjectPlacementStatus::Unused,
                 phase: None,
             },

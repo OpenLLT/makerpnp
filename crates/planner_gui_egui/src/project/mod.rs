@@ -7,10 +7,7 @@ use std::str::FromStr;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{
-    AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, ProcessReference,
-    ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName,
-};
+use planner_app::{AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, PlacementStatus, PlacementOperation, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
@@ -374,17 +371,19 @@ impl Project {
                     .to_string();
                 debug!("phase_reference: {}", phase_reference);
 
-                project.show_phase(key.clone(), phase_reference.clone().into());
+                let reference = Reference::from_raw(phase_reference);
+                
+                project.show_phase(key.clone(), reference.clone());
 
                 let tasks: Vec<_> = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhaseOverview {
-                            phase: Reference::from(phase_reference.clone()),
+                            phase: reference.clone(),
                         },
                     ))),
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhasePlacements {
-                            phase: Reference::from(phase_reference.clone()),
+                            phase: reference.clone(),
                         },
                     ))),
                 ];
@@ -488,12 +487,18 @@ impl Project {
             old_placement: &PlacementState,
         ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
             if new_placement.operation_status != old_placement.operation_status {
+                
+                let operation = match new_placement.operation_status {
+                    PlacementStatus::Placed => PlacementOperation::Place,
+                    PlacementStatus::Skipped => PlacementOperation::Skip,
+                    PlacementStatus::Pending => PlacementOperation::Place,
+                };
+                
                 Some(
                     planner_core_service
                         .update(key.clone(), Event::RecordPlacementsOperation {
                             object_path_patterns: vec![exact_match(&object_path.to_string())],
-
-                            operation: new_placement.operation_status.into(),
+                            operation,
                         })
                         .into_actions(),
                 )

@@ -27,7 +27,7 @@ impl Reference {
             return false;
         }
         
-        if value.chars().all(|c| !(c.is_whitespace() || c.is_ascii_control() || c.is_control())) {
+        if value.chars().any(|c| c.is_whitespace() || c.is_ascii_control() || c.is_control()) {
             return false;
         }
         

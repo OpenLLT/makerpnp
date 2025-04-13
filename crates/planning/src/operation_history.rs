@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use anyhow::Error;
 use as_any::AsAny;
-use dyn_eq::DynEq;
 use pnp::object_path::ObjectPath;
 use serde::Serialize;
 use serde_json::Value;
@@ -15,7 +14,7 @@ use time::serde::rfc3339;
 use time::OffsetDateTime;
 use tracing::info;
 
-use crate::placement::{PlacementOperation, PlacementStatus};
+use crate::placement::PlacementOperation;
 use crate::process::{OperationTaskReference, OperationTaskStatus, ProcessOperationReference};
 use crate::reference::Reference;
 

@@ -138,7 +138,7 @@ impl UiComponent for PhaseUi {
             let (green, orange, red, grey) = green_orange_red_grey_from_style(ui.style());
 
             if let Some(overview) = &self.overview {
-                for (index, (state)) in overview
+                for (index, state) in overview
                     .state
                     .operation_states
                     .iter()

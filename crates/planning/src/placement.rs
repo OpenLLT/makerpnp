@@ -113,16 +113,36 @@ pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant,
     unique_parts
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlacementStatus {
     Placed,
     Skipped,
     Pending,
 }
 
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq)]
+impl Display for PlacementStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlacementStatus::Placed => f.write_str("Placed"),
+            PlacementStatus::Skipped => f.write_str("Skipped"),
+            PlacementStatus::Pending => f.write_str("Pending"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlacementOperation {
     Place,
     Skip,
     Reset,
+}
+
+impl Display for PlacementOperation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlacementOperation::Place => f.write_str("Place"),
+            PlacementOperation::Skip => f.write_str("Skip"),
+            PlacementOperation::Reset => f.write_str("Reset"),
+        }
+    }
 }

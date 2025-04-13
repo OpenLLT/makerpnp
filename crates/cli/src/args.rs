@@ -1,8 +1,8 @@
 use clap::ValueEnum;
 use eda::EdaTool;
 use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
-use planning::placement::{PlacementStatus, PlacementSortingMode};
-use planning::process::{ProcessOperationAttribute, ProcessOperationSetItem};
+use planning::placement::{PlacementStatus, PlacementSortingMode, PlacementOperation};
+use planning::process::ProcessOperationSetItem;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
 
@@ -133,63 +133,22 @@ impl EdaToolArg {
 pub enum PlacementOperationArg {
     #[value(name("placed"))]
     Placed,
+    #[value(name("skipped"))]
+    Skipped,
     #[value(name("reset"))]
     Reset,
 }
 
-impl From<PlacementOperationArg> for PlacementStatus {
+impl From<PlacementOperationArg> for PlacementOperation {
     fn from(value: PlacementOperationArg) -> Self {
         match value {
-            PlacementOperationArg::Placed => Self::Placed,
-            PlacementOperationArg::Reset => Self::Pending,
+            PlacementOperationArg::Placed => Self::Place,
+            PlacementOperationArg::Skipped => Self::Skip,
+            PlacementOperationArg::Reset => Self::Reset,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-#[derive(ValueEnum)]
-pub enum ProcessOperationArg {
-    #[value(name("loadpcbs"))]
-    LoadPcbs,
-    #[value(name("automatedpnp"))]
-    AutomatedPnp,
-    #[value(name("reflowcomponents"))]
-    ReflowComponents,
-    #[value(name("manuallysoldercomponents"))]
-    ManuallySolderComponents,
-}
-
-impl From<ProcessOperationArg> for ProcessOperationAttribute {
-    fn from(value: ProcessOperationArg) -> Self {
-        match value {
-            ProcessOperationArg::LoadPcbs => ProcessOperationAttribute::LoadPcbs,
-            ProcessOperationArg::AutomatedPnp => ProcessOperationAttribute::AutomatedPnp,
-            ProcessOperationArg::ReflowComponents => ProcessOperationAttribute::ReflowComponents,
-            ProcessOperationArg::ManuallySolderComponents => ProcessOperationAttribute::ManuallySolderComponents,
-        }
-    }
-}
-
-#[cfg(test)]
-mod from_process_operation_arg_for_process_operation_kind_tests {
-    use planning::process::ProcessOperationAttribute;
-    use rstest::rstest;
-
-    use super::ProcessOperationArg;
-
-    #[rstest]
-    #[case(ProcessOperationArg::LoadPcbs, ProcessOperationKind::LoadPcbs)]
-    #[case(ProcessOperationArg::AutomatedPnp, ProcessOperationKind::AutomatedPnp)]
-    #[case(ProcessOperationArg::ReflowComponents, ProcessOperationKind::ReflowComponents)]
-    #[case(
-        ProcessOperationArg::ManuallySolderComponents,
-        ProcessOperationKind::ManuallySolderComponents
-    )]
-    pub fn from(#[case] arg: ProcessOperationArg, #[case] expected_kind: ProcessOperationAttribute) {
-        // expect
-        assert_eq!(ProcessOperationAttribute::from(arg), expected_kind)
-    }
-}
 
 #[derive(Clone, Debug)]
 #[derive(ValueEnum)]
