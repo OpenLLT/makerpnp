@@ -1,25 +1,24 @@
 use serde_with::DisplayFromStr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
-use std::path::PathBuf;
+
 use std::str::FromStr;
-use csv::Writer;
+
 use indexmap::{IndexMap, IndexSet};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Map, Number, Value};
+
 use serde_with::serde_as;
 use planning::design::DesignVariant;
-use planning::part::PartState;
-use planning::phase::{Phase, PhaseState};
-use planning::placement::{PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus, ProjectPlacementStatus};
-use planning::process::{OperationDefinition, OperationReference, OperationState, ProcessDefinition, ProcessReference, ProcessRuleReference, SerializableTaskState, TaskReference, TaskStatus};
+
+use planning::placement::{ PlacementSortingMode,  PlacementStatus, ProjectPlacementStatus};
+use planning::process::{ OperationReference,   ProcessReference, ProcessRuleReference,  TaskReference, TaskStatus};
 use planning::reference::Reference;
 use pnp::object_path::ObjectPath;
-use pnp::part::Part;
-use pnp::pcb::{Pcb, PcbKind, PcbSide};
-use pnp::placement::{Placement, RefDes};
-use stores::load_out::LoadOutSource;
+
+use pnp::pcb::{ PcbKind, PcbSide};
+use pnp::placement::{RefDes};
+
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
 
@@ -425,11 +424,6 @@ impl Display for TestProcessOperationStatus {
             TestProcessOperationStatus::Complete => write!(f, "Complete"),
         }
     }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub enum TestProcessOperationExtraState {
-    PlacementOperation { placements_state: TestPlacementsState },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]

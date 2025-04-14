@@ -10,8 +10,6 @@ use time::OffsetDateTime;
 use planning::placement::PlacementOperation;
 use planning::process::{OperationReference, TaskReference, TaskStatus};
 use pnp::object_path::ObjectPath;
-use util::dynamic::as_any::AsAny;
-use util::dynamic::dynamic_eq::DynamicEq;
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq)]
 pub enum TestOperationHistoryPlacementOperation {
@@ -20,7 +18,7 @@ pub enum TestOperationHistoryPlacementOperation {
 
 
 #[typetag::serde(tag = "type")]
-pub trait TestOperationHistoryKind: AsAny + DynClone + DynEq + Debug {}
+pub trait TestOperationHistoryKind: DynClone + DynEq + Debug {}
 dyn_eq::eq_trait_object!(TestOperationHistoryKind);
 dyn_clone::clone_trait_object!(TestOperationHistoryKind);
 

@@ -24,7 +24,6 @@ use serde_with::DisplayFromStr;
 use thiserror::Error;
 use time::OffsetDateTime;
 use tracing::{debug, error, info, trace, warn};
-use util::dynamic::dynamic_eq::DynamicEq;
 use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
@@ -1055,7 +1054,7 @@ pub fn update_placements_operation(
             let operation_reference = phase.operation_states
                 .iter()
                 .find_map(|operation_state|{
-                    if let Some((task_reference, state)) = operation_state.task_states.iter().find(|(task_reference, task_state)|task_state.requires_placements()) {
+                    if operation_state.task_states.iter().any(|(_task_reference, task_state)|task_state.requires_placements()) {
                         Some(operation_state.reference.clone())
                     } else {
                         None

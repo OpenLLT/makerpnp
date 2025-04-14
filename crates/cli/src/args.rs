@@ -1,7 +1,7 @@
 use clap::ValueEnum;
 use eda::EdaTool;
 use planning::actions::{AddOrRemoveAction, SetOrClearAction};
-use planning::placement::{PlacementStatus, PlacementSortingMode, PlacementOperation};
+use planning::placement::{PlacementSortingMode, PlacementOperation};
 use planning::process::OperationAction;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;

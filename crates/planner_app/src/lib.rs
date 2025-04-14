@@ -727,7 +727,7 @@ impl Planner {
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
-                action: action,
+                action,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project,

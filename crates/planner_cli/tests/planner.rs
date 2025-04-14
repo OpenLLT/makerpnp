@@ -4,7 +4,6 @@ extern crate util;
 pub mod common;
 
 mod operation_sequence_1 {
-    use std::collections::BTreeMap;
     use std::fs::{read_to_string, File};
     use std::io::Write;
     use std::path::PathBuf;
@@ -17,14 +16,14 @@ mod operation_sequence_1 {
     use tempfile::tempdir;
     use planning::design::DesignVariant;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
-    use planning::process::{OperationReference, TaskStatus};
+    use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;
     use pnp::pcb::{PcbKind, PcbSide};
     use util::test::{build_temp_file, prepare_args, print};
 
-    use crate::common::operation_history::{TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind, TestOperationHistoryPlacementOperation, TestPlacementOperationHistoryKind};
+    use crate::common::operation_history::{TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind, TestPlacementOperationHistoryKind};
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
-    use crate::common::project_builder::{TestAutomatedSolderingTaskState, TestLoadPcbsTaskState, TestManualSolderingTaskState, TestOperationState, TestPartState, TestPhase, TestPhaseState, TestPlacement, TestPlacementState, TestPlacementTaskState, TestPlacementsState, TestProcessOperationExtraState, TestProcessOperationStatus, TestProjectBuilder, TestSerializableTaskState};
+    use crate::common::project_builder::{TestAutomatedSolderingTaskState, TestLoadPcbsTaskState, TestManualSolderingTaskState, TestOperationState, TestPartState, TestPhase, TestPlacement, TestPlacementState, TestPlacementTaskState, TestProcessOperationStatus, TestProjectBuilder, TestSerializableTaskState};
 
     use crate::common::project_builder as project;
     use crate::common::project_report_builder::{
@@ -1884,16 +1883,6 @@ mod operation_sequence_1 {
             .content();
 
         // and
-
-        let operation_expectations = vec![
-            (
-                "require",
-                Some(("top_1".to_string(), Box::new(TestLoadPcbsOperationTaskHistoryKind {
-                    status: TaskStatus::Complete,
-                }))),
-            ),
-            ("eof", None),
-        ];
 
         let operation_expectations = vec![
             ("ignore", None),
