@@ -152,15 +152,21 @@ impl From<PlacementOperationArg> for PlacementOperation {
 
 #[derive(Clone, Debug)]
 #[derive(ValueEnum)]
-pub enum ProcessOperationSetArg {
+pub enum OperationActionArg {
+    #[value(name("started"))]
+    Started,
     #[value(name("completed"))]
     Completed,
+    #[value(name("abandoned"))]
+    Abandoned,
 }
 
-impl From<ProcessOperationSetArg> for OperationAction {
-    fn from(value: ProcessOperationSetArg) -> Self {
+impl From<OperationActionArg> for OperationAction {
+    fn from(value: OperationActionArg) -> Self {
         match value {
-            ProcessOperationSetArg::Completed => OperationAction::Completed,
+            OperationActionArg::Started => OperationAction::Started,
+            OperationActionArg::Completed => OperationAction::Completed,
+            OperationActionArg::Abandoned => OperationAction::Abandoned,
         }
     }
 }

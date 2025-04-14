@@ -73,9 +73,6 @@ pub enum ProcessError {
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct OperationState {
     pub reference: OperationReference,
-    // TODO probably build the overall status dynamically... (cache it?)
-    //pub status: OperationStatus,
-
     pub task_states: IndexMap<TaskReference, Box<dyn SerializableTaskState>>,
 }
 
@@ -132,8 +129,9 @@ pub trait PlacementsTaskAPI {
 
 /// Allowed transitions
 /// 
-/// Pending -> Started
-/// Started -> Complete | Abandoned
+/// 1) Pending -> Started
+/// 2) Started -> Complete | Abandoned
+/// 3) * -> Pending (reset)
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum TaskStatus {
     Pending,

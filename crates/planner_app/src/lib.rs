@@ -303,7 +303,7 @@ pub enum Event {
     RecordPhaseOperation {
         phase: Reference,
         operation: OperationReference,
-        set: OperationAction,
+        action: OperationAction,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -727,7 +727,7 @@ impl Planner {
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
-                set,
+                action: action,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project,
@@ -740,7 +740,7 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let directory = path.parent().unwrap();
-                *modified |= project::apply_phase_operation_action(project, directory, &reference, operation, set)
+                *modified |= project::apply_phase_operation_action(project, directory, &reference, operation, action)
                     .map_err(AppError::OperationError)?;
                 Ok(render::render())
             }),

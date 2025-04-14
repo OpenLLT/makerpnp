@@ -2400,12 +2400,12 @@ mod help {
         let expected_output = indoc! {"
             Record phase operation
 
-            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --set <SET>
+            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --action <ACTION>
 
             Options:
                   --phase <PHASE>          Phase reference (e.g. 'top_1')
-                  --operation <OPERATION>  The operation to update [possible values: loadpcbs, automatedpnp, reflowcomponents, manuallysoldercomponents]
-                  --set <SET>              The process operation to set [possible values: completed]
+                  --operation <OPERATION>  The operation to update
+                  --action <ACTION>        The process operation to set [possible values: started, completed, abandoned]
               -v, --verbose...             Increase logging verbosity
               -q, --quiet...               Decrease logging verbosity
               -h, --help                   Print help
@@ -2435,7 +2435,7 @@ mod help {
                   --object-path-patterns <OBJECT_PATH_PATTERNS>...
                       List of reference designators to apply the operation to
                   --operation <OPERATION>
-                      The completed operation to apply [possible values: placed, reset]
+                      The completed operation to apply [possible values: placed, skipped, reset]
               -v, --verbose...
                       Increase logging verbosity
               -q, --quiet...

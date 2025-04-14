@@ -4,7 +4,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
     AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg,
-    ProcessOperationSetArg, SetOrClearOperationArg,
+    OperationActionArg, SetOrClearOperationArg,
 };
 use planner_app::Event;
 use planning::design::DesignName;
@@ -169,7 +169,7 @@ pub(crate) enum Command {
 
         /// The process operation to set
         #[arg(long)]
-        set: ProcessOperationSetArg,
+        action: OperationActionArg,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -278,15 +278,14 @@ impl TryFrom<Opts> for Event {
                 manufacturer,
                 mpn,
             }),
-
             Command::RecordPhaseOperation {
                 phase,
                 operation,
-                set,
+                action,
             } => Ok(Event::RecordPhaseOperation {
                 phase,
                 operation: operation.into(),
-                set: set.into(),
+                action: action.into(),
             }),
             Command::RecordPlacementsOperation {
                 object_path_patterns,

@@ -1178,7 +1178,7 @@ pub fn apply_phase_operation_action(
                         .map(|(reference, state)| {
 
                             state.set_completed();
-                            
+
                             if reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
                                 (
                                     reference,

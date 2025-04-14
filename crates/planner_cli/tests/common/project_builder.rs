@@ -6,6 +6,7 @@ use serde::Serialize;
 use serde_json::{json, Map, Number, Value};
 
 // TODO transition this to use test structures/enums instead of tuples and serialize with serde.
+
 #[derive(Default)]
 pub struct TestProjectBuilder<'a> {
     name: Option<&'a str>,
@@ -348,7 +349,7 @@ impl<'a> TestProjectBuilder<'a> {
         self
     }
 
-    pub fn with_default_processes(mut self) -> Self {
+    pub fn nwith_default_processes(mut self) -> Self {
         self.processes = Some(&[
             ("pnp", &["LoadPcbs", "AutomatedPnp", "ReflowComponents"]),
             ("manual", &["LoadPcbs", "ManuallySolderComponents"]),
