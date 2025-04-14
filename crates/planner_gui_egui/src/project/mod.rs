@@ -7,7 +7,7 @@ use std::str::FromStr;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{AddOrRemoveOperation, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, PlacementStatus, PlacementOperation, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearOperation, VariantName};
+use planner_app::{AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, PlacementStatus, PlacementOperation, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction, VariantName};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
@@ -459,9 +459,9 @@ impl Project {
                 .eq(&old_placement.phase)
             {
                 let (phase, operation) = match (&new_placement.phase, &old_placement.phase) {
-                    (Some(new_phase), None) => (new_phase, SetOrClearOperation::Set),
-                    (Some(new_phase), Some(_old_phase)) => (new_phase, SetOrClearOperation::Set),
-                    (None, Some(old_phase)) => (old_phase, SetOrClearOperation::Clear),
+                    (Some(new_phase), None) => (new_phase, SetOrClearAction::Set),
+                    (Some(new_phase), Some(_old_phase)) => (new_phase, SetOrClearAction::Set),
+                    (None, Some(old_phase)) => (old_phase, SetOrClearAction::Clear),
                     _ => unreachable!(),
                 };
 
@@ -508,22 +508,22 @@ impl Project {
         }
 
         #[derive(Debug)]
-        enum Operations {
+        enum Actions {
             AddOrRemovePhase,
             SetOrResetPlaced,
         }
 
         // FUTURE find a solution to keep the operation with the handler, instead of two separate arrays.
         //        a tuple was tried, but results in a compile error: "expected fn item, found a different fn item"
-        let operations = [Operations::AddOrRemovePhase, Operations::SetOrResetPlaced];
+        let actions = [Actions::AddOrRemovePhase, Actions::SetOrResetPlaced];
 
-        let operation_handlers = [handle_phase, handle_placed];
+        let action_handlers = [handle_phase, handle_placed];
 
-        for (operation, handler) in operations
+        for (action, handler) in actions
             .into_iter()
-            .zip(operation_handlers.into_iter())
+            .zip(action_handlers.into_iter())
         {
-            debug!("update placement, operation: {:?}", operation);
+            debug!("update placement, action: {:?}", action);
 
             if let Some(core_result) = handler(planner_core_service, &key, &object_path, &new_placement, &old_placement)
             {
@@ -846,8 +846,8 @@ impl UiComponent for Project {
                         let mut tasks = vec![];
                         for (process, enabled) in processes {
                             let operation = match enabled {
-                                true => AddOrRemoveOperation::Add,
-                                false => AddOrRemoveOperation::Remove,
+                                true => AddOrRemoveAction::Add,
+                                false => AddOrRemoveAction::Remove,
                             };
 
                             match self

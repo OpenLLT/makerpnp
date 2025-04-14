@@ -28,11 +28,11 @@ use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
 use crate::operation_history::{LoadPcbsOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind, PlacementOperationHistoryKind};
-use crate::operations::{AddOrRemoveOperation, SetOrClearOperation};
+use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::part::PartState;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
 use crate::placement::{PlacementStatus, PlacementSortingItem, PlacementSortingMode, PlacementState, ProjectPlacementStatus, PlacementOperation};
-use crate::process::{Process, ProcessError, ProcessReference, OperationTaskStatus, ProcessOperation, ProcessRuleReference, OperationTaskReference, ProcessOperationReference, ProcessOperationSetItem};
+use crate::process::{ProcessDefinition, ProcessError, ProcessReference, TaskStatus, OperationDefinition, ProcessRuleReference, TaskReference, OperationReference, OperationAction};
 use crate::reference::{Reference, ReferenceError};
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
@@ -46,7 +46,7 @@ pub struct Project {
     pub name: String,
 
     /// The *definition* of the processes used by this project.
-    pub processes: Vec<Process>,
+    pub processes: Vec<ProcessDefinition>,
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
@@ -91,7 +91,7 @@ impl Project {
         }
     }
 
-    pub fn ensure_process(&mut self, process: &Process) -> anyhow::Result<()> {
+    pub fn ensure_process(&mut self, process: &ProcessDefinition) -> anyhow::Result<()> {
         if !self.processes.contains(process) {
             info!("Adding process to project.  process: '{}'", process.reference);
             self.processes.push(process.clone())
@@ -171,7 +171,7 @@ impl Project {
         Ok(())
     }
 
-    pub fn find_process(&self, process_reference: &ProcessReference) -> Result<&Process, ProcessError> {
+    pub fn find_process(&self, process_reference: &ProcessReference) -> Result<&ProcessDefinition, ProcessError> {
         self.processes
             .iter()
             .find(|&process| process.reference.eq(&process_reference))
@@ -233,7 +233,7 @@ pub enum ProcessFactoryError {
 pub struct ProcessFactory {}
 
 impl ProcessFactory {
-    pub fn by_name(name: &str) -> Result<Process, ProcessFactoryError> {
+    pub fn by_name(name: &str) -> Result<ProcessDefinition, ProcessFactoryError> {
         let process_name = ProcessReference::from_str(name).map_err(|e| ProcessFactoryError::ErrorCreatingProcessReference {
             reason: e,
         })?;
@@ -241,25 +241,25 @@ impl ProcessFactory {
         // FUTURE add support for more named processes
 
         match name {
-            "pnp" => Ok(Process {
+            "pnp" => Ok(ProcessDefinition {
                 reference: process_name,
                 operations: vec![
-                    ProcessOperation {
+                    OperationDefinition {
                         reference: Reference::from_raw_str("load_pcbs"),
                         tasks: vec![
-                            OperationTaskReference::from_raw_str("core::load_pcbs"),
+                            TaskReference::from_raw_str("core::load_pcbs"),
                         ],
                     },
-                    ProcessOperation {
+                    OperationDefinition {
                         reference: Reference::from_raw_str("automated_pnp"),
                         tasks: vec![
-                            OperationTaskReference::from_raw_str("core::place_components"),
+                            TaskReference::from_raw_str("core::place_components"),
                         ],
                     },
-                    ProcessOperation {
+                    OperationDefinition {
                         reference: Reference::from_raw_str("reflow_oven_soldering"),
                         tasks: vec![
-                            OperationTaskReference::from_raw_str("core::automated_soldering"),
+                            TaskReference::from_raw_str("core::automated_soldering"),
                         ],
                     },
                 ],
@@ -267,20 +267,20 @@ impl ProcessFactory {
                     ProcessRuleReference::from_raw_str("core::unique_feeder_references")
                 ],
             }),
-            "manual" => Ok(Process {
+            "manual" => Ok(ProcessDefinition {
                 reference: process_name,
                 operations: vec![
-                    ProcessOperation {
+                    OperationDefinition {
                         reference: Reference::from_raw_str("load_pcbs"),
                         tasks: vec![
-                            OperationTaskReference::from_raw_str("core::load_pcbs"),
+                            TaskReference::from_raw_str("core::load_pcbs"),
                         ],
                     },
-                    ProcessOperation {
+                    OperationDefinition {
                         reference: Reference::from_raw_str("manually_solder_components"),
                         tasks: vec![
-                            OperationTaskReference::from_raw_str("core::place_components"),
-                            OperationTaskReference::from_raw_str("core::manual_soldering"),
+                            TaskReference::from_raw_str("core::place_components"),
+                            TaskReference::from_raw_str("core::manual_soldering"),
                         ],
                     },
                 ],
@@ -565,14 +565,14 @@ pub fn store_phase_placements_as_csv(
 pub fn assign_placements_to_phase(
     project: &mut Project,
     phase: &Phase,
-    operation: SetOrClearOperation,
+    action: SetOrClearAction,
     placements_pattern: Regex,
 ) -> BTreeSet<Part> {
     let mut required_load_out_parts = BTreeSet::new();
 
     debug!(
-        "Assigning phase placements to {:?}, operation: {:?}, pattern: {:?}",
-        phase, operation, placements_pattern
+        "Assigning phase placements to {:?}, action: {:?}, pattern: {:?}",
+        phase, action, placements_pattern
     );
     let matched_placements: Vec<(&ObjectPath, &mut PlacementState)> = project
         .placements
@@ -592,8 +592,8 @@ pub fn assign_placements_to_phase(
 
     for (placement_path, state) in matched_placements {
         // FUTURE consider refactoring this into the filter above, and then working on the remaining results...
-        match operation {
-            SetOrClearOperation::Set => {
+        match action {
+            SetOrClearAction::Set => {
                 let should_assign = match &state.phase {
                     // different
                     Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => true,
@@ -611,7 +611,7 @@ pub fn assign_placements_to_phase(
                     state.phase = Some(phase.reference.clone());
                 }
             }
-            SetOrClearOperation::Clear => {
+            SetOrClearAction::Clear => {
                 let should_remove = match &state.phase {
                     // different
                     Some(assigned_phase) if !assigned_phase.eq(&phase.reference) => false,
@@ -843,8 +843,8 @@ fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, 
 pub fn update_applicable_processes(
     project: &mut Project,
     all_parts: &[Part],
-    process: Process,
-    operation: AddOrRemoveOperation,
+    process: ProcessDefinition,
+    action: AddOrRemoveAction,
     manufacturer_pattern: Regex,
     mpn_pattern: Regex,
 ) -> bool {
@@ -860,11 +860,11 @@ pub fn update_applicable_processes(
                         .part_states
                         .entry(part.clone())
                         .and_modify(|part_state| {
-                            modified |= match operation {
-                                AddOrRemoveOperation::Add => {
+                            modified |= match action {
+                                AddOrRemoveAction::Add => {
                                     add_process_to_part(part_state, part, process.reference.clone())
                                 }
-                                AddOrRemoveOperation::Remove => {
+                                AddOrRemoveAction::Remove => {
                                     remove_process_from_part(part_state, part, process.reference.clone())
                                 }
                             }
@@ -1035,8 +1035,8 @@ pub fn update_placements_operation(
                     date_time: now,
                     phase: phase.clone(),
                     extra: Default::default(),
-                    operation_reference: ProcessOperationReference::from_raw_str("TODO"),
-                    task_reference: OperationTaskReference::from_raw_str("core::place_components"),
+                    operation_reference: OperationReference::from_raw_str("TODO"),
+                    task_reference: TaskReference::from_raw_str("core::place_components"),
                     task_history: Box::new(PlacementOperationHistoryKind {
                         object_path: object_path.clone(),
                         operation: placement_operation.clone(),
@@ -1092,12 +1092,12 @@ pub enum PartStateError {
     NoPartStateFound { part: Part },
 }
 
-pub fn update_phase_operation(
+pub fn apply_phase_operation_action(
     project: &mut Project,
     directory: &Path,
     phase_reference: &Reference,
-    operation: ProcessOperationReference,
-    set_item: ProcessOperationSetItem,
+    operation: OperationReference,
+    action: OperationAction,
 ) -> anyhow::Result<bool> {
     let phase_state = project
         .phase_states
@@ -1154,10 +1154,10 @@ pub fn update_phase_operation(
         )
     )?;
 
-    let mut task_history_items: Vec<(&OperationTaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
+    let mut task_history_items: Vec<(&TaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
 
-    match set_item {
-        ProcessOperationSetItem::Completed => {
+    match action {
+        OperationAction::Completed => {
             if !is_complete {
                 // make sure the operation CAN be completed.
                 // reasons why it might not be possible include:
@@ -1179,14 +1179,14 @@ pub fn update_phase_operation(
 
                             state.set_completed();
                             
-                            if reference.eq(&OperationTaskReference::from_raw_str("core::load_pcbs")) {
+                            if reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
                                 (
                                     reference,
                                     Box::new(LoadPcbsOperationTaskHistoryKind {
-                                        status: OperationTaskStatus::Complete,
+                                        status: TaskStatus::Complete,
                                     }) as Box<dyn OperationHistoryKind>
                                 )
-                            } else if reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
+                            } else if reference.eq(&TaskReference::from_raw_str("core::place_components")) {
                                 // core::place_components should not be completable.
                                 unreachable!()
                             } else {
@@ -1199,12 +1199,18 @@ pub fn update_phase_operation(
 
                 } else {
 
-                    let task_references: Vec<&OperationTaskReference> = uncompletable_tasks.iter().map(|(reference, _state)|*reference).collect::<Vec<_>>();
+                    let task_references: Vec<&TaskReference> = uncompletable_tasks.iter().map(|(reference, _state)|*reference).collect::<Vec<_>>();
                     error!("Incomplete tasks.  references:  {:?}", task_references);
                 }
             } else {
                 error!("Phase operation is already complete");
             }
+        }
+        OperationAction::Started => {
+            todo!()
+        }
+        OperationAction::Abandoned => {
+            todo!()
         }
     }
 

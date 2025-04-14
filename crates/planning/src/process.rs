@@ -2,7 +2,7 @@
 //! Each assembly project has one or more phases.
 //! Each phase uses a process.
 //! Each process has one or more operations.
-//! Each operation can be complete, or not.
+//! Each operation can be pending, incomplete, complete or abandoned.
 //! Some operations just have a simple status, others require per-operation actions to be performed before they are
 //! complete
 //! 
@@ -16,6 +16,7 @@ use dyn_eq::DynEq;
 use indexmap::IndexMap;
 use thiserror::Error;
 use util::dynamic::as_any::AsAny;
+use crate::placement::PlacementStatus;
 use crate::reference::Reference;
 
 /// e.g. `manual` or `pnp`
@@ -23,14 +24,14 @@ pub type ProcessReference = Reference;
 
 /// The /definition/ of a process.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct Process {
+pub struct ProcessDefinition {
     pub reference: ProcessReference,
 
     /// examples:
     /// for `Manual` = `["load-pcbs", "manually-place-and-solder"]`
     /// for `PnP` = `["load-pcbs", "place-components", "solder"]`
     ///
-    pub operations: Vec<ProcessOperation>,
+    pub operations: Vec<OperationDefinition>,
     
     /// examples: `["core::"]`
     pub rules: Vec<ProcessRuleReference>
@@ -38,26 +39,26 @@ pub struct Process {
 
 /// A user defined (or pre-configured) process operation reference
 /// e.g. "place-components"
-pub type ProcessOperationReference = Reference;
+pub type OperationReference = Reference;
 
 /// The /definition/ of a process operation
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct ProcessOperation {
+pub struct OperationDefinition {
     /// e.g. "manually-place-and-solder"
-    pub reference: ProcessOperationReference,
+    pub reference: OperationReference,
 
     /// e.g. `["core::place_components", "core::manual_solder"]`
-    /// @see [`ProcessOperationState`]
-    pub tasks: Vec<OperationTaskReference>,
+    /// @see [`OperationState`]
+    pub tasks: Vec<TaskReference>,
 }
 
 /// a namespaced operation task reference.  e.g. "core::place_components"
-pub type OperationTaskReference = Reference;
+pub type TaskReference = Reference;
 
 /// a namespaced rule reference. e.g. "core::unique_feeder_ids"
 pub type ProcessRuleReference = Reference;
 
-impl Process {
+impl ProcessDefinition {
     pub fn has_rule(&self, rule: &ProcessRuleReference) -> bool {
         self.rules.contains(rule)
     }
@@ -65,92 +66,109 @@ impl Process {
 
 #[derive(Error, Debug)]
 pub enum ProcessError {
-    #[error("Unused process. processes: {:?}, process: '{}'", processes, process)]
-    UndefinedProcessError { processes: Vec<Process>, process: String },
+    #[error("Undefined process. processes: {:?}, process: '{}'", processes, process)]
+    UndefinedProcessError { processes: Vec<ProcessDefinition>, process: String },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
-pub struct ProcessOperationState {
-    pub reference: ProcessOperationReference,
+pub struct OperationState {
+    pub reference: OperationReference,
     // TODO probably build the overall status dynamically... (cache it?)
     //pub status: OperationStatus,
 
-    pub task_states: IndexMap<OperationTaskReference, Box<dyn SerializableOperationTaskState>>,
+    pub task_states: IndexMap<TaskReference, Box<dyn SerializableTaskState>>,
 }
 
-impl ProcessOperationState {
+impl OperationState {
     pub fn is_complete(&self) -> bool {
-        self.task_states.iter().fold(true, |complete, (reference, task_state)| {
+        self.task_states.iter().fold(true, |complete, (_reference, task_state)| {
             if !complete {
                 return false;
             }
 
-            complete && matches!(task_state.status(), OperationTaskStatus::Complete)
+            complete && matches!(task_state.status(), TaskStatus::Complete)
         })
     }
 }
 
 #[typetag::serde(tag = "type")]
-pub trait SerializableOperationTaskState: OperationTaskState + DynEq + DynClone + AsAny + Send + Sync + Debug {
+pub trait SerializableTaskState: TaskState + DynEq + DynClone + AsAny + Send + Sync + Debug {
 }
-dyn_eq::eq_trait_object!(SerializableOperationTaskState);
-dyn_clone::clone_trait_object!(SerializableOperationTaskState);
+dyn_eq::eq_trait_object!(SerializableTaskState);
+dyn_clone::clone_trait_object!(SerializableTaskState);
 
-pub trait OperationTaskState {
-    fn status(&self) -> OperationTaskStatus;
+pub trait TaskState {
+    fn status(&self) -> TaskStatus;
     fn reset(&mut self);
 
     fn is_complete(&self) -> bool {
-        matches!(self.status(), OperationTaskStatus::Complete)
+        matches!(self.status(), TaskStatus::Complete)
     }
 
     fn can_complete(&self) -> bool;
 
+    fn set_started(&mut self);
+    
     /// Will panic if not completable.
     /// 
     /// See [`Self::can_complete`]
     fn set_completed(&mut self);
 
-    // TODO add these, probably needed when adding/removing placements to a phase
-    // fn on_placement_removed(&mut self, &Placement)
-    // fn on_placement_added(&mut self, &Placement)
-
+    fn set_abandoned(&mut self);
+    
+    /// Allows callers to access this operation's placements api
+    fn placements_api(&self) -> Option<&dyn PlacementsTaskAPI> { None::<&dyn PlacementsTaskAPI> }
+    
+    fn requires_placements(&self) -> bool {
+        self.placements_api().is_some()
+    }
 }
 
+pub trait PlacementsTaskAPI {
+    fn on_placement_status_change(&mut self, new_status: &PlacementStatus, old_status: &PlacementStatus);
+
+    fn set_total_placements(&mut self, total: usize);
+}
+
+/// Allowed transitions
+/// 
+/// Pending -> Started
+/// Started -> Complete | Abandoned
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub enum OperationTaskStatus {
+pub enum TaskStatus {
     Pending,
-    Incomplete,
+    Started,
     Complete,
     Abandoned,
 }
 
-impl Default for OperationTaskStatus {
+impl Default for TaskStatus {
     fn default() -> Self {
         Self::Pending
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
-pub struct PlacementOperationState {
+pub struct PlacementTaskState {
     pub placed: usize,
     pub skipped: usize,
     pub total: usize,
 
-    status: OperationTaskStatus,
+    // FUTURE consider using some struct that wraps the status to prevent disallowed state changes
+    status: TaskStatus,
 }
 
-#[typetag::serde(name = "core::placement_operation_state")]
-impl SerializableOperationTaskState for PlacementOperationState {}
+#[typetag::serde(name = "core::placement_task_state")]
+impl SerializableTaskState for PlacementTaskState {}
 
-impl PlacementOperationState {
+impl PlacementTaskState {
     pub fn are_all_placements_placed(&self) -> bool {
         (self.placed + self.skipped) == self.total
     }
 }
 
-impl OperationTaskState for PlacementOperationState {
-    fn status(&self) -> OperationTaskStatus {
+impl TaskState for PlacementTaskState {
+    fn status(&self) -> TaskStatus {
         self.status.clone()
     }
 
@@ -158,36 +176,69 @@ impl OperationTaskState for PlacementOperationState {
         *self = Self::default()
     }
 
-    /// This task can only be completed
+    /// This task can only be completed via other apis
     fn can_complete(&self) -> bool {
         false
+    }
+
+    fn set_started(&mut self) {
+        self.status = TaskStatus::Started;
     }
 
     /// See [`Self::can_complete`]
     fn set_completed(&mut self) {
         panic!("task cannot be completed this way");
     }
+
+    fn set_abandoned(&mut self) {
+        self.status = TaskStatus::Abandoned;
+    }
+
+    fn placements_api(&self) -> Option<&dyn PlacementsTaskAPI> {
+        Some(self)
+    }
+}
+
+impl PlacementsTaskAPI for PlacementTaskState {
+    fn on_placement_status_change(&mut self, new_status: &PlacementStatus, old_status: &PlacementStatus) {
+        match old_status {
+            PlacementStatus::Placed => self.placed -= 1,
+            PlacementStatus::Skipped => self.skipped -= 1,
+            PlacementStatus::Pending => {}
+        }
+        match new_status {
+            PlacementStatus::Placed => self.placed += 1,
+            PlacementStatus::Skipped => self.skipped += 1,
+            PlacementStatus::Pending => {}
+        }
+    }
+    
+    fn set_total_placements(&mut self, total: usize) {
+        self.total = total;
+    }
 }
 
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub enum ProcessOperationSetItem {
+pub enum OperationAction {
+    Started,
     Completed,
+    Abandoned,
 }
 
-macro_rules! generic_operation_impl {
+macro_rules! generic_task_impl {
     ( $name:ident, $key:literal ) => {
         #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
         pub struct $name {
-            status: OperationTaskStatus,
+            status: TaskStatus,
         }
         
         #[typetag::serde(name = $key)]
-        impl SerializableOperationTaskState for $name {}
+        impl SerializableTaskState for $name {}
         
         
-        impl OperationTaskState for $name {
-            fn status(&self) -> OperationTaskStatus {
+        impl TaskState for $name {
+            fn status(&self) -> TaskStatus {
                 self.status.clone()
             }
         
@@ -199,15 +250,22 @@ macro_rules! generic_operation_impl {
                 true
             }
         
+            fn set_started(&mut self) {
+                self.status = TaskStatus::Started;
+            }
+            
             fn set_completed(&mut self) {
-                self.status = OperationTaskStatus::Complete;
+                self.status = TaskStatus::Complete;
+            }
+            
+            fn set_abandoned(&mut self) {
+                self.status = TaskStatus::Abandoned;
             }
         }
-        
     }
 }
 
-generic_operation_impl!(LoadPcbsOperationState, "core::load_pcbs_operation_state");
-generic_operation_impl!(AutomatedSolderingOperationState, "core::automated_soldering_operation_state");
-generic_operation_impl!(ManualSolderingOperationState, "core::manual_soldering_operation_state");
+generic_task_impl!(LoadPcbsOperationState, "core::load_pcbs_task_state");
+generic_task_impl!(AutomatedSolderingOperationState, "core::automated_soldering_task_state");
+generic_task_impl!(ManualSolderingOperationState, "core::manual_soldering_operation_state");
 

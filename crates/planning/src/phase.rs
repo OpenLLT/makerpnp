@@ -5,7 +5,7 @@ use pnp::pcb::PcbSide;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
-use crate::process::{Process, ProcessReference, ProcessOperationReference, ProcessOperationState, PlacementOperationState, SerializableOperationTaskState, OperationTaskReference, LoadPcbsOperationState, AutomatedSolderingOperationState, ManualSolderingOperationState};
+use crate::process::{ProcessDefinition, ProcessReference, OperationReference, OperationState, PlacementTaskState, SerializableTaskState, TaskReference, LoadPcbsOperationState, AutomatedSolderingOperationState, ManualSolderingOperationState};
 use crate::reference::Reference;
 
 // TODO
@@ -34,9 +34,9 @@ pub enum PhaseError {
     UnknownPhase(Reference),
 
     #[error("Invalid operation for phase. phase: '{}', operation: '{}', possible_operations: {:?}", .0, .1, .2.iter().map(|reference|reference.to_string()).collect::<Vec<_>>())]
-    InvalidOperationForPhase(Reference, ProcessOperationReference, Vec<ProcessOperationReference>),
+    InvalidOperationForPhase(Reference, OperationReference, Vec<OperationReference>),
     #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
-    PrecedingOperationIncomplete(Reference, ProcessOperationReference),
+    PrecedingOperationIncomplete(Reference, OperationReference),
 }
 
 pub struct PhaseOrderings<'a>(pub &'a IndexSet<Reference>);
@@ -58,13 +58,13 @@ impl<'a> Display for PhaseOrderings<'a> {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct PhaseState {
     // the order of operations must be preserved.
-    pub operation_states: Vec<ProcessOperationState>,
+    pub operation_states: Vec<OperationState>,
 }
 
 impl PhaseState {
     
     // Safety: all process must be valid
-    pub fn from_process(process: &Process) -> Self {
+    pub fn from_process(process: &ProcessDefinition) -> Self {
         let operation_states = process
             .operations
             .iter()
@@ -72,23 +72,23 @@ impl PhaseState {
 
                 let task_states = process_operation.tasks.iter().map(|task_reference|{
 
-                    let mut task_state: Option<Box<dyn SerializableOperationTaskState>> = None;
-                    if task_reference.eq(&OperationTaskReference::from_raw_str("core::load_pcbs")) {
-                        task_state = Some(Box::new(LoadPcbsOperationState::default()) as Box<dyn SerializableOperationTaskState>)
-                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
-                        task_state = Some(Box::new(PlacementOperationState::default()) as Box<dyn SerializableOperationTaskState>)
-                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::automated_soldering")) {
-                        task_state = Some(Box::new(AutomatedSolderingOperationState::default()) as Box<dyn SerializableOperationTaskState>)
-                    } else if task_reference.eq(&OperationTaskReference::from_raw_str("core::manual_soldering")) {
-                        task_state = Some(Box::new(ManualSolderingOperationState::default()) as Box<dyn SerializableOperationTaskState>)
+                    let task_state = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                        Box::new(LoadPcbsOperationState::default()) as Box<dyn SerializableTaskState>
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+                        Box::new(PlacementTaskState::default()) as Box<dyn SerializableTaskState>
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+                        Box::new(AutomatedSolderingOperationState::default()) as Box<dyn SerializableTaskState>
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+                        Box::new(ManualSolderingOperationState::default()) as Box<dyn SerializableTaskState>
                     } else {
                         panic!("unknown task reference {:?}", task_reference);
-                    }
-                    (task_reference.clone(), task_state.unwrap())
+                    };
+                    
+                    (task_reference.clone(), task_state)
                     
                 }).collect::<IndexMap<_, _>>();
                 
-                ProcessOperationState {
+                OperationState {
                     reference: process_operation.reference.clone(),
                     task_states
                 }

@@ -1,8 +1,8 @@
 use clap::ValueEnum;
 use eda::EdaTool;
-use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
+use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 use planning::placement::{PlacementStatus, PlacementSortingMode, PlacementOperation};
-use planning::process::ProcessOperationSetItem;
+use planning::process::OperationAction;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
 
@@ -83,7 +83,7 @@ pub enum AddOrRemoveOperationArg {
     Remove,
 }
 
-impl From<AddOrRemoveOperationArg> for AddOrRemoveOperation {
+impl From<AddOrRemoveOperationArg> for AddOrRemoveAction {
     fn from(value: AddOrRemoveOperationArg) -> Self {
         match value {
             AddOrRemoveOperationArg::Add => Self::Add,
@@ -98,7 +98,7 @@ pub enum SetOrClearOperationArg {
     Clear,
 }
 
-impl From<SetOrClearOperationArg> for SetOrClearOperation {
+impl From<SetOrClearOperationArg> for SetOrClearAction {
     fn from(value: SetOrClearOperationArg) -> Self {
         match value {
             SetOrClearOperationArg::Set => Self::Set,
@@ -157,10 +157,10 @@ pub enum ProcessOperationSetArg {
     Completed,
 }
 
-impl From<ProcessOperationSetArg> for ProcessOperationSetItem {
+impl From<ProcessOperationSetArg> for OperationAction {
     fn from(value: ProcessOperationSetArg) -> Self {
         match value {
-            ProcessOperationSetArg::Completed => ProcessOperationSetItem::Completed,
+            ProcessOperationSetArg::Completed => OperationAction::Completed,
         }
     }
 }

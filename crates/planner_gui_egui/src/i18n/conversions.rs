@@ -1,4 +1,4 @@
-use planner_app::{PcbSide, PlacementSortingMode, ProjectPlacementStatus, OperationTaskStatus, PlacementStatus};
+use planner_app::{PcbSide, PlacementSortingMode, ProjectPlacementStatus, TaskStatus, PlacementStatus};
 use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
@@ -45,11 +45,11 @@ pub fn sort_order_to_i18n_key(sort_order: &SortOrder) -> &'static str {
     }
 }
 
-pub fn process_operation_status_to_i18n_key(status: &OperationTaskStatus) -> &'static str {
+pub fn process_operation_status_to_i18n_key(status: &TaskStatus) -> &'static str {
     match status {
-        OperationTaskStatus::Pending => "process-operation-status-pending",
-        OperationTaskStatus::Incomplete => "process-operation-status-incomplete",
-        OperationTaskStatus::Complete => "process-operation-status-complete",
-        OperationTaskStatus::Abandoned => "process-operation-status-abandoned",
+        TaskStatus::Pending => "process-operation-status-pending",
+        TaskStatus::Started => "process-operation-status-incomplete",
+        TaskStatus::Complete => "process-operation-status-complete",
+        TaskStatus::Abandoned => "process-operation-status-abandoned",
     }
 }

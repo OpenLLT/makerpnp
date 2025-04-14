@@ -15,7 +15,7 @@ use time::OffsetDateTime;
 use tracing::info;
 
 use crate::placement::PlacementOperation;
-use crate::process::{OperationTaskReference, OperationTaskStatus, ProcessOperationReference};
+use crate::process::{TaskReference, TaskStatus, OperationReference};
 use crate::reference::Reference;
 
 #[typetag::serde(tag = "type")]
@@ -23,7 +23,7 @@ pub trait OperationHistoryKind: AsAny + Debug {}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct LoadPcbsOperationTaskHistoryKind {
-    pub(crate) status: OperationTaskStatus,
+    pub(crate) status: TaskStatus,
 }
 
 #[typetag::serde(name = "load_pcbs_operation")]
@@ -49,8 +49,8 @@ pub struct OperationHistoryItem {
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
     
-    pub operation_reference: ProcessOperationReference,
-    pub task_reference: OperationTaskReference,
+    pub operation_reference: OperationReference,
+    pub task_reference: TaskReference,
     pub task_history: Box<dyn OperationHistoryKind>,
 }
 

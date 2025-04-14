@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, OperationTaskStatus, Reference};
+use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, TaskStatus, Reference};
 use regex::Regex;
 use tracing::{debug, trace};
 
@@ -153,10 +153,10 @@ impl UiComponent for PhaseUi {
                     for (task_index, (reference, task)) in state.task_states.iter().enumerate() {
                         let status = task.status();
                         let color = match status {
-                            OperationTaskStatus::Pending => grey,
-                            OperationTaskStatus::Abandoned => red,
-                            OperationTaskStatus::Incomplete => orange,
-                            OperationTaskStatus::Complete => green,
+                            TaskStatus::Pending => grey,
+                            TaskStatus::Abandoned => red,
+                            TaskStatus::Started => orange,
+                            TaskStatus::Complete => green,
                         };
                         if task_index > 0 {
                             ui.label("::");

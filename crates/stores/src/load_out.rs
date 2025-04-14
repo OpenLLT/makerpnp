@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{Context, Error};
 use csv::QuoteStyle;
-use planning::process::{Process, ProcessReference, ProcessRuleReference};
+use planning::process::{ProcessDefinition, ProcessReference, ProcessRuleReference};
 use planning::reference::Reference;
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
@@ -240,7 +240,7 @@ pub enum FeederAssignmentError {
 
 pub fn assign_feeder_to_load_out_item(
     load_out_source: &LoadOutSource,
-    process: &Process,
+    process: &ProcessDefinition,
     feeder_reference: &Reference,
     manufacturer: Regex,
     mpn: Regex,

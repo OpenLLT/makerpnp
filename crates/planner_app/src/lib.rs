@@ -9,7 +9,7 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::design::{DesignName, DesignVariant};
-pub use planning::operations::{AddOrRemoveOperation, SetOrClearOperation};
+pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementStatus;
 pub use planning::placement::PlacementSortingItem;
@@ -17,8 +17,8 @@ pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::{PlacementState, PlacementOperation};
 pub use planning::placement::ProjectPlacementStatus;
 pub use planning::process::ProcessReference;
-pub use planning::process::{Process, ProcessOperationReference, ProcessOperationSetItem};
-pub use planning::process::OperationTaskStatus;
+pub use planning::process::{ProcessDefinition, OperationReference, OperationAction};
+pub use planning::process::TaskStatus;
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -208,7 +208,7 @@ pub enum ProjectView {
     PhasePlacements(PhasePlacements),
     Placements(PlacementsList),
     ProjectTree(ProjectTreeView),
-    Process(Process),
+    Process(ProcessDefinition),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -260,7 +260,7 @@ pub enum Event {
     RefreshFromDesignVariants,
     AssignProcessToParts {
         process: ProcessReference,
-        operation: AddOrRemoveOperation,
+        operation: AddOrRemoveAction,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
@@ -274,7 +274,7 @@ pub enum Event {
     },
     AssignPlacementsToPhase {
         phase: Reference,
-        operation: SetOrClearOperation,
+        operation: SetOrClearAction,
 
         /// to apply to object path (not refdes)
         #[serde(with = "serde_regex")]
@@ -302,8 +302,8 @@ pub enum Event {
     GenerateArtifacts,
     RecordPhaseOperation {
         phase: Reference,
-        operation: ProcessOperationReference,
-        set: ProcessOperationSetItem,
+        operation: OperationReference,
+        set: OperationAction,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -565,7 +565,7 @@ impl Planner {
                     try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 match operation {
-                    SetOrClearOperation::Set => {
+                    SetOrClearAction::Set => {
                         for part in parts.iter() {
                             let part_state = project
                                 .part_states
@@ -580,7 +580,7 @@ impl Planner {
                         stores::load_out::add_parts_to_load_out(&load_out_source, parts)
                             .map_err(AppError::LoadoutError)?;
                     }
-                    SetOrClearOperation::Clear => {
+                    SetOrClearAction::Clear => {
                         // FUTURE not currently sure if cleanup should happen automatically or if it should be explicit.
                     }
                 }
@@ -740,7 +740,7 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let directory = path.parent().unwrap();
-                *modified |= project::update_phase_operation(project, directory, &reference, operation, set)
+                *modified |= project::apply_phase_operation_action(project, directory, &reference, operation, set)
                     .map_err(AppError::OperationError)?;
                 Ok(render::render())
             }),

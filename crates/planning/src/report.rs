@@ -19,7 +19,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{OperationTaskStatus, ProcessOperationReference};
+use crate::process::{TaskStatus, OperationReference};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -693,7 +693,7 @@ pub struct PhaseOverview {
 pub struct PhaseSpecification {
     pub phase_name: String,
     // TODO make this a tuple of some dynamic operation report based on the tasks
-    pub operations: Vec<ProcessOperationReference>,
+    pub operations: Vec<OperationReference>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
@@ -701,7 +701,7 @@ pub struct PhaseSpecification {
 pub struct PhaseOperationOverview {
     pub operation: PhaseOperationKind,
     pub message: String,
-    pub status: OperationTaskStatus,
+    pub status: TaskStatus,
 }
 
 #[serde_as]
