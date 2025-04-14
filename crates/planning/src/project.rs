@@ -949,7 +949,7 @@ pub fn update_placements_operation(
     placement_operation: PlacementOperation,
 ) -> anyhow::Result<bool> {
     let mut modified = false;
-    let mut history_item_map: HashMap<Reference, Vec<OperationHistoryItem>> = HashMap::new();
+    let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
     for object_path_pattern in object_path_patterns.iter() {
         let placements: Vec<_> = project
@@ -1028,27 +1028,18 @@ pub fn update_placements_operation(
             };
 
             if should_log {
-                let now = OffsetDateTime::now_utc();
-
                 let phase = placement_state.phase.as_ref().unwrap();
 
-                let history_item = OperationHistoryItem {
-                    date_time: now,
-                    phase: phase.clone(),
-                    extra: Default::default(),
-                    operation_reference: OperationReference::from_raw_str("TODO"),
-                    task_reference: TaskReference::from_raw_str("core::place_components"),
-                    task_history: Box::new(PlacementOperationHistoryKind {
+                let task_history = Box::new(PlacementOperationHistoryKind {
                         object_path: object_path.clone(),
                         operation: placement_operation.clone(),
-                    }) as Box<dyn OperationHistoryKind>,
-                };
+                    }) as Box<dyn OperationHistoryKind>;
 
                 let history_items = history_item_map
                     .entry(phase.clone())
                     .or_default();
 
-                history_items.push(history_item);
+                history_items.push(task_history);
 
                 modified = true;
             }
@@ -1058,7 +1049,22 @@ pub fn update_placements_operation(
     if modified {
         refresh_phase_operation_states(project);
 
-        for (phase_reference, history_items) in history_item_map {
+        for (phase_reference, meh) in history_item_map {
+
+            let now = OffsetDateTime::now_utc();
+
+            let history_items = meh.into_iter().map(|task_history|{
+                OperationHistoryItem {
+                    date_time: now,
+                    phase: phase_reference.clone(),
+                    extra: Default::default(),
+                    operation_reference: OperationReference::from_raw_str("TODO"),
+                    task_reference: TaskReference::from_raw_str("core::place_components"),
+                    task_history,
+                }
+            }).collect::<Vec<_>>();
+
+            
             let mut phase_log_path = PathBuf::from(directory);
             phase_log_path.push(format!("{}_log.json", phase_reference));
 
@@ -1095,7 +1101,8 @@ pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
 
                 if task_state.requires_placements() {
 
-                    let original_task_state = task_state.clone();
+                    let original_task_state = dyn_clone::clone(task_state);
+                    
                     {
                         let placement_api = task_state.placements_state_mut().unwrap();
                         placement_api.reset();
@@ -1114,103 +1121,17 @@ pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
                         }
                     }
 
-                    let status_changed = task_state.dyn_eq(&original_task_state);
+                    error!("before: {:?}, after: {:?}", original_task_state, task_state);
+
+                    let status_changed = task_state != &original_task_state;
 
                     info!("Refreshed task status. phase: {}, operation: {}, task: {}, status: {}, changed: {}", phase_reference, operation_state.reference, task_reference, task_state.status(), status_changed);
-                    
+
                     modified |= status_changed;
                 }
             }
         }
     }
-        /*
-        for (reference, phase_state) in project.phase_states.iter_mut() {
-            trace!("reference: {:?}, phase_state: {:?}", reference, phase_state);
-
-            for (operation, operation_state) in phase_state.operation_state.iter_mut() {
-                trace!("operation: {:?}, operation_state: {:?}", operation, operation_state);
-
-                let maybe_state = if (*operation).eq(&ProcessOperationKind::AutomatedPnp)
-                    || (*operation).eq(&ProcessOperationKind::ManuallySolderComponents)
-                {
-                    let placements_state = project.placements.iter().fold(
-                        PlacementsState::default(),
-                        |mut state, (_object_path, placement_status)| {
-                            if let Some(placement_phase) = &placement_status.phase {
-                                if placement_phase.eq(reference) {
-                                    if placement_status.placed {
-                                        state.placed += 1;
-                                    }
-                                    state.total += 1;
-                                }
-                            }
-
-                            state
-                        },
-                    );
-
-                    let status = if placements_state.total == 0 || placements_state.placed == 0 {
-                        ProcessOperationStatus::Pending
-                    } else if placements_state.are_all_placements_placed() {
-                        ProcessOperationStatus::Complete
-                    } else {
-                        ProcessOperationStatus::Incomplete
-                    };
-
-                    Some((placements_state, status))
-                } else {
-                    None
-                };
-                trace!("maybe_state: {:?}", maybe_state);
-
-                let original_operation_state = operation_state.clone();
-
-                match (&maybe_state, &operation) {
-                    (Some((placements_state, status)), ProcessOperationKind::AutomatedPnp) => {
-                        operation_state.status = status.clone();
-                        operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
-                            placements_state: placements_state.clone(),
-                        });
-                    }
-                    (Some((placements_state, status)), ProcessOperationKind::ManuallySolderComponents) => {
-                        operation_state.status = status.clone();
-                        operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
-                            placements_state: placements_state.clone(),
-                        });
-                    }
-                    (_, _) => {}
-                };
-
-                let phase_operation_modified = !original_operation_state.eq(operation_state);
-
-                if phase_operation_modified {
-                    info!("Updating phase status. phase: {}", reference);
-
-                    if let Some((_maybe_state, status)) = maybe_state {
-                        match status {
-                            ProcessOperationStatus::Complete => info!(
-                                "Phase operation complete. phase: {}, operation: {:?}",
-                                reference, operation
-                            ),
-                            ProcessOperationStatus::Incomplete => info!(
-                                "Phase operation incomplete. phase: {}, operation: {:?}",
-                                reference, operation
-                            ),
-                            ProcessOperationStatus::Pending => info!(
-                                "Phase operation pending. phase: {}, operation: {:?}",
-                                reference, operation
-                            ),
-                        }
-                    }
-                }
-
-                modified |= phase_operation_modified;
-            }
-        }
-        */
-
-
-
     modified
 }
 

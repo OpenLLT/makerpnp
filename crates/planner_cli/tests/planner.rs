@@ -1949,7 +1949,7 @@ mod operation_sequence_1 {
             "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
             "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
             "Unmatched object path pattern. object_path_pattern: pcb=panel::instance=1::unit=2::ref_des=.*\n",
-            "Refreshed task status. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Complete, changed: false\n",
+            "Refreshed task status. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, changed: false\n",
             "Refreshed task status. phase: top_1, operation: automated_pnp, task: core::place_components, status: Complete, changed: true\n",
             &log_file_message,
         ]);
