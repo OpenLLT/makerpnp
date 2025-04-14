@@ -3,6 +3,8 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
+// FUTURE Consider adding `NamespacedReference`
+
 /// Reference should be a string with no-whitespace characters at all
 /// 
 /// This is mostly so they can be used on the command line without parsing issues.
@@ -22,7 +24,7 @@ use thiserror::Error;
 pub struct Reference(pub String);
 
 impl Reference {
-    fn is_valid(value: &String) -> bool {
+    fn is_valid(value: &str) -> bool {
         if value.is_empty() {
             return false;
         }

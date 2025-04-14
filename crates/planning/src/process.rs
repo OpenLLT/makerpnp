@@ -1,6 +1,16 @@
-use std::collections::BTreeMap;
-use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
+//! PCBs are assembled using one or more processes.
+//! Each assembly project has one or more phases.
+//! Each phase uses a process.
+//! Each process has one or more operations.
+//! Each operation can be complete, or not.
+//! Some operations just have a simple status, others require per-operation actions to be performed before they are
+//! complete
+//! 
+//! Phases can be abandoned or skipped.
+//! Operations can be abandoned or skipped.
+//! 
+//! Later operations and phases cannot be actioned unless preceding phases and actions are completed/skipped/abandoned.
+use std::fmt::{Debug};
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;
 use indexmap::IndexMap;
@@ -11,6 +21,7 @@ use crate::reference::Reference;
 /// e.g. `manual` or `pnp`
 pub type ProcessReference = Reference;
 
+/// The /definition/ of a process.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct Process {
     pub reference: ProcessReference,
@@ -20,6 +31,8 @@ pub struct Process {
     /// for `PnP` = `["load-pcbs", "place-components", "solder"]`
     ///
     pub operations: Vec<ProcessOperation>,
+    
+    /// examples: `["core::"]`
     pub rules: Vec<ProcessRuleReference>
 }
 
@@ -27,6 +40,7 @@ pub struct Process {
 /// e.g. "place-components"
 pub type ProcessOperationReference = Reference;
 
+/// The /definition/ of a process operation
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct ProcessOperation {
     /// e.g. "manually-place-and-solder"
@@ -37,10 +51,10 @@ pub struct ProcessOperation {
     pub tasks: Vec<OperationTaskReference>,
 }
 
-/// e.g. "core::place-components"
+/// a namespaced operation task reference.  e.g. "core::place_components"
 pub type OperationTaskReference = Reference;
 
-/// e.g. "core::unique-feeder-ids"
+/// a namespaced rule reference. e.g. "core::unique_feeder_ids"
 pub type ProcessRuleReference = Reference;
 
 impl Process {
@@ -92,6 +106,9 @@ pub trait OperationTaskState {
 
     fn can_complete(&self) -> bool;
 
+    /// Will panic if not completable.
+    /// 
+    /// See [`Self::can_complete`]
     fn set_completed(&mut self);
 
     // TODO add these, probably needed when adding/removing placements to a phase

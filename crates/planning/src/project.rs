@@ -1104,6 +1104,9 @@ pub fn update_phase_operation(
         .get_mut(phase_reference)
         .ok_or(PhaseError::UnknownPhase(phase_reference.clone()))?;
 
+    // in case of an error, we need to help the user by giving them a list of the possible operation references
+    let possible_operation_references = phase_state.operation_states.iter().map(|state|state.reference.clone()).collect::<Vec<_>>();
+
     let mut modified = false;
 
     // We can only complete an operation if all preceding operation have been completed
@@ -1143,10 +1146,13 @@ pub fn update_phase_operation(
         )?;
 
     // If we didn't find the operation we were looking, bail.
-    let state = state.ok_or(PhaseError::InvalidOperationForPhase(
-        phase_reference.clone(),
-        operation.clone(),
-    ))?;
+    let state = state.ok_or(
+        PhaseError::InvalidOperationForPhase(
+            phase_reference.clone(),
+            operation.clone(),
+            possible_operation_references,
+        )
+    )?;
 
     let mut task_history_items: Vec<(&OperationTaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
 
@@ -1169,8 +1175,10 @@ pub fn update_phase_operation(
                     let stuff = state.task_states
                         .iter_mut()
                         .filter(|(_reference, state)| state.can_complete())
-                        .map(|(reference, _state)| {
+                        .map(|(reference, state)| {
 
+                            state.set_completed();
+                            
                             if reference.eq(&OperationTaskReference::from_raw_str("core::load_pcbs")) {
                                 (
                                     reference,
@@ -1179,7 +1187,8 @@ pub fn update_phase_operation(
                                     }) as Box<dyn OperationHistoryKind>
                                 )
                             } else if reference.eq(&OperationTaskReference::from_raw_str("core::place_components")) {
-                                todo!()
+                                // core::place_components should not be completable.
+                                unreachable!()
                             } else {
                                 todo!()
                             }

@@ -33,8 +33,8 @@ pub enum PhaseError {
     #[error("Unknown phase. phase: '{0:}'")]
     UnknownPhase(Reference),
 
-    #[error("Invalid operation for phase. phase: '{0:}', operation: {1:?}")]
-    InvalidOperationForPhase(Reference, ProcessOperationReference),
+    #[error("Invalid operation for phase. phase: '{}', operation: '{}', possible_operations: {:?}", .0, .1, .2.iter().map(|reference|reference.to_string()).collect::<Vec<_>>())]
+    InvalidOperationForPhase(Reference, ProcessOperationReference, Vec<ProcessOperationReference>),
     #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
     PrecedingOperationIncomplete(Reference, ProcessOperationReference),
 }
