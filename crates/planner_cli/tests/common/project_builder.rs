@@ -1,365 +1,345 @@
-use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
-
+use serde_with::DisplayFromStr;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::{Debug, Display, Formatter};
+use std::path::PathBuf;
+use std::str::FromStr;
+use csv::Writer;
+use indexmap::{IndexMap, IndexSet};
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Number, Value};
+use serde_with::serde_as;
+use planning::design::DesignVariant;
+use planning::part::PartState;
+use planning::phase::{Phase, PhaseState};
+use planning::placement::{PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus, ProjectPlacementStatus};
+use planning::process::{OperationDefinition, OperationReference, OperationState, ProcessDefinition, ProcessReference, ProcessRuleReference, SerializableTaskState, TaskReference, TaskStatus};
+use planning::reference::Reference;
+use pnp::object_path::ObjectPath;
+use pnp::part::Part;
+use pnp::pcb::{Pcb, PcbKind, PcbSide};
+use pnp::placement::{Placement, RefDes};
+use stores::load_out::LoadOutSource;
+use util::dynamic::as_any::AsAny;
+use util::sorting::SortOrder;
 
-// TODO transition this to use test structures/enums instead of tuples and serialize with serde.
+#[serde_as]
+#[derive(Debug, serde::Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct TestProjectBuilder {
+    pub name: String,
 
-#[derive(Default)]
-pub struct TestProjectBuilder<'a> {
-    name: Option<&'a str>,
-    processes: Option<&'a [(&'a str, &'a [&'a str])]>,
-    pcbs: Option<&'a [(&'a str, &'a str)]>,
-    unit_assignments: Option<&'a [(&'a str, BTreeMap<&'a str, &'a str>)]>,
-    part_states: Option<&'a [((&'a str, &'a str), &'a [&'a str])]>,
-    placements: Option<
-        &'a [(
-            &'a str,
-            &'a str,
-            (&'a str, &'a str, &'a str, bool, &'a str, Decimal, Decimal, Decimal),
-            bool,
-            &'a str,
-            Option<&'a str>,
-        )],
-    >,
-    phases: Option<&'a [(&'a str, &'a str, &'a str, &'a str, &'a [(&'a str, &'a str)])]>,
-    phase_orderings: Option<&'a [&'a str]>,
-    phase_states: Option<
-        &'a [(
-            &'a str,
-            &'a [(
-                &'a str,
-                TestProcessOperationStatus,
-                Option<TestProcessOperationExtraState>,
-            )],
-        )],
-    >,
+    /// The *definition* of the processes used by this project.
+    pub processes: Vec<TestProcessDefinition>,
+
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    pub pcbs: Vec<TestPcb>,
+
+    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub unit_assignments: BTreeMap<ObjectPath, DesignVariant>,
+
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub part_states: BTreeMap<TestPart, TestPartState>,
+
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub phases: BTreeMap<Reference, TestPhase>,
+
+    #[serde(skip_serializing_if = "IndexSet::is_empty")]
+    #[serde(default)]
+    pub phase_orderings: IndexSet<Reference>,
+
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub phase_states: BTreeMap<Reference, TestPhaseState>,
+
+    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub placements: BTreeMap<ObjectPath, TestPlacementState>,
 }
 
-impl<'a> TestProjectBuilder<'a> {
-    pub fn content(&self) -> String {
-        let mut root = json!({});
+impl TestProjectBuilder {
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
+        
+        self
+    }
 
-        if let Some(name) = self.name {
-            root["name"] = Value::String(name.to_string());
-        }
-
-        if let Some(processes) = self.processes {
-            root["processes"] = Value::Array(
-                processes
-                    .to_vec()
-                    .iter()
-                    .map(|(process_name, operations)| {
-                        let operation_values = operations
-                            .iter()
-                            .map(|operation| Value::String(operation.to_string()))
-                            .collect();
-
-                        let mut process_map = Map::new();
-                        process_map.insert("name".to_string(), Value::String(process_name.to_string()));
-                        process_map.insert("operations".to_string(), Value::Array(operation_values));
-
-                        Value::Object(process_map)
-                    })
-                    .collect(),
-            );
-        }
-
-        if let Some(pcbs) = self.pcbs {
-            root["pcbs"] = Value::Array(
-                pcbs.to_vec()
-                    .iter()
-                    .map(|(kind, name)| {
-                        let mut pcb_map = Map::new();
-                        pcb_map.insert("kind".to_string(), Value::String(kind.to_string()));
-                        pcb_map.insert("name".to_string(), Value::String(name.to_string()));
-                        Value::Object(pcb_map)
-                    })
-                    .collect(),
-            );
-        }
-
-        if let Some(unit_assignments) = self.unit_assignments {
-            let values: Vec<Value> = unit_assignments
-                .iter()
-                .map(|(key, values)| {
-                    Value::Array(vec![
-                        Value::String(key.to_string()),
-                        Value::Object(
-                            values
-                                .iter()
-                                .fold(Map::new(), |mut map, (k, v)| {
-                                    map.insert(k.to_string(), Value::String(v.to_string()));
-
-                                    map
-                                }),
-                        ),
-                    ])
-                })
-                .collect();
-
-            root["unit_assignments"] = Value::Array(values);
-        }
-
-        if let Some(part_states) = self.part_states {
-            let values: Vec<Value> = part_states
-                .iter()
-                .map(|((manufacturer, mpn), applicable_processes)| {
-                    let mut part_map = Map::new();
-                    part_map.insert("manufacturer".to_string(), Value::String(manufacturer.to_string()));
-                    part_map.insert("mpn".to_string(), Value::String(mpn.to_string()));
-
-                    let mut state_map = Map::new();
-                    if !applicable_processes.is_empty() {
-                        state_map.insert(
-                            "applicable_processes".to_string(),
-                            Value::Array(
-                                applicable_processes
-                                    .to_vec()
-                                    .iter()
-                                    .map(|process| Value::String(process.to_string()))
-                                    .collect(),
-                            ),
-                        );
-                    }
-
-                    Value::Array(vec![Value::Object(part_map), Value::Object(state_map)])
-                })
-                .collect();
-
-            root["part_states"] = Value::Array(values);
-        }
-
-        if let Some(phases) = self.phases {
-            let values: Vec<Value> = phases
-                .iter()
-                .map(|(reference, process, load_out_source, pcb_side, sort_orderings)| {
-                    let mut phase_map = Map::new();
-                    phase_map.insert("reference".to_string(), Value::String(reference.to_string()));
-                    phase_map.insert("process".to_string(), Value::String(process.to_string()));
-                    phase_map.insert(
-                        "load_out_source".to_string(),
-                        Value::String(load_out_source.to_string()),
-                    );
-                    phase_map.insert("pcb_side".to_string(), Value::String(pcb_side.to_string()));
-
-                    if !sort_orderings.is_empty() {
-                        let sort_orderings_values: Vec<Value> = sort_orderings
-                            .iter()
-                            .map(|(mode, sort_order)| {
-                                let mut ordering_map = Map::new();
-                                ordering_map.insert("mode".to_string(), Value::String(mode.to_string()));
-                                ordering_map.insert("sort_order".to_string(), Value::String(sort_order.to_string()));
-                                Value::Object(ordering_map)
-                            })
-                            .collect();
-                        phase_map.insert("placement_orderings".to_string(), Value::Array(sort_orderings_values));
-                    }
-
-                    Value::Array(vec![Value::String(reference.to_string()), Value::Object(phase_map)])
-                })
-                .collect();
-            root["phases"] = Value::Array(values);
-        }
-
-        if let Some(phase_orderings) = self.phase_orderings {
-            let values: Vec<Value> = phase_orderings
-                .iter()
-                .map(|phase_ordering| Value::String(phase_ordering.to_string()))
-                .collect();
-            root["phase_orderings"] = Value::Array(values);
-        }
-
-        if let Some(phase_states) = self.phase_states {
-            let values = phase_states
-                .iter()
-                .map(|(reference, operation_states)| {
-                    let operation_state_entries =
-                        operation_states
-                            .iter()
-                            .fold(Vec::new(), |mut values, (operation, status, extra_state)| {
-                                let mut operation_state_map = Map::new();
-
-                                operation_state_map.insert("status".to_string(), Value::String(status.to_string()));
-                                match extra_state {
-                                    Some(TestProcessOperationExtraState::PlacementOperation {
-                                        placements_state,
-                                    }) => {
-                                        let mut placements_state_map = Map::new();
-                                        placements_state_map.insert(
-                                            "placed".to_string(),
-                                            Value::Number(Number::from(placements_state.placed)),
-                                        );
-                                        placements_state_map.insert(
-                                            "total".to_string(),
-                                            Value::Number(Number::from(placements_state.total)),
-                                        );
-
-                                        let mut placement_operation_map = Map::new();
-                                        placement_operation_map.insert(
-                                            "placements_state".to_string(),
-                                            Value::Object(placements_state_map),
-                                        );
-
-                                        let mut extra_map = Map::new();
-                                        extra_map.insert(
-                                            "PlacementOperation".to_string(),
-                                            Value::Object(placement_operation_map),
-                                        );
-
-                                        operation_state_map.insert("extra".to_string(), Value::Object(extra_map));
-                                    }
-                                    _ => {}
-                                }
-
-                                // create the tuple
-                                let array = Value::Array(vec![
-                                    Value::String(operation.to_string()),
-                                    Value::Object(operation_state_map),
-                                ]);
-
-                                // add to the array of tuples
-                                values.push(array);
-
-                                values
-                            });
-
-                    let mut phase_state = Map::new();
-                    phase_state.insert("operation_state".to_string(), Value::Array(operation_state_entries));
-
-                    Value::Array(vec![Value::String(reference.to_string()), Value::Object(phase_state)])
-                })
-                .collect();
-            root["phase_states"] = Value::Array(values);
-        }
-
-        if let Some(placements) = self.placements {
-            let values: Vec<Value> = placements
-                .iter()
-                .map(
-                    |(
-                        key,
-                        unit_path,
-                        (ref_des, manufacturer, mpn, place, pcb_side, x, y, rotation),
-                        placed,
-                        status,
-                        phase,
-                    )| {
-                        let mut part_map = Map::new();
-                        part_map.insert("manufacturer".to_string(), Value::String(manufacturer.to_string()));
-                        part_map.insert("mpn".to_string(), Value::String(mpn.to_string()));
-
-                        let mut placement_map = Map::new();
-                        placement_map.insert("ref_des".to_string(), Value::String(ref_des.to_string()));
-                        placement_map.insert("part".to_string(), Value::Object(part_map));
-                        placement_map.insert("place".to_string(), Value::Bool(*place));
-                        placement_map.insert("pcb_side".to_string(), Value::String(pcb_side.to_string()));
-                        placement_map.insert("x".to_string(), Value::String(x.to_string()));
-                        placement_map.insert("y".to_string(), Value::String(y.to_string()));
-                        placement_map.insert("rotation".to_string(), Value::String(rotation.to_string()));
-
-                        let mut placement_state_map = Map::new();
-                        placement_state_map.insert("unit_path".to_string(), Value::String(unit_path.to_string()));
-                        placement_state_map.insert("placement".to_string(), Value::Object(placement_map));
-                        placement_state_map.insert("placed".to_string(), Value::Bool(*placed));
-                        placement_state_map.insert("status".to_string(), Value::String(status.to_string()));
-
-                        if let Some(phase) = phase {
-                            placement_state_map.insert("phase".to_string(), Value::String(phase.to_string()));
-                        }
-
-                        Value::Array(vec![Value::String(key.to_string()), Value::Object(placement_state_map)])
+    pub fn with_default_processes(mut self) -> Self {
+        self.processes.clear();
+        
+        self.processes.push( TestProcessDefinition {
+            reference: Reference::from_raw_str("pnp"),
+            operations: vec![
+                TestOperationDefinition {
+                    reference: Reference::from_raw_str("load_pcbs"),
+                    tasks: vec![
+                        TaskReference::from_raw_str("core::load_pcbs"),
+                    ],
+                },
+                TestOperationDefinition {
+                    reference: Reference::from_raw_str("automated_pnp"),
+                    tasks: vec![
+                        TaskReference::from_raw_str("core::place_components"),
+                    ],
+                },
+                TestOperationDefinition {
+                    reference: Reference::from_raw_str("reflow_oven_soldering"),
+                    tasks: vec![
+                        TaskReference::from_raw_str("core::automated_soldering"),
+                    ],
+                },
+            ],
+            rules: vec![
+                ProcessRuleReference::from_raw_str("core::unique_feeder_references")
+            ],
+        });
+        
+        self.processes.push(TestProcessDefinition {
+                reference: Reference::from_raw_str("manual"),
+                operations: vec![
+                    TestOperationDefinition {
+                        reference: Reference::from_raw_str("load_pcbs"),
+                        tasks: vec![
+                            TaskReference::from_raw_str("core::load_pcbs"),
+                        ],
                     },
-                )
-                .collect();
+                    TestOperationDefinition {
+                        reference: Reference::from_raw_str("manually_solder_components"),
+                        tasks: vec![
+                            TaskReference::from_raw_str("core::place_components"),
+                            TaskReference::from_raw_str("core::manual_soldering"),
+                        ],
+                    },
+                ],
+                rules: vec![],
+            });
+        
+        self
+    }
 
-            root["placements"] = Value::Array(values);
+    pub fn with_pcbs(mut self, pcbs: Vec<TestPcb>) -> Self {
+        self.pcbs = pcbs;
+        self
+    }
+    
+    pub fn with_unit_assignments(mut self, unit_assignments: Vec<(ObjectPath, DesignVariant)>) -> Self {
+        self.unit_assignments = BTreeMap::from_iter(unit_assignments.into_iter());
+        self
+    }
+
+    pub fn with_part_states(mut self, part_states: Vec<(TestPart, TestPartState)>) -> Self {
+        self.part_states = BTreeMap::from_iter(part_states.into_iter());
+        self
+    }
+
+    pub fn with_placements(mut self, placements: Vec<(&str, TestPlacementState)>) -> Self {
+        self.placements = BTreeMap::from_iter(placements.into_iter().map(|(a,b)|(ObjectPath::from_str(a).unwrap(),b)));
+        self
+    }
+    
+    pub fn with_phases(mut self, phases: Vec<TestPhase>) -> Self {
+        self.phases = BTreeMap::from_iter(phases.into_iter().map(|phase|(phase.reference.clone(), phase)));
+        self
+    }
+    
+    pub fn with_phase_orderings(mut self, phase_orderings: &[&str]) -> Self {
+        self.phase_orderings = IndexSet::from_iter(phase_orderings.into_iter().map(|a|Reference::from_raw_str(a)));
+        self
+    }
+    
+    pub fn with_phase_states(mut self, phase_states: Vec<(&str, Vec<TestOperationState>)>) -> Self {
+        self.phase_states = BTreeMap::from_iter(phase_states.into_iter().map(|(reference, operation_states)|{
+            (Reference::from_raw_str(reference), TestPhaseState { operation_states })
+        }));
+        self
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestProcessDefinition {
+    pub reference: ProcessReference,
+    pub operations: Vec<TestOperationDefinition>,
+    pub rules: Vec<ProcessRuleReference>
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestOperationDefinition {
+    pub reference: OperationReference,
+    pub tasks: Vec<TaskReference>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPcb {
+    pub kind: PcbKind,
+    pub name: String,
+}
+
+#[derive(Debug, serde::Serialize, Ord, PartialOrd, Eq, PartialEq)]
+pub struct TestPart {
+    pub manufacturer: String,
+    pub mpn: String,
+}
+
+impl TestPart {
+    pub fn new(manufacturer: &str, mpn: &str) -> Self {
+        Self {
+            manufacturer: manufacturer.to_string(),
+            mpn: mpn.to_string(),
         }
+    }
+}
 
-        let mut buffer = Vec::new();
+#[derive(Debug, serde::Serialize, Default)]
+pub struct TestPartState {
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    #[serde(default)]
+    pub applicable_processes: BTreeSet<ProcessReference>,
+}
+
+impl TestPartState {
+    pub fn new(references: &[&str]) -> Self {
+        Self {
+            applicable_processes: BTreeSet::from_iter(references.into_iter().map(|reference|ProcessReference::from_raw_str(reference))),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPhase {
+    pub reference: Reference,
+    pub process: ProcessReference,
+    pub load_out_source: String,
+    pub pcb_side: PcbSide,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
+    pub placement_orderings: Vec<TestPlacementSortingItem>,
+}
+
+impl TestPhase {
+    pub fn new(reference: &str, process: &str, path: &str, pcb_side: PcbSide, placement_orderings: &[(&str, &str)]) -> Self {
+        Self {
+            reference: Reference::from_raw_str(reference),
+            process: Reference::from_raw_str(process),
+            load_out_source: path.to_string(),
+            pcb_side,
+            placement_orderings: placement_orderings.into_iter().map(|(mode, sort_order)|{
+                TestPlacementSortingItem { 
+                    mode: PlacementSortingMode::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(mode)).unwrap(), 
+                    sort_order: SortOrder::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(sort_order)).unwrap(),
+                }
+            }).collect(),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPhaseState {
+    pub operation_states: Vec<TestOperationState>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestOperationState {
+    pub reference: OperationReference,
+    pub task_states: IndexMap<TaskReference, Box<dyn TestSerializableTaskState>>,
+}
+
+#[typetag::serialize(tag = "type")]
+pub trait TestSerializableTaskState: TestTaskState + AsAny + Send + Sync + Debug {
+}
+//dyn_eq::eq_trait_object!(TestSerializableTaskState);
+//dyn_clone::clone_trait_object!(TestSerializableTaskState);
+
+pub trait TestTaskState {
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPlacementTaskState {
+    pub placed: usize,
+    pub skipped: usize,
+    pub total: usize,
+    status: TaskStatus,
+}
+
+impl TestTaskState for TestPlacementTaskState {}
+
+#[typetag::serialize(name = "core::placement_task_state")]
+impl TestSerializableTaskState for TestPlacementTaskState {}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPlacementSortingItem {
+    pub mode: PlacementSortingMode,
+    pub sort_order: SortOrder,
+}
+
+#[serde_as]
+#[derive(Debug, serde::Serialize)]
+pub struct TestPlacementState {
+    #[serde_as(as = "DisplayFromStr")]
+    pub unit_path: ObjectPath,
+    pub placement: TestPlacement,
+    pub operation_status: PlacementStatus,
+    pub project_status: ProjectPlacementStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub phase: Option<Reference>,
+}
+
+impl TestPlacementState {
+    pub fn new(unit_path: &str, placement: TestPlacement, operation_status: PlacementStatus, project_status: ProjectPlacementStatus, phase: Option<&str>) -> Self {
+        TestPlacementState {
+            unit_path: ObjectPath::from_str(unit_path).unwrap(),
+            placement,
+            operation_status,
+            project_status,
+            phase: phase.map(|phase|Reference::from_str(phase).unwrap()),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct TestPlacement {
+    pub ref_des: RefDes,
+    pub part: TestPart,
+    pub place: bool,
+    pub pcb_side: PcbSide,
+    pub x: Decimal,
+    pub y: Decimal,
+    pub rotation: Decimal,
+}
+
+impl TestPlacement {
+    pub fn new(ref_des: &str, manufacturer: &str, mpn: &str, place: bool, pcb_side: PcbSide, x: Decimal, y: Decimal, rotation: Decimal) -> Self {
+        // FUTURE add test assertions
+        Self {
+            ref_des: RefDes::from(ref_des),
+            part: TestPart { manufacturer: manufacturer.to_string(), mpn: mpn.to_string() },
+            place,
+            pcb_side,
+            x,
+            y,
+            rotation,
+        }
+    }
+}
+
+impl TestProjectBuilder {
+    pub fn content(&self) -> String {
+        let mut content : Vec<u8> = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut buffer, formatter);
+        let mut ser = serde_json::Serializer::with_formatter(&mut content, formatter);
+        self.serialize(&mut ser).unwrap();
+        content.push(b'\n');
 
-        root.serialize(&mut ser).expect("TODO");
-
-        let mut content = String::from_utf8(buffer).unwrap();
-        content.push('\n');
-
-        content
-    }
-
-    pub fn with_pcbs(mut self, pcbs: &'a [(&'a str, &'a str)]) -> Self {
-        self.pcbs = Some(pcbs);
-        self
-    }
-
-    pub fn with_phases(mut self, phases: &'a [(&'a str, &'a str, &'a str, &'a str, &'a [(&'a str, &'a str)])]) -> Self {
-        self.phases = Some(phases);
-        self
-    }
-
-    pub fn with_phase_states(
-        mut self,
-        phase_states: &'a [(
-            &'a str,
-            &'a [(
-                &'a str,
-                TestProcessOperationStatus,
-                Option<TestProcessOperationExtraState>,
-            )],
-        )],
-    ) -> Self {
-        self.phase_states = Some(phase_states);
-        self
-    }
-
-    pub fn with_phase_orderings(mut self, phase_orderings: &'a [&'a str]) -> Self {
-        self.phase_orderings = Some(phase_orderings);
-        self
-    }
-
-    pub fn with_placements(
-        mut self,
-        placements: &'a [(
-            &'a str,
-            &'a str,
-            (&'a str, &'a str, &'a str, bool, &'a str, Decimal, Decimal, Decimal),
-            bool,
-            &'a str,
-            Option<&'a str>,
-        )],
-    ) -> Self {
-        self.placements = Some(placements);
-        self
-    }
-
-    pub fn with_part_states(mut self, part_states: &'a [((&'a str, &'a str), &'a [&'a str])]) -> Self {
-        self.part_states = Some(part_states);
-        self
-    }
-
-    pub fn with_unit_assignments(mut self, unit_assignments: &'a [(&'a str, BTreeMap<&'a str, &'a str>)]) -> Self {
-        self.unit_assignments = Some(unit_assignments);
-        self
-    }
-    pub fn with_processes(mut self, processes: &'a [(&'a str, &'a [&'a str])]) -> Self {
-        self.processes = Some(processes);
-        self
-    }
-
-    pub fn nwith_default_processes(mut self) -> Self {
-        self.processes = Some(&[
-            ("pnp", &["LoadPcbs", "AutomatedPnp", "ReflowComponents"]),
-            ("manual", &["LoadPcbs", "ManuallySolderComponents"]),
-        ]);
-        self
-    }
-
-    pub fn with_name(mut self, name: &'a str) -> Self {
-        self.name = Some(name);
-        self
+        String::from_utf8(content).unwrap()
     }
 
     pub fn new() -> Self {

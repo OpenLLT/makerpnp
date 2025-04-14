@@ -20,6 +20,12 @@ impl Display for VariantName {
     }
 }
 
+impl From<&str> for VariantName {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("Variant name error")]
 pub struct VariantNameError;

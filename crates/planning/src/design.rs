@@ -34,6 +34,12 @@ impl Display for DesignName {
     }
 }
 
+impl From<&str> for DesignName {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("Design name error")]
 pub struct DesignNameError;

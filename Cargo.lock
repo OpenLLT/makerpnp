@@ -3422,6 +3422,7 @@ dependencies = [
  "crossbeam-channel",
  "crux_core",
  "csv",
+ "indexmap 2.7.1",
  "indoc",
  "planner_app",
  "planner_cli",
@@ -3433,11 +3434,13 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "serde_json",
+ "serde_with",
  "stores",
  "tempfile",
  "thiserror 2.0.11",
  "time",
  "tracing",
+ "typetag",
  "util",
 ]
 
