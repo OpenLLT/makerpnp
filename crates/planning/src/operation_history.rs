@@ -15,7 +15,7 @@ use time::OffsetDateTime;
 use tracing::info;
 
 use crate::placement::PlacementOperation;
-use crate::process::{TaskReference, TaskStatus, OperationReference};
+use crate::process::{OperationReference, TaskReference, TaskStatus};
 use crate::reference::Reference;
 
 #[typetag::serde(tag = "type")]

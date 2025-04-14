@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;
+use planning::placement::PlacementOperation;
+use planning::process::{OperationReference, TaskReference, TaskStatus};
+use pnp::object_path::ObjectPath;
 use serde_json::Value;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use time::serde::rfc3339;
 use time::OffsetDateTime;
-use planning::placement::PlacementOperation;
-use planning::process::{OperationReference, TaskReference, TaskStatus};
-use pnp::object_path::ObjectPath;
 
 #[derive(Debug, Clone, serde::Deserialize, PartialEq)]
 pub enum TestOperationHistoryPlacementOperation {
     Placed,
 }
-
 
 #[typetag::serde(tag = "type")]
 pub trait TestOperationHistoryKind: DynClone + DynEq + Debug {}
@@ -40,7 +40,6 @@ pub struct TestPlacementOperationHistoryKind {
 
 #[typetag::serde(name = "placement_operation")]
 impl TestOperationHistoryKind for TestPlacementOperationHistoryKind {}
-
 
 #[derive(Debug, serde::Deserialize, Clone)]
 pub struct TestOperationHistoryItem {

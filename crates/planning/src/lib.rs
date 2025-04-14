@@ -1,7 +1,7 @@
 pub mod actions;
+pub mod design;
 pub mod operation;
 pub mod operation_history;
-pub mod design;
 pub mod part;
 pub mod phase;
 pub mod placement;

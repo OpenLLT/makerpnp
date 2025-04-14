@@ -163,7 +163,7 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
             0 => {
                 // TODO validate the feeder reference here?
                 true
-            },
+            }
             1 => false,
             2 => false,
             _ => unreachable!(),

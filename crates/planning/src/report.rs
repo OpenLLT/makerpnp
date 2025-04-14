@@ -19,7 +19,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{TaskStatus, OperationReference};
+use crate::process::{OperationReference, TaskStatus};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -60,12 +60,12 @@ pub fn project_generate_report(
 
                     let mut operations_overview = vec![];
 
-                    let phase_status = phase_state.operation_states.iter().fold(
-                        PhaseStatus::Complete,
-                        |mut phase_status, operation_state| {
-
+                    let phase_status = phase_state
+                        .operation_states
+                        .iter()
+                        .fold(PhaseStatus::Complete, |mut phase_status, operation_state| {
                             let overview: Option<PhaseOperationOverview> = None;
-                            
+
                             // TODO use operation_state.tasks to build something
 
                             if let Some(overview) = overview {
@@ -73,8 +73,7 @@ pub fn project_generate_report(
                             }
 
                             phase_status
-                        },
-                    );
+                        });
 
                     if phase_status == PhaseStatus::Incomplete {
                         all_phases_complete = false
@@ -729,7 +728,7 @@ pub enum PcbReportItem {
 
 #[derive(Clone, serde::Serialize)]
 pub enum PhaseOperation {
-    PreparePcbs {  },
+    PreparePcbs {},
     PlaceComponents {},
     ReflowComponents {},
     ManuallySolderComponents {},

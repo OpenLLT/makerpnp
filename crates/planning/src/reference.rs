@@ -6,9 +6,9 @@ use thiserror::Error;
 // FUTURE Consider adding `NamespacedReference`
 
 /// Reference should be a string with no-whitespace characters at all
-/// 
+///
 /// This is mostly so they can be used on the command line without parsing issues.
-/// 
+///
 /// Some references use namespacing, in the form `<value>[::<...>]`  e.g. `this::that::the_other`
 #[derive(
     Debug,
@@ -28,11 +28,14 @@ impl Reference {
         if value.is_empty() {
             return false;
         }
-        
-        if value.chars().any(|c| c.is_whitespace() || c.is_ascii_control() || c.is_control()) {
+
+        if value
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_ascii_control() || c.is_control())
+        {
             return false;
         }
-        
+
         true
     }
 
@@ -42,10 +45,10 @@ impl Reference {
 
         Self(value)
     }
-    
+
     pub fn from_raw(value: String) -> Self {
         assert!(Self::is_valid(&value));
-        
+
         Self(value.to_string())
     }
 }
@@ -85,6 +88,7 @@ pub enum ReferenceError {
 #[cfg(test)]
 mod reference_tests {
     use rstest::rstest;
+
     use crate::reference::Reference;
 
     #[rstest]

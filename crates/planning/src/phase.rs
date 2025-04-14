@@ -5,7 +5,10 @@ use pnp::pcb::PcbSide;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
-use crate::process::{ProcessDefinition, ProcessReference, OperationReference, OperationState, PlacementTaskState, SerializableTaskState, TaskReference, LoadPcbsOperationState, AutomatedSolderingOperationState, ManualSolderingOperationState};
+use crate::process::{
+    AutomatedSolderingOperationState, LoadPcbsOperationState, ManualSolderingOperationState, OperationReference,
+    OperationState, PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
+};
 use crate::reference::Reference;
 
 // TODO
@@ -62,35 +65,35 @@ pub struct PhaseState {
 }
 
 impl PhaseState {
-    
     // Safety: all process must be valid
     pub fn from_process(process: &ProcessDefinition) -> Self {
         let operation_states = process
             .operations
             .iter()
             .map(|process_operation| {
+                let task_states = process_operation
+                    .tasks
+                    .iter()
+                    .map(|task_reference| {
+                        let task_state = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                            Box::new(LoadPcbsOperationState::default()) as Box<dyn SerializableTaskState>
+                        } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+                            Box::new(PlacementTaskState::default()) as Box<dyn SerializableTaskState>
+                        } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+                            Box::new(AutomatedSolderingOperationState::default()) as Box<dyn SerializableTaskState>
+                        } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+                            Box::new(ManualSolderingOperationState::default()) as Box<dyn SerializableTaskState>
+                        } else {
+                            panic!("unknown task reference {:?}", task_reference);
+                        };
 
-                let task_states = process_operation.tasks.iter().map(|task_reference|{
+                        (task_reference.clone(), task_state)
+                    })
+                    .collect::<IndexMap<_, _>>();
 
-                    let task_state = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
-                        Box::new(LoadPcbsOperationState::default()) as Box<dyn SerializableTaskState>
-                    } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
-                        Box::new(PlacementTaskState::default()) as Box<dyn SerializableTaskState>
-                    } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
-                        Box::new(AutomatedSolderingOperationState::default()) as Box<dyn SerializableTaskState>
-                    } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
-                        Box::new(ManualSolderingOperationState::default()) as Box<dyn SerializableTaskState>
-                    } else {
-                        panic!("unknown task reference {:?}", task_reference);
-                    };
-                    
-                    (task_reference.clone(), task_state)
-                    
-                }).collect::<IndexMap<_, _>>();
-                
                 OperationState {
                     reference: process_operation.reference.clone(),
-                    task_states
+                    task_states,
                 }
             })
             .collect::<Vec<_>>();
@@ -99,7 +102,7 @@ impl PhaseState {
             operation_states,
         }
     }
-    
+
     pub fn reset(&mut self) {
         for state in self.operation_states.iter_mut() {
             for (_task_reference, task_state) in state.task_states.iter_mut() {

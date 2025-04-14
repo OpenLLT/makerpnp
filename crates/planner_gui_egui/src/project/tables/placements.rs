@@ -9,12 +9,16 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, ProjectPlacementStatus, PlacementsItem, Reference, PlacementStatus};
+use planner_app::{
+    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, PlacementsItem,
+    ProjectPlacementStatus, Reference,
+};
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
 use crate::i18n::conversions::{
-    pcb_side_to_i18n_key, placement_place_to_i18n_key, placement_operation_status_to_i18n_key, placement_project_status_to_i18n_key,
+    pcb_side_to_i18n_key, placement_operation_status_to_i18n_key, placement_place_to_i18n_key,
+    placement_project_status_to_i18n_key,
 };
 use crate::i18n::datatable_support::FluentTranslator;
 use crate::ui_component::{ComponentState, UiComponent};
@@ -256,7 +260,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .cmp(&row_r.placement_state.placement.ref_des),
             PLACE_COL => row_l
                 .placement_state
-                .placement.place
+                .placement
+                .place
                 .cmp(&row_r.placement_state.placement.place),
             MANUFACTURER_COL => row_l
                 .placement_state
@@ -370,11 +375,15 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 ui.label(phase)
             }
             PLACED_COL => {
-                let label = tr!(placement_operation_status_to_i18n_key(&row.placement_state.operation_status));
+                let label = tr!(placement_operation_status_to_i18n_key(
+                    &row.placement_state.operation_status
+                ));
                 ui.label(label)
             }
             STATUS_COL => {
-                let label = tr!(placement_project_status_to_i18n_key(&row.placement_state.project_status));
+                let label = tr!(placement_project_status_to_i18n_key(
+                    &row.placement_state.project_status
+                ));
                 ui.label(label)
             }
             ORDERING_COL => ui.label(row.ordering.to_string()),
@@ -427,9 +436,21 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 Some(response)
             }
             PLACED_COL => {
-                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Pending, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)));
-                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Placed, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)));
-                ui.radio_value(&mut row.placement_state.operation_status, PlacementStatus::Skipped, tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)));
+                ui.radio_value(
+                    &mut row.placement_state.operation_status,
+                    PlacementStatus::Pending,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)),
+                );
+                ui.radio_value(
+                    &mut row.placement_state.operation_status,
+                    PlacementStatus::Placed,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)),
+                );
+                ui.radio_value(
+                    &mut row.placement_state.operation_status,
+                    PlacementStatus::Skipped,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)),
+                );
 
                 Some(ui.response())
             }

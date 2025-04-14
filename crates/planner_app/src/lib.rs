@@ -8,17 +8,17 @@ use crux_core::render::Render;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
-pub use planning::design::{DesignName, DesignVariant};
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
+pub use planning::design::{DesignName, DesignVariant};
 use planning::phase::{Phase, PhaseState};
-pub use planning::placement::PlacementStatus;
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
-pub use planning::placement::{PlacementState, PlacementOperation};
+pub use planning::placement::PlacementStatus;
 pub use planning::placement::ProjectPlacementStatus;
+pub use planning::placement::{PlacementOperation, PlacementState};
 pub use planning::process::ProcessReference;
-pub use planning::process::{ProcessDefinition, OperationReference, OperationAction};
 pub use planning::process::TaskStatus;
+pub use planning::process::{OperationAction, OperationReference, ProcessDefinition};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -35,6 +35,7 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{info, trace};
+
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 
@@ -1137,7 +1138,7 @@ impl Planner {
                 Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
             }),
             Event::RequestProcessView {
-                process_reference ,
+                process_reference,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project, ..
@@ -1146,14 +1147,13 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let process_reference = ProcessReference::try_from(process_reference)
-                    .map_err(|err|AppError::ProcessError(err.into()))?;
-                
+                let process_reference =
+                    ProcessReference::try_from(process_reference).map_err(|err| AppError::ProcessError(err.into()))?;
 
                 let process = project
                     .find_process(&process_reference)
                     .map_err(|err| AppError::ProcessError(err.into()))?;
-                
+
                 Ok(view_renderer::view(ProjectView::Process(process.clone())))
             }),
             Event::RequestPartStatesView {} => Box::new(move |model: &mut Model| {

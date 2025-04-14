@@ -7,7 +7,11 @@ use std::str::FromStr;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use planner_app::{AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementState, PlacementStatus, PlacementOperation, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction, VariantName};
+use planner_app::{
+    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementOperation, PlacementState,
+    PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
+    VariantName,
+};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, info, trace};
@@ -372,7 +376,7 @@ impl Project {
                 debug!("phase_reference: {}", phase_reference);
 
                 let reference = Reference::from_raw(phase_reference);
-                
+
                 project.show_phase(key.clone(), reference.clone());
 
                 let tasks: Vec<_> = vec![
@@ -487,13 +491,12 @@ impl Project {
             old_placement: &PlacementState,
         ) -> Option<Result<Vec<ProjectAction>, ProjectAction>> {
             if new_placement.operation_status != old_placement.operation_status {
-                
                 let operation = match new_placement.operation_status {
                     PlacementStatus::Placed => PlacementOperation::Place,
                     PlacementStatus::Skipped => PlacementOperation::Skip,
                     PlacementStatus::Pending => PlacementOperation::Place,
                 };
-                
+
                 Some(
                     planner_core_service
                         .update(key.clone(), Event::RecordPlacementsOperation {

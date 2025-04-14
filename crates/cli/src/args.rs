@@ -1,7 +1,7 @@
 use clap::ValueEnum;
 use eda::EdaTool;
 use planning::actions::{AddOrRemoveAction, SetOrClearAction};
-use planning::placement::{PlacementSortingMode, PlacementOperation};
+use planning::placement::{PlacementOperation, PlacementSortingMode};
 use planning::process::OperationAction;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
@@ -148,7 +148,6 @@ impl From<PlacementOperationArg> for PlacementOperation {
         }
     }
 }
-
 
 #[derive(Clone, Debug)]
 #[derive(ValueEnum)]

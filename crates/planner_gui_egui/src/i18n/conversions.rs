@@ -1,4 +1,4 @@
-use planner_app::{PcbSide, PlacementSortingMode, ProjectPlacementStatus, TaskStatus, PlacementStatus};
+use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus};
 use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {

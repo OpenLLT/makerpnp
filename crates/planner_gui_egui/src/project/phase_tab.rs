@@ -1,11 +1,11 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, TaskStatus, Reference};
+use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference, TaskStatus};
 use regex::Regex;
 use tracing::{debug, trace};
 
-use crate::i18n::conversions::{process_operation_status_to_i18n_key};
+use crate::i18n::conversions::process_operation_status_to_i18n_key;
 use crate::project::dialogs::placement_orderings::{
     PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
@@ -149,7 +149,7 @@ impl UiComponent for PhaseUi {
                     }
 
                     ui.label(state.reference.to_string());
-                    
+
                     for (task_index, (reference, task)) in state.task_states.iter().enumerate() {
                         let status = task.status();
                         let color = match status {
@@ -162,7 +162,6 @@ impl UiComponent for PhaseUi {
                             ui.label("::");
                         }
                         ui.label(reference.to_string());
-
 
                         let status = tr!(process_operation_status_to_i18n_key(&status));
                         ui.colored_label(color, status);

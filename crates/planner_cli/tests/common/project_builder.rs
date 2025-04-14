@@ -1,24 +1,19 @@
-use serde_with::DisplayFromStr;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display, Formatter};
-
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-
-use serde_with::serde_as;
 use planning::design::DesignVariant;
-
-use planning::placement::{ PlacementSortingMode,  PlacementStatus, ProjectPlacementStatus};
-use planning::process::{ OperationReference,   ProcessReference, ProcessRuleReference,  TaskReference, TaskStatus};
+use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
+use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::reference::Reference;
 use pnp::object_path::ObjectPath;
-
-use pnp::pcb::{ PcbKind, PcbSide};
-use pnp::placement::{RefDes};
-
+use pnp::pcb::{PcbKind, PcbSide};
+use pnp::placement::RefDes;
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use serde_with::DisplayFromStr;
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
 
@@ -75,41 +70,33 @@ impl TestProjectBuilder {
     pub fn with_default_processes(mut self) -> Self {
         self.processes.clear();
 
-        self.processes.push( TestProcessDefinition {
-            reference: Reference::from_raw_str("pnp"),
-            operations: vec![
-                TestOperationDefinition {
-                    reference: Reference::from_raw_str("load_pcbs"),
-                    tasks: vec![
-                        TaskReference::from_raw_str("core::load_pcbs"),
-                    ],
-                },
-                TestOperationDefinition {
-                    reference: Reference::from_raw_str("automated_pnp"),
-                    tasks: vec![
-                        TaskReference::from_raw_str("core::place_components"),
-                    ],
-                },
-                TestOperationDefinition {
-                    reference: Reference::from_raw_str("reflow_oven_soldering"),
-                    tasks: vec![
-                        TaskReference::from_raw_str("core::automated_soldering"),
-                    ],
-                },
-            ],
-            rules: vec![
-                ProcessRuleReference::from_raw_str("core::unique_feeder_references")
-            ],
-        });
+        self.processes
+            .push(TestProcessDefinition {
+                reference: Reference::from_raw_str("pnp"),
+                operations: vec![
+                    TestOperationDefinition {
+                        reference: Reference::from_raw_str("load_pcbs"),
+                        tasks: vec![TaskReference::from_raw_str("core::load_pcbs")],
+                    },
+                    TestOperationDefinition {
+                        reference: Reference::from_raw_str("automated_pnp"),
+                        tasks: vec![TaskReference::from_raw_str("core::place_components")],
+                    },
+                    TestOperationDefinition {
+                        reference: Reference::from_raw_str("reflow_oven_soldering"),
+                        tasks: vec![TaskReference::from_raw_str("core::automated_soldering")],
+                    },
+                ],
+                rules: vec![ProcessRuleReference::from_raw_str("core::unique_feeder_references")],
+            });
 
-        self.processes.push(TestProcessDefinition {
+        self.processes
+            .push(TestProcessDefinition {
                 reference: Reference::from_raw_str("manual"),
                 operations: vec![
                     TestOperationDefinition {
                         reference: Reference::from_raw_str("load_pcbs"),
-                        tasks: vec![
-                            TaskReference::from_raw_str("core::load_pcbs"),
-                        ],
+                        tasks: vec![TaskReference::from_raw_str("core::load_pcbs")],
                     },
                     TestOperationDefinition {
                         reference: Reference::from_raw_str("manually_solder_components"),
@@ -141,24 +128,42 @@ impl TestProjectBuilder {
     }
 
     pub fn with_placements(mut self, placements: Vec<(&str, TestPlacementState)>) -> Self {
-        self.placements = BTreeMap::from_iter(placements.into_iter().map(|(a,b)|(ObjectPath::from_str(a).unwrap(),b)));
+        self.placements = BTreeMap::from_iter(
+            placements
+                .into_iter()
+                .map(|(a, b)| (ObjectPath::from_str(a).unwrap(), b)),
+        );
         self
     }
 
     pub fn with_phases(mut self, phases: Vec<TestPhase>) -> Self {
-        self.phases = BTreeMap::from_iter(phases.into_iter().map(|phase|(phase.reference.clone(), phase)));
+        self.phases = BTreeMap::from_iter(
+            phases
+                .into_iter()
+                .map(|phase| (phase.reference.clone(), phase)),
+        );
         self
     }
 
     pub fn with_phase_orderings(mut self, phase_orderings: &[&str]) -> Self {
-        self.phase_orderings = IndexSet::from_iter(phase_orderings.into_iter().map(|a|Reference::from_raw_str(a)));
+        self.phase_orderings = IndexSet::from_iter(
+            phase_orderings
+                .into_iter()
+                .map(|a| Reference::from_raw_str(a)),
+        );
         self
     }
 
     pub fn with_phase_states(mut self, phase_states: Vec<(&str, Vec<TestOperationState>)>) -> Self {
-        self.phase_states = BTreeMap::from_iter(phase_states.into_iter().map(|(reference, operation_states)|{
-            (Reference::from_raw_str(reference), TestPhaseState { operation_states })
-        }));
+        self.phase_states = BTreeMap::from_iter(
+            phase_states
+                .into_iter()
+                .map(|(reference, operation_states)| {
+                    (Reference::from_raw_str(reference), TestPhaseState {
+                        operation_states,
+                    })
+                }),
+        );
         self
     }
 }
@@ -167,7 +172,7 @@ impl TestProjectBuilder {
 pub struct TestProcessDefinition {
     pub reference: ProcessReference,
     pub operations: Vec<TestOperationDefinition>,
-    pub rules: Vec<ProcessRuleReference>
+    pub rules: Vec<ProcessRuleReference>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -207,7 +212,11 @@ pub struct TestPartState {
 impl TestPartState {
     pub fn new(references: &[&str]) -> Self {
         Self {
-            applicable_processes: BTreeSet::from_iter(references.into_iter().map(|reference|ProcessReference::from_raw_str(reference))),
+            applicable_processes: BTreeSet::from_iter(
+                references
+                    .into_iter()
+                    .map(|reference| ProcessReference::from_raw_str(reference)),
+            ),
         }
     }
 }
@@ -224,18 +233,31 @@ pub struct TestPhase {
 }
 
 impl TestPhase {
-    pub fn new(reference: &str, process: &str, path: &str, pcb_side: PcbSide, placement_orderings: &[(&str, &str)]) -> Self {
+    pub fn new(
+        reference: &str,
+        process: &str,
+        path: &str,
+        pcb_side: PcbSide,
+        placement_orderings: &[(&str, &str)],
+    ) -> Self {
         Self {
             reference: Reference::from_raw_str(reference),
             process: Reference::from_raw_str(process),
             load_out_source: path.to_string(),
             pcb_side,
-            placement_orderings: placement_orderings.into_iter().map(|(mode, sort_order)|{
-                TestPlacementSortingItem {
-                    mode: PlacementSortingMode::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(mode)).unwrap(),
-                    sort_order: SortOrder::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(sort_order)).unwrap(),
-                }
-            }).collect(),
+            placement_orderings: placement_orderings
+                .into_iter()
+                .map(|(mode, sort_order)| TestPlacementSortingItem {
+                    mode: PlacementSortingMode::deserialize(
+                        serde::de::value::StrDeserializer::<serde::de::value::Error>::new(mode),
+                    )
+                    .unwrap(),
+                    sort_order: SortOrder::deserialize(
+                        serde::de::value::StrDeserializer::<serde::de::value::Error>::new(sort_order),
+                    )
+                    .unwrap(),
+                })
+                .collect(),
         }
     }
 }
@@ -255,19 +277,19 @@ impl TestOperationState {
     pub fn new(reference: &str, task_states: Vec<(&str, Box<dyn TestSerializableTaskState>)>) -> TestOperationState {
         TestOperationState {
             reference: Reference::from_raw_str(reference),
-            task_states: IndexMap::from_iter(task_states.into_iter().map(|(reference, task_state)|{
-                (TaskReference::from_raw_str(reference), task_state)
-            })),
+            task_states: IndexMap::from_iter(
+                task_states
+                    .into_iter()
+                    .map(|(reference, task_state)| (TaskReference::from_raw_str(reference), task_state)),
+            ),
         }
     }
 }
 
 #[typetag::serialize(tag = "type")]
-pub trait TestSerializableTaskState: TestTaskState + AsAny + Send + Sync + Debug {
-}
+pub trait TestSerializableTaskState: TestTaskState + AsAny + Send + Sync + Debug {}
 
-pub trait TestTaskState {
-}
+pub trait TestTaskState {}
 
 #[derive(Debug, serde::Serialize, Default)]
 pub struct TestPlacementTaskState {
@@ -312,12 +334,12 @@ macro_rules! generic_test_task {
         pub struct $name {
             status: TaskStatus,
         }
-        
+
         impl TestTaskState for $name {}
-        
+
         #[typetag::serialize(name = $key)]
         impl TestSerializableTaskState for $name {}
-        
+
         impl $name {
             pub fn new(status: TaskStatus) -> Self {
                 Self {
@@ -352,13 +374,19 @@ pub struct TestPlacementState {
 }
 
 impl TestPlacementState {
-    pub fn new(unit_path: &str, placement: TestPlacement, operation_status: PlacementStatus, project_status: ProjectPlacementStatus, phase: Option<&str>) -> Self {
+    pub fn new(
+        unit_path: &str,
+        placement: TestPlacement,
+        operation_status: PlacementStatus,
+        project_status: ProjectPlacementStatus,
+        phase: Option<&str>,
+    ) -> Self {
         TestPlacementState {
             unit_path: ObjectPath::from_str(unit_path).unwrap(),
             placement,
             operation_status,
             project_status,
-            phase: phase.map(|phase|Reference::from_str(phase).unwrap()),
+            phase: phase.map(|phase| Reference::from_str(phase).unwrap()),
         }
     }
 }
@@ -375,11 +403,23 @@ pub struct TestPlacement {
 }
 
 impl TestPlacement {
-    pub fn new(ref_des: &str, manufacturer: &str, mpn: &str, place: bool, pcb_side: PcbSide, x: Decimal, y: Decimal, rotation: Decimal) -> Self {
+    pub fn new(
+        ref_des: &str,
+        manufacturer: &str,
+        mpn: &str,
+        place: bool,
+        pcb_side: PcbSide,
+        x: Decimal,
+        y: Decimal,
+        rotation: Decimal,
+    ) -> Self {
         // FUTURE add test assertions
         Self {
             ref_des: RefDes::from(ref_des),
-            part: TestPart { manufacturer: manufacturer.to_string(), mpn: mpn.to_string() },
+            part: TestPart {
+                manufacturer: manufacturer.to_string(),
+                mpn: mpn.to_string(),
+            },
             place,
             pcb_side,
             x,
@@ -391,7 +431,7 @@ impl TestPlacement {
 
 impl TestProjectBuilder {
     pub fn content(&self) -> String {
-        let mut content : Vec<u8> = Vec::new();
+        let mut content: Vec<u8> = Vec::new();
         let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut content, formatter);
         self.serialize(&mut ser).unwrap();

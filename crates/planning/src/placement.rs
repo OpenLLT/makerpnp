@@ -19,7 +19,7 @@ pub struct PlacementState {
     pub unit_path: ObjectPath,
     pub placement: Placement,
     pub operation_status: PlacementStatus,
-    /// Status of the placement in the project 
+    /// Status of the placement in the project
     pub project_status: ProjectPlacementStatus,
 
     #[serde(skip_serializing_if = "Option::is_none")]

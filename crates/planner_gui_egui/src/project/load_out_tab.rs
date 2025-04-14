@@ -128,7 +128,7 @@ impl UiComponent for LoadOutUi {
                 let (_, _) = (index, old_row);
 
                 // TODO how to handle invalid feeder reference properly?
-                
+
                 if let Ok(feeder_reference) = Reference::try_from(new_row.feeder)
                     .inspect_err(|err| error!("Invalid feeder reference. cause: {:?}", err))
                 {
