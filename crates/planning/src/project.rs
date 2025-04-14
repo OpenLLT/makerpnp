@@ -1107,16 +1107,16 @@ pub fn update_phase_operation(
     let mut modified = false;
 
     // We can only complete an operation if all preceding operation have been completed
-    let (is_complete, _preceeding_operation, state) = phase_state
+    let (is_complete, _preceding_operation, state) = phase_state
         .operation_states
         .iter_mut()
         .try_fold(
             (true, None, None),
-            |(preceeding_phase_complete, preceding_operation_reference, found_state), state| {
+            |(preceding_phase_complete, preceding_operation_reference, found_state), state| {
                 let is_this_state_complete = state.is_complete();
                 let candidate_operation_reference = state.reference.clone();
 
-                match (preceeding_phase_complete, preceding_operation_reference, found_state) {
+                match (preceding_phase_complete, preceding_operation_reference, found_state) {
                     (true, _, Some(state)) => Ok((true, Some(candidate_operation_reference), Some(state))),
                     result @ (false, _, Some(_)) => {
                         // we found what we were looking for on a previous iteration
@@ -1125,7 +1125,7 @@ pub fn update_phase_operation(
                     }
                     (_, preceding_operation, None) => {
                         if candidate_operation_reference.eq(&operation) {
-                            if preceeding_phase_complete {
+                            if preceding_phase_complete {
                                 Ok((is_this_state_complete, Some(candidate_operation_reference), Some(state)))
                             } else {
                                 // Safety: the `unwrap` here is safe, as the first iteration will prevent this branch from being executed, and all other branches set the value to `Some`
