@@ -964,6 +964,9 @@ pub fn update_placements_operation(
         }
 
         for (object_path, placement_state) in placements {
+
+            // FIXME do not modify placement state when no phase is assigned.
+            
             let should_log = match placement_operation {
                 PlacementOperation::Place => match placement_state.operation_status {
                     PlacementStatus::Placed => {
@@ -1016,6 +1019,7 @@ pub fn update_placements_operation(
             };
 
             if should_log {
+                // FIXME this `unwrap` can panic, see above.
                 let phase = placement_state.phase.as_ref().unwrap();
 
                 let task_history = Box::new(PlacementOperationHistoryKind {
