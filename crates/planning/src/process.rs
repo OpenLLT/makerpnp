@@ -10,6 +10,9 @@
 //! Operations can be abandoned or skipped.
 //! 
 //! Later operations and phases cannot be actioned unless preceding phases and actions are completed/skipped/abandoned.
+
+// FIXME there's nothing currently preventing a process from being defined with more than one task where [`TaskState::requires_placements`] returns true
+
 use std::fmt::{Debug, Display, Formatter};
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;

@@ -512,7 +512,7 @@ mod operation_sequence_1 {
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
         println!("{}", project_content);
-        
+
         assert_eq!(project_content, expected_project_content);
 
         Ok(())
@@ -1065,8 +1065,8 @@ mod operation_sequence_1 {
             "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R2",
             "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R3",
             // all phase status should be updated
-            "Refreshed task status. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, changed: false\n",
-            "Refreshed task status. phase: top_1, operation: automated_pnp, task: core::place_components, status: Pending, changed: false\n",
+            "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
+            "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Pending, updated: true\n",
             // part process should be updated
             "Added process. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, applicable_processes: [\"pnp\"]",
             "Added process. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, applicable_processes: [\"pnp\"]",
@@ -1899,21 +1899,21 @@ mod operation_sequence_1 {
             ("ignore", None),
             (
                 "require",
-                Some(("top_1".to_string(), "meh".to_string(), Box::new(TestPlacementOperationHistoryKind {
+                Some(("top_1".to_string(), "automated_pnp".to_string(), Box::new(TestPlacementOperationHistoryKind {
                     object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").unwrap(),
                     operation: PlacementOperation::Place,
                 }) as Box<dyn TestOperationHistoryKind>)),
             ),
             (
                 "require",
-                Some(("top_1".to_string(), "meh".to_string(), Box::new(TestPlacementOperationHistoryKind {
+                Some(("top_1".to_string(), "automated_pnp".to_string(), Box::new(TestPlacementOperationHistoryKind {
                     object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R2").unwrap(),
                     operation: PlacementOperation::Place,
                 }) as Box<dyn TestOperationHistoryKind>)),
             ),
             (
                 "require",
-                Some(("top_1".to_string(), "meh".to_string(), Box::new(TestPlacementOperationHistoryKind {
+                Some(("top_1".to_string(), "automated_pnp".to_string(), Box::new(TestPlacementOperationHistoryKind {
                     object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R3").unwrap(),
                     operation: PlacementOperation::Place,
                 }) as Box<dyn TestOperationHistoryKind>)),
@@ -1949,8 +1949,8 @@ mod operation_sequence_1 {
             "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
             "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
             "Unmatched object path pattern. object_path_pattern: pcb=panel::instance=1::unit=2::ref_des=.*\n",
-            "Refreshed task status. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, changed: false\n",
-            "Refreshed task status. phase: top_1, operation: automated_pnp, task: core::place_components, status: Complete, changed: true\n",
+            "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
+            "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Complete, updated: true\n",
             &log_file_message,
         ]);
 
@@ -2016,31 +2016,26 @@ mod operation_sequence_1 {
             .with_phase_orderings(&["top_1", "bottom_1"])
             .with_phase_states(vec![
                 ("bottom_1", vec![
-                    // ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    // (
-                    //     "ManuallySolderComponents",
-                    //     TestProcessOperationStatus::Pending,
-                    //     Some(TestProcessOperationExtraState::PlacementOperation {
-                    //         placements_state: TestPlacementsState {
-                    //             placed: 0,
-                    //             total: 0,
-                    //         },
-                    //     }),
-                    // ),
+                    TestOperationState::new("load_pcbs", vec![
+                        ("core::load_pcbs", Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>),
+                    ]),
+                    TestOperationState::new("manually_solder_components", vec![
+                        ("core::place_components", Box::new(TestPlacementTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>),
+                        ("core::manual_soldering", Box::new(TestManualSolderingTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>),
+                    ]),
                 ]),
                 ("top_1", vec![
-                    // ("LoadPcbs", TestProcessOperationStatus::Pending, None),
-                    // (
-                    //     "AutomatedPnp",
-                    //     TestProcessOperationStatus::Pending,
-                    //     Some(TestProcessOperationExtraState::PlacementOperation {
-                    //         placements_state: TestPlacementsState {
-                    //             placed: 0,
-                    //             total: 3,
-                    //         },
-                    //     }),
-                    // ),
-                    // ("ReflowComponents", TestProcessOperationStatus::Pending, None),
+                    TestOperationState::new("load_pcbs", vec![
+                        ("core::load_pcbs", Box::new(TestLoadPcbsTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>),
+                    ]),
+                    TestOperationState::new("automated_pnp", vec![
+                        ("core::place_components", Box::new(TestPlacementTaskState::new(TaskStatus::Pending)
+                            .with_total(3)
+                        ) as Box<dyn TestSerializableTaskState>),
+                    ]),
+                    TestOperationState::new("reflow_oven_soldering", vec![
+                        ("core::automated_soldering", Box::new(TestAutomatedSolderingTaskState::new(TaskStatus::Pending)) as Box<dyn TestSerializableTaskState>),
+                    ]),
                 ]),
             ])
             .with_placements(vec![

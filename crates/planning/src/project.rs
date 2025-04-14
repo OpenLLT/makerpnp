@@ -1049,22 +1049,38 @@ pub fn update_placements_operation(
     if modified {
         refresh_phase_operation_states(project);
 
-        for (phase_reference, meh) in history_item_map {
+        for (phase_reference, task_histories) in history_item_map {
+
+            let phase = project.phase_states.get_mut(&phase_reference).unwrap();
+            let operation_reference = phase.operation_states
+                .iter()
+                .find_map(|operation_state|{
+                    if let Some((task_reference, state)) = operation_state.task_states.iter().find(|(task_reference, task_state)|task_state.requires_placements()) {
+                        Some(operation_state.reference.clone())
+                    } else {
+                        None
+                    }
+                });
+
+            // FIXME Probably we should check for a phase with a placements tasks BEFORE changing placements state
+            assert!(operation_reference.is_some());
+
+            let operation_reference = operation_reference.unwrap();
 
             let now = OffsetDateTime::now_utc();
 
-            let history_items = meh.into_iter().map(|task_history|{
+            let history_items = task_histories.into_iter().map(|task_history|{
                 OperationHistoryItem {
                     date_time: now,
                     phase: phase_reference.clone(),
                     extra: Default::default(),
-                    operation_reference: OperationReference::from_raw_str("TODO"),
+                    operation_reference: operation_reference.clone(),
                     task_reference: TaskReference::from_raw_str("core::place_components"),
                     task_history,
                 }
             }).collect::<Vec<_>>();
 
-            
+
             let mut phase_log_path = PathBuf::from(directory);
             phase_log_path.push(format!("{}_log.json", phase_reference));
 
@@ -1102,7 +1118,7 @@ pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
                 if task_state.requires_placements() {
 
                     let original_task_state = dyn_clone::clone(task_state);
-                    
+
                     {
                         let placement_api = task_state.placements_state_mut().unwrap();
                         placement_api.reset();
@@ -1121,13 +1137,13 @@ pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
                         }
                     }
 
-                    error!("before: {:?}, after: {:?}", original_task_state, task_state);
+                    trace!("Refreshing placement task state complete.  before: {:?}, after: {:?}", original_task_state, task_state);
 
-                    let status_changed = task_state != &original_task_state;
+                    let state_updated = task_state != &original_task_state;
 
-                    info!("Refreshed task status. phase: {}, operation: {}, task: {}, status: {}, changed: {}", phase_reference, operation_state.reference, task_reference, task_state.status(), status_changed);
+                    info!("Refreshed placement task state. phase: {}, operation: {}, task: {}, status: {}, updated: {}", phase_reference, operation_state.reference, task_reference, task_state.status(), state_updated);
 
-                    modified |= status_changed;
+                    modified |= state_updated;
                 }
             }
         }
