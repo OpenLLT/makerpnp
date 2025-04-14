@@ -24,6 +24,7 @@ use serde_with::DisplayFromStr;
 use thiserror::Error;
 use time::OffsetDateTime;
 use tracing::{debug, error, info, trace, warn};
+use util::dynamic::dynamic_eq::DynamicEq;
 use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
@@ -1081,7 +1082,134 @@ pub fn update_placements_operation(
 pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
     let mut modified = false;
 
-    // TODO
+    for (phase_reference, phase_state) in project.phase_states.iter_mut() {
+        trace!("reference: {:?}, phase_state: {:?}", phase_reference, phase_state);
+
+        for operation_state in phase_state.operation_states.iter_mut() {
+            trace!("operation: {:?}, operation_state: {:?}", operation_state.reference, operation_state);
+
+            // FUTURE optimize this if there's ever more then one task that needs placements
+
+            for (task_reference, task_state) in operation_state.task_states.iter_mut() {
+                trace!("task: {:?}, task_state: {:?}", task_reference, task_state);
+
+                if task_state.requires_placements() {
+
+                    let original_task_state = task_state.clone();
+                    {
+                        let placement_api = task_state.placements_state_mut().unwrap();
+                        placement_api.reset();
+
+                        let phase_placements = project.placements
+                            .iter()
+                            .filter(|(_object_path, placement_state)|
+                                matches!(&placement_state.phase, Some(candidate_phase_reference) if candidate_phase_reference.eq(phase_reference))
+                            ).collect::<Vec<_>>();
+
+                        let total = phase_placements.len();
+                        placement_api.set_total_placements(total);
+
+                        for (_object_path, placement) in phase_placements {
+                            placement_api.on_placement_status_change(&PlacementStatus::Pending, &placement.operation_status);
+                        }
+                    }
+
+                    let status_changed = task_state.dyn_eq(&original_task_state);
+
+                    info!("Refreshed task status. phase: {}, operation: {}, task: {}, status: {}, changed: {}", phase_reference, operation_state.reference, task_reference, task_state.status(), status_changed);
+                    
+                    modified |= status_changed;
+                }
+            }
+        }
+    }
+        /*
+        for (reference, phase_state) in project.phase_states.iter_mut() {
+            trace!("reference: {:?}, phase_state: {:?}", reference, phase_state);
+
+            for (operation, operation_state) in phase_state.operation_state.iter_mut() {
+                trace!("operation: {:?}, operation_state: {:?}", operation, operation_state);
+
+                let maybe_state = if (*operation).eq(&ProcessOperationKind::AutomatedPnp)
+                    || (*operation).eq(&ProcessOperationKind::ManuallySolderComponents)
+                {
+                    let placements_state = project.placements.iter().fold(
+                        PlacementsState::default(),
+                        |mut state, (_object_path, placement_status)| {
+                            if let Some(placement_phase) = &placement_status.phase {
+                                if placement_phase.eq(reference) {
+                                    if placement_status.placed {
+                                        state.placed += 1;
+                                    }
+                                    state.total += 1;
+                                }
+                            }
+
+                            state
+                        },
+                    );
+
+                    let status = if placements_state.total == 0 || placements_state.placed == 0 {
+                        ProcessOperationStatus::Pending
+                    } else if placements_state.are_all_placements_placed() {
+                        ProcessOperationStatus::Complete
+                    } else {
+                        ProcessOperationStatus::Incomplete
+                    };
+
+                    Some((placements_state, status))
+                } else {
+                    None
+                };
+                trace!("maybe_state: {:?}", maybe_state);
+
+                let original_operation_state = operation_state.clone();
+
+                match (&maybe_state, &operation) {
+                    (Some((placements_state, status)), ProcessOperationKind::AutomatedPnp) => {
+                        operation_state.status = status.clone();
+                        operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
+                            placements_state: placements_state.clone(),
+                        });
+                    }
+                    (Some((placements_state, status)), ProcessOperationKind::ManuallySolderComponents) => {
+                        operation_state.status = status.clone();
+                        operation_state.extra = Some(ProcessOperationExtraState::PlacementOperation {
+                            placements_state: placements_state.clone(),
+                        });
+                    }
+                    (_, _) => {}
+                };
+
+                let phase_operation_modified = !original_operation_state.eq(operation_state);
+
+                if phase_operation_modified {
+                    info!("Updating phase status. phase: {}", reference);
+
+                    if let Some((_maybe_state, status)) = maybe_state {
+                        match status {
+                            ProcessOperationStatus::Complete => info!(
+                                "Phase operation complete. phase: {}, operation: {:?}",
+                                reference, operation
+                            ),
+                            ProcessOperationStatus::Incomplete => info!(
+                                "Phase operation incomplete. phase: {}, operation: {:?}",
+                                reference, operation
+                            ),
+                            ProcessOperationStatus::Pending => info!(
+                                "Phase operation pending. phase: {}, operation: {:?}",
+                                reference, operation
+                            ),
+                        }
+                    }
+                }
+
+                modified |= phase_operation_modified;
+            }
+        }
+        */
+
+
 
     modified
 }

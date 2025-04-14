@@ -10,7 +10,7 @@
 //! Operations can be abandoned or skipped.
 //! 
 //! Later operations and phases cannot be actioned unless preceding phases and actions are completed/skipped/abandoned.
-use std::fmt::{Debug};
+use std::fmt::{Debug, Display, Formatter};
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;
 use indexmap::IndexMap;
@@ -114,15 +114,19 @@ pub trait TaskState {
     fn set_abandoned(&mut self);
     
     /// Allows callers to access this operation's placements api
-    fn placements_api(&self) -> Option<&dyn PlacementsTaskAPI> { None::<&dyn PlacementsTaskAPI> }
+    fn placements_state(&self) -> Option<&dyn PlacementsTaskState> { None::<&dyn PlacementsTaskState> }
+    fn placements_state_mut(&mut self) -> Option<&mut dyn PlacementsTaskState> { None::<&mut dyn PlacementsTaskState> }
     
     fn requires_placements(&self) -> bool {
-        self.placements_api().is_some()
+        self.placements_state().is_some()
     }
 }
 
-pub trait PlacementsTaskAPI {
-    fn on_placement_status_change(&mut self, new_status: &PlacementStatus, old_status: &PlacementStatus);
+pub trait PlacementsTaskState {
+    
+    fn reset(&mut self);
+    
+    fn on_placement_status_change(&mut self, old_status: &PlacementStatus, new_status: &PlacementStatus);
 
     fn set_total_placements(&mut self, total: usize);
 }
@@ -146,6 +150,17 @@ impl Default for TaskStatus {
     }
 }
 
+impl Display for TaskStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TaskStatus::Pending => f.write_str("Pending"),
+            TaskStatus::Started => f.write_str("Started"),
+            TaskStatus::Complete => f.write_str("Complete"),
+            TaskStatus::Abandoned => f.write_str("Abandoned"),
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct PlacementTaskState {
     pub placed: usize,
@@ -162,6 +177,31 @@ impl SerializableTaskState for PlacementTaskState {}
 impl PlacementTaskState {
     pub fn are_all_placements_placed(&self) -> bool {
         (self.placed + self.skipped) == self.total
+    }
+
+    fn refresh_status(&mut self) {
+        // it is invalid to have a total == 0 and any items placed or skipped
+        // ensure total is set BEFORE placed or skipped.
+        assert!(!(self.total == 0 && (self.placed > 0 || self.skipped > 0)));
+
+        let should_check = match self.status {
+            TaskStatus::Pending => true,
+            TaskStatus::Started => true,
+            TaskStatus::Complete => true,
+            TaskStatus::Abandoned => false,
+        };
+
+        if should_check {
+            if self.total > 0 {
+                if self.are_all_placements_placed() {
+                    self.status = TaskStatus::Complete;
+                } else if self.placed > 0 || self.skipped > 0 {
+                    self.status = TaskStatus::Started;
+                }
+            } else {
+                self.status = TaskStatus::Pending;
+            }
+        }
     }
 }
 
@@ -192,13 +232,24 @@ impl TaskState for PlacementTaskState {
         self.status = TaskStatus::Abandoned;
     }
 
-    fn placements_api(&self) -> Option<&dyn PlacementsTaskAPI> {
+    fn placements_state(&self) -> Option<&dyn PlacementsTaskState> {
+        Some(self)
+    }
+    
+    fn placements_state_mut(&mut self) -> Option<&mut dyn PlacementsTaskState> {
         Some(self)
     }
 }
 
-impl PlacementsTaskAPI for PlacementTaskState {
-    fn on_placement_status_change(&mut self, new_status: &PlacementStatus, old_status: &PlacementStatus) {
+impl PlacementsTaskState for PlacementTaskState {
+    
+    fn reset(&mut self) {
+        self.placed = 0;
+        self.skipped = 0;
+        self.total = 0;
+    }
+
+    fn on_placement_status_change(&mut self, old_status: &PlacementStatus, new_status: &PlacementStatus) {
         match old_status {
             PlacementStatus::Placed => self.placed -= 1,
             PlacementStatus::Skipped => self.skipped -= 1,
@@ -209,10 +260,12 @@ impl PlacementsTaskAPI for PlacementTaskState {
             PlacementStatus::Skipped => self.skipped += 1,
             PlacementStatus::Pending => {}
         }
+        self.refresh_status();
     }
     
     fn set_total_placements(&mut self, total: usize) {
         self.total = total;
+        self.refresh_status();
     }
 }
 
@@ -265,5 +318,5 @@ macro_rules! generic_task_impl {
 
 generic_task_impl!(LoadPcbsOperationState, "core::load_pcbs_task_state");
 generic_task_impl!(AutomatedSolderingOperationState, "core::automated_soldering_task_state");
-generic_task_impl!(ManualSolderingOperationState, "core::manual_soldering_operation_state");
+generic_task_impl!(ManualSolderingOperationState, "core::manual_soldering_task_state");
 

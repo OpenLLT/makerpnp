@@ -69,13 +69,13 @@ pub struct TestProjectBuilder {
 impl TestProjectBuilder {
     pub fn with_name(mut self, name: &str) -> Self {
         self.name = name.to_string();
-        
+
         self
     }
 
     pub fn with_default_processes(mut self) -> Self {
         self.processes.clear();
-        
+
         self.processes.push( TestProcessDefinition {
             reference: Reference::from_raw_str("pnp"),
             operations: vec![
@@ -102,7 +102,7 @@ impl TestProjectBuilder {
                 ProcessRuleReference::from_raw_str("core::unique_feeder_references")
             ],
         });
-        
+
         self.processes.push(TestProcessDefinition {
                 reference: Reference::from_raw_str("manual"),
                 operations: vec![
@@ -122,7 +122,7 @@ impl TestProjectBuilder {
                 ],
                 rules: vec![],
             });
-        
+
         self
     }
 
@@ -130,7 +130,7 @@ impl TestProjectBuilder {
         self.pcbs = pcbs;
         self
     }
-    
+
     pub fn with_unit_assignments(mut self, unit_assignments: Vec<(ObjectPath, DesignVariant)>) -> Self {
         self.unit_assignments = BTreeMap::from_iter(unit_assignments.into_iter());
         self
@@ -145,17 +145,17 @@ impl TestProjectBuilder {
         self.placements = BTreeMap::from_iter(placements.into_iter().map(|(a,b)|(ObjectPath::from_str(a).unwrap(),b)));
         self
     }
-    
+
     pub fn with_phases(mut self, phases: Vec<TestPhase>) -> Self {
         self.phases = BTreeMap::from_iter(phases.into_iter().map(|phase|(phase.reference.clone(), phase)));
         self
     }
-    
+
     pub fn with_phase_orderings(mut self, phase_orderings: &[&str]) -> Self {
         self.phase_orderings = IndexSet::from_iter(phase_orderings.into_iter().map(|a|Reference::from_raw_str(a)));
         self
     }
-    
+
     pub fn with_phase_states(mut self, phase_states: Vec<(&str, Vec<TestOperationState>)>) -> Self {
         self.phase_states = BTreeMap::from_iter(phase_states.into_iter().map(|(reference, operation_states)|{
             (Reference::from_raw_str(reference), TestPhaseState { operation_states })
@@ -232,8 +232,8 @@ impl TestPhase {
             load_out_source: path.to_string(),
             pcb_side,
             placement_orderings: placement_orderings.into_iter().map(|(mode, sort_order)|{
-                TestPlacementSortingItem { 
-                    mode: PlacementSortingMode::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(mode)).unwrap(), 
+                TestPlacementSortingItem {
+                    mode: PlacementSortingMode::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(mode)).unwrap(),
                     sort_order: SortOrder::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(sort_order)).unwrap(),
                 }
             }).collect(),
@@ -252,16 +252,25 @@ pub struct TestOperationState {
     pub task_states: IndexMap<TaskReference, Box<dyn TestSerializableTaskState>>,
 }
 
+impl TestOperationState {
+    pub fn new(reference: &str, task_states: Vec<(&str, Box<dyn TestSerializableTaskState>)>) -> TestOperationState {
+        TestOperationState {
+            reference: Reference::from_raw_str(reference),
+            task_states: IndexMap::from_iter(task_states.into_iter().map(|(reference, task_state)|{
+                (TaskReference::from_raw_str(reference), task_state)
+            })),
+        }
+    }
+}
+
 #[typetag::serialize(tag = "type")]
 pub trait TestSerializableTaskState: TestTaskState + AsAny + Send + Sync + Debug {
 }
-//dyn_eq::eq_trait_object!(TestSerializableTaskState);
-//dyn_clone::clone_trait_object!(TestSerializableTaskState);
 
 pub trait TestTaskState {
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, Default)]
 pub struct TestPlacementTaskState {
     pub placed: usize,
     pub skipped: usize,
@@ -273,6 +282,56 @@ impl TestTaskState for TestPlacementTaskState {}
 
 #[typetag::serialize(name = "core::placement_task_state")]
 impl TestSerializableTaskState for TestPlacementTaskState {}
+
+impl TestPlacementTaskState {
+    pub fn new(status: TaskStatus) -> Self {
+        Self {
+            status,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_placed(mut self, placed: usize) -> Self {
+        self.placed = placed;
+        self
+    }
+
+    pub fn with_skipped(mut self, skipped: usize) -> Self {
+        self.skipped = skipped;
+        self
+    }
+
+    pub fn with_total(mut self, total: usize) -> Self {
+        self.total = total;
+        self
+    }
+}
+
+macro_rules! generic_test_task {
+    ($name:ident, $key:literal) => {
+        #[derive(Debug, serde::Serialize, Default)]
+        pub struct $name {
+            status: TaskStatus,
+        }
+        
+        impl TestTaskState for $name {}
+        
+        #[typetag::serialize(name = $key)]
+        impl TestSerializableTaskState for $name {}
+        
+        impl $name {
+            pub fn new(status: TaskStatus) -> Self {
+                Self {
+                    status,
+                }
+            }
+        }
+    };
+}
+
+generic_test_task!(TestLoadPcbsTaskState, "core::load_pcbs_task_state");
+generic_test_task!(TestAutomatedSolderingTaskState, "core::automated_soldering_task_state");
+generic_test_task!(TestManualSolderingTaskState, "core::manual_soldering_task_state");
 
 #[derive(Debug, serde::Serialize)]
 pub struct TestPlacementSortingItem {
@@ -339,7 +398,11 @@ impl TestProjectBuilder {
         self.serialize(&mut ser).unwrap();
         content.push(b'\n');
 
-        String::from_utf8(content).unwrap()
+        let content = String::from_utf8(content).unwrap();
+
+        println!("expected: {}", content);
+
+        content
     }
 
     pub fn new() -> Self {

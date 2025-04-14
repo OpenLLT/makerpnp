@@ -46,12 +46,12 @@ pub struct OperationHistoryItem {
     pub date_time: OffsetDateTime,
     pub phase: Reference,
 
-    #[serde(flatten)]
-    pub extra: HashMap<String, Value>,
-    
     pub operation_reference: OperationReference,
     pub task_reference: TaskReference,
     pub task_history: Box<dyn OperationHistoryKind>,
+
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }
 
 pub fn write(phase_log_path: PathBuf, operation_history: &Vec<OperationHistoryItem>) -> Result<(), Error> {
