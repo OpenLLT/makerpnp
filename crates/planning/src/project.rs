@@ -947,6 +947,33 @@ pub fn update_placements_operation(
     placement_operation: PlacementOperation,
 ) -> anyhow::Result<bool> {
     let mut modified = false;
+    
+    // first, find the only tasks for each phase that allow placement changes.
+    
+    let phase_operation_task_map = project.phase_states
+        .iter()
+        .filter_map(|(phase_reference, phase_state)|{
+
+            let operation_and_task_references = phase_state
+                .operation_states
+                .iter()
+                .find_map(|operation_state| {
+                    operation_state
+                        .task_states
+                        .iter()
+                        .find_map(|(task_reference, task_state)| 
+                            match task_state.requires_placements() {
+                                true => Some((operation_state.reference.clone(), task_reference.clone())),
+                                false => None
+                            }
+                        )
+                });
+            operation_and_task_references
+                .map(|(operation_reference, task_reference)|
+                    (phase_reference.clone(), (operation_reference.clone(), task_reference.clone()))
+                )
+        }).collect::<BTreeMap<_, _>>();
+
     let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
     for object_path_pattern in object_path_patterns.iter() {
@@ -965,8 +992,19 @@ pub fn update_placements_operation(
 
         for (object_path, placement_state) in placements {
 
-            // FIXME do not modify placement state when no phase is assigned.
+            if placement_state.phase.is_none() {
+                // we cannot modify placement state when no phase is assigned.
+                continue;
+            }
             
+            let placement_phase_reference = placement_state.phase.as_ref().unwrap();
+            
+            let phase_map_entry = phase_operation_task_map.get(placement_phase_reference);
+            if phase_map_entry.is_none() {
+                // if a phase doesn't have a map entry then we cannot update any placement with that phase reference
+                continue;
+            }
+
             let should_log = match placement_operation {
                 PlacementOperation::Place => match placement_state.operation_status {
                     PlacementStatus::Placed => {
@@ -1019,16 +1057,13 @@ pub fn update_placements_operation(
             };
 
             if should_log {
-                // FIXME this `unwrap` can panic, see above.
-                let phase = placement_state.phase.as_ref().unwrap();
-
                 let task_history = Box::new(PlacementOperationHistoryKind {
                     object_path: object_path.clone(),
                     operation: placement_operation.clone(),
                 }) as Box<dyn OperationHistoryKind>;
 
                 let history_items = history_item_map
-                    .entry(phase.clone())
+                    .entry(placement_phase_reference.clone())
                     .or_default();
 
                 history_items.push(task_history);
@@ -1039,32 +1074,14 @@ pub fn update_placements_operation(
     }
 
     if modified {
-        refresh_phase_operation_states(project);
+        let states_modified = refresh_phase_operation_states(project);
+        // redundant, but consistent.
+        modified |= states_modified;
 
         for (phase_reference, task_histories) in history_item_map {
-            let phase = project
-                .phase_states
-                .get_mut(&phase_reference)
-                .unwrap();
-            let operation_reference = phase
-                .operation_states
-                .iter()
-                .find_map(|operation_state| {
-                    if operation_state
-                        .task_states
-                        .iter()
-                        .any(|(_task_reference, task_state)| task_state.requires_placements())
-                    {
-                        Some(operation_state.reference.clone())
-                    } else {
-                        None
-                    }
-                });
-
-            // FIXME Probably we should check for a phase with a placements tasks BEFORE changing placements state
-            assert!(operation_reference.is_some());
-
-            let operation_reference = operation_reference.unwrap();
+            
+            // Safety: code above should prevent this unwrap from failing
+            let (operation_reference, _task_reference) = phase_operation_task_map.get(&phase_reference).unwrap();
 
             let now = OffsetDateTime::now_utc();
 
