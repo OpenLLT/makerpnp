@@ -235,7 +235,8 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PlacementsRow) -> bool {
         match column {
             PHASE_COL => true,
-            PLACED_COL => true,
+            // FIXME also check that the phase state is appropriate
+            PLACED_COL => _row_value.placement_state.phase.is_some(),
             _ => false,
         }
     }
