@@ -946,6 +946,7 @@ pub fn update_placements_operation(
     object_path_patterns: Vec<Regex>,
     placement_operation: PlacementOperation,
 ) -> anyhow::Result<bool> {
+    
     let mut modified = false;
     
     // first, find the only tasks for each phase that allow placement changes.
@@ -961,8 +962,8 @@ pub fn update_placements_operation(
                     operation_state
                         .task_states
                         .iter()
-                        .find_map(|(task_reference, task_state)| 
-                            match task_state.requires_placements() {
+                        .find_map(|(task_reference, task_state)|
+                            match task_state.requires_placements() && task_state.status() != TaskStatus::Abandoned {
                                 true => Some((operation_state.reference.clone(), task_reference.clone())),
                                 false => None
                             }
@@ -973,7 +974,7 @@ pub fn update_placements_operation(
                     (phase_reference.clone(), (operation_reference.clone(), task_reference.clone()))
                 )
         }).collect::<BTreeMap<_, _>>();
-
+    
     let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
     for object_path_pattern in object_path_patterns.iter() {
