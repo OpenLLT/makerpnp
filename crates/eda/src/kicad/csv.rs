@@ -13,17 +13,20 @@ pub enum KiCadPlacementRecordError {
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all(deserialize = "PascalCase"))]
 pub struct KiCadPlacementRecord {
-    #[serde(rename(deserialize = "ref"))]
+    #[serde(rename(deserialize = "Ref"))]
     ref_des: String,
     package: String,
     val: String,
     side: KiCadPcbSide,
+    #[serde(rename(deserialize = "PosX"))]
     x: Decimal,
+    #[serde(rename(deserialize = "PosY"))]
     y: Decimal,
     /// Positive values indicate anti-clockwise rotation
     /// Range is >-180 to +180.
     /// No rounding.
     /// Values are truncated to 3 decimal places in the UI.
+    #[serde(rename(deserialize = "Rot"))]
     rotation: Decimal,
 }
 
