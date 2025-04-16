@@ -559,6 +559,16 @@ mod tests {
         // and
         let temp_dir = tempdir()?;
 
+        // FIXME KiCad isn't consitent with it's creation of CSV files. The header row doesn't contain quotes but the rows
+        //       that contain data do, for example:
+        //       ```
+        //       Ref,Val,Package,PosX,PosY,Rot,Side
+        //       "D1","RED","LED_0402_1005Metric",152.485000,-93.000000,0.000000,top
+        //       ```
+        //       Since this test is using a CSV generator to write the test records the CSV file will not be the same
+        //       as what KiCad generates.
+        //       Until this is fixed in both a) the test, and b) the production code, users will need to add quotes manually.
+
         // and placements
         let (test_placements_path, test_placements_file_name) = build_temp_csv_file(&temp_dir, "placements-all-pos");
 
