@@ -559,8 +559,8 @@ mod tests {
         // and
         let temp_dir = tempdir()?;
 
-        // FIXME KiCad isn't consitent with it's creation of CSV files. The header row doesn't contain quotes but the rows
-        //       that contain data do, for example:
+        // FIXME KiCad isn't consistent with it's creation of CSV files. The header row doesn't contain quotes but the rows
+        //       that contain data do, for example (KiCad 9.0.1):
         //       ```
         //       Ref,Val,Package,PosX,PosY,Rot,Side
         //       "D1","RED","LED_0402_1005Metric",152.485000,-93.000000,0.000000,top
@@ -991,17 +991,20 @@ mod tests {
     #[derive(Debug, serde::Serialize)]
     #[serde(rename_all(serialize = "PascalCase"))]
     struct TestKiCadPlacementRecord {
-        #[serde(rename(serialize = "ref"))]
+        #[serde(rename(serialize = "Ref"))]
         ref_des: String,
         package: String,
         val: String,
         side: String,
+        #[serde(rename(serialize = "PosX"))]
         x: Decimal,
+        #[serde(rename(serialize = "PosY"))]
         y: Decimal,
         /// Positive values indicate anti-clockwise rotation
         /// Range is >-180 to +180.
         /// No rounding.
         /// Values are truncated to 3 decimal places in the UI.
+        #[serde(rename(serialize = "Rot"))]
         rotation: Decimal,
     }
 
