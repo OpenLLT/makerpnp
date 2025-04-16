@@ -236,7 +236,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         match column {
             PHASE_COL => true,
             // FIXME also check that the phase state is appropriate
-            PLACED_COL => _row_value.placement_state.phase.is_some(),
+            PLACED_COL => _row_value
+                .placement_state
+                .phase
+                .is_some(),
             _ => false,
         }
     }

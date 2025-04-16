@@ -946,15 +946,14 @@ pub fn update_placements_operation(
     object_path_patterns: Vec<Regex>,
     placement_operation: PlacementOperation,
 ) -> anyhow::Result<bool> {
-    
     let mut modified = false;
-    
-    // first, find the only tasks for each phase that allow placement changes.
-    
-    let phase_operation_task_map = project.phase_states
-        .iter()
-        .filter_map(|(phase_reference, phase_state)|{
 
+    // first, find the only tasks for each phase that allow placement changes.
+
+    let phase_operation_task_map = project
+        .phase_states
+        .iter()
+        .filter_map(|(phase_reference, phase_state)| {
             let operation_and_task_references = phase_state
                 .operation_states
                 .iter()
@@ -962,19 +961,22 @@ pub fn update_placements_operation(
                     operation_state
                         .task_states
                         .iter()
-                        .find_map(|(task_reference, task_state)|
+                        .find_map(|(task_reference, task_state)| {
                             match task_state.requires_placements() && task_state.status() != TaskStatus::Abandoned {
                                 true => Some((operation_state.reference.clone(), task_reference.clone())),
-                                false => None
+                                false => None,
                             }
-                        )
+                        })
                 });
-            operation_and_task_references
-                .map(|(operation_reference, task_reference)|
-                    (phase_reference.clone(), (operation_reference.clone(), task_reference.clone()))
+            operation_and_task_references.map(|(operation_reference, task_reference)| {
+                (
+                    phase_reference.clone(),
+                    (operation_reference.clone(), task_reference.clone()),
                 )
-        }).collect::<BTreeMap<_, _>>();
-    
+            })
+        })
+        .collect::<BTreeMap<_, _>>();
+
     let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
     for object_path_pattern in object_path_patterns.iter() {
@@ -992,14 +994,13 @@ pub fn update_placements_operation(
         }
 
         for (object_path, placement_state) in placements {
-
             if placement_state.phase.is_none() {
                 // we cannot modify placement state when no phase is assigned.
                 continue;
             }
-            
+
             let placement_phase_reference = placement_state.phase.as_ref().unwrap();
-            
+
             let phase_map_entry = phase_operation_task_map.get(placement_phase_reference);
             if phase_map_entry.is_none() {
                 // if a phase doesn't have a map entry then we cannot update any placement with that phase reference
@@ -1080,9 +1081,10 @@ pub fn update_placements_operation(
         modified |= states_modified;
 
         for (phase_reference, task_histories) in history_item_map {
-            
             // Safety: code above should prevent this unwrap from failing
-            let (operation_reference, _task_reference) = phase_operation_task_map.get(&phase_reference).unwrap();
+            let (operation_reference, _task_reference) = phase_operation_task_map
+                .get(&phase_reference)
+                .unwrap();
 
             let now = OffsetDateTime::now_utc();
 
