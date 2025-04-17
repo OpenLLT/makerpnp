@@ -1,3 +1,4 @@
+use dyn_clone::DynClone;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
@@ -19,7 +20,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{OperationReference, OperationStatus, TaskStatus};
+use crate::process::{OperationReference, OperationStatus, TaskReference};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -64,12 +65,24 @@ pub fn project_generate_report(
                         .operation_states
                         .iter()
                         .fold(PhaseStatus::Complete, |mut phase_status, operation_state| {
-                            let overview: Option<PhaseOperationOverview> = None;
+                            let task_overviews = operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
+                                let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                                    Some(Box::new(LoadPcbsTaskOverview { }) as Box<dyn TaskOverview>)
+                                } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+                                    Some(Box::new(PlaceComponentsTaskOverview {}) as Box<dyn TaskOverview>)
+                                } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+                                    Some(Box::new(AutomatedSolderingTaskOverview {}) as Box<dyn TaskOverview>)
+                                } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+                                    Some(Box::new(ManualSolderingTaskOverview {}) as Box<dyn TaskOverview>)
+                                } else {
+                                    None
+                                };
+                                Some((task_reference.clone(), report))
+                            }).collect::<Vec<_>>();
 
-                            // TODO use operation_state.tasks to build something
 
                             let operation_status = operation_state.status();
-                            phase_status = match (phase_status, operation_status) {
+                            phase_status = match (phase_status, &operation_status) {
                                 (PhaseStatus::Complete, OperationStatus::Complete) => PhaseStatus::Complete,
 
                                 (PhaseStatus::Abandoned, _) => PhaseStatus::Abandoned,
@@ -83,9 +96,14 @@ pub fn project_generate_report(
                                 phase_status = PhaseStatus::Incomplete;
                             }
 
-                            if let Some(overview) = overview {
-                                operations_overview.push(overview)
-                            }
+                            let overview = PhaseOperationOverview {
+                                operation: operation_state.reference.clone(),
+                                message: "TODO".to_string(),
+                                status: operation_status,
+                                tasks: task_overviews,
+                            };
+
+                            operations_overview.push(overview);
 
                             phase_status
                         });
@@ -233,9 +251,32 @@ fn build_phase_specification(
     let operations = phase_state
         .operation_states
         .iter()
-        .filter_map(|process_operation_state| {
-            // TODO build reports
-            None
+        .map(|operation_state| {
+
+            let task_reports= operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
+                let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                    let pcbs = build_operation_load_pcbs(project);
+                    Some(Box::new(LoadPcbsTaskSpecification {
+                        pcbs,
+                    }) as Box<dyn TaskSpecification>)
+                } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+                    Some(Box::new(PlaceComponentsTaskSpecification {}) as Box<dyn TaskSpecification>)
+                } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+                    Some(Box::new(AutomatedSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
+                } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+                    Some(Box::new(ManualSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
+                } else {
+                    None
+                };
+                Some((task_reference.clone(), report))
+            }).collect::<Vec<_>>();
+
+            let operation_item = OperationItem {
+                operation: operation_state.reference.clone(),
+                task_reports,
+            };
+
+            (operation_state.reference.clone(), operation_item)
         })
         .collect();
 
@@ -707,17 +748,71 @@ pub struct PhaseOverview {
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseSpecification {
     pub phase_name: String,
-    // TODO make this a tuple of some dynamic operation report based on the tasks
-    pub operations: Vec<OperationReference>,
+    pub operations: Vec<(OperationReference, OperationItem)>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseOperationOverview {
-    pub operation: PhaseOperationKind,
+    pub operation: OperationReference,
     pub message: String,
-    pub status: TaskStatus,
+    pub status: OperationStatus,
+    pub tasks: Vec<(TaskReference, Option<Box<dyn TaskOverview>>)>,
 }
+
+#[derive(Clone, serde::Serialize)]
+pub struct OperationItem {
+    pub operation: OperationReference,
+    pub task_reports: Vec<(TaskReference, Option<Box<dyn TaskSpecification>>)>,
+}
+
+#[typetag::serialize(tag = "type")]
+trait TaskSpecification: DynClone {}
+dyn_clone::clone_trait_object!(TaskSpecification);
+
+macro_rules! generic_task_specification {
+    ($name:ident, $key:literal) => {
+        #[typetag::serialize(name = $key)]
+        impl TaskSpecification for $name {}
+
+        #[derive(Clone, serde::Serialize)]
+        struct $name {}
+    };
+}
+
+generic_task_specification!(ManualSolderingTaskSpecification, "manual_soldering_specification");
+generic_task_specification!(AutomatedSolderingTaskSpecification, "automated_soldering_specification");
+generic_task_specification!(PlaceComponentsTaskSpecification, "place_components_specification");
+
+#[typetag::serialize(name = "load_pcbs_specification")]
+impl TaskSpecification for LoadPcbsTaskSpecification {}
+
+#[derive(Clone, serde::Serialize)]
+struct LoadPcbsTaskSpecification {
+    pub pcbs: Vec<PcbReportItem>,
+}
+
+#[typetag::serialize(tag = "type")]
+trait TaskOverview: DynClone {}
+dyn_clone::clone_trait_object!(TaskOverview);
+
+macro_rules! generic_task_overview {
+    ($name:ident, $key:literal) => {
+        #[typetag::serialize(name = $key)]
+        impl TaskOverview for $name {}
+
+        #[derive(Clone, serde::Serialize)]
+        struct $name {}
+    };
+}
+
+generic_task_overview!(LoadPcbsTaskOverview, "load_pcbs_overview");
+generic_task_overview!(ManualSolderingTaskOverview, "manual_soldering_overview");
+generic_task_overview!(AutomatedSolderingTaskOverview, "automated_soldering_overview");
+
+// TODO replace this one with a proper impl.
+generic_task_overview!(PlaceComponentsTaskOverview, "place_components_overview");
+
 
 #[serde_as]
 #[derive(Clone, serde::Serialize)]
@@ -730,31 +825,16 @@ pub struct PcbUnitAssignmentItem {
 
 #[derive(Clone, serde::Serialize)]
 pub enum PcbReportItem {
-    // there should be one or more assignments, but the assignment might not have been made yet.
+    /// there should be one or more assignments, but the assignment might not have been made yet.
     Panel {
         name: String,
         unit_assignments: Vec<PcbUnitAssignmentItem>,
     },
-    // there should be exactly one assignment, but the assignment might not have been made yet.
+    /// there should be exactly one assignment, but the assignment might not have been made yet.
     Single {
         name: String,
         unit_assignment: Option<PcbUnitAssignmentItem>,
     },
-}
-
-#[derive(Clone, serde::Serialize)]
-pub enum PhaseOperation {
-    PreparePcbs {},
-    PlaceComponents {},
-    ReflowComponents {},
-    ManuallySolderComponents {},
-}
-
-#[derive(Clone, serde::Serialize)]
-pub enum PhaseOperationKind {
-    PreparePcbs,
-    PlaceComponents,
-    ManuallySolderComponents,
 }
 
 #[derive(Clone, serde::Serialize)]
