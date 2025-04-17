@@ -96,6 +96,24 @@ impl OperationState {
                 complete && matches!(task_state.status(), TaskStatus::Complete)
             })
     }
+
+    pub fn status(&self) -> OperationStatus {
+        self.task_states.iter().fold(OperationStatus::Incomplete, |status, (task_reference, task_state)| {
+            match task_state.status() {
+                TaskStatus::Pending => OperationStatus::Incomplete,
+                TaskStatus::Started => OperationStatus::Incomplete,
+                TaskStatus::Complete => OperationStatus::Complete,
+                TaskStatus::Abandoned => OperationStatus::Abandoned,
+            }
+        })
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+pub enum OperationStatus {
+    Incomplete,
+    Complete,
+    Abandoned,
 }
 
 #[typetag::serde(tag = "type")]

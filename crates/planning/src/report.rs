@@ -19,7 +19,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{OperationReference, TaskStatus};
+use crate::process::{OperationReference, OperationStatus, TaskStatus};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -67,6 +67,21 @@ pub fn project_generate_report(
                             let overview: Option<PhaseOperationOverview> = None;
 
                             // TODO use operation_state.tasks to build something
+
+                            let operation_status = operation_state.status();
+                            phase_status = match (phase_status, operation_status) {
+                                (PhaseStatus::Complete, OperationStatus::Complete) => PhaseStatus::Complete,
+
+                                (PhaseStatus::Abandoned, _) => PhaseStatus::Abandoned,
+                                (_, OperationStatus::Abandoned) => PhaseStatus::Abandoned,
+
+                                (PhaseStatus::Incomplete, _) => PhaseStatus::Incomplete,
+                                (_, OperationStatus::Incomplete) => PhaseStatus::Incomplete,
+                            };
+
+                            if !operation_state.is_complete() {
+                                phase_status = PhaseStatus::Incomplete;
+                            }
 
                             if let Some(overview) = overview {
                                 operations_overview.push(overview)
@@ -678,6 +693,7 @@ impl Default for ProjectStatus {
 pub enum PhaseStatus {
     Incomplete,
     Complete,
+    Abandoned,
 }
 
 #[derive(serde::Serialize)]
