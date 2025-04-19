@@ -1159,6 +1159,8 @@ pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
                             placement_api
                                 .on_placement_status_change(&PlacementStatus::Pending, &placement.operation_status);
                         }
+
+                        debug!("summary: {:?}", placement_api.summary());
                     }
 
                     trace!(

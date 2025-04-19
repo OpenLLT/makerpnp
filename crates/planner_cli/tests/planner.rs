@@ -33,11 +33,7 @@ mod operation_sequence_1 {
         TestProcessOperationStatus, TestProjectBuilder, TestSerializableTaskState,
     };
     use crate::common::project_report_builder as report;
-    use crate::common::project_report_builder::{
-        ProjectReportBuilder, TestIssue, TestIssueKind, TestIssueSeverity, TestPart, TestPcbUnitAssignment,
-        TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationKind, TestPhaseOperationOverview,
-        TestPhaseOverview, TestPhaseSpecification,
-    };
+    use crate::common::project_report_builder::{ProjectReportBuilder, TestAutomatedSolderingTaskOverview, TestAutomatedSolderingTaskSpecification, TestIssue, TestIssueKind, TestIssueSeverity, TestLoadPcbsTaskOverview, TestLoadPcbsTaskSpecification, TestManualSolderingTaskOverview, TestManualSolderingTaskSpecification, TestPart, TestPcbUnitAssignment, TestPhaseLoadOutAssignmentItem, TestPhaseOperation, TestPhaseOperationOverview, TestPhaseOverview, TestPhaseSpecification, TestPlaceComponentsTaskOverview, TestPlaceComponentsTaskSpecification, TestTaskOverview, TestTaskSpecification};
 
     /// A context, which will be dropped when the tests are completed.
     mod context {
@@ -1682,11 +1678,30 @@ mod operation_sequence_1 {
                     status: "Incomplete".to_string(),
                     process: "pnp".to_string(),
                     operations_overview: vec![
-                        // TODO add Prepare/Load PCBs and ensure it's incomplete
                         TestPhaseOperationOverview {
-                            operation: TestPhaseOperationKind::PlaceComponents,
-                            message: "0/3 placements placed".to_string(),
-                            status: TestProcessOperationStatus::Pending,
+                            operation: "load_pcbs".to_string(),
+                            status: TestProcessOperationStatus::Incomplete,
+                            tasks: vec![
+                                ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>),
+                            ],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "automated_pnp".to_string(),
+                            status: TestProcessOperationStatus::Incomplete,
+                            tasks: vec![
+                                ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskOverview {
+                                    placed: 0,
+                                    skipped: 0,
+                                    total: 3,
+                                }) as Box<dyn TestTaskOverview>),
+                            ],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "reflow_oven_soldering".to_string(),
+                            status: TestProcessOperationStatus::Incomplete,
+                            tasks: vec![
+                                ("core::automated_soldering".to_string(), Box::new(TestAutomatedSolderingTaskOverview {}) as Box<dyn TestTaskOverview>),
+                            ],
                         },
                     ],
                 },
@@ -1694,29 +1709,62 @@ mod operation_sequence_1 {
                     phase_name: "bottom_1".to_string(),
                     status: "Incomplete".to_string(),
                     process: "manual".to_string(),
-                    operations_overview: vec![TestPhaseOperationOverview {
-                        operation: TestPhaseOperationKind::ManuallySolderComponents,
-                        message: "0/0 placements placed".to_string(),
-                        status: TestProcessOperationStatus::Pending,
-                    }],
+                    operations_overview: vec![
+                        TestPhaseOperationOverview {
+                            operation: "load_pcbs".to_string(),
+                            status: TestProcessOperationStatus::Incomplete,
+                            tasks: vec![
+                                ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>),
+                            ],
+                        },
+                        TestPhaseOperationOverview {
+                            operation: "manually_solder_components".to_string(),
+                            status: TestProcessOperationStatus::Incomplete,
+                            tasks: vec![
+                                ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskOverview {
+                                    placed: 0,
+                                    skipped: 0,
+                                    total: 0,
+                                }) as Box<dyn TestTaskOverview>),
+                                ("core::manual_soldering".to_string(), Box::new(TestManualSolderingTaskOverview {}) as Box<dyn TestTaskOverview>),
+                            ],
+                        }
+                    ],
                 },
             ])
             .with_phase_specification(&[
                 TestPhaseSpecification {
                     phase_name: "top_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs {
-                            pcbs: vec![report::TestPcb::Panel {
-                                name: "panel_a".to_string(),
-                                unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
-                                    design_name: "design_a".to_string(),
-                                    variant_name: "variant_a".to_string(),
-                                }],
-                            }],
+                        TestPhaseOperation {
+                            operation: "load_pcbs".to_string(),
+                            task_specifications: vec![
+                                ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskSpecification {
+                                    pcbs: vec![report::TestPcb::Panel {
+                                        name: "panel_a".to_string(),
+                                        unit_assignments: vec![TestPcbUnitAssignment {
+                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            design_name: "design_a".to_string(),
+                                            variant_name: "variant_a".to_string(),
+                                        }],
+                                    }],
+                                }) as Box<dyn TestTaskSpecification>),
+                            ]
                         },
-                        TestPhaseOperation::PlaceComponents {},
-                        TestPhaseOperation::ReflowComponents {},
+                        TestPhaseOperation {
+                            operation: "automated_pnp".to_string(),
+                            task_specifications: vec![
+                                ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskSpecification {
+                                }) as Box<dyn TestTaskSpecification>),
+                            ]
+                        },
+                        TestPhaseOperation {
+                            operation: "reflow_oven_soldering".to_string(),
+                            task_specifications: vec![
+                                ("core::automated_soldering".to_string(), Box::new(TestAutomatedSolderingTaskSpecification {
+                                }) as Box<dyn TestTaskSpecification>),
+                            ]
+                        },
                     ],
                     load_out_assignments: vec![
                         TestPhaseLoadOutAssignmentItem {
@@ -1736,17 +1784,30 @@ mod operation_sequence_1 {
                 TestPhaseSpecification {
                     phase_name: "bottom_1".to_string(),
                     operations: vec![
-                        TestPhaseOperation::PreparePcbs {
-                            pcbs: vec![report::TestPcb::Panel {
-                                name: "panel_a".to_string(),
-                                unit_assignments: vec![TestPcbUnitAssignment {
-                                    unit_path: "pcb=panel::instance=1::unit=1".to_string(),
-                                    design_name: "design_a".to_string(),
-                                    variant_name: "variant_a".to_string(),
-                                }],
-                            }],
+                        TestPhaseOperation {
+                            operation: "load_pcbs".to_string(),
+                            task_specifications: vec![
+                                ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskSpecification {
+                                    pcbs: vec![report::TestPcb::Panel {
+                                        name: "panel_a".to_string(),
+                                        unit_assignments: vec![TestPcbUnitAssignment {
+                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            design_name: "design_a".to_string(),
+                                            variant_name: "variant_a".to_string(),
+                                        }],
+                                    }],
+                                }) as Box<dyn TestTaskSpecification>),
+                            ]
                         },
-                        TestPhaseOperation::ManuallySolderComponents {},
+                        TestPhaseOperation {
+                            operation: "manually_solder_components".to_string(),
+                            task_specifications: vec![
+                                ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskSpecification {
+                                }) as Box<dyn TestTaskSpecification>),
+                                ("core::manual_soldering".to_string(), Box::new(TestManualSolderingTaskSpecification {
+                                }) as Box<dyn TestTaskSpecification>),
+                            ]
+                        },
                     ],
                     load_out_assignments: vec![],
                 },
@@ -1778,6 +1839,7 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "generate-artifacts",
+            "-vv",
         ]);
         // when
         cmd.args(args)

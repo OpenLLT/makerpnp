@@ -451,17 +451,17 @@ impl TestProjectBuilder {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub enum TestProcessOperationStatus {
-    Pending,
     Incomplete,
     Complete,
+    Abandoned,
 }
 
 impl Display for TestProcessOperationStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TestProcessOperationStatus::Pending => write!(f, "Pending"),
             TestProcessOperationStatus::Incomplete => write!(f, "Incomplete"),
             TestProcessOperationStatus::Complete => write!(f, "Complete"),
+            TestProcessOperationStatus::Abandoned => write!(f, "Abandoned"),
         }
     }
 }

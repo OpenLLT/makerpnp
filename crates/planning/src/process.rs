@@ -109,7 +109,7 @@ impl OperationState {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum OperationStatus {
     Incomplete,
     Complete,
@@ -153,12 +153,21 @@ pub trait TaskState {
     }
 }
 
-pub trait PlacementsTaskState {
+pub trait PlacementsTaskState: AsAny {
     fn reset(&mut self);
 
     fn on_placement_status_change(&mut self, old_status: &PlacementStatus, new_status: &PlacementStatus);
 
     fn set_total_placements(&mut self, total: usize);
+
+    fn summary(&self) -> PlacementTaskSummary;
+}
+
+#[derive(Clone, Debug)]
+pub struct PlacementTaskSummary {
+    pub placed: usize,
+    pub skipped: usize,
+    pub total: usize,
 }
 
 /// Allowed transitions
@@ -295,6 +304,14 @@ impl PlacementsTaskState for PlacementTaskState {
     fn set_total_placements(&mut self, total: usize) {
         self.total = total;
         self.refresh_status();
+    }
+
+    fn summary(&self) -> PlacementTaskSummary {
+        PlacementTaskSummary {
+            placed: self.placed,
+            skipped: self.skipped,
+            total: self.total,
+        }
     }
 }
 

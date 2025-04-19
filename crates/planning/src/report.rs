@@ -5,7 +5,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
+use as_any::Downcast;
 #[cfg(feature = "markdown")]
 use json2markdown::MarkdownRenderer;
 use pnp::load_out::LoadOutItem;
@@ -20,7 +20,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{OperationReference, OperationStatus, TaskReference};
+use crate::process::{OperationReference, OperationStatus, PlacementTaskState, TaskReference};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
@@ -69,7 +69,15 @@ pub fn project_generate_report(
                                 let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
                                     Some(Box::new(LoadPcbsTaskOverview { }) as Box<dyn TaskOverview>)
                                 } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
-                                    Some(Box::new(PlaceComponentsTaskOverview {}) as Box<dyn TaskOverview>)
+
+                                    task_state.placements_state().map(|state|{
+                                        let summary = state.summary();
+                                        Box::new(PlaceComponentsTaskOverview {
+                                            placed: summary.placed,
+                                            skipped: summary.skipped,
+                                            total: summary.total,
+                                        }) as Box<dyn TaskOverview>
+                                    })
                                 } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
                                     Some(Box::new(AutomatedSolderingTaskOverview {}) as Box<dyn TaskOverview>)
                                 } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
@@ -98,7 +106,6 @@ pub fn project_generate_report(
 
                             let overview = PhaseOperationOverview {
                                 operation: operation_state.reference.clone(),
-                                message: "TODO".to_string(),
                                 status: operation_status,
                                 tasks: task_overviews,
                             };
@@ -253,7 +260,7 @@ fn build_phase_specification(
         .iter()
         .map(|operation_state| {
 
-            let task_reports= operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
+            let task_specifications = operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
                 let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
                     let pcbs = build_operation_load_pcbs(project);
                     Some(Box::new(LoadPcbsTaskSpecification {
@@ -273,10 +280,10 @@ fn build_phase_specification(
 
             let operation_item = OperationItem {
                 operation: operation_state.reference.clone(),
-                task_reports,
+                task_specifications,
             };
 
-            (operation_state.reference.clone(), operation_item)
+            operation_item
         })
         .collect();
 
@@ -748,14 +755,13 @@ pub struct PhaseOverview {
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseSpecification {
     pub phase_name: String,
-    pub operations: Vec<(OperationReference, OperationItem)>,
+    pub operations: Vec<OperationItem>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseOperationOverview {
     pub operation: OperationReference,
-    pub message: String,
     pub status: OperationStatus,
     pub tasks: Vec<(TaskReference, Option<Box<dyn TaskOverview>>)>,
 }
@@ -763,11 +769,11 @@ pub struct PhaseOperationOverview {
 #[derive(Clone, serde::Serialize)]
 pub struct OperationItem {
     pub operation: OperationReference,
-    pub task_reports: Vec<(TaskReference, Option<Box<dyn TaskSpecification>>)>,
+    pub task_specifications: Vec<(TaskReference, Option<Box<dyn TaskSpecification>>)>,
 }
 
 #[typetag::serialize(tag = "type")]
-trait TaskSpecification: DynClone {}
+pub trait TaskSpecification: DynClone {}
 dyn_clone::clone_trait_object!(TaskSpecification);
 
 macro_rules! generic_task_specification {
@@ -776,7 +782,7 @@ macro_rules! generic_task_specification {
         impl TaskSpecification for $name {}
 
         #[derive(Clone, serde::Serialize)]
-        struct $name {}
+        pub struct $name {}
     };
 }
 
@@ -793,7 +799,7 @@ struct LoadPcbsTaskSpecification {
 }
 
 #[typetag::serialize(tag = "type")]
-trait TaskOverview: DynClone {}
+pub trait TaskOverview: DynClone {}
 dyn_clone::clone_trait_object!(TaskOverview);
 
 macro_rules! generic_task_overview {
@@ -802,7 +808,7 @@ macro_rules! generic_task_overview {
         impl TaskOverview for $name {}
 
         #[derive(Clone, serde::Serialize)]
-        struct $name {}
+        pub struct $name {}
     };
 }
 
@@ -810,8 +816,15 @@ generic_task_overview!(LoadPcbsTaskOverview, "load_pcbs_overview");
 generic_task_overview!(ManualSolderingTaskOverview, "manual_soldering_overview");
 generic_task_overview!(AutomatedSolderingTaskOverview, "automated_soldering_overview");
 
-// TODO replace this one with a proper impl.
-generic_task_overview!(PlaceComponentsTaskOverview, "place_components_overview");
+#[typetag::serialize(name = "place_components_overview")]
+impl TaskOverview for PlaceComponentsTaskOverview {}
+
+#[derive(Clone, serde::Serialize)]
+pub struct PlaceComponentsTaskOverview {
+    pub placed: usize,
+    pub skipped: usize,
+    pub total: usize,
+}
 
 
 #[serde_as]
