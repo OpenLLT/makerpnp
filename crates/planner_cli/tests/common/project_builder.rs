@@ -454,20 +454,16 @@ pub enum TestProcessOperationStatus {
     Incomplete,
     Complete,
     Abandoned,
+    Pending,
 }
 
 impl Display for TestProcessOperationStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            TestProcessOperationStatus::Pending => write!(f, "Pending"),
             TestProcessOperationStatus::Incomplete => write!(f, "Incomplete"),
             TestProcessOperationStatus::Complete => write!(f, "Complete"),
             TestProcessOperationStatus::Abandoned => write!(f, "Abandoned"),
         }
     }
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
-pub struct TestPlacementsState {
-    pub placed: usize,
-    pub total: usize,
 }

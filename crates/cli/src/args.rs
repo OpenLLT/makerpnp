@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use eda::EdaTool;
 use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 use planning::placement::{PlacementOperation, PlacementSortingMode};
-use planning::process::OperationAction;
+use planning::process::TaskAction;
 use pnp::pcb::{PcbKind, PcbSide};
 use util::sorting::SortOrder;
 
@@ -151,21 +151,21 @@ impl From<PlacementOperationArg> for PlacementOperation {
 
 #[derive(Clone, Debug)]
 #[derive(ValueEnum)]
-pub enum OperationActionArg {
-    #[value(name("started"))]
-    Started,
-    #[value(name("completed"))]
-    Completed,
-    #[value(name("abandoned"))]
-    Abandoned,
+pub enum TaskActionArg {
+    #[value(name("start"))]
+    Start,
+    #[value(name("complete"))]
+    Complete,
+    #[value(name("abandon"))]
+    Abandon,
 }
 
-impl From<OperationActionArg> for OperationAction {
-    fn from(value: OperationActionArg) -> Self {
+impl From<TaskActionArg> for TaskAction {
+    fn from(value: TaskActionArg) -> Self {
         match value {
-            OperationActionArg::Started => OperationAction::Started,
-            OperationActionArg::Completed => OperationAction::Completed,
-            OperationActionArg::Abandoned => OperationAction::Abandoned,
+            TaskActionArg::Start => TaskAction::Start,
+            TaskActionArg::Complete => TaskAction::Complete,
+            TaskActionArg::Abandon => TaskAction::Abandon,
         }
     }
 }

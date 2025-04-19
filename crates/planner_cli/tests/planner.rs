@@ -21,10 +21,7 @@ mod operation_sequence_1 {
     use tempfile::tempdir;
     use util::test::{build_temp_file, prepare_args, print};
 
-    use crate::common::operation_history::{
-        TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind,
-        TestPlacementOperationHistoryKind,
-    };
+    use crate::common::operation_history::{TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind, TestPlaceComponentsOperationTaskHistoryKind, TestPlacementOperationHistoryKind};
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
     use crate::common::project_builder as project;
     use crate::common::project_builder::{
@@ -37,6 +34,8 @@ mod operation_sequence_1 {
 
     /// A context, which will be dropped when the tests are completed.
     mod context {
+        use std::fs;
+        use std::path::Path;
         use std::sync::{Mutex, MutexGuard};
         use std::thread::sleep;
         use std::time::Duration;
@@ -97,6 +96,13 @@ mod operation_sequence_1 {
                     phase_2_load_out_path,
                 }
             }
+
+            pub fn delete_trace_log(&self) {
+                if Path::new(&self.test_trace_log_path).exists() {
+                    println!("deleting trace log: {}", self.test_trace_log_path.to_str().unwrap());
+                    fs::remove_file(&self.test_trace_log_path).unwrap();
+                }
+            }
         }
 
         impl Drop for Context {
@@ -114,7 +120,7 @@ mod operation_sequence_1 {
         /// Use a mutex to prevent multiple test threads interacting with the same static state.
         /// This can happen when tests use the same mock context.  Without this mechanism tests will
         /// interact with each other causing unexpected results and test failures.
-        pub fn aquire(sequence: usize) -> MutexGuard<'static, (usize, Option<Context>)> {
+        pub fn acquire(sequence: usize) -> MutexGuard<'static, (usize, Option<Context>)> {
             let mut lock = loop {
                 let mut lock = LOCK
                     .lock()
@@ -139,7 +145,7 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_01_create_job() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(1);
+        let mut ctx_guard = context::acquire(1);
         let ctx = ctx_guard.1.as_mut().unwrap();
 
         // and
@@ -187,8 +193,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_02_add_pcb() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(2);
+        let mut ctx_guard = context::acquire(2);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -240,8 +247,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_03_assign_variant_to_unit() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(3);
+        let mut ctx_guard = context::acquire(3);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -411,8 +419,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_04_assign_process_to_parts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(4);
+        let mut ctx_guard = context::acquire(4);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -602,8 +611,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_05_create_phase_top() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(5);
+        let mut ctx_guard = context::acquire(5);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -812,8 +822,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_06_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(6);
+        let mut ctx_guard = context::acquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1054,8 +1065,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_07_assign_placements_to_phase() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(7);
+        let mut ctx_guard = context::acquire(7);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1341,8 +1353,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_08_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(8);
+        let mut ctx_guard = context::acquire(8);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1403,8 +1416,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_09_set_placement_ordering() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(9);
+        let mut ctx_guard = context::acquire(9);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1630,8 +1644,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_10_generate_artifacts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(10);
+        let mut ctx_guard = context::acquire(10);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -1680,14 +1695,14 @@ mod operation_sequence_1 {
                     operations_overview: vec![
                         TestPhaseOperationOverview {
                             operation: "load_pcbs".to_string(),
-                            status: TestProcessOperationStatus::Incomplete,
+                            status: TestProcessOperationStatus::Pending,
                             tasks: vec![
                                 ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>),
                             ],
                         },
                         TestPhaseOperationOverview {
                             operation: "automated_pnp".to_string(),
-                            status: TestProcessOperationStatus::Incomplete,
+                            status: TestProcessOperationStatus::Pending,
                             tasks: vec![
                                 ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskOverview {
                                     placed: 0,
@@ -1698,7 +1713,7 @@ mod operation_sequence_1 {
                         },
                         TestPhaseOperationOverview {
                             operation: "reflow_oven_soldering".to_string(),
-                            status: TestProcessOperationStatus::Incomplete,
+                            status: TestProcessOperationStatus::Pending,
                             tasks: vec![
                                 ("core::automated_soldering".to_string(), Box::new(TestAutomatedSolderingTaskOverview {}) as Box<dyn TestTaskOverview>),
                             ],
@@ -1712,14 +1727,14 @@ mod operation_sequence_1 {
                     operations_overview: vec![
                         TestPhaseOperationOverview {
                             operation: "load_pcbs".to_string(),
-                            status: TestProcessOperationStatus::Incomplete,
+                            status: TestProcessOperationStatus::Pending,
                             tasks: vec![
                                 ("core::load_pcbs".to_string(), Box::new(TestLoadPcbsTaskOverview {}) as Box<dyn TestTaskOverview>),
                             ],
                         },
                         TestPhaseOperationOverview {
                             operation: "manually_solder_components".to_string(),
-                            status: TestProcessOperationStatus::Incomplete,
+                            status: TestProcessOperationStatus::Pending,
                             tasks: vec![
                                 ("core::place_components".to_string(), Box::new(TestPlaceComponentsTaskOverview {
                                     placed: 0,
@@ -1932,13 +1947,16 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_11_record_phase_operation() -> Result<(), anyhow::Error> {
+    fn sequence_11_record_phase_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(11);
+        let mut ctx_guard = context::acquire(11);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_1 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_2 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let mut cmd_3 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
         let expected_project_content = TestProjectBuilder::new()
@@ -2011,7 +2029,7 @@ mod operation_sequence_1 {
                     )]),
                     TestOperationState::new("automated_pnp", vec![(
                         "core::place_components",
-                        Box::new(TestPlacementTaskState::new(TaskStatus::Pending).with_total(3))
+                        Box::new(TestPlacementTaskState::new(TaskStatus::Started).with_total(3))
                             as Box<dyn TestSerializableTaskState>,
                     )]),
                     TestOperationState::new("reflow_oven_soldering", vec![(
@@ -2128,7 +2146,27 @@ mod operation_sequence_1 {
                     "top_1".to_string(),
                     "load_pcbs".to_string(),
                     Box::new(TestLoadPcbsOperationTaskHistoryKind {
+                        status: TaskStatus::Started,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
+            ),
+            (
+                "require",
+                Some((
+                    "top_1".to_string(),
+                    "load_pcbs".to_string(),
+                    Box::new(TestLoadPcbsOperationTaskHistoryKind {
                         status: TaskStatus::Complete,
+                    }) as Box<dyn TestOperationHistoryKind>,
+                )),
+            ),
+            (
+                "require",
+                Some((
+                    "top_1".to_string(),
+                    "automated_pnp".to_string(),
+                    Box::new(TestPlaceComponentsOperationTaskHistoryKind {
+                        status: TaskStatus::Started,
                     }) as Box<dyn TestOperationHistoryKind>,
                 )),
             ),
@@ -2136,18 +2174,59 @@ mod operation_sequence_1 {
         ];
 
         // and
-        let args = prepare_args(vec![
+        let args_1 = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-phase-operation",
             "--phase top_1",
             "--operation load_pcbs",
-            "--action completed",
+            "--task core::load_pcbs",
+            "--action start",
         ]);
+        let message_1 = "Marking task as started. phase: top_1, operation: load_pcbs, task: core::load_pcbs";
+
+        let args_2 = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "record-phase-operation",
+            "--phase top_1",
+            "--operation load_pcbs",
+            "--task core::load_pcbs",
+            "--action complete",
+        ]);
+        let message_2 = "Marking task as completed. phase: top_1, operation: load_pcbs, task: core::load_pcbs";
+
+        let args_3 = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "record-phase-operation",
+            "--phase top_1",
+            "--operation automated_pnp",
+            "--task core::place_components",
+            "--action start",
+        ]);
+        let message_3 = "Marking task as started. phase: top_1, operation: automated_pnp, task: core::place_components";
 
         // when
-        cmd.args(args)
+        cmd_1.args(args_1)
+            // then
+            .assert()
+            .success()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+
+        // and when
+        cmd_2.args(args_2)
+            // then
+            .assert()
+            .success()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+        // and when
+        cmd_3.args(args_3)
             // then
             .assert()
             .success()
@@ -2156,12 +2235,17 @@ mod operation_sequence_1 {
 
         // and
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        println!("trace:\n{}", trace_content);
 
-        let log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
+        let initial_log_file_message = format!("Created operation history file. path: {:?}\n", ctx.phase_1_log_path);
+        let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
-            "Marking phase operation as complete\n",
+            message_1,
+            &initial_log_file_message,
+            message_2,
+            &log_file_message,
+            message_3,
             &log_file_message,
         ]);
 
@@ -2183,8 +2267,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_12_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(12);
+        let mut ctx_guard = context::acquire(12);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -2376,6 +2461,8 @@ mod operation_sequence_1 {
 
         let operation_expectations = vec![
             ("ignore", None),
+            ("ignore", None),
+            ("ignore", None),
             (
                 "require",
                 Some((
@@ -2464,8 +2551,9 @@ mod operation_sequence_1 {
     #[test]
     fn sequence_13_reset_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::aquire(13);
+        let mut ctx_guard = context::acquire(13);
         let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
@@ -2725,7 +2813,7 @@ mod operation_sequence_1 {
 
     #[test]
     fn sequence_14_cleanup() {
-        let mut ctx_guard = context::aquire(14);
+        let mut ctx_guard = context::acquire(14);
         let ctx = ctx_guard.1.take().unwrap();
         drop(ctx);
     }
@@ -3050,12 +3138,13 @@ mod help {
         let expected_output = indoc! {"
             Record phase operation
 
-            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --action <ACTION>
+            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --task <TASK> --action <ACTION>
 
             Options:
                   --phase <PHASE>          Phase reference (e.g. 'top_1')
-                  --operation <OPERATION>  The operation to update
-                  --action <ACTION>        The process operation to set [possible values: started, completed, abandoned]
+                  --operation <OPERATION>  Operation reference
+                  --task <TASK>            The task to update
+                  --action <ACTION>        The task action to apply [possible values: start, complete, abandon]
               -v, --verbose...             Increase logging verbosity
               -q, --quiet...               Decrease logging verbosity
               -h, --help                   Print help

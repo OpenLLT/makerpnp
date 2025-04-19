@@ -97,9 +97,11 @@ pub fn project_generate_report(
                                 (_, OperationStatus::Abandoned) => PhaseStatus::Abandoned,
 
                                 (PhaseStatus::Incomplete, _) => PhaseStatus::Incomplete,
-                                (_, OperationStatus::Incomplete) => PhaseStatus::Incomplete,
+                                (_, OperationStatus::Pending) => PhaseStatus::Incomplete,
+                                (_, OperationStatus::Started) => PhaseStatus::Incomplete,
                             };
 
+                            // TODO review is this is still needed
                             if !operation_state.is_complete() {
                                 phase_status = PhaseStatus::Incomplete;
                             }

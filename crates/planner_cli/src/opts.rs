@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
-    AddOrRemoveOperationArg, OperationActionArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg,
+    AddOrRemoveOperationArg, TaskActionArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg,
 };
 use planner_app::Event;
 use planning::design::DesignName;
@@ -162,13 +162,17 @@ pub(crate) enum Command {
         #[arg(long)]
         phase: Reference,
 
-        /// The operation to update
+        /// Operation reference
         #[arg(long)]
         operation: Reference,
 
-        /// The process operation to set
+        /// The task to update
         #[arg(long)]
-        action: OperationActionArg,
+        task: Reference,
+
+        /// The task action to apply
+        #[arg(long)]
+        action: TaskActionArg,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -280,10 +284,12 @@ impl TryFrom<Opts> for Event {
             Command::RecordPhaseOperation {
                 phase,
                 operation,
+                task,
                 action,
             } => Ok(Event::RecordPhaseOperation {
                 phase,
                 operation: operation.into(),
+                task: task.into(),
                 action: action.into(),
             }),
             Command::RecordPlacementsOperation {

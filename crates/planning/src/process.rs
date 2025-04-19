@@ -97,11 +97,23 @@ impl OperationState {
             })
     }
 
+    pub fn is_started(&self) -> bool {
+        self.task_states
+            .iter()
+            .fold(true, |started, (_reference, task_state)| {
+                if !started {
+                    return false;
+                }
+
+                started && matches!(task_state.status(), TaskStatus::Started)
+            })
+    }
+
     pub fn status(&self) -> OperationStatus {
-        self.task_states.iter().fold(OperationStatus::Incomplete, |status, (task_reference, task_state)| {
+        self.task_states.iter().fold(OperationStatus::Pending, |status, (task_reference, task_state)| {
             match task_state.status() {
-                TaskStatus::Pending => OperationStatus::Incomplete,
-                TaskStatus::Started => OperationStatus::Incomplete,
+                TaskStatus::Pending => OperationStatus::Pending,
+                TaskStatus::Started => OperationStatus::Started,
                 TaskStatus::Complete => OperationStatus::Complete,
                 TaskStatus::Abandoned => OperationStatus::Abandoned,
             }
@@ -111,7 +123,8 @@ impl OperationState {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub enum OperationStatus {
-    Incomplete,
+    Pending,
+    Started,
     Complete,
     Abandoned,
 }
@@ -316,10 +329,10 @@ impl PlacementsTaskState for PlacementTaskState {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
-pub enum OperationAction {
-    Started,
-    Completed,
-    Abandoned,
+pub enum TaskAction {
+    Start,
+    Complete,
+    Abandon,
 }
 
 macro_rules! generic_task_impl {
@@ -360,6 +373,8 @@ macro_rules! generic_task_impl {
     };
 }
 
-generic_task_impl!(LoadPcbsOperationState, "core::load_pcbs_task_state");
-generic_task_impl!(AutomatedSolderingOperationState, "core::automated_soldering_task_state");
-generic_task_impl!(ManualSolderingOperationState, "core::manual_soldering_task_state");
+generic_task_impl!(LoadPcbsTaskState, "core::load_pcbs_task_state");
+generic_task_impl!(AutomatedSolderingTaskState, "core::automated_soldering_task_state");
+generic_task_impl!(ManualSolderingTaskState, "core::manual_soldering_task_state");
+#[cfg(test)]
+generic_task_impl!(TestTaskState, "core::test_task_state");

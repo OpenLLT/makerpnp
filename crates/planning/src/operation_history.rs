@@ -29,6 +29,30 @@ pub struct LoadPcbsOperationTaskHistoryKind {
 #[typetag::serde(name = "load_pcbs_operation")]
 impl OperationHistoryKind for LoadPcbsOperationTaskHistoryKind {}
 
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct PlaceComponentsOperationTaskHistoryKind {
+    pub(crate) status: TaskStatus,
+}
+
+#[typetag::serde(name = "place_components_operation")]
+impl OperationHistoryKind for PlaceComponentsOperationTaskHistoryKind {}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct ManualSolderingOperationTaskHistoryKind {
+    pub(crate) status: TaskStatus,
+}
+
+#[typetag::serde(name = "manual_soldering_operation")]
+impl OperationHistoryKind for ManualSolderingOperationTaskHistoryKind {}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct AutomatedSolderingOperationTaskHistoryKind {
+    pub(crate) status: TaskStatus,
+}
+
+#[typetag::serde(name = "automated_soldering_operation")]
+impl OperationHistoryKind for AutomatedSolderingOperationTaskHistoryKind {}
+
 #[serde_as]
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct PlacementOperationHistoryKind {

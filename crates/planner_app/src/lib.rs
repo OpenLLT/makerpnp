@@ -18,7 +18,7 @@ pub use planning::placement::ProjectPlacementStatus;
 pub use planning::placement::{PlacementOperation, PlacementState};
 pub use planning::process::ProcessReference;
 pub use planning::process::TaskStatus;
-pub use planning::process::{OperationAction, OperationReference, ProcessDefinition};
+pub use planning::process::{TaskAction, OperationReference, ProcessDefinition};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -35,7 +35,7 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{info, trace};
-
+use planning::process::TaskReference;
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 
@@ -304,7 +304,8 @@ pub enum Event {
     RecordPhaseOperation {
         phase: Reference,
         operation: OperationReference,
-        action: OperationAction,
+        task: TaskReference,
+        action: TaskAction,
     },
     /// Record placements operation
     RecordPlacementsOperation {
@@ -728,6 +729,7 @@ impl Planner {
             Event::RecordPhaseOperation {
                 phase: reference,
                 operation,
+                task,
                 action,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -741,7 +743,7 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let directory = path.parent().unwrap();
-                *modified |= project::apply_phase_operation_action(project, directory, &reference, operation, action)
+                *modified |= project::apply_phase_operation_task_action(project, directory, &reference, operation, task, action)
                     .map_err(AppError::OperationError)?;
                 Ok(render::render())
             }),
