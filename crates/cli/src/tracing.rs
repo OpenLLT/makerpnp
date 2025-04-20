@@ -1,4 +1,4 @@
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::path::PathBuf;
 
 use clap_verbosity_flag::{LogLevel, Verbosity};
