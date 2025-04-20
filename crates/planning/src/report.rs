@@ -101,11 +101,6 @@ pub fn project_generate_report(
                                 (_, OperationStatus::Started) => PhaseStatus::Incomplete,
                             };
 
-                            // TODO review is this is still needed
-                            if !operation_state.is_complete() {
-                                phase_status = PhaseStatus::Incomplete;
-                            }
-
                             let overview = PhaseOperationOverview {
                                 operation: operation_state.reference.clone(),
                                 status: operation_status,
