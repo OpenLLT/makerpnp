@@ -1704,7 +1704,7 @@ mod operation_sequence_1 {
             .with_status("Incomplete")
             .with_phases_overview(&[
                 TestPhaseOverview {
-                    phase_name: "top_1".to_string(),
+                    phase: "top_1".to_string(),
                     status: "Incomplete".to_string(),
                     process: "pnp".to_string(),
                     operations_overview: vec![
@@ -1739,7 +1739,7 @@ mod operation_sequence_1 {
                     ],
                 },
                 TestPhaseOverview {
-                    phase_name: "bottom_1".to_string(),
+                    phase: "bottom_1".to_string(),
                     status: "Incomplete".to_string(),
                     process: "manual".to_string(),
                     operations_overview: vec![
@@ -1774,7 +1774,7 @@ mod operation_sequence_1 {
             ])
             .with_phase_specification(&[
                 TestPhaseSpecification {
-                    phase_name: "top_1".to_string(),
+                    phase: "top_1".to_string(),
                     operations: vec![
                         TestPhaseOperation {
                             operation: "load_pcbs".to_string(),
@@ -1823,7 +1823,7 @@ mod operation_sequence_1 {
                     ],
                 },
                 TestPhaseSpecification {
-                    phase_name: "bottom_1".to_string(),
+                    phase: "bottom_1".to_string(),
                     operations: vec![
                         TestPhaseOperation {
                             operation: "load_pcbs".to_string(),

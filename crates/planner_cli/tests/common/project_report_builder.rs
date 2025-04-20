@@ -62,7 +62,7 @@ pub struct TestProjectReport {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseOverview {
-    pub phase_name: String,
+    pub phase: String,
     pub status: String,
     pub process: String,
     pub operations_overview: Vec<TestPhaseOperationOverview>,
@@ -105,7 +105,7 @@ pub struct TestPlaceComponentsTaskOverview {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseSpecification {
-    pub phase_name: String,
+    pub phase: String,
     pub operations: Vec<TestPhaseOperation>,
     pub load_out_assignments: Vec<TestPhaseLoadOutAssignmentItem>,
 }
