@@ -1629,43 +1629,45 @@ pub fn apply_phase_operation_task_action(
 
     let mut task_history_items: Vec<(&TaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
 
-    let task_history_item = build_operation_task_history_item(&task_reference, task_state.status());
-    task_history_items.push(task_history_item);
+    if let Some(task_history_item) = build_operation_task_history_item(&task_reference, task_state.status()) {
+        task_history_items.push(task_history_item);
+    }
 
     fn build_operation_task_history_item(
         reference: &TaskReference,
         new_status: TaskStatus,
-    ) -> (&TaskReference, Box<dyn OperationHistoryKind>) {
+    ) -> Option<(&TaskReference, Box<dyn OperationHistoryKind>)> {
         if reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
-            (
+            Some((
                 reference,
                 Box::new(LoadPcbsOperationTaskHistoryKind {
                     status: new_status,
                 }) as Box<dyn OperationHistoryKind>,
-            )
+            ))
         } else if reference.eq(&TaskReference::from_raw_str("core::place_components")) {
-            (
+            Some((
                 reference,
                 Box::new(PlaceComponentsOperationTaskHistoryKind {
                     status: new_status,
                 }) as Box<dyn OperationHistoryKind>,
-            )
+            ))
         } else if reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
-            (
+            Some((
                 reference,
                 Box::new(ManualSolderingOperationTaskHistoryKind {
                     status: new_status,
                 }) as Box<dyn OperationHistoryKind>,
-            )
+            ))
         } else if reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
-            (
+            Some((
                 reference,
                 Box::new(AutomatedSolderingOperationTaskHistoryKind {
                     status: new_status,
                 }) as Box<dyn OperationHistoryKind>,
-            )
+            ))
         } else {
-            todo!()
+            warn!("Unable to build history. task_reference: {:?}", reference);
+            None
         }
     }
 
