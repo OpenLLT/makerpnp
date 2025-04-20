@@ -13,14 +13,11 @@ use crate::process::{
 };
 use crate::reference::Reference;
 
-// TODO
-//pub type PhaseReference = Reference;
+pub type PhaseReference = Reference;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Phase {
-    // TODO
-    //pub reference: PhaseReference,
-    pub reference: Reference,
+    pub reference: PhaseReference,
     pub process: ProcessReference,
 
     pub load_out_source: String,

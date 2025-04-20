@@ -10,7 +10,7 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignName, DesignVariant};
-use planning::phase::{Phase, PhaseState};
+use planning::phase::{Phase, PhaseReference, PhaseState};
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::PlacementStatus;
@@ -72,7 +72,7 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct LoadOut {
-    pub phase_reference: Reference,
+    pub phase_reference: PhaseReference,
     pub source: LoadOutSource,
     pub items: Vec<LoadOutItem>,
 }
@@ -84,7 +84,7 @@ pub struct Phases {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhaseOverview {
-    pub phase_reference: Reference,
+    pub phase_reference: PhaseReference,
     pub process: ProcessReference,
     pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
@@ -101,7 +101,7 @@ pub struct PlacementsItem {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PhasePlacements {
-    pub phase_reference: Reference,
+    pub phase_reference: PhaseReference,
 
     pub placements: Vec<PlacementsItem>,
 }
@@ -218,9 +218,9 @@ pub enum ProjectViewRequest {
     Overview,
     Parts,
     Phases,
-    PhaseLoadOut { phase: Reference },
-    PhaseOverview { phase: Reference },
-    PhasePlacements { phase: Reference },
+    PhaseLoadOut { phase: PhaseReference },
+    PhaseOverview { phase: PhaseReference },
+    PhasePlacements { phase: PhaseReference },
     Placements,
     ProjectTree,
 }
@@ -270,12 +270,12 @@ pub enum Event {
     },
     CreatePhase {
         process: ProcessReference,
-        reference: Reference,
+        reference: PhaseReference,
         load_out: LoadOutSource,
         pcb_side: PcbSide,
     },
     AssignPlacementsToPhase {
-        phase: Reference,
+        phase: PhaseReference,
         operation: SetOrClearAction,
 
         /// to apply to object path (not refdes)
@@ -283,14 +283,14 @@ pub enum Event {
         placements: Regex,
     },
     AddPartsToLoadout {
-        phase: Reference,
+        phase: PhaseReference,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
         mpn: Regex,
     },
     AssignFeederToLoadOutItem {
-        phase: Reference,
+        phase: PhaseReference,
         feeder_reference: Reference,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
@@ -298,12 +298,12 @@ pub enum Event {
         mpn: Regex,
     },
     SetPlacementOrdering {
-        phase: Reference,
+        phase: PhaseReference,
         placement_orderings: Vec<PlacementSortingItem>,
     },
     GenerateArtifacts,
     RecordPhaseOperation {
-        phase: Reference,
+        phase: PhaseReference,
         operation: OperationReference,
         task: TaskReference,
         action: TaskAction,
@@ -315,7 +315,7 @@ pub enum Event {
         operation: PlacementOperation,
     },
     RemoveUsedPlacements {
-        phase: Option<Reference>,
+        phase: Option<PhaseReference>,
     },
     /// Reset operations
     ResetOperations {},
@@ -328,17 +328,17 @@ pub enum Event {
     RequestProjectTreeView {},
     RequestPhasesView {},
     RequestPhaseOverviewView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
     RequestPhasePlacementsView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
     RequestProcessView {
         process_reference: String,
     },
     RequestPartStatesView,
     RequestPhaseLoadOutView {
-        phase_reference: Reference,
+        phase_reference: PhaseReference,
     },
 }
 
@@ -1368,7 +1368,7 @@ fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Res
 #[must_use]
 fn try_build_phase_overview(
     project_path: &PathBuf,
-    phase_reference: Reference,
+    phase_reference: PhaseReference,
     phase: &Phase,
     state: &PhaseState,
 ) -> Result<PhaseOverview, LoadOutSourceError> {

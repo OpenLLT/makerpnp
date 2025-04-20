@@ -34,7 +34,7 @@ use crate::operation_history::{
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
-use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
+use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
     ProjectPlacementStatus,
@@ -139,7 +139,7 @@ impl Project {
 
     pub fn update_phase(
         &mut self,
-        reference: Reference,
+        reference: PhaseReference,
         process_name: ProcessReference,
         load_out_source: String,
         pcb_side: PcbSide,

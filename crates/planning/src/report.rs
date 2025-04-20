@@ -19,6 +19,7 @@ use tracing::{error, info, trace};
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
+use crate::phase::PhaseReference;
 use crate::placement::{PlacementState, ProjectPlacementStatus};
 use crate::process::{OperationReference, OperationStatus, TaskReference};
 use crate::project::Project;
@@ -126,7 +127,7 @@ pub fn project_generate_report(
                     }
 
                     PhaseOverview {
-                        phase_name: phase.reference.to_string(),
+                        phase: phase.reference.clone(),
                         status: phase_status,
                         process: phase.process.to_string(),
                         operations_overview,
@@ -297,7 +298,7 @@ fn build_phase_specification(
         .collect();
 
     PhaseSpecification {
-        phase_name: phase.reference.to_string(),
+        phase: phase.reference.clone(),
         operations,
         load_out_assignments,
     }
@@ -755,7 +756,7 @@ pub enum PhaseStatus {
 
 #[derive(serde::Serialize)]
 pub struct PhaseOverview {
-    pub phase_name: String,
+    pub phase: PhaseReference,
     pub status: PhaseStatus,
     pub process: String,
     pub operations_overview: Vec<PhaseOperationOverview>,
@@ -763,7 +764,7 @@ pub struct PhaseOverview {
 
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseSpecification {
-    pub phase_name: String,
+    pub phase: PhaseReference,
     pub operations: Vec<OperationItem>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
