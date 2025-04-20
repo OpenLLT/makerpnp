@@ -41,7 +41,7 @@ use crate::placement::{
 };
 use crate::process::{
     OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessError, ProcessReference,
-    ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskState, TaskStatus,
+    ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
 };
 use crate::reference::{Reference, ReferenceError};
 #[cfg(feature = "markdown")]

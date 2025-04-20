@@ -92,7 +92,7 @@ impl OperationState {
             .task_states
             .iter()
             .rev()
-            .try_fold(None, |status, (task_reference, task_state)| {
+            .try_fold(None, |status, (_task_reference, task_state)| {
                 //trace!("acc: {:?}, task_status: {:?}", status, task_state.status());
                 match (status, task_state.status()) {
                     (None, TaskStatus::Abandoned) => ControlFlow::Break(OperationStatus::Abandoned),

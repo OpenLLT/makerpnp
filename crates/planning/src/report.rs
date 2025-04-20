@@ -5,7 +5,6 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use as_any::Downcast;
 use dyn_clone::DynClone;
 #[cfg(feature = "markdown")]
 use json2markdown::MarkdownRenderer;
@@ -21,7 +20,7 @@ use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
-use crate::process::{OperationReference, OperationStatus, PlacementTaskState, TaskReference};
+use crate::process::{OperationReference, OperationStatus, TaskReference};
 use crate::project::Project;
 use crate::reference::Reference;
 use crate::variant::VariantName;
