@@ -1,5 +1,4 @@
 use dyn_clone::DynClone;
-use planning::report::PcbReportItem;
 use serde::Serialize;
 
 use crate::common::project_builder::TestProcessOperationStatus;
@@ -166,7 +165,7 @@ pub struct TestPcbUnitAssignment {
 
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseLoadOutAssignmentItem {
-    pub feeder_reference: String,
+    pub feeder_reference: Option<String>,
     pub manufacturer: String,
     pub mpn: String,
     pub quantity: u32,

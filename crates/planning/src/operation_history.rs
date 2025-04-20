@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::Error;
 use as_any::AsAny;
 use pnp::object_path::ObjectPath;
+use pnp::reference::Reference;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
@@ -16,7 +17,6 @@ use tracing::info;
 
 use crate::placement::PlacementOperation;
 use crate::process::{OperationReference, TaskReference, TaskStatus};
-use crate::reference::Reference;
 
 #[typetag::serde(tag = "type")]
 pub trait OperationHistoryKind: AsAny + Debug {}

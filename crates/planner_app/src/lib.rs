@@ -22,7 +22,6 @@ pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, ProcessDefinition, TaskAction};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
-pub use planning::reference::Reference;
 pub use planning::variant::VariantName;
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
@@ -30,6 +29,7 @@ pub use pnp::part::Part;
 pub use pnp::pcb::{PcbKind, PcbSide};
 pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
+pub use pnp::reference::Reference;
 use regex::Regex;
 use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
@@ -664,7 +664,7 @@ impl Planner {
                 stores::load_out::assign_feeder_to_load_out_item(
                     &load_out_source,
                     &process,
-                    &feeder_reference,
+                    feeder_reference,
                     manufacturer,
                     mpn,
                 )

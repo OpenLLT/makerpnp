@@ -8,6 +8,5 @@ pub mod placement;
 pub mod process;
 pub mod project;
 
-pub mod reference;
 pub mod report;
 pub mod variant;
