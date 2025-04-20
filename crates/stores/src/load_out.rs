@@ -7,9 +7,9 @@ use std::str::FromStr;
 use anyhow::{Context, Error};
 use csv::QuoteStyle;
 use planning::process::{ProcessDefinition, ProcessReference, ProcessRuleReference};
-use planning::reference::Reference;
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
+use pnp::reference::Reference;
 use regex::Regex;
 use thiserror::Error;
 use tracing::trace;
@@ -54,7 +54,7 @@ pub fn store_items(load_out_source: &LoadOutSource, items: &[LoadOutItem]) -> Re
 
     for item in items {
         writer.serialize(LoadOutItemRecord {
-            reference: item.reference.to_string(),
+            reference: item.reference.clone(),
             manufacturer: item.manufacturer.to_string(),
             mpn: item.mpn.to_string(),
         })?;
@@ -212,7 +212,7 @@ pub fn add_parts_to_load_out(
             }
 
             let load_out_item = LoadOutItem {
-                reference: "".to_string(),
+                reference: None,
                 manufacturer: part.manufacturer.clone(),
                 mpn: part.mpn.clone(),
             };
@@ -241,7 +241,7 @@ pub enum FeederAssignmentError {
 pub fn assign_feeder_to_load_out_item(
     load_out_source: &LoadOutSource,
     process: &ProcessDefinition,
-    feeder_reference: &Reference,
+    feeder_reference: Reference,
     manufacturer: Regex,
     mpn: Regex,
 ) -> anyhow::Result<Vec<Part>> {
@@ -274,7 +274,7 @@ pub fn assign_feeder_to_load_out_item(
                 mpn: item.mpn.clone(),
             };
 
-            item.reference = feeder_reference.to_string();
+            item.reference = Some(feeder_reference.clone());
 
             parts.push(part);
         }

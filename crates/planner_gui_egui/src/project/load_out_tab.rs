@@ -46,7 +46,9 @@ impl LoadOutUi {
                 .drain(0..)
                 .map(|item| LoadOutRow {
                     part: Part::new(item.manufacturer, item.mpn),
-                    feeder: item.reference.to_string(),
+                    feeder: item
+                        .reference
+                        .map_or_else(|| "".to_string(), |reference| reference.to_string()),
                 })
         }
         .collect();

@@ -1809,13 +1809,13 @@ mod operation_sequence_1 {
                     ],
                     load_out_assignments: vec![
                         TestPhaseLoadOutAssignmentItem {
-                            feeder_reference: "FEEDER_1".to_string(),
+                            feeder_reference: Some("FEEDER_1".to_string()),
                             manufacturer: "RES_MFR1".to_string(),
                             mpn: "RES1".to_string(),
                             quantity: 2, // R1 and R3
                         },
                         TestPhaseLoadOutAssignmentItem {
-                            feeder_reference: "".to_string(),
+                            feeder_reference: None,
                             manufacturer: "RES_MFR2".to_string(),
                             mpn: "RES2".to_string(),
                             quantity: 1,

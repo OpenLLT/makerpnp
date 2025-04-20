@@ -9,6 +9,7 @@ use part_mapper::criteria::PlacementMappingCriteria;
 use part_mapper::part_mapping::PartMapping;
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
+use pnp::reference::Reference;
 use regex::{Error, Regex};
 use thiserror::Error;
 
@@ -169,7 +170,7 @@ impl PartRecord {
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct LoadOutItemRecord {
-    pub reference: String,
+    pub reference: Option<Reference>,
     pub manufacturer: String,
     pub mpn: String,
 }

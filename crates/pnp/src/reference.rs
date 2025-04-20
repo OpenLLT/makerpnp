@@ -24,7 +24,11 @@ use thiserror::Error;
 pub struct Reference(pub String);
 
 impl Reference {
-    fn is_valid(value: &str) -> bool {
+    pub fn is_valid(&self) -> bool {
+        Self::inner_is_valid(&self.0)
+    }
+
+    fn inner_is_valid(value: &str) -> bool {
         if value.is_empty() {
             return false;
         }
@@ -40,16 +44,16 @@ impl Reference {
     }
 
     pub fn from_raw_str(value: &str) -> Self {
-        let value = value.to_string();
-        assert!(Self::is_valid(&value));
+        assert!(Self::inner_is_valid(value));
 
+        let value = value.to_string();
         Self(value)
     }
 
     pub fn from_raw(value: String) -> Self {
-        assert!(Self::is_valid(&value));
+        assert!(Self::inner_is_valid(&value));
 
-        Self(value.to_string())
+        Self(value)
     }
 }
 
@@ -71,7 +75,7 @@ impl TryFrom<String> for Reference {
     type Error = ReferenceError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        if Self::is_valid(&value) {
+        if Self::inner_is_valid(&value) {
             Ok(Self(value))
         } else {
             Err(ReferenceError::InvalidReference(value))
@@ -89,7 +93,7 @@ pub enum ReferenceError {
 mod reference_tests {
     use rstest::rstest;
 
-    use crate::reference::Reference;
+    use super::Reference;
 
     #[rstest]
     #[case("", false)]
@@ -105,6 +109,6 @@ mod reference_tests {
     #[case("namespaced::example_reference", true)]
     #[case("longer::namespaced::example_reference", true)]
     fn is_valid(#[case] value: &str, #[case] expected_result: bool) {
-        assert_eq!(Reference::is_valid(&value.to_string()), expected_result);
+        assert_eq!(Reference::inner_is_valid(value), expected_result);
     }
 }

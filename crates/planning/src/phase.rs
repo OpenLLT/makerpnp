@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use indexmap::{IndexMap, IndexSet};
 use pnp::pcb::PcbSide;
+use pnp::reference::Reference;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
@@ -11,7 +12,6 @@ use crate::process::{
     AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState,
     PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
 };
-use crate::reference::Reference;
 
 pub type PhaseReference = Reference;
 

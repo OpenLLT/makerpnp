@@ -19,11 +19,11 @@ use std::ops::ControlFlow;
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;
 use indexmap::IndexMap;
+use pnp::reference::Reference;
 use thiserror::Error;
 use util::dynamic::as_any::AsAny;
 
 use crate::placement::PlacementStatus;
-use crate::reference::Reference;
 
 /// e.g. `manual` or `pnp`
 pub type ProcessReference = Reference;
@@ -130,12 +130,12 @@ impl OperationState {
 #[cfg(test)]
 mod operation_state_tests {
     use indexmap::IndexMap;
+    use pnp::reference::Reference;
     use rstest::rstest;
 
     use crate::process::{
         OperationState, OperationStatus, SerializableTaskState, TaskReference, TaskStatus, TestTaskState,
     };
-    use crate::reference::Reference;
 
     #[rstest]
     #[case(vec![TaskStatus::Pending], OperationStatus::Pending)]

@@ -4,6 +4,7 @@ use assembly::rules::AssemblyRule;
 use eda::placement::EdaPlacement;
 use pnp::load_out::LoadOutItem;
 use pnp::part::Part;
+use pnp::reference::Reference;
 
 use crate::part_mapping::PartMapping;
 use crate::PartMappingError::{ConflictingRules, NoRulesApplied};
@@ -142,7 +143,7 @@ pub enum PartMappingError<'mapping> {
 #[derive(Debug)]
 pub enum AppliedMappingRule {
     AutoSelected,
-    FoundInLoadOut(String),
+    FoundInLoadOut(Option<Reference>),
     AssemblyRule,
 }
 
@@ -150,7 +151,10 @@ impl Display for AppliedMappingRule {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             AppliedMappingRule::AutoSelected => write!(f, "Auto-selected"),
-            AppliedMappingRule::FoundInLoadOut(reference) => write!(f, "Found in load-out, reference: '{}'", reference),
+            AppliedMappingRule::FoundInLoadOut(Some(reference)) => {
+                write!(f, "Found in load-out, reference: '{}'", reference)
+            }
+            AppliedMappingRule::FoundInLoadOut(None) => write!(f, "Found in load-out, but no feeder reference defined"),
             AppliedMappingRule::AssemblyRule => write!(f, "Matched assembly-rule"),
         }
     }
@@ -178,6 +182,7 @@ mod tests {
     use eda::placement::{EdaPlacement, EdaPlacementField};
     use pnp::load_out::LoadOutItem;
     use pnp::part::Part;
+    use pnp::reference::Reference;
 
     use crate::part_mapping::PartMapping;
     use crate::{
@@ -414,8 +419,16 @@ mod tests {
 
         // and
         let load_out_items = vec![
-            LoadOutItem::new("REFERENCE_1".to_string(), "MFR3".to_string(), "PART3".to_string()),
-            LoadOutItem::new("REFERENCE_2".to_string(), "MFR2".to_string(), "PART2".to_string()),
+            LoadOutItem::new(
+                Some(Reference::from_raw_str("REFERENCE_1")),
+                "MFR3".to_string(),
+                "PART3".to_string(),
+            ),
+            LoadOutItem::new(
+                Some(Reference::from_raw_str("REFERENCE_2")),
+                "MFR2".to_string(),
+                "PART2".to_string(),
+            ),
         ];
 
         // and
@@ -429,7 +442,9 @@ mod tests {
                 },
                 PartMappingResult {
                     part_mapping: &part_mappings[1],
-                    applied_rule: Some(AppliedMappingRule::FoundInLoadOut("REFERENCE_2".to_string())),
+                    applied_rule: Some(AppliedMappingRule::FoundInLoadOut(Some(Reference::from_raw_str(
+                        "REFERENCE_2",
+                    )))),
                 },
             ]),
         }]);
@@ -556,7 +571,7 @@ mod tests {
 
         // and
         let load_out_items = vec![LoadOutItem::new(
-            "REFERENCE_1".to_string(),
+            Some(Reference::from_raw_str("REFERENCE_1")),
             "MFR1".to_string(),
             "PART1".to_string(),
         )];

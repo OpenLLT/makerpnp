@@ -1,10 +1,12 @@
 use crate::part::Part;
+use crate::reference::Reference;
 
 #[derive(Debug, PartialEq, Clone)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct LoadOutItem {
-    // TODO consider using Reference here
-    pub reference: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub reference: Option<Reference>,
 
     // FUTURE consider using 'Part' here instead of these two fields.
     pub manufacturer: String,
@@ -12,7 +14,7 @@ pub struct LoadOutItem {
 }
 
 impl LoadOutItem {
-    pub fn new(reference: String, manufacturer: String, mpn: String) -> Self {
+    pub fn new(reference: Option<Reference>, manufacturer: String, mpn: String) -> Self {
         Self {
             reference,
             manufacturer,

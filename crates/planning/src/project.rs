@@ -16,6 +16,7 @@ use pnp::object_path::ObjectPath;
 use pnp::part::Part;
 use pnp::pcb::{Pcb, PcbKind, PcbSide};
 use pnp::placement::Placement;
+use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -43,7 +44,6 @@ use crate::process::{
     OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessError, ProcessReference,
     ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
 };
-use crate::reference::{Reference, ReferenceError};
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
 use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
@@ -406,10 +406,10 @@ fn generate_phase_artifacts(
         let feeder_reference =
             match pnp::load_out::find_load_out_item_by_part(load_out_items, &placement_state.placement.part) {
                 Some(load_out_item) => load_out_item.reference.clone(),
-                _ => "".to_string(),
+                _ => None,
             };
 
-        if feeder_reference.is_empty() {
+        if feeder_reference.is_none() {
             let issue = ProjectReportIssue {
                 message: "A part has not been assigned to a feeder".to_string(),
                 severity: IssueSeverity::Warning,
@@ -455,18 +455,18 @@ pub fn sort_placements(
                                 &placement_state_a.placement.part,
                             ) {
                                 Some(load_out_item) => load_out_item.reference.clone(),
-                                _ => "".to_string(),
+                                _ => None,
                             };
                             let feeder_reference_b = match pnp::load_out::find_load_out_item_by_part(
                                 load_out_items,
                                 &placement_state_b.placement.part,
                             ) {
                                 Some(load_out_item) => load_out_item.reference.clone(),
-                                _ => "".to_string(),
+                                _ => None,
                             };
 
                             trace!(
-                                "Comparing feeder references. feeder_reference_a: '{}' feeder_reference_a: '{}'",
+                                "Comparing feeder references. feeder_reference_a: '{:?}' feeder_reference_a: '{:?}'",
                                 feeder_reference_a,
                                 feeder_reference_b
                             );
@@ -513,7 +513,7 @@ pub struct PhasePlacementRecord {
     #[serde_as(as = "DisplayFromStr")]
     pub object_path: ObjectPath,
 
-    pub feeder_reference: String,
+    pub feeder_reference: Option<Reference>,
     pub manufacturer: String,
     pub mpn: String,
     pub x: Decimal,
@@ -536,7 +536,7 @@ pub fn store_phase_placements_as_csv(
         let feeder_reference =
             match pnp::load_out::find_load_out_item_by_part(&load_out_items, &placement_state.placement.part) {
                 Some(load_out_item) => load_out_item.reference.clone(),
-                _ => "".to_string(),
+                _ => None,
             };
 
         writer.serialize(PhasePlacementRecord {
@@ -1199,6 +1199,7 @@ pub enum PartStateError {
 #[cfg(test)]
 mod apply_phase_operation_task_action_tests {
     use indexmap::IndexMap;
+    use pnp::reference::Reference;
     use rstest::rstest;
 
     use crate::phase;
@@ -1206,7 +1207,6 @@ mod apply_phase_operation_task_action_tests {
     use crate::process::TaskAction;
     use crate::process::{OperationState, SerializableTaskState, TaskReference, TaskStatus};
     use crate::project::{Project, TaskActionError};
-    use crate::reference::Reference;
 
     #[rstest]
     #[case(

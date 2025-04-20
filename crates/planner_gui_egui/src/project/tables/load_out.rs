@@ -5,7 +5,7 @@ use egui_data_table::RowViewer;
 use egui_data_table::viewer::{CellWriteContext, TableColumnConfig};
 use egui_i18n::tr;
 use egui_mobius::types::Enqueue;
-use planner_app::{Part, Reference};
+use planner_app::Part;
 use tracing::{debug, trace};
 
 use crate::filter::Filter;

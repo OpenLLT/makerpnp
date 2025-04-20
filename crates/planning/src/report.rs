@@ -12,6 +12,7 @@ use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
 use pnp::pcb::{Pcb, PcbKind};
+use pnp::reference::Reference;
 use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
@@ -23,7 +24,6 @@ use crate::phase::PhaseReference;
 use crate::placement::{PlacementState, ProjectPlacementStatus};
 use crate::process::{OperationReference, OperationStatus, TaskReference};
 use crate::project::Project;
-use crate::reference::Reference;
 use crate::variant::VariantName;
 
 // FUTURE add a test to ensure that duplicate issues are not added to the report.
@@ -861,7 +861,7 @@ pub enum PcbReportItem {
 
 #[derive(Clone, serde::Serialize)]
 pub struct PhaseLoadOutAssignmentItem {
-    pub feeder_reference: String,
+    pub feeder_reference: Option<Reference>,
     pub manufacturer: String,
     pub mpn: String,
     pub quantity: u32,
