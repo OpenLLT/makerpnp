@@ -1,6 +1,7 @@
 use dyn_clone::DynClone;
-use serde::Serialize;
 use planning::report::PcbReportItem;
+use serde::Serialize;
+
 use crate::common::project_builder::TestProcessOperationStatus;
 
 #[derive(Default)]
@@ -102,7 +103,6 @@ pub struct TestPlaceComponentsTaskOverview {
     pub total: usize,
 }
 
-
 #[derive(Clone, serde::Serialize)]
 pub struct TestPhaseSpecification {
     pub phase_name: String,
@@ -131,7 +131,10 @@ macro_rules! generic_test_task_specification {
 }
 
 generic_test_task_specification!(TestManualSolderingTaskSpecification, "manual_soldering_specification");
-generic_test_task_specification!(TestAutomatedSolderingTaskSpecification, "automated_soldering_specification");
+generic_test_task_specification!(
+    TestAutomatedSolderingTaskSpecification,
+    "automated_soldering_specification"
+);
 generic_test_task_specification!(TestPlaceComponentsTaskSpecification, "place_components_specification");
 
 #[typetag::serialize(name = "load_pcbs_specification")]

@@ -11,7 +11,10 @@ pub fn configure_tracing<IL: LogLevel>(path: Option<PathBuf>, verbosity: Verbosi
     match path {
         Some(path) => {
             //println!("using file_subscriber");
-            let trace_file = OpenOptions::new().create(true).append(true).open(path)?;
+            let trace_file = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)?;
 
             let file_subscriber = FmtSubscriber::builder()
                 .with_writer(trace_file)

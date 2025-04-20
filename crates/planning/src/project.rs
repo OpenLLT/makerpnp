@@ -28,14 +28,21 @@ use util::sorting::SortOrder;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::DesignVariant;
-use crate::operation_history::{AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind, ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind, PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind};
+use crate::operation_history::{
+    AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
+    ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
+    PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
+};
 use crate::part::PartState;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
     ProjectPlacementStatus,
 };
-use crate::process::{TaskAction, OperationDefinition, OperationReference, ProcessDefinition, ProcessError, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus, OperationStatus, TaskState, SerializableTaskState};
+use crate::process::{
+    OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessError, ProcessReference,
+    ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskState, TaskStatus,
+};
 use crate::reference::{Reference, ReferenceError};
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
@@ -1193,10 +1200,11 @@ pub enum PartStateError {
 mod apply_phase_operation_task_action_tests {
     use indexmap::IndexMap;
     use rstest::rstest;
+
     use crate::phase;
     use crate::phase::PhaseState;
-    use crate::process::{OperationState, SerializableTaskState, TaskReference, TaskStatus};
     use crate::process::TaskAction;
+    use crate::process::{OperationState, SerializableTaskState, TaskReference, TaskStatus};
     use crate::project::{Project, TaskActionError};
     use crate::reference::Reference;
 
@@ -1365,47 +1373,64 @@ mod apply_phase_operation_task_action_tests {
         #[case] action: TaskAction,
         #[case] references: (&str, &str, &str),
         #[case] phase_operation_task_status_map: Vec<(&str, Vec<(&str, Vec<(&str, TaskStatus)>)>)>,
-        #[case] expected_result: Result<bool, TaskActionError>
+        #[case] expected_result: Result<bool, TaskActionError>,
     ) {
         let (phase_reference, operation_reference, task_reference) = {
-            (Reference::from_raw_str(references.0), Reference::from_raw_str(references.1), TaskReference::from_raw_str(references.2))
+            (
+                Reference::from_raw_str(references.0),
+                Reference::from_raw_str(references.1),
+                TaskReference::from_raw_str(references.2),
+            )
         };
 
         let mut project = Project::default();
         for (phase_reference, operation_task_status_map) in phase_operation_task_status_map.iter() {
-            let operation_states = operation_task_status_map.iter().map(|(operation_reference, task_status_map)| {
-                let task_states = task_status_map.iter().map(|(task_reference, task_status)| {
-                    let mut task_state = phase::make_task_state(&TaskReference::from_raw_str(task_reference));
-                    match task_status {
-                        // Default state is pending
-                        TaskStatus::Pending => {}
+            let operation_states = operation_task_status_map
+                .iter()
+                .map(|(operation_reference, task_status_map)| {
+                    let task_states = task_status_map
+                        .iter()
+                        .map(|(task_reference, task_status)| {
+                            let mut task_state = phase::make_task_state(&TaskReference::from_raw_str(task_reference));
+                            match task_status {
+                                // Default state is pending
+                                TaskStatus::Pending => {}
 
-                        TaskStatus::Started => task_state.set_started(),
-                        TaskStatus::Complete => task_state.set_completed(),
-                        TaskStatus::Abandoned => task_state.set_abandoned(),
-                    }
+                                TaskStatus::Started => task_state.set_started(),
+                                TaskStatus::Complete => task_state.set_completed(),
+                                TaskStatus::Abandoned => task_state.set_abandoned(),
+                            }
 
-                    (TaskReference::from_raw_str(task_reference), task_state)
-                }).collect::<Vec<(TaskReference, Box<dyn SerializableTaskState>)>>();
-                let operation_state = OperationState {
-                    reference: Reference::from_raw_str(operation_reference),
-                    task_states: IndexMap::from_iter(task_states),
-                };
-                operation_state
-            }).collect::<Vec<OperationState>>();
+                            (TaskReference::from_raw_str(task_reference), task_state)
+                        })
+                        .collect::<Vec<(TaskReference, Box<dyn SerializableTaskState>)>>();
+                    let operation_state = OperationState {
+                        reference: Reference::from_raw_str(operation_reference),
+                        task_states: IndexMap::from_iter(task_states),
+                    };
+                    operation_state
+                })
+                .collect::<Vec<OperationState>>();
 
             let phase_state = PhaseState {
                 operation_states,
             };
-            let _ = project.phase_states.insert(Reference::from_raw_str(phase_reference), phase_state);
+            let _ = project
+                .phase_states
+                .insert(Reference::from_raw_str(phase_reference), phase_state);
         }
 
         // when
-        let result = super::can_apply_action(&mut project, &phase_reference, &operation_reference, &task_reference, &action);
+        let result = super::can_apply_action(
+            &mut project,
+            &phase_reference,
+            &operation_reference,
+            &task_reference,
+            &action,
+        );
 
         // then
         let result = result.map(|_task_state| true);
-
 
         assert_eq!(result, expected_result);
     }
@@ -1433,77 +1458,85 @@ fn can_apply_action<'p>(
     phase_reference: &Reference,
     operation_reference: &OperationReference,
     task_reference: &TaskReference,
-    task_action: &TaskAction
-) -> Result<&'p mut Box::<dyn SerializableTaskState>, TaskActionError> {
+    task_action: &TaskAction,
+) -> Result<&'p mut Box<dyn SerializableTaskState>, TaskActionError> {
+    let phase_state = project
+        .phase_states
+        .get_mut(phase_reference)
+        .unwrap();
 
-    let phase_state = project.phase_states.get_mut(phase_reference).unwrap();
-
-    let operation_state = phase_state.operation_states
+    let operation_state = phase_state
+        .operation_states
         .iter_mut()
-        .try_fold(None, |mut acc, operation_state|{
-        if acc.is_some() {
-            // already found the operation state
-            return Ok(acc);
-        }
+        .try_fold(None, |mut acc, operation_state| {
+            if acc.is_some() {
+                // already found the operation state
+                return Ok(acc);
+            }
 
-        if operation_state.reference.eq(operation_reference) {
-            acc = Some(operation_state);
-            return Ok(acc);
-        }
+            if operation_state
+                .reference
+                .eq(operation_reference)
+            {
+                acc = Some(operation_state);
+                return Ok(acc);
+            }
 
-        //
-        // check overall-state of preceding operation
-        //
-        let preceding_operation_status = operation_state.status();
-        if preceding_operation_status != OperationStatus::Complete {
-            return Err(TaskActionError::PrecedingOperationNotComplete);
-        }
+            //
+            // check overall-state of preceding operation
+            //
+            let preceding_operation_status = operation_state.status();
+            if preceding_operation_status != OperationStatus::Complete {
+                return Err(TaskActionError::PrecedingOperationNotComplete);
+            }
 
-        Ok(acc)
-    })?.unwrap();
+            Ok(acc)
+        })?
+        .unwrap();
 
     let task_state = operation_state
         .task_states
         .iter_mut()
-        .try_fold(None, |mut acc, (candidate_task_reference, task_state)|{
-        if acc.is_some() {
-            return Ok(acc);
-        }
-
-        if task_reference.eq(candidate_task_reference) {
-            //
-            // check the state of this task
-            //
-            match (task_action, task_state.status()) {
-                (TaskAction::Start, TaskStatus::Started) => return Err(TaskActionError::TaskAlreadyStarted),
-                (TaskAction::Complete, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
-                (TaskAction::Abandon, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
-
-                // 'start' with wrong state
-                (TaskAction::Start, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyStarted),
-                (TaskAction::Start, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
-
-                // 'complete' with wrong state
-                (TaskAction::Complete, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
-                (TaskAction::Complete, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
-
-                // 'abandon' with wrong state
-                (TaskAction::Abandon, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
-                _ => {}
+        .try_fold(None, |mut acc, (candidate_task_reference, task_state)| {
+            if acc.is_some() {
+                return Ok(acc);
             }
-            acc = Some(task_state);
-        } else {
-            //
-            // check the state of the preceding task
-            //
-            let preceding_task_status = task_state.status();
-            if preceding_task_status != TaskStatus::Complete {
-                return Err(TaskActionError::PrecedingTaskNotComplete);
-            }
-        }
 
-        Ok(acc)
-    })?.unwrap();
+            if task_reference.eq(candidate_task_reference) {
+                //
+                // check the state of this task
+                //
+                match (task_action, task_state.status()) {
+                    (TaskAction::Start, TaskStatus::Started) => return Err(TaskActionError::TaskAlreadyStarted),
+                    (TaskAction::Complete, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
+                    (TaskAction::Abandon, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
+
+                    // 'start' with wrong state
+                    (TaskAction::Start, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyStarted),
+                    (TaskAction::Start, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
+
+                    // 'complete' with wrong state
+                    (TaskAction::Complete, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
+                    (TaskAction::Complete, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
+
+                    // 'abandon' with wrong state
+                    (TaskAction::Abandon, TaskStatus::Pending) => return Err(TaskActionError::TaskNotStarted),
+                    _ => {}
+                }
+                acc = Some(task_state);
+            } else {
+                //
+                // check the state of the preceding task
+                //
+                let preceding_task_status = task_state.status();
+                if preceding_task_status != TaskStatus::Complete {
+                    return Err(TaskActionError::PrecedingTaskNotComplete);
+                }
+            }
+
+            Ok(acc)
+        })?
+        .unwrap();
 
     Ok(task_state)
 }
@@ -1530,7 +1563,10 @@ pub fn apply_phase_operation_task_action(
         .map(|state| state.reference.clone())
         .collect::<Vec<_>>();
 
-    let operation_state = phase_state.operation_states.iter_mut().find(|state| state.reference.eq(&operation_reference));
+    let operation_state = phase_state
+        .operation_states
+        .iter_mut()
+        .find(|state| state.reference.eq(&operation_reference));
 
     // If we didn't find the operation we were looking, bail.
     let operation_state = operation_state.ok_or(PhaseError::InvalidOperationForPhase(
@@ -1549,9 +1585,7 @@ pub fn apply_phase_operation_task_action(
     let task_ref_and_state = operation_state
         .task_states
         .iter_mut()
-        .find(|(&ref reference, _state)|
-            reference.eq(&task_reference)
-        );
+        .find(|(&ref reference, _state)| reference.eq(&task_reference));
 
     // If we didn't find the task we were looking, bail.
     let _task_ref_and_state = task_ref_and_state.ok_or(PhaseError::InvalidTaskForOperation(
@@ -1571,17 +1605,26 @@ pub fn apply_phase_operation_task_action(
 
     match action {
         TaskAction::Start => {
-            info!("Marking task as started. phase: {}, operation: {}, task: {}", phase_reference, operation_reference, task_reference);
+            info!(
+                "Marking task as started. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
             task_state.set_started()
-        },
+        }
         TaskAction::Complete => {
-            info!("Marking task as completed. phase: {}, operation: {}, task: {}", phase_reference, operation_reference, task_reference);
+            info!(
+                "Marking task as completed. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
             task_state.set_completed()
-        },
+        }
         TaskAction::Abandon => {
-            info!("Marking task as abandoned. phase: {}, operation: {}, task: {}", phase_reference, operation_reference, task_reference);
+            info!(
+                "Marking task as abandoned. phase: {}, operation: {}, task: {}",
+                phase_reference, operation_reference, task_reference
+            );
             task_state.set_abandoned()
-        },
+        }
     }
 
     let mut task_history_items: Vec<(&TaskReference, Box<dyn OperationHistoryKind>)> = Vec::new();
@@ -1589,7 +1632,10 @@ pub fn apply_phase_operation_task_action(
     let task_history_item = build_operation_task_history_item(&task_reference, task_state.status());
     task_history_items.push(task_history_item);
 
-    fn build_operation_task_history_item(reference: &TaskReference, new_status: TaskStatus) -> (&TaskReference, Box<dyn OperationHistoryKind>) {
+    fn build_operation_task_history_item(
+        reference: &TaskReference,
+        new_status: TaskStatus,
+    ) -> (&TaskReference, Box<dyn OperationHistoryKind>) {
         if reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
             (
                 reference,

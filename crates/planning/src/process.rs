@@ -15,6 +15,7 @@
 
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::ControlFlow;
+
 use dyn_clone::DynClone;
 use dyn_eq::DynEq;
 use indexmap::IndexMap;
@@ -87,27 +88,39 @@ pub struct OperationState {
 impl OperationState {
     /// Determine the operation status based on the tasks
     pub fn status(&self) -> OperationStatus {
-        let result = self.task_states.iter().rev().try_fold(None, |status, (task_reference, task_state)| {
-            //trace!("acc: {:?}, task_status: {:?}", status, task_state.status());
-            match (status, task_state.status()) {
-                (None, TaskStatus::Abandoned) => ControlFlow::Break(OperationStatus::Abandoned),
-                (None, TaskStatus::Complete) => ControlFlow::Break(OperationStatus::Complete),
-                (None, TaskStatus::Started) => ControlFlow::Break(OperationStatus::Started),
-                (None, TaskStatus::Pending) => ControlFlow::Continue(Some(OperationStatus::Pending)),
-                (Some(OperationStatus::Pending), TaskStatus::Abandoned) => ControlFlow::Break(OperationStatus::Abandoned),
-                (Some(OperationStatus::Pending), TaskStatus::Started) => ControlFlow::Break(OperationStatus::Started),
-                (Some(OperationStatus::Pending), TaskStatus::Complete) => ControlFlow::Break(OperationStatus::Started),
-                (Some(OperationStatus::Pending), TaskStatus::Pending) => ControlFlow::Continue(Some(OperationStatus::Pending)),
-                (_, _) => unreachable!()
-            }
-        });
+        let result = self
+            .task_states
+            .iter()
+            .rev()
+            .try_fold(None, |status, (task_reference, task_state)| {
+                //trace!("acc: {:?}, task_status: {:?}", status, task_state.status());
+                match (status, task_state.status()) {
+                    (None, TaskStatus::Abandoned) => ControlFlow::Break(OperationStatus::Abandoned),
+                    (None, TaskStatus::Complete) => ControlFlow::Break(OperationStatus::Complete),
+                    (None, TaskStatus::Started) => ControlFlow::Break(OperationStatus::Started),
+                    (None, TaskStatus::Pending) => ControlFlow::Continue(Some(OperationStatus::Pending)),
+                    (Some(OperationStatus::Pending), TaskStatus::Abandoned) => {
+                        ControlFlow::Break(OperationStatus::Abandoned)
+                    }
+                    (Some(OperationStatus::Pending), TaskStatus::Started) => {
+                        ControlFlow::Break(OperationStatus::Started)
+                    }
+                    (Some(OperationStatus::Pending), TaskStatus::Complete) => {
+                        ControlFlow::Break(OperationStatus::Started)
+                    }
+                    (Some(OperationStatus::Pending), TaskStatus::Pending) => {
+                        ControlFlow::Continue(Some(OperationStatus::Pending))
+                    }
+                    (_, _) => unreachable!(),
+                }
+            });
         //trace!("result: {:?}", result);
-        
+
         match result {
             // no tasks
             ControlFlow::Continue(None) => OperationStatus::Pending,
-            
-            // some tasks 
+
+            // some tasks
             ControlFlow::Continue(Some(value)) => value,
             ControlFlow::Break(value) => value,
         }
@@ -118,7 +131,10 @@ impl OperationState {
 mod operation_state_tests {
     use indexmap::IndexMap;
     use rstest::rstest;
-    use crate::process::{OperationState, OperationStatus, SerializableTaskState, TaskReference, TaskStatus, TestTaskState};
+
+    use crate::process::{
+        OperationState, OperationStatus, SerializableTaskState, TaskReference, TaskStatus, TestTaskState,
+    };
     use crate::reference::Reference;
 
     #[rstest]
@@ -139,18 +155,27 @@ mod operation_state_tests {
     #[case(vec![], OperationStatus::Pending)]
     fn status(#[case] task_statuses: Vec<TaskStatus>, #[case] expected_result: OperationStatus) {
         // given
-        let task_states = task_statuses.into_iter().enumerate().map(|(index, status)| {
-            (TaskReference::from_raw(index.to_string()), Box::new(TestTaskState { status }) as Box<dyn SerializableTaskState>)
-        }).collect::<IndexMap<_, _>>();
-        
+        let task_states = task_statuses
+            .into_iter()
+            .enumerate()
+            .map(|(index, status)| {
+                (
+                    TaskReference::from_raw(index.to_string()),
+                    Box::new(TestTaskState {
+                        status,
+                    }) as Box<dyn SerializableTaskState>,
+                )
+            })
+            .collect::<IndexMap<_, _>>();
+
         let operation_state = OperationState {
             reference: Reference::from_raw_str("test"),
             task_states,
         };
-        
+
         // when
         let result = operation_state.status();
-        
+
         assert_eq!(result, expected_result);
     }
 }

@@ -5,10 +5,13 @@ use pnp::pcb::PcbSide;
 use thiserror::Error;
 
 use crate::placement::PlacementSortingItem;
-use crate::process::{AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState, PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference};
-use crate::reference::Reference;
 #[cfg(test)]
 use crate::process::TestTaskState;
+use crate::process::{
+    AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState,
+    PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
+};
+use crate::reference::Reference;
 
 // TODO
 //pub type PhaseReference = Reference;
@@ -115,7 +118,7 @@ pub(crate) fn make_task_state(task_reference: &TaskReference) -> Box<dyn Seriali
     } else {
         #[cfg(test)]
         if task_reference.eq(&TaskReference::from_raw_str("core::test_task")) {
-            return Box::new(TestTaskState::default()) as Box<dyn SerializableTaskState>
+            return Box::new(TestTaskState::default()) as Box<dyn SerializableTaskState>;
         }
 
         panic!("unknown task reference {:?}", task_reference);

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{
-    AddOrRemoveOperationArg, TaskActionArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg,
+    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg, TaskActionArg,
 };
 use planner_app::Event;
 use planning::design::DesignName;

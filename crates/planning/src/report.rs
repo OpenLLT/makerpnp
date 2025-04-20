@@ -1,11 +1,12 @@
-use dyn_clone::DynClone;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
 use as_any::Downcast;
+use dyn_clone::DynClone;
 #[cfg(feature = "markdown")]
 use json2markdown::MarkdownRenderer;
 use pnp::load_out::LoadOutItem;
@@ -65,29 +66,38 @@ pub fn project_generate_report(
                         .operation_states
                         .iter()
                         .fold(PhaseStatus::Complete, |mut phase_status, operation_state| {
-                            let task_overviews = operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
-                                let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
-                                    Some(Box::new(LoadPcbsTaskOverview { }) as Box<dyn TaskOverview>)
-                                } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
-
-                                    task_state.placements_state().map(|state|{
-                                        let summary = state.summary();
-                                        Box::new(PlaceComponentsTaskOverview {
-                                            placed: summary.placed,
-                                            skipped: summary.skipped,
-                                            total: summary.total,
-                                        }) as Box<dyn TaskOverview>
-                                    })
-                                } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
-                                    Some(Box::new(AutomatedSolderingTaskOverview {}) as Box<dyn TaskOverview>)
-                                } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
-                                    Some(Box::new(ManualSolderingTaskOverview {}) as Box<dyn TaskOverview>)
-                                } else {
-                                    None
-                                };
-                                Some((task_reference.clone(), report))
-                            }).collect::<Vec<_>>();
-
+                            let task_overviews = operation_state
+                                .task_states
+                                .iter()
+                                .filter_map(|(task_reference, task_state)| {
+                                    let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                                        Some(Box::new(LoadPcbsTaskOverview {}) as Box<dyn TaskOverview>)
+                                    } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components"))
+                                    {
+                                        task_state
+                                            .placements_state()
+                                            .map(|state| {
+                                                let summary = state.summary();
+                                                Box::new(PlaceComponentsTaskOverview {
+                                                    placed: summary.placed,
+                                                    skipped: summary.skipped,
+                                                    total: summary.total,
+                                                })
+                                                    as Box<dyn TaskOverview>
+                                            })
+                                    } else if task_reference
+                                        .eq(&TaskReference::from_raw_str("core::automated_soldering"))
+                                    {
+                                        Some(Box::new(AutomatedSolderingTaskOverview {}) as Box<dyn TaskOverview>)
+                                    } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering"))
+                                    {
+                                        Some(Box::new(ManualSolderingTaskOverview {}) as Box<dyn TaskOverview>)
+                                    } else {
+                                        None
+                                    };
+                                    Some((task_reference.clone(), report))
+                                })
+                                .collect::<Vec<_>>();
 
                             let operation_status = operation_state.status();
                             phase_status = match (phase_status, &operation_status) {
@@ -256,24 +266,27 @@ fn build_phase_specification(
         .operation_states
         .iter()
         .map(|operation_state| {
-
-            let task_specifications = operation_state.task_states.iter().filter_map(|(task_reference, task_state)|{
-                let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
-                    let pcbs = build_operation_load_pcbs(project);
-                    Some(Box::new(LoadPcbsTaskSpecification {
-                        pcbs,
-                    }) as Box<dyn TaskSpecification>)
-                } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
-                    Some(Box::new(PlaceComponentsTaskSpecification {}) as Box<dyn TaskSpecification>)
-                } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
-                    Some(Box::new(AutomatedSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
-                } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
-                    Some(Box::new(ManualSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
-                } else {
-                    None
-                };
-                Some((task_reference.clone(), report))
-            }).collect::<Vec<_>>();
+            let task_specifications = operation_state
+                .task_states
+                .iter()
+                .filter_map(|(task_reference, task_state)| {
+                    let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
+                        let pcbs = build_operation_load_pcbs(project);
+                        Some(Box::new(LoadPcbsTaskSpecification {
+                            pcbs,
+                        }) as Box<dyn TaskSpecification>)
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::place_components")) {
+                        Some(Box::new(PlaceComponentsTaskSpecification {}) as Box<dyn TaskSpecification>)
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::automated_soldering")) {
+                        Some(Box::new(AutomatedSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
+                    } else if task_reference.eq(&TaskReference::from_raw_str("core::manual_soldering")) {
+                        Some(Box::new(ManualSolderingTaskSpecification {}) as Box<dyn TaskSpecification>)
+                    } else {
+                        None
+                    };
+                    Some((task_reference.clone(), report))
+                })
+                .collect::<Vec<_>>();
 
             let operation_item = OperationItem {
                 operation: operation_state.reference.clone(),
@@ -822,7 +835,6 @@ pub struct PlaceComponentsTaskOverview {
     pub skipped: usize,
     pub total: usize,
 }
-
 
 #[serde_as]
 #[derive(Clone, serde::Serialize)]

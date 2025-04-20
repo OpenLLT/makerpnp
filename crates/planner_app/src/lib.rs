@@ -17,8 +17,9 @@ pub use planning::placement::PlacementStatus;
 pub use planning::placement::ProjectPlacementStatus;
 pub use planning::placement::{PlacementOperation, PlacementState};
 pub use planning::process::ProcessReference;
+use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
-pub use planning::process::{TaskAction, OperationReference, ProcessDefinition};
+pub use planning::process::{OperationReference, ProcessDefinition, TaskAction};
 use planning::project;
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
 pub use planning::reference::Reference;
@@ -35,7 +36,7 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{info, trace};
-use planning::process::TaskReference;
+
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
 
@@ -743,8 +744,9 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 let directory = path.parent().unwrap();
-                *modified |= project::apply_phase_operation_task_action(project, directory, &reference, operation, task, action)
-                    .map_err(AppError::OperationError)?;
+                *modified |=
+                    project::apply_phase_operation_task_action(project, directory, &reference, operation, task, action)
+                        .map_err(AppError::OperationError)?;
                 Ok(render::render())
             }),
             Event::RecordPlacementsOperation {
