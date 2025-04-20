@@ -80,7 +80,7 @@ egui_taffy = "0.7.0"
 egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d545a715529ac80415f49d675756", features = ["fluent"] }
 egui_mobius = "0.3.0-alpha.23"
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.8.0" }
-egui_ltreeview = { version = "0.1.10" }
+egui_ltreeview = { version = "0.2.0" }
 egui-data-table = { version = "0.6.2" }
 
 rfd = "0.15.2"

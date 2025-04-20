@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::{tr, translate_fluent};
-use egui_ltreeview::{Action, Opened, TreeView, TreeViewBuilder, TreeViewState};
+use egui_ltreeview::{Action, Activate, NodeBuilder, TreeView, TreeViewBuilder, TreeViewState};
 use egui_mobius::types::Value;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
@@ -51,7 +51,7 @@ impl ExplorerUi {
         );
 
         for action in actions {
-            if let Action::Opened(Opened {
+            if let Action::Activate(Activate {
                 selected,
                 modifiers,
             }) = action
@@ -134,7 +134,13 @@ impl ExplorerUi {
             .rev()
         {
             if !node_created {
-                tree_builder.dir(node_id, &label);
+                tree_builder.node(
+                    NodeBuilder::dir(node_id)
+                        .activatable(true)
+                        .label_ui(|ui| {
+                            ui.add(egui::Label::new(label.clone()).selectable(false));
+                        }),
+                );
                 node_created = true;
             }
             self.show_project_tree_inner(tree_builder, graph, neighbour);
