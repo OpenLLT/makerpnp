@@ -400,8 +400,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         match column {
             PHASE_COL => {
                 let response = ui.add(|ui: &mut Ui| {
-                    let pcb_side_id = ui.id();
-                    egui::ComboBox::from_id_salt(pcb_side_id)
+                    egui::ComboBox::from_id_salt(ui.id().with("phase").with(column))
                         .width(ui.available_width())
                         .selected_text(match &row.placement_state.phase {
                             None => tr!("form-common-combo-none"),

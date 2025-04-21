@@ -138,8 +138,7 @@ impl AddPhaseModal {
                             let available_size = ui.available_size();
 
                             ui.add_sized(available_size, |ui: &mut Ui| {
-                                let pcb_side_id = ui.id();
-                                egui::ComboBox::from_id_salt(pcb_side_id)
+                                egui::ComboBox::from_id_salt(ui.id().with("pcb_side"))
                                     .width(ui.available_width())
                                     .selected_text(match side {
                                         None => tr!("form-common-combo-select"),
@@ -182,8 +181,7 @@ impl AddPhaseModal {
                             let available_size = ui.available_size();
 
                             ui.add_sized(available_size, |ui: &mut Ui| {
-                                let pcb_side_id = ui.id();
-                                egui::ComboBox::from_id_salt(pcb_side_id)
+                                egui::ComboBox::from_id_salt(ui.id().with("process"))
                                     .width(ui.available_width())
                                     .selected_text(process.clone().map_or_else(
                                         || tr!("form-common-combo-select"),

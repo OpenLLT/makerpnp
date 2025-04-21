@@ -176,50 +176,57 @@ impl UiComponent for PhaseUi {
                         .enumerate()
                     {
                         trace!("task state: {:?}, index: {}", task_state, task_index);
-
                         let task_status = task_state.status();
-                        let color = match task_status {
-                            TaskStatus::Pending => grey,
-                            TaskStatus::Started => orange,
-                            TaskStatus::Complete => green,
-                            TaskStatus::Abandoned => red,
-                        };
-                        if task_index > 0 {
-                            ui.label("+");
-                        }
-                        ui.colored_label(color, task_reference.to_string());
 
-                        let status = tr!(process_task_status_to_i18n_key(&task_status));
+                        // scope the task ui, to prevent id clash if two comboboxes are displayed
+                        // FIXME this which should never happen since it's caused by invalid state.
+                        //       fix the planner core to prevent placements from being placed unless the task state is started.
+                        ui.push_id(task_index, |ui| {
+                            let color = match task_status {
+                                TaskStatus::Pending => grey,
+                                TaskStatus::Started => orange,
+                                TaskStatus::Complete => green,
+                                TaskStatus::Abandoned => red,
+                            };
+                            if task_index > 0 {
+                                ui.label("+");
+                            }
+                            ui.colored_label(color, task_reference.to_string());
 
-                        if let Some(actions) = build_task_actions(
-                            &previous_operation_status,
-                            &operation_status,
-                            &previous_task_status,
-                            &task_status,
-                            task_state.can_complete(),
-                        ) {
-                            let kind_id = ui.id();
-                            egui::ComboBox::from_id_salt(kind_id)
-                                .selected_text(status)
-                                .show_ui(ui, |ui| {
-                                    for action in actions {
-                                        if ui
-                                            .add(egui::SelectableLabel::new(false, format!("{:?}", action).to_string()))
-                                            .clicked()
-                                        {
-                                            debug!("clicked: {:?}", action);
-                                            self.component
-                                                .send(PhaseUiCommand::TaskAction {
-                                                    operation: operation_state.reference.clone(),
-                                                    task: task_reference.clone(),
-                                                    action,
-                                                });
+                            let status = tr!(process_task_status_to_i18n_key(&task_status));
+
+                            if let Some(actions) = build_task_actions(
+                                &previous_operation_status,
+                                &operation_status,
+                                &previous_task_status,
+                                &task_status,
+                                task_state.can_complete(),
+                            ) {
+                                egui::ComboBox::from_id_salt(ui.id().with("kind"))
+                                    .selected_text(status)
+                                    .show_ui(ui, |ui| {
+                                        for action in actions {
+                                            if ui
+                                                .add(egui::SelectableLabel::new(
+                                                    false,
+                                                    format!("{:?}", action).to_string(),
+                                                ))
+                                                .clicked()
+                                            {
+                                                debug!("clicked: {:?}", action);
+                                                self.component
+                                                    .send(PhaseUiCommand::TaskAction {
+                                                        operation: operation_state.reference.clone(),
+                                                        task: task_reference.clone(),
+                                                        action,
+                                                    });
+                                            }
                                         }
-                                    }
-                                });
-                        } else {
-                            ui.colored_label(color, status);
-                        }
+                                    });
+                            } else {
+                                ui.colored_label(color, status);
+                            }
+                        });
                         previous_task_status = Some(task_status);
                     }
 
