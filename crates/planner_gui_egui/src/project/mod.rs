@@ -522,7 +522,7 @@ impl Project {
                 let operation = match new_placement.operation_status {
                     PlacementStatus::Placed => PlacementOperation::Place,
                     PlacementStatus::Skipped => PlacementOperation::Skip,
-                    PlacementStatus::Pending => PlacementOperation::Place,
+                    PlacementStatus::Pending => PlacementOperation::Reset,
                 };
 
                 Some((
