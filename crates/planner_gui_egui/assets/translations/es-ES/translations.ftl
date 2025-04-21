@@ -36,7 +36,7 @@ project-toolbar-button-create-unit-assignment = Crear asignacion de unidad
 tab-label-home = Inicio
 tab-label-new-project = Nuevo proyecto
 
-home-banner = Pestaña de inicio
+home-banner = MakerPnP - Planner
 home-checkbox-label-show-on-startup = Mostrar al inicio
 
 new-project-banner = Nuevo proyecto

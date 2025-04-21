@@ -36,7 +36,7 @@ project-toolbar-button-create-unit-assignment = Create unit assignment
 tab-label-home = Home
 tab-label-new-project = New project
 
-home-banner = Home tab
+home-banner = MakerPnP - Planner
 home-checkbox-label-show-on-startup = Show on startup
 
 new-project-banner = New project
