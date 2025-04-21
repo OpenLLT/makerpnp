@@ -1,4 +1,6 @@
-use planner_app::{PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus};
+use planner_app::{
+    OperationStatus, PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus,
+};
 use util::sorting::SortOrder;
 
 pub fn pcb_side_to_i18n_key(pcb_side: &PcbSide) -> &'static str {
@@ -45,11 +47,22 @@ pub fn sort_order_to_i18n_key(sort_order: &SortOrder) -> &'static str {
     }
 }
 
-pub fn process_operation_status_to_i18n_key(status: &TaskStatus) -> &'static str {
+/// Note: uses the same i18n keys for [`TaskStatus`]
+pub fn process_operation_status_to_i18n_key(status: &OperationStatus) -> &'static str {
     match status {
-        TaskStatus::Pending => "process-operation-status-pending",
-        TaskStatus::Started => "process-operation-status-incomplete",
-        TaskStatus::Complete => "process-operation-status-complete",
-        TaskStatus::Abandoned => "process-operation-status-abandoned",
+        OperationStatus::Pending => "process-status-pending",
+        OperationStatus::Started => "process-status-incomplete",
+        OperationStatus::Complete => "process-status-complete",
+        OperationStatus::Abandoned => "process-status-abandoned",
+    }
+}
+
+/// Note: uses the same i18n keys for [`OperationStatus`]
+pub fn process_task_status_to_i18n_key(status: &TaskStatus) -> &'static str {
+    match status {
+        TaskStatus::Pending => "process-status-pending",
+        TaskStatus::Started => "process-status-incomplete",
+        TaskStatus::Complete => "process-status-complete",
+        TaskStatus::Abandoned => "process-status-abandoned",
     }
 }

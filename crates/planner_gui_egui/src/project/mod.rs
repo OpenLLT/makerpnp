@@ -935,6 +935,20 @@ impl UiComponent for Project {
                             placement_orderings: args.orderings,
                         })
                         .when_ok(|_| Some(ProjectUiCommand::RefreshPhase(phase))),
+                    Some(PhaseUiAction::TaskAction {
+                        phase,
+                        operation,
+                        task,
+                        action,
+                    }) => self
+                        .planner_core_service
+                        .update(key, Event::RecordPhaseOperation {
+                            phase: phase.clone(),
+                            operation,
+                            task,
+                            action,
+                        })
+                        .when_ok(|_| Some(ProjectUiCommand::RefreshPhase(phase))),
                 }
             }
             ProjectUiCommand::LoadOutUiCommand {

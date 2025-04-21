@@ -154,14 +154,10 @@ sort-mode-ref-des = Ref. Des.
 sort-order-ascending = Ascending
 sort-order-descending = Descending
 
-process-operation-kind-load-pcbs = Load PCBs
-process-operation-kind-automated-pnp = Automated PnP
-process-operation-kind-reflow-components = Reflow Soldering
-process-operation-kind-manually-solder-components = Manual Soldering
-
-process-operation-status-pending = Pending
-process-operation-status-incomplete = Incomplete
-process-operation-status-complete = Complete
+process-status-pending = Pending
+process-status-incomplete = Incomplete
+process-status-complete = Complete
+process-status-abandoned = Abandoned
 
 table-placements-column-index = #
 table-placements-column-object-path = Object path

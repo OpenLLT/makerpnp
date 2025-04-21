@@ -1,11 +1,14 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PhaseOverview, PhasePlacements, PlacementState, Reference, TaskStatus};
+use planner_app::{
+    ObjectPath, OperationReference, OperationStatus, PhaseOverview, PhasePlacements, PhaseReference, PlacementState,
+    Reference, TaskAction, TaskReference, TaskStatus,
+};
 use regex::Regex;
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
-use crate::i18n::conversions::process_operation_status_to_i18n_key;
+use crate::i18n::conversions::{process_operation_status_to_i18n_key, process_task_status_to_i18n_key};
 use crate::project::dialogs::placement_orderings::{
     PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
@@ -64,12 +67,17 @@ pub enum PhaseUiCommand {
     None,
     PlacementsTableUiCommand(PlacementsTableUiCommand),
     AddPartsToLoadout {
-        phase: Reference,
+        phase: PhaseReference,
         manufacturer_pattern: Regex,
         mpn_pattern: Regex,
     },
     ShowPhasePlacementsOrderingsDialog,
     PlacementOrderingsModalUiCommand(PlacementOrderingsModalUiCommand),
+    TaskAction {
+        operation: OperationReference,
+        task: TaskReference,
+        action: TaskAction,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -82,11 +90,17 @@ pub enum PhaseUiAction {
         old_placement: PlacementState,
     },
     AddPartsToLoadout {
-        phase: Reference,
+        phase: PhaseReference,
         manufacturer_pattern: Regex,
         mpn_pattern: Regex,
     },
     SetPlacementOrderings(PlacementOrderingsArgs),
+    TaskAction {
+        phase: PhaseReference,
+        operation: OperationReference,
+        task: TaskReference,
+        action: TaskAction,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -138,34 +152,145 @@ impl UiComponent for PhaseUi {
             let (green, orange, red, grey) = green_orange_red_grey_from_style(ui.style());
 
             if let Some(overview) = &self.overview {
-                for (index, state) in overview
+                let mut previous_operation_status = None;
+                for (index, operation_state) in overview
                     .state
                     .operation_states
                     .iter()
                     .enumerate()
                 {
+                    trace!("operation state: {:?}, index: {}", operation_state, index);
                     if index > 0 {
                         ui.label(">");
                     }
 
-                    ui.label(state.reference.to_string());
+                    let operation_status = operation_state.status();
 
-                    for (task_index, (reference, task)) in state.task_states.iter().enumerate() {
-                        let status = task.status();
-                        let color = match status {
+                    ui.label(operation_state.reference.to_string());
+
+                    #[instrument]
+                    fn build_task_actions(
+                        previous_operation_status: &Option<OperationStatus>,
+                        operation_status: &OperationStatus,
+                        previous_task_status: &Option<TaskStatus>,
+                        task_status: &TaskStatus,
+                        can_complete: bool,
+                    ) -> Option<Vec<TaskAction>> {
+                        trace!("building task actions");
+                        if !matches!(previous_operation_status, None | Some(OperationStatus::Complete)) {
+                            trace!(
+                                "previous operation status not complete. previous_operation_status: {:?}",
+                                previous_operation_status
+                            );
+                            return None;
+                        }
+
+                        if matches!(operation_status, OperationStatus::Complete | OperationStatus::Abandoned) {
+                            trace!(
+                                "operation status complete or abandoned. operation_status: {:?}",
+                                operation_status
+                            );
+                            return None;
+                        }
+
+                        if !matches!(previous_task_status, None | Some(TaskStatus::Complete)) {
+                            trace!(
+                                "previous task status not complete. previous_task_state: {:?}",
+                                previous_task_status
+                            );
+                            return None;
+                        }
+
+                        let mut task_actions = Vec::new();
+                        match task_status {
+                            TaskStatus::Pending => task_actions.push(TaskAction::Start),
+                            TaskStatus::Started => {
+                                if can_complete {
+                                    task_actions.push(TaskAction::Complete);
+                                }
+                                task_actions.push(TaskAction::Abandon);
+                            }
+                            TaskStatus::Complete => {
+                                trace!("task status complete.");
+                                return None;
+                            }
+                            TaskStatus::Abandoned => {
+                                trace!("task status abandoned.");
+                                return None;
+                            }
+                        }
+
+                        trace!("task actions: {:?}", task_actions);
+
+                        Some(task_actions)
+                    }
+
+                    let mut previous_task_status = None;
+                    for (task_index, (task_reference, task_state)) in operation_state
+                        .task_states
+                        .iter()
+                        .enumerate()
+                    {
+                        trace!("task state: {:?}, index: {}", task_state, task_index);
+
+                        let task_status = task_state.status();
+                        let color = match task_status {
                             TaskStatus::Pending => grey,
-                            TaskStatus::Abandoned => red,
                             TaskStatus::Started => orange,
                             TaskStatus::Complete => green,
+                            TaskStatus::Abandoned => red,
                         };
                         if task_index > 0 {
-                            ui.label("::");
+                            ui.label("+");
                         }
-                        ui.label(reference.to_string());
+                        ui.colored_label(color, task_reference.to_string());
 
-                        let status = tr!(process_operation_status_to_i18n_key(&status));
-                        ui.colored_label(color, status);
+                        let status = tr!(process_task_status_to_i18n_key(&task_status));
+
+                        if let Some(actions) = build_task_actions(
+                            &previous_operation_status,
+                            &operation_status,
+                            &previous_task_status,
+                            &task_status,
+                            task_state.can_complete(),
+                        ) {
+                            let kind_id = ui.id();
+                            egui::ComboBox::from_id_salt(kind_id)
+                                .selected_text(status)
+                                .show_ui(ui, |ui| {
+                                    for action in actions {
+                                        if ui
+                                            .add(egui::SelectableLabel::new(false, format!("{:?}", action).to_string()))
+                                            .clicked()
+                                        {
+                                            debug!("clicked: {:?}", action);
+                                            self.component
+                                                .send(PhaseUiCommand::TaskAction {
+                                                    operation: operation_state.reference.clone(),
+                                                    task: task_reference.clone(),
+                                                    action,
+                                                });
+                                        }
+                                    }
+                                });
+                        } else {
+                            ui.colored_label(color, status);
+                        }
+                        previous_task_status = Some(task_status);
                     }
+
+                    ui.label("=");
+
+                    let color = match operation_status {
+                        OperationStatus::Pending => grey,
+                        OperationStatus::Started => orange,
+                        OperationStatus::Complete => green,
+                        OperationStatus::Abandoned => red,
+                    };
+                    let status = tr!(process_operation_status_to_i18n_key(&operation_status));
+                    ui.colored_label(color, status);
+
+                    previous_operation_status = Some(operation_status);
                 }
             }
         });
@@ -257,6 +382,21 @@ impl UiComponent for PhaseUi {
                     None
                 }
             }
+            PhaseUiCommand::TaskAction {
+                operation,
+                task,
+                action,
+            } => Some(PhaseUiAction::TaskAction {
+                phase: self
+                    .overview
+                    .as_ref()
+                    .unwrap()
+                    .phase_reference
+                    .clone(),
+                operation,
+                task,
+                action,
+            }),
         }
     }
 }
