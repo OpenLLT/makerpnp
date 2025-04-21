@@ -50,6 +50,8 @@ mod tables;
 
 mod dialogs;
 
+mod process;
+
 new_key_type! {
     /// A key for a project
     pub struct ProjectKey;

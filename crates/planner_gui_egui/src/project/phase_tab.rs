@@ -6,12 +6,13 @@ use planner_app::{
     Reference, TaskAction, TaskReference, TaskStatus,
 };
 use regex::Regex;
-use tracing::{debug, instrument, trace};
+use tracing::{debug, trace};
 
 use crate::i18n::conversions::{process_operation_status_to_i18n_key, process_task_status_to_i18n_key};
 use crate::project::dialogs::placement_orderings::{
     PlacementOrderingsArgs, PlacementOrderingsModal, PlacementOrderingsModalAction, PlacementOrderingsModalUiCommand,
 };
+use crate::project::process::build_task_actions;
 use crate::project::tables::placements::{
     PlacementsTableUi, PlacementsTableUiAction, PlacementsTableUiCommand, PlacementsTableUiContext,
 };
@@ -167,63 +168,6 @@ impl UiComponent for PhaseUi {
                     let operation_status = operation_state.status();
 
                     ui.label(operation_state.reference.to_string());
-
-                    #[instrument]
-                    fn build_task_actions(
-                        previous_operation_status: &Option<OperationStatus>,
-                        operation_status: &OperationStatus,
-                        previous_task_status: &Option<TaskStatus>,
-                        task_status: &TaskStatus,
-                        can_complete: bool,
-                    ) -> Option<Vec<TaskAction>> {
-                        trace!("building task actions");
-                        if !matches!(previous_operation_status, None | Some(OperationStatus::Complete)) {
-                            trace!(
-                                "previous operation status not complete. previous_operation_status: {:?}",
-                                previous_operation_status
-                            );
-                            return None;
-                        }
-
-                        if matches!(operation_status, OperationStatus::Complete | OperationStatus::Abandoned) {
-                            trace!(
-                                "operation status complete or abandoned. operation_status: {:?}",
-                                operation_status
-                            );
-                            return None;
-                        }
-
-                        if !matches!(previous_task_status, None | Some(TaskStatus::Complete)) {
-                            trace!(
-                                "previous task status not complete. previous_task_state: {:?}",
-                                previous_task_status
-                            );
-                            return None;
-                        }
-
-                        let mut task_actions = Vec::new();
-                        match task_status {
-                            TaskStatus::Pending => task_actions.push(TaskAction::Start),
-                            TaskStatus::Started => {
-                                if can_complete {
-                                    task_actions.push(TaskAction::Complete);
-                                }
-                                task_actions.push(TaskAction::Abandon);
-                            }
-                            TaskStatus::Complete => {
-                                trace!("task status complete.");
-                                return None;
-                            }
-                            TaskStatus::Abandoned => {
-                                trace!("task status abandoned.");
-                                return None;
-                            }
-                        }
-
-                        trace!("task actions: {:?}", task_actions);
-
-                        Some(task_actions)
-                    }
 
                     let mut previous_task_status = None;
                     for (task_index, (task_reference, task_state)) in operation_state
