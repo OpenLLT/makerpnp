@@ -1551,6 +1551,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_double_slider"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26dbf8618ae357a62ec9b5c2cf2550c5c8c21899e194470640c92a507bd13b91"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui_extras"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3459,6 +3468,7 @@ dependencies = [
  "egui-data-table",
  "egui-i18n",
  "egui_dock",
+ "egui_double_slider",
  "egui_extras",
  "egui_ltreeview",
  "egui_material_icons",

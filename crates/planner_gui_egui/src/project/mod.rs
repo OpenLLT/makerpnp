@@ -8,9 +8,9 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PlacementOperation, PlacementState,
-    PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
-    VariantName,
+    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PcbKind, PhaseOverview, PlacementOperation,
+    PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
+    SetOrClearAction, VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -21,6 +21,7 @@ use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbMod
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::dialogs::create_unit_assignment::{
     CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
+    UnitAssignmentPcbKind,
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
@@ -1154,13 +1155,70 @@ impl UiComponent for Project {
                         None => None,
                         Some(CreateUnitAssignmentModalAction::Submit(args)) => {
                             self.create_unit_assignment_modal.take();
-                            self.planner_core_service
-                                .update(key, Event::AssignVariantToUnit {
-                                    design: DesignName::from_str(&args.design_name).unwrap(),
-                                    variant: VariantName::from_str(&args.variant_name).unwrap(),
-                                    unit: args.object_path,
-                                })
-                                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
+
+                            let mut events = vec![];
+
+                            match args.kind {
+                                UnitAssignmentPcbKind::Single {
+                                    instance,
+                                } => {
+                                    let mut object_path = ObjectPath::default();
+                                    object_path.set_pcb_kind_and_instance(PcbKind::Single, instance);
+                                    object_path.set_pcb_unit(1);
+
+                                    events.push(Event::AssignVariantToUnit {
+                                        design: DesignName::from_str(&args.design_name).unwrap(),
+                                        variant: VariantName::from_str(&args.variant_name).unwrap(),
+                                        unit: object_path,
+                                    });
+                                }
+                                UnitAssignmentPcbKind::Panel {
+                                    instance,
+                                    unit_range,
+                                } => {
+                                    for unit in unit_range {
+                                        let mut object_path = ObjectPath::default();
+                                        object_path.set_pcb_kind_and_instance(PcbKind::Panel, instance);
+                                        object_path.set_pcb_unit(unit);
+
+                                        events.push(Event::AssignVariantToUnit {
+                                            design: DesignName::from_str(&args.design_name).unwrap(),
+                                            variant: VariantName::from_str(&args.variant_name).unwrap(),
+                                            unit: object_path,
+                                        });
+                                    }
+                                }
+                            }
+
+                            let mut tasks = vec![];
+                            for event in events {
+                                match self
+                                    .planner_core_service
+                                    .update(key, event)
+                                    .into_actions()
+                                {
+                                    Ok(actions) => {
+                                        let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                            .into_iter()
+                                            .map(Task::done)
+                                            .collect();
+                                        tasks.extend(effect_tasks);
+                                    }
+                                    Err(service_error) => {
+                                        tasks.push(Task::done(service_error));
+                                        break;
+                                    }
+                                }
+                            }
+
+                            let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                ProjectViewRequest::ProjectTree,
+                            )));
+                            tasks.push(final_task);
+
+                            let action = ProjectAction::Task(key, Task::batch(tasks));
+
+                            Some(action)
                         }
                         Some(CreateUnitAssignmentModalAction::CloseDialog) => {
                             self.create_unit_assignment_modal.take();

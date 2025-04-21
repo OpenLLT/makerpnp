@@ -1,19 +1,21 @@
 use std::fmt::Debug;
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::{Modal, TextEdit, Ui};
+use egui_double_slider::DoubleSlider;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
-use egui_taffy::taffy::{AlignItems, FlexDirection, Style};
-use egui_taffy::{taffy, tui};
-use planner_app::ObjectPath;
+use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Style};
+use egui_taffy::{Tui, TuiBuilderLogic, taffy, tui};
 use taffy::Size;
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
+use crate::forms::transforms::no_transform;
 use crate::project::dialogs::PcbKindChoice;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -26,6 +28,8 @@ pub struct CreateUnitAssignmentModal {
 
     pub component: ComponentState<CreateUnitAssignmentModalUiCommand>,
 }
+
+const DEFAULT_PCB_UNIT_MAX: u16 = 256;
 
 impl CreateUnitAssignmentModal {
     pub fn new(path: PathBuf) -> Self {
@@ -200,7 +204,7 @@ impl CreateUnitAssignmentModal {
                                 let enabled = fields.pcb_kind.is_some();
                                 let response = ui.add_enabled(
                                     enabled,
-                                    egui::DragValue::new(&mut pcb_instance_clone).range(1..=i16::MAX),
+                                    egui::DragValue::new(&mut pcb_instance_clone).range(1..=u16::MAX),
                                 );
                                 if !fields
                                     .pcb_instance
@@ -216,23 +220,81 @@ impl CreateUnitAssignmentModal {
                             }
                         },
                     );
+                    form.add_field_tui(
+                        "pcb_unit_range",
+                        tr!("form-create-unit-assignment-input-pcb-unit-range"),
+                        tui,
+                        {
+                            move |tui: &mut Tui, fields, sender| {
+                                let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
+                                let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
+                                let enabled = matches!(fields.pcb_kind, Some(PcbKindChoice::Panel));
 
-                    form.add_field_ui("pcb_unit", tr!("form-create-unit-assignment-input-pcb-unit"), tui, {
-                        move |ui: &mut Ui, fields, sender| {
-                            let mut pcb_unit_clone = fields.pcb_unit;
-                            let enabled = matches!(fields.pcb_kind, Some(PcbKindChoice::Panel));
+                                tui.style(Style {
+                                    display: Display::Flex,
+                                    align_content: Some(AlignContent::Stretch),
+                                    flex_grow: 1.0,
+                                    ..default_style()
+                                })
+                                .add(|tui| {
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        ..default_style()
+                                    })
+                                    .ui_add_manual(
+                                        |ui| {
+                                            ui.horizontal_centered(|ui| {
+                                                // FIXME make the width auto-size
+                                                ui.add_enabled(
+                                                    enabled,
+                                                    DoubleSlider::new(
+                                                        &mut pcb_unit_start,
+                                                        &mut pcb_unit_end,
+                                                        1..=DEFAULT_PCB_UNIT_MAX,
+                                                    )
+                                                    .separation_distance(0)
+                                                    .width(400.0),
+                                                )
+                                            })
+                                            .response
+                                        },
+                                        no_transform,
+                                    );
 
-                            let response =
-                                ui.add_enabled(enabled, egui::DragValue::new(&mut pcb_unit_clone).range(1..=i16::MAX));
+                                    tui.style(Style {
+                                        flex_grow: 0.0,
+                                        ..default_style()
+                                    })
+                                    .ui(|ui| {
+                                        ui.add_enabled(
+                                            enabled,
+                                            egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end),
+                                        );
+                                    });
 
-                            if !fields.pcb_unit.eq(&pcb_unit_clone) {
-                                sender
-                                    .send(CreateUnitAssignmentModalUiCommand::PcbUnitChanged(pcb_unit_clone))
-                                    .expect("sent")
+                                    tui.style(Style {
+                                        flex_grow: 0.0,
+                                        ..default_style()
+                                    })
+                                    .ui(|ui| {
+                                        ui.add_enabled(
+                                            enabled,
+                                            egui::DragValue::new(&mut pcb_unit_end)
+                                                .range(pcb_unit_start..=DEFAULT_PCB_UNIT_MAX),
+                                        );
+                                    });
+                                });
+
+                                let pcb_unit_range = RangeInclusive::new(pcb_unit_start, pcb_unit_end);
+
+                                if fields.pcb_unit_range != pcb_unit_range {
+                                    sender
+                                        .send(CreateUnitAssignmentModalUiCommand::PcbUnitRangeChanged(pcb_unit_range))
+                                        .expect("sent")
+                                }
                             }
-                            response
-                        }
-                    });
+                        },
+                    );
                 });
             });
     }
@@ -247,7 +309,6 @@ pub struct CreateUnitAssignmentFields {
     #[validate(length(min = 1, code = "form-input-error-length"))]
     variant_name: String,
 
-    // TODO validate placements file exists for the design_name and variant_name
     #[validate(custom(function = "CreateUnitAssignmentFields::validate_placements_filename", use_context))]
     placements_filename: String,
 
@@ -255,13 +316,11 @@ pub struct CreateUnitAssignmentFields {
     #[validate(required(code = "form-option-error-required"))]
     pcb_kind: Option<PcbKindChoice>,
 
-    // TODO should be a number > 0 (?)
     #[derivative(Default(value = "1"))]
-    pcb_instance: i16,
+    pcb_instance: u16,
 
-    // TODO only required when kind is 'panel'
-    #[derivative(Default(value = "1"))]
-    pcb_unit: i16,
+    #[derivative(Default(value = "1..=6"))]
+    pcb_unit_range: RangeInclusive<u16>,
 }
 
 pub struct CreateUnitAssignmentValidationContext {
@@ -298,8 +357,8 @@ pub enum CreateUnitAssignmentModalUiCommand {
     DesignNameChanged(String),
     VariantNameChanged(String),
     PcbKindChanged(PcbKindChoice),
-    PcbInstanceChanged(i16),
-    PcbUnitChanged(i16),
+    PcbInstanceChanged(u16),
+    PcbUnitRangeChanged(RangeInclusive<u16>),
 }
 
 #[derive(Debug, Clone)]
@@ -308,12 +367,23 @@ pub enum CreateUnitAssignmentModalAction {
     CloseDialog,
 }
 
+#[derive(Debug, Clone)]
+pub enum UnitAssignmentPcbKind {
+    Single {
+        instance: u16,
+    },
+    Panel {
+        instance: u16,
+        unit_range: RangeInclusive<u16>,
+    },
+}
+
 /// Value object
 #[derive(Debug, Clone)]
 pub struct CreateUnitAssignmentArgs {
     pub design_name: String,
     pub variant_name: String,
-    pub object_path: ObjectPath,
+    pub kind: UnitAssignmentPcbKind,
 }
 
 impl UiComponent for CreateUnitAssignmentModal {
@@ -383,23 +453,21 @@ impl UiComponent for CreateUnitAssignmentModal {
             CreateUnitAssignmentModalUiCommand::Submit => {
                 let fields = self.fields.lock().unwrap();
 
-                let mut object_path = ObjectPath::default();
-
                 let pcb_kind = fields.pcb_kind.as_ref().unwrap();
-                object_path.set_pcb_kind_and_instance(pcb_kind.clone().into(), fields.pcb_instance as u16);
-                match pcb_kind {
-                    PcbKindChoice::Single => {
-                        object_path.set_pcb_unit(1);
-                    }
-                    PcbKindChoice::Panel => {
-                        object_path.set_pcb_unit(fields.pcb_unit as u16);
-                    }
-                }
+                let kind = match pcb_kind {
+                    PcbKindChoice::Single => UnitAssignmentPcbKind::Single {
+                        instance: fields.pcb_instance,
+                    },
+                    PcbKindChoice::Panel => UnitAssignmentPcbKind::Panel {
+                        instance: fields.pcb_instance,
+                        unit_range: fields.pcb_unit_range.clone(),
+                    },
+                };
 
                 let args = CreateUnitAssignmentArgs {
                     design_name: fields.design_name.clone(),
                     variant_name: fields.variant_name.clone(),
-                    object_path,
+                    kind,
                 };
                 Some(CreateUnitAssignmentModalAction::Submit(args))
             }
@@ -423,8 +491,11 @@ impl UiComponent for CreateUnitAssignmentModal {
                 self.fields.lock().unwrap().pcb_instance = value;
                 None
             }
-            CreateUnitAssignmentModalUiCommand::PcbUnitChanged(value) => {
-                self.fields.lock().unwrap().pcb_unit = value;
+            CreateUnitAssignmentModalUiCommand::PcbUnitRangeChanged(value) => {
+                self.fields
+                    .lock()
+                    .unwrap()
+                    .pcb_unit_range = value;
                 None
             }
             CreateUnitAssignmentModalUiCommand::Cancel => Some(CreateUnitAssignmentModalAction::CloseDialog),
