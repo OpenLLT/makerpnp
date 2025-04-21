@@ -205,14 +205,13 @@ impl NewProjectTab {
                         }
                     });
                 });
-
                 if tui
                     .style(Style {
                         ..default_style()
                     })
+                    .enabled_ui(form.is_valid())
                     .ui_add(Button::new(tr!("form-button-ok")))
                     .clicked()
-                    && form.is_valid()
                 {
                     self.component
                         .send(NewProjectTabUiCommand::Submit);

@@ -431,10 +431,10 @@ impl UiComponent for CreateUnitAssignmentModal {
                         self.component
                             .send(CreateUnitAssignmentModalUiCommand::Cancel);
                     }
+
                     if ui
-                        .button(tr!("form-button-ok"))
+                        .add_enabled(form.is_valid(), egui::Button::new(tr!("form-button-ok")))
                         .clicked()
-                        && form.is_valid()
                     {
                         self.component
                             .send(CreateUnitAssignmentModalUiCommand::Submit);

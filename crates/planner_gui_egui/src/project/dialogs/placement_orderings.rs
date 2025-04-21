@@ -222,8 +222,6 @@ impl UiComponent for PlacementOrderingsModal {
 
             self.show_form(ui, &form);
 
-            let is_form_valid = form.is_valid();
-
             egui::Sides::new().show(
                 ui,
                 |_ui| {},
@@ -235,10 +233,10 @@ impl UiComponent for PlacementOrderingsModal {
                         self.component
                             .send(PlacementOrderingsModalUiCommand::Cancel);
                     }
+
                     if ui
-                        .button(tr!("form-button-ok"))
+                        .add_enabled(form.is_valid(), egui::Button::new(tr!("form-button-ok")))
                         .clicked()
-                        && is_form_valid
                     {
                         self.component
                             .send(PlacementOrderingsModalUiCommand::Submit);

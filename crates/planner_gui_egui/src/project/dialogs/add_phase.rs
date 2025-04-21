@@ -320,10 +320,10 @@ impl UiComponent for AddPhaseModal {
                         self.component
                             .send(AddPhaseModalUiCommand::Cancel);
                     }
+
                     if ui
-                        .button(tr!("form-button-ok"))
+                        .add_enabled(form.is_valid(), egui::Button::new(tr!("form-button-ok")))
                         .clicked()
-                        && form.is_valid()
                     {
                         self.component
                             .send(AddPhaseModalUiCommand::Submit);
