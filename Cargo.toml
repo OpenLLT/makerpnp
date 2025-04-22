@@ -22,6 +22,7 @@ members = [
     "crates/planner_gui_egui",
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
+    "crates/gerber_viewer_egui",
 ]
 
 [workspace.dependencies]

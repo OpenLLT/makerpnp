@@ -1,0 +1,29 @@
+[package]
+name = "gerber_viewer_egui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# GUI Framework
+egui = "0.31.1"
+eframe = { version = "0.31.1", features = ["default"] }
+epaint = "0.31.1"
+
+# File Dialog
+rfd = "0.15.2"
+
+# Gerber Parsing
+# `master` branch has support for gerber-types 0.3.0
+#gerber_parser = { git = "https://github.com/NemoAndrea/gerber-parser", rev = "02650f2773b6618cc92bc8c181b3e6f5eadda1d9"}
+# using version with fixed diptrace 4.3.x parsing support.
+gerber_parser = { git = "https://github.com/hydra/gerber-parser.git", rev = "f8f9d33e77535266223c4f0e700024be9331a4a3"}
+#gerber_parser = { path = "../../../../../libraries/rust/gerber-parser"}
+
+gerber-types = "0.3.0"
+
+# Errors
+thiserror = "2.0.12"
