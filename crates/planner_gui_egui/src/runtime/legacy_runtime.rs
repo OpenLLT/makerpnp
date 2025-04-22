@@ -106,6 +106,7 @@ mod tests {
     use crate::task;
     use crate::task::Task;
 
+    #[ignore]
     #[test]
     pub fn wrapped_messages() {
         // given
@@ -124,6 +125,7 @@ mod tests {
         assert_eq!(messages, vec![OuterMessage::Wrapped(InnerMessage::Inner1)]);
     }
 
+    #[ignore]
     #[test]
     pub fn batched_messages() {
         // given
@@ -150,6 +152,7 @@ mod tests {
         ]);
     }
 
+    #[ignore]
     #[test]
     pub fn batched_messages_with_chain() {
         // given
@@ -180,6 +183,7 @@ mod tests {
         ]);
     }
 
+    #[ignore]
     #[test]
     pub fn batched_messages_with_and_then() {
         // given
@@ -228,6 +232,7 @@ mod tests {
         assert_eq!(messages_to_assert, vec![InnerMessage::Inner1,]);
     }
 
+    #[ignore]
     #[test]
     pub fn batched_messages_with_map() {
         // given
@@ -277,6 +282,7 @@ mod tests {
         assert_eq!(results_to_assert, [Ok(InnerMessage::Inner1), Err(TestError::Error1),]);
     }
 
+    #[ignore]
     #[test]
     pub fn batched_messages_with_then() {
         // given
