@@ -1,4 +1,10 @@
+<div align="center">
+
 ![rust](https://github.com/makerpnp/makerpnp/actions/workflows/rust.yml/badge.svg?event=push)
+
+![MakerPnP](assets/logos/makerpnp_icon_1_384x384.png)
+
+</div>
 
 # MakerPnP
 
