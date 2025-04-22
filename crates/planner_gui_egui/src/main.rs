@@ -27,6 +27,14 @@ fn main() {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
+            .with_icon(std::sync::Arc::new(egui::IconData {
+                rgba: image::load_from_memory(include_bytes!("../../../assets/logos/makerpnp_icon_1_384x384.png"))
+                    .unwrap()
+                    .to_rgba8()
+                    .to_vec(),
+                width: 384,
+                height: 384,
+            }))
             .with_inner_size([600.0, 440.0])
             .with_min_inner_size([300.0, 220.0]),
         ..Default::default()
