@@ -1,3 +1,6 @@
 /target
-/assets/eda/kicad/test1/test1-backups
-/assets/eda/kicad/test1/fp-info-cache
+/assets/eda/kicad/*/test1-backups
+/assets/eda/kicad/*/fp-info-cache
+
+# PlannerGUI auto-generated file
+config.json
