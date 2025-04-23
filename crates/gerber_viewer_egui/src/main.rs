@@ -446,6 +446,10 @@ impl GerberLayer {
                         [start_pos.to_pos2(), end_pos.to_pos2()],
                         Stroke::new((*width as f32) * self.view.scale, self.color),
                     );
+                    // Draw circles at either end of the line.
+                    let radius = (*width as f32 / 2.0) * self.view.scale;
+                    painter.circle(start_pos.to_pos2(), radius, self.color, Stroke::NONE);
+                    painter.circle(end_pos.to_pos2(), radius, self.color, Stroke::NONE);
                 }
             }
         }
