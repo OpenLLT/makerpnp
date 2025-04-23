@@ -5,17 +5,20 @@ use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use eframe::emath::Vec2;
 use eframe::{CreationContext, Frame, NativeOptions, egui, run_native};
-use egui::Context;
+use egui::ahash::HashMap;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::style::ScrollStyle;
-use gerber_parser::error::GerberParserErrorWithContext;
+use egui::{Color32, Context, Painter, Rect, Response, Ui};
+use epaint::{Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::parser::parse_gerber;
-use gerber_types::Command;
+use gerber_types::{Aperture, ApertureDefinition, Command, Coordinates, FunctionCode, Operation, Rectangular};
 use log::{error, info};
 use rfd::FileDialog;
 use thiserror::Error;
+const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
 fn main() -> eframe::Result<()> {
     env_logger::init(); // Log to stderr (optional).
@@ -27,14 +30,70 @@ fn main() -> eframe::Result<()> {
     )
 }
 struct GerberViewer {
-    gerber_doc: Option<GerberDoc>,
-
+    state: Option<GerberLayer>,
     log: Vec<AppLogItem>,
 }
 
-struct GerberState {
+struct GerberLayer {
+    color: Color32,
+    gerber_doc: GerberDoc,
     path: PathBuf,
-    gerber_commands: Vec<Command>,
+    view: ViewState,
+    needs_initial_view: bool,
+    bounding_box: BoundingBox,
+    gerber_primitives: Vec<GerberPrimitive>,
+}
+
+struct ViewState {
+    translation: Vec2,
+    scale: f32,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            translation: Vec2::ZERO,
+            scale: 1.0,
+        }
+    }
+}
+
+struct BoundingBox {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+}
+
+impl Default for BoundingBox {
+    fn default() -> Self {
+        Self {
+            min_x: f64::MAX,
+            min_y: f64::MAX,
+            max_x: f64::MIN,
+            max_y: f64::MIN,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum GerberPrimitive {
+    Circle {
+        x: f64,
+        y: f64,
+        diameter: f64,
+    },
+    Rectangle {
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    },
+    Line {
+        start: (f64, f64),
+        end: (f64, f64),
+        width: f64,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -68,6 +127,7 @@ impl AppLogItem {
         }
     }
 }
+
 impl Display for AppLogItem {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -117,7 +177,21 @@ impl GerberViewer {
             .collect::<Vec<_>>();
         self.log.extend(log);
 
-        self.gerber_doc = Some(gerber_doc);
+        let gerber_primitives = GerberLayer::build_primitives(&gerber_doc);
+        let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
+
+        self.state = Some(GerberLayer {
+            color: Color32::LIGHT_GRAY,
+            gerber_doc,
+            path,
+            gerber_primitives,
+            view: ViewState {
+                translation: Default::default(),
+                scale: 0.0,
+            },
+            needs_initial_view: true,
+            bounding_box,
+        });
 
         let message = "Gerber file parsed successfully";
         info!("{}", message);
@@ -132,12 +206,258 @@ impl GerberViewer {
     }
 }
 
+impl GerberLayer {
+    fn calculate_bounding_box(primitives: &Vec<GerberPrimitive>) -> BoundingBox {
+        let mut bbox = BoundingBox::default();
+
+        // Calculate bounding box
+        for primitive in primitives {
+            match primitive {
+                GerberPrimitive::Circle {
+                    x,
+                    y,
+                    diameter,
+                } => {
+                    let radius = diameter / 2.0;
+                    bbox.min_x = bbox.min_x.min(*x - radius);
+                    bbox.min_y = bbox.min_y.min(*y - radius);
+                    bbox.max_x = bbox.max_x.max(*x + radius);
+                    bbox.max_y = bbox.max_y.max(*y + radius);
+                }
+                GerberPrimitive::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                } => {
+                    bbox.min_x = bbox.min_x.min(*x);
+                    bbox.min_y = bbox.min_y.min(*y);
+                    bbox.max_x = bbox.max_x.max(*x + width);
+                    bbox.max_y = bbox.max_y.max(*y + height);
+                }
+                GerberPrimitive::Line {
+                    start,
+                    end,
+                    width,
+                } => {
+                    let radius = width / 2.0;
+                    for &(x, y) in &[start, end] {
+                        bbox.min_x = bbox.min_x.min(x - radius);
+                        bbox.min_y = bbox.min_y.min(y - radius);
+                        bbox.max_x = bbox.max_x.max(x + radius);
+                        bbox.max_y = bbox.max_y.max(y + radius);
+                    }
+                }
+            }
+        }
+
+        bbox
+    }
+
+    fn build_primitives(doc: &GerberDoc) -> Vec<GerberPrimitive> {
+        let mut primitives = Vec::new();
+        let mut apertures = HashMap::default();
+        let mut current_aperture = None;
+        let mut current_pos = (0.0, 0.0);
+
+        for cmd in doc
+            .commands
+            .iter()
+            .filter_map(|result| result.as_ref().ok())
+        {
+            match cmd {
+                Command::ExtendedCode(gerber_types::ExtendedCode::ApertureDefinition(ApertureDefinition {
+                    code,
+                    aperture,
+                })) => {
+                    apertures.insert(code, aperture);
+                }
+                Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::SelectAperture(code))) => {
+                    current_aperture = apertures.get(&code).cloned();
+                }
+                Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::Operation(operation))) => {
+                    match operation {
+                        Operation::Move(coords) => {
+                            current_pos = (
+                                coords.x.unwrap_or(0_i32.into()).into(),
+                                coords.y.unwrap_or(0_i32.into()).into(),
+                            );
+                        }
+                        Operation::Interpolate(coords, ..) => {
+                            if let Some(aperture) = &current_aperture {
+                                let end: (f64, f64) = (
+                                    coords.x.unwrap_or(0_i32.into()).into(),
+                                    coords.y.unwrap_or(0_i32.into()).into(),
+                                );
+                                match aperture {
+                                    Aperture::Circle(gerber_types::Circle {
+                                        diameter, ..
+                                    }) => {
+                                        primitives.push(GerberPrimitive::Line {
+                                            start: current_pos,
+                                            end: (end.0.into(), end.1.into()),
+                                            width: *diameter,
+                                        });
+                                    }
+                                    _ => {
+                                        // TODO support more Apertures (rectangle, obround, etc)
+                                    }
+                                }
+                                current_pos = end;
+                            }
+                        }
+                        Operation::Flash(coords, ..) => {
+                            if let Coordinates {
+                                x: Some(x),
+                                y: Some(y),
+                                ..
+                            } = coords
+                            {
+                                current_pos = ((*x).into(), (*y).into());
+                            }
+                            if let Some(aperture) = &current_aperture {
+                                match aperture {
+                                    Aperture::Circle(gerber_types::Circle {
+                                        diameter, ..
+                                    }) => {
+                                        primitives.push(GerberPrimitive::Circle {
+                                            x: current_pos.0,
+                                            y: current_pos.1,
+                                            diameter: *diameter,
+                                        });
+                                    }
+                                    Aperture::Rectangle(Rectangular {
+                                        x,
+                                        y,
+                                        ..
+                                    }) => {
+                                        primitives.push(GerberPrimitive::Rectangle {
+                                            x: current_pos.0 - x / 2.0,
+                                            y: current_pos.1 - y / 2.0,
+                                            width: *x,
+                                            height: *y,
+                                        });
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        primitives
+    }
+
+    fn calculate_initial_view(&mut self, viewport: Rect) {
+        let bbox = &self.bounding_box;
+
+        let content_width = bbox.max_x - bbox.min_x;
+        let content_height = bbox.max_y - bbox.min_y;
+
+        let scale_x = viewport.width() as f64 / content_width;
+        let scale_y = viewport.height() as f64 / content_height;
+
+        let scale = scale_x.min(scale_y) as f32 * INITIAL_GERBER_AREA_PERCENT;
+
+        let center_x = (bbox.min_x + bbox.max_x) / 2.0;
+        let center_y = (bbox.min_y + bbox.max_y) / 2.0;
+
+        self.view.translation = Vec2::new(
+            (viewport.width() / 2.0) - (center_x as f32 * scale),
+            (viewport.height() / 2.0) - (center_y as f32 * scale),
+        );
+        self.view.scale = scale;
+        self.needs_initial_view = false;
+    }
+
+    pub fn handle_panning(&mut self, response: &Response, ui: &mut Ui) {
+        if response.dragged_by(egui::PointerButton::Primary) {
+            let delta = response.drag_delta();
+            self.view.translation += delta;
+            ui.ctx().clear_animations();
+        }
+    }
+
+    pub fn handle_zooming(&mut self, response: &Response, viewport: Rect, ui: &mut Ui) {
+        let zoom_factor = 1.1;
+        let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
+        if ui.input(|i| i.modifiers.ctrl) {
+            scroll_delta *= 0.0; // Disable zoom when Ctrl is held (for text scaling)
+        }
+
+        if scroll_delta != 0.0 {
+            let old_scale = self.view.scale;
+            let new_scale = if scroll_delta > 0.0 {
+                old_scale * zoom_factor
+            } else {
+                old_scale / zoom_factor
+            };
+
+            if let Some(mouse_pos) = response.hover_pos() {
+                let mouse_pos = mouse_pos - viewport.min.to_vec2();
+                let mouse_world = (mouse_pos - self.view.translation) / old_scale;
+                self.view.translation = mouse_pos - mouse_world * new_scale;
+            }
+
+            self.view.scale = new_scale;
+        }
+    }
+
+    pub fn paint_gerber(&self, painter: Painter) {
+        for primitive in &self.gerber_primitives {
+            match primitive {
+                GerberPrimitive::Circle {
+                    x,
+                    y,
+                    diameter,
+                } => {
+                    let screen_pos = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
+                    let radius = (*diameter as f32 / 2.0) * self.view.scale;
+                    painter.circle(screen_pos.to_pos2(), radius, self.color, Stroke::NONE);
+                }
+                GerberPrimitive::Rectangle {
+                    x,
+                    y,
+                    width,
+                    height,
+                } => {
+                    let pos = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
+                    let size = Vec2::new(*width as f32, *height as f32) * self.view.scale;
+                    painter.rect(
+                        Rect::from_min_size(pos.to_pos2(), size),
+                        0.0,
+                        self.color,
+                        Stroke::NONE,
+                        StrokeKind::Middle, // verify this is correct
+                    );
+                }
+                GerberPrimitive::Line {
+                    start,
+                    end,
+                    width,
+                } => {
+                    let start_pos = self.view.translation + Vec2::new(start.0 as f32, start.1 as f32) * self.view.scale;
+                    let end_pos = self.view.translation + Vec2::new(end.0 as f32, end.1 as f32) * self.view.scale;
+                    painter.line_segment(
+                        [start_pos.to_pos2(), end_pos.to_pos2()],
+                        Stroke::new((*width as f32) * self.view.scale, self.color),
+                    );
+                }
+            }
+        }
+    }
+}
+
 impl GerberViewer {
     pub fn new(_cc: &CreationContext) -> Self {
         _cc.egui_ctx
             .style_mut(|style| style.spacing.scroll = ScrollStyle::solid());
         Self {
-            gerber_doc: None,
+            state: None,
             log: Vec::new(),
         }
     }
@@ -170,6 +490,21 @@ impl eframe::App for GerberViewer {
             }
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {});
+        egui::CentralPanel::default().show(ctx, |ui| {
+            let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
+            let viewport = response.rect;
+
+            if let Some(state) = &mut self.state {
+                if state.needs_initial_view {
+                    state.calculate_initial_view(viewport);
+                }
+
+                state.handle_panning(&response, ui);
+                state.handle_zooming(&response, viewport, ui);
+
+                let painter = ui.painter().with_clip_rect(viewport);
+                state.paint_gerber(painter);
+            }
+        });
     }
 }
