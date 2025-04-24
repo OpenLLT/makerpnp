@@ -10,8 +10,8 @@ use eframe::{CreationContext, Frame, NativeOptions, egui, run_native};
 use egui::ahash::HashMap;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Painter, Rect, Response, Ui};
-use epaint::{Stroke, StrokeKind};
+use egui::{Color32, Context, Painter, Pos2, Rect, Response, Ui};
+use epaint::{Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::parser::parse_gerber;
 use gerber_types::{Aperture, ApertureDefinition, Command, Coordinates, FunctionCode, Operation, Rectangular};
@@ -415,9 +415,9 @@ impl GerberLayer {
                     y,
                     diameter,
                 } => {
-                    let screen_pos = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
+                    let center = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
                     let radius = (*diameter as f32 / 2.0) * self.view.scale;
-                    painter.circle(screen_pos.to_pos2(), radius, self.color, Stroke::NONE);
+                    painter.circle(center.to_pos2(), radius, self.color, Stroke::NONE);
                 }
                 GerberPrimitive::Rectangle {
                     x,
@@ -425,10 +425,10 @@ impl GerberLayer {
                     width,
                     height,
                 } => {
-                    let pos = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
+                    let top_left = self.view.translation + Vec2::new(*x as f32, *y as f32) * self.view.scale;
                     let size = Vec2::new(*width as f32, *height as f32) * self.view.scale;
                     painter.rect(
-                        Rect::from_min_size(pos.to_pos2(), size),
+                        Rect::from_min_size(top_left.to_pos2(), size),
                         0.0,
                         self.color,
                         Stroke::NONE,
@@ -440,16 +440,17 @@ impl GerberLayer {
                     end,
                     width,
                 } => {
-                    let start_pos = self.view.translation + Vec2::new(start.0 as f32, start.1 as f32) * self.view.scale;
-                    let end_pos = self.view.translation + Vec2::new(end.0 as f32, end.1 as f32) * self.view.scale;
+                    let start_position =
+                        self.view.translation + Vec2::new(start.0 as f32, start.1 as f32) * self.view.scale;
+                    let end_position = self.view.translation + Vec2::new(end.0 as f32, end.1 as f32) * self.view.scale;
                     painter.line_segment(
-                        [start_pos.to_pos2(), end_pos.to_pos2()],
-                        Stroke::new((*width as f32) * self.view.scale, self.color),
+                        [start_position.to_pos2(), end_position.to_pos2()],
+                        Stroke::new((*width as f32) * self.view.scale, Color32::LIGHT_GREEN),
                     );
                     // Draw circles at either end of the line.
                     let radius = (*width as f32 / 2.0) * self.view.scale;
-                    painter.circle(start_pos.to_pos2(), radius, self.color, Stroke::NONE);
-                    painter.circle(end_pos.to_pos2(), radius, self.color, Stroke::NONE);
+                    painter.circle(start_position.to_pos2(), radius, self.color, Stroke::NONE);
+                    painter.circle(end_position.to_pos2(), radius, self.color, Stroke::NONE);
                 }
             }
         }
