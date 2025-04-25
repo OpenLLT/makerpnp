@@ -2229,7 +2229,6 @@ dependencies = [
 [[package]]
 name = "gerber_parser"
 version = "0.1.2"
-source = "git+https://github.com/hydra/gerber-parser.git?rev=f8f9d33e77535266223c4f0e700024be9331a4a3#f8f9d33e77535266223c4f0e700024be9331a4a3"
 dependencies = [
  "gerber-types",
  "lazy-regex",

@@ -20,8 +20,8 @@ rfd = "0.15.2"
 # `master` branch has support for gerber-types 0.3.0
 #gerber_parser = { git = "https://github.com/NemoAndrea/gerber-parser", rev = "02650f2773b6618cc92bc8c181b3e6f5eadda1d9"}
 # using version with fixed diptrace 4.3.x parsing support.
-gerber_parser = { git = "https://github.com/hydra/gerber-parser.git", rev = "f8f9d33e77535266223c4f0e700024be9331a4a3"}
-#gerber_parser = { path = "../../../../../libraries/rust/gerber-parser"}
+#gerber_parser = { git = "https://github.com/hydra/gerber-parser.git", rev = "ec3175d3209a0b04136682b639ede2409ee850e3"}
+gerber_parser = { path = "../../../../../libraries/rust/gerber-parser"}
 
 gerber-types = "0.3.0"
 
