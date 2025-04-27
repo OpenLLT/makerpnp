@@ -791,7 +791,54 @@ impl GerberLayer {
                                                         exposure: Exposure::Add,
                                                     });
                                                 }
-                                                _ => {}
+                                                Aperture::Obround(rect) => {
+                                                    // For an obround, we need to:
+                                                    // 1. Create a rectangle for the center part
+                                                    // 2. Add two circles (one at each end)
+                                                    // The longer dimension determines which way the semicircles go
+
+                                                    let (rect_width, rect_height, circle_centers) = if rect.x > rect.y {
+                                                        // Horizontal obround
+                                                        let rect_width = rect.x - rect.y; // Subtract circle diameter
+                                                        let circle_offset = rect_width / 2.0;
+                                                        (rect_width, rect.y, [
+                                                            (circle_offset, 0.0),
+                                                            (-circle_offset, 0.0),
+                                                        ])
+                                                    } else {
+                                                        // Vertical obround
+                                                        let rect_height = rect.y - rect.x; // Subtract circle diameter
+                                                        let circle_offset = rect_height / 2.0;
+                                                        (rect.x, rect_height, [
+                                                            (0.0, circle_offset),
+                                                            (0.0, -circle_offset),
+                                                        ])
+                                                    };
+
+                                                    // Add the center rectangle
+                                                    primitives.push(GerberPrimitive::Rectangle {
+                                                        x: current_pos.0 - rect_width / 2.0,
+                                                        y: current_pos.1 - rect_height / 2.0,
+                                                        width: rect_width,
+                                                        height: rect_height,
+                                                        exposure: Exposure::Add,
+                                                    });
+
+                                                    // Add the end circles
+                                                    let circle_radius = rect.x.min(rect.y) / 2.0;
+                                                    for (dx, dy) in circle_centers {
+                                                        primitives.push(GerberPrimitive::Circle {
+                                                            x: current_pos.0 + dx,
+                                                            y: current_pos.1 + dy,
+                                                            diameter: circle_radius * 2.0,
+                                                            exposure: Exposure::Add,
+                                                        });
+                                                    }
+                                                }
+                                                Aperture::Other(code) => {
+                                                    // if the aperture referred to a macro, and the macro was supported, it will have been handled by the `ApertureKind::Macro` handling.
+                                                    warn!("Unsupported aperture: {:?}, code: {}", aperture, code);
+                                                }
                                             }
                                         }
                                     }
