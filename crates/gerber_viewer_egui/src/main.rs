@@ -613,17 +613,12 @@ impl GerberLayer {
                 Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::Operation(operation))) => {
                     match operation {
                         Operation::Move(coords) => {
-                            current_pos = (
-                                coords.x.unwrap_or(0_i32.into()).into(),
-                                coords.y.unwrap_or(0_i32.into()).into(),
-                            );
+                            Self::update_position(&mut current_pos, coords);
                         }
                         Operation::Interpolate(coords, ..) => {
                             if let Some(aperture) = current_aperture {
-                                let end: (f64, f64) = (
-                                    coords.x.unwrap_or(0_i32.into()).into(),
-                                    coords.y.unwrap_or(0_i32.into()).into(),
-                                );
+                                let mut end = current_pos;
+                                Self::update_position(&mut end, coords);
                                 match aperture {
                                     ApertureKind::Standard(Aperture::Circle(gerber_types::Circle {
                                         diameter,
@@ -631,7 +626,7 @@ impl GerberLayer {
                                     })) => {
                                         primitives.push(GerberPrimitive::Line {
                                             start: current_pos,
-                                            end: (end.0.into(), end.1.into()),
+                                            end,
                                             width: *diameter,
                                             exposure: Exposure::Add,
                                         });
@@ -644,7 +639,7 @@ impl GerberLayer {
                             }
                         }
                         Operation::Flash(coords, ..) => {
-                            Self::update_current_position(&mut current_pos, coords);
+                            Self::update_position(&mut current_pos, coords);
 
                             if let Some(aperture) = current_aperture {
                                 match aperture {
@@ -748,16 +743,17 @@ impl GerberLayer {
         primitives
     }
 
-    fn update_current_position(current_pos: &mut (f64, f64), coords: &Coordinates) {
-        // if the coordinates are not present, we don't need to update the current position
-        if let Coordinates {
-            x: Some(x),
-            y: Some(y),
-            ..
-        } = coords
-        {
-            *current_pos = ((*x).into(), (*y).into());
-        }
+    fn update_position(current_pos: &mut (f64, f64), coords: &Coordinates) {
+        *current_pos = (
+            coords
+                .x
+                .map(|value| value.into())
+                .unwrap_or(current_pos.0),
+            coords
+                .y
+                .map(|value| value.into())
+                .unwrap_or(current_pos.1),
+        )
     }
 
     fn calculate_initial_view(&mut self, viewport: Rect) {
