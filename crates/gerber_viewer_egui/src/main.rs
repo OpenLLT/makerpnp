@@ -12,6 +12,7 @@ use egui::ahash::HashMap;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::style::ScrollStyle;
 use egui::{Color32, Context, Painter, Pos2, Rect, Response, Ui};
+use egui_extras::{Column, TableBuilder};
 use epaint::{Primitive, Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::parser::parse_gerber;
@@ -1167,6 +1168,7 @@ impl eframe::App for GerberViewer {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         egui::TopBottomPanel::bottom("bottom_panel")
             .resizable(true)
+            .min_height(150.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("Clear").clicked() {
@@ -1174,14 +1176,39 @@ impl eframe::App for GerberViewer {
                     }
                 });
 
-                egui::ScrollArea::vertical()
-                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                let text_height = egui::TextStyle::Body
+                    .resolve(ui.style())
+                    .size
+                    .max(ui.spacing().interact_size.y);
+
+                TableBuilder::new(ui)
+                    .column(Column::auto().at_least(100.0))
+                    .column(Column::remainder())
+                    .striped(true)
+                    .resizable(true)
                     .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        for error in self.log.iter() {
-                            ui.label(format!("{}", error));
-                        }
+                    .stick_to_bottom(true)
+                    .header(20.0, |mut header| {
+                        header.col(|ui| {
+                            ui.strong("Log Level");
+                        });
+                        header.col(|ui| {
+                            ui.strong("Message");
+                        });
                     })
+                    .body(|mut body| {
+                        body.rows(text_height, self.log.len(), |mut row| {
+                            if let Some(log_item) = self.log.get(row.index()) {
+                                row.col(|ui| {
+                                    ui.label(log_item.level());
+                                });
+                                row.col(|ui| {
+                                    ui.label(log_item.message());
+                                });
+                            }
+                        });
+                    });
+
             });
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
