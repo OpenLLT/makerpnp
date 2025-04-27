@@ -131,6 +131,7 @@ enum GerberPrimitive {
         vertices: Vec<(f64, f64)>,
         exposure: Exposure,
         is_convex: bool,
+        triangles: Vec<Vec<Pos2>>,
     },
 }
 
@@ -178,20 +179,40 @@ impl GerberPolygon {
 
 impl GerberPrimitive {
     fn new_polygon(polygon: GerberPolygon) -> Self {
-        if polygon.is_convex() {
-            GerberPrimitive::Polygon {
-                center: polygon.center,
-                vertices: polygon.vertices,
-                exposure: polygon.exposure,
-                is_convex: true,
-            }
-        } else {
-            GerberPrimitive::Polygon {
-                center: polygon.center,
-                vertices: polygon.vertices,
-                exposure: polygon.exposure,
-                is_convex: false,
-            }
+        let is_convex = polygon.is_convex();
+        let mut triangles = Vec::new();
+
+        if !is_convex {
+            // Convert vertices to flat array for triangulation
+            let vertices: Vec<[f64; 2]> = polygon
+                .vertices
+                .iter()
+                .map(|(x, y)| [*x, *y])
+                .collect();
+
+            let mut indices = Vec::new();
+            let mut earcut = Earcut::new();
+            earcut.earcut(vertices.clone(), &[], &mut indices);
+
+            // Convert indices back to triangle vertices
+            triangles = indices
+                .chunks(3)
+                .map(|chunk: &[usize]| {
+                    vec![
+                        Pos2::new(vertices[chunk[0]][0] as f32, vertices[chunk[0]][1] as f32),
+                        Pos2::new(vertices[chunk[1]][0] as f32, vertices[chunk[1]][1] as f32),
+                        Pos2::new(vertices[chunk[2]][0] as f32, vertices[chunk[2]][1] as f32),
+                    ]
+                })
+                .collect();
+        }
+
+        GerberPrimitive::Polygon {
+            center: polygon.center,
+            vertices: polygon.vertices,
+            exposure: polygon.exposure,
+            is_convex,
+            triangles,
         }
     }
 }
@@ -1060,51 +1081,36 @@ impl GerberLayer {
                     vertices,
                     exposure,
                     is_convex,
+                    triangles,
                 } => {
                     let color = exposure.to_color(&self.color);
 
                     let screen_center =
                         self.view.translation + Vec2::new(center.0 as f32, -(center.1 as f32)) * self.view.scale;
 
-                    // Convert vertices to screen space
-                    let screen_vertices: Vec<Pos2> = vertices
-                        .iter()
-                        .map(|(dx, dy)| {
-                            let screen_pos = screen_center + Vec2::new(*dx as f32, -(*dy as f32)) * self.view.scale;
-                            screen_pos.to_pos2()
-                        })
-                        .collect();
-
                     // Draw the polygon
                     match is_convex {
                         true => {
+                            // Convert vertices to screen space
+                            let screen_vertices: Vec<Pos2> = vertices
+                                .iter()
+                                .map(|(dx, dy)| {
+                                    let screen_pos =
+                                        screen_center + Vec2::new(*dx as f32, -(*dy as f32)) * self.view.scale;
+                                    screen_pos.to_pos2()
+                                })
+                                .collect();
+
                             painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
                         }
                         false => {
-                            // FIXME due to floating-point rounding errors, triangles don't line up exactly and
-                            //       artifacts are visible.
-                            fn triangulate(vertices: &[Pos2]) -> Vec<Vec<Pos2>> {
-                                let flat_vertices: Vec<[f64; 2]> = vertices
-                                    .iter()
-                                    .map(|p| [p.x as f64, p.y as f64])
-                                    .collect();
-
-                                let mut triangles = Vec::new();
-                                let mut earcut = Earcut::new();
-                                earcut.earcut(flat_vertices, &[], &mut triangles);
-
-                                triangles
-                                    .chunks(3)
-                                    .map(|chunk: &[usize]| {
-                                        vec![vertices[chunk[0]], vertices[chunk[1]], vertices[chunk[2]]]
-                                    })
-                                    .collect()
-                            }
-
-                            // Triangulate the polygon
-                            let triangles = triangulate(&screen_vertices);
+                            // Transform stored triangles to screen space and draw them
                             for triangle in triangles {
-                                painter.add(Shape::convex_polygon(triangle, color, Stroke::NONE));
+                                let screen_triangle: Vec<Pos2> = triangle
+                                    .iter()
+                                    .map(|pos| (screen_center + Vec2::new(pos.x, -pos.y) * self.view.scale).to_pos2())
+                                    .collect();
+                                painter.add(Shape::convex_polygon(screen_triangle, color, Stroke::NONE));
                             }
                         }
                     };
