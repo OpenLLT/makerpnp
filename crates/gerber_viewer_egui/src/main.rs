@@ -995,6 +995,11 @@ impl GerberLayer {
     }
 
     pub fn handle_zooming(&mut self, response: &Response, viewport: Rect, ui: &mut Ui) {
+        // Only process zoom if mouse is actually over the viewport
+        if !response.hovered() {
+            return;
+        }
+        
         let zoom_factor = 1.1;
         let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
         if ui.input(|i| i.modifiers.ctrl) {
