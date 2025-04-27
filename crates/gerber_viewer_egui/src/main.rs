@@ -15,7 +15,7 @@ use epaint::{Primitive, Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::parser::parse_gerber;
 use gerber_types::{
-    Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, ExtendedCode, FunctionCode, MacroContent,
+    Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, ExtendedCode, FunctionCode, GCode, MacroContent,
     MacroDecimal, Operation, Rectangular,
 };
 use log::{error, info, warn};
@@ -595,11 +595,15 @@ impl GerberLayer {
             }
         }
 
-        // Third pass: collect all primitives
+        // Third pass: collect all primitives, handle regions
 
         let mut primitives = Vec::new();
         let mut current_aperture = None;
         let mut current_pos = (0.0, 0.0);
+
+        // regions are a special case - they are defined by aperture codes
+        let mut current_region_vertices: Vec<(f64, f64)> = Vec::new();
+        let mut in_region = false;
 
         for cmd in doc
             .commands
@@ -607,18 +611,74 @@ impl GerberLayer {
             .filter_map(|result| result.as_ref().ok())
         {
             match cmd {
+                Command::FunctionCode(FunctionCode::GCode(GCode::RegionMode(enabled))) => {
+                    if *enabled {
+                        // G36 - Begin Region
+                        in_region = true;
+                        current_region_vertices.clear();
+                    } else {
+                        // G37 - End Region
+                        if in_region && current_region_vertices.len() >= 3 {
+                            // Close the polygon by adding the first vertex if needed
+                            if current_region_vertices.first() != current_region_vertices.last() {
+                                current_region_vertices.push(*current_region_vertices.first().unwrap());
+                            }
+
+                            // Calculate center point as average of all vertices
+                            let center_x = current_region_vertices
+                                .iter()
+                                .map(|(x, _)| x)
+                                .sum::<f64>()
+                                / current_region_vertices.len() as f64;
+                            let center_y = current_region_vertices
+                                .iter()
+                                .map(|(_, y)| y)
+                                .sum::<f64>()
+                                / current_region_vertices.len() as f64;
+
+                            // Make vertices relative to center
+                            let relative_vertices: Vec<(f64, f64)> = current_region_vertices
+                                .iter()
+                                .map(|(x, y)| (x - center_x, y - center_y))
+                                .collect();
+
+                            primitives.push(GerberPrimitive::Polygon {
+                                center: (center_x, center_y),
+                                vertices: relative_vertices,
+                                exposure: Exposure::Add,
+                            });
+                        }
+                        in_region = false;
+                        current_region_vertices.clear();
+                    }
+                }
+
                 Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::SelectAperture(code))) => {
                     current_aperture = apertures.get(&code);
                 }
                 Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::Operation(operation))) => {
                     match operation {
                         Operation::Move(coords) => {
-                            Self::update_position(&mut current_pos, coords);
+                            let mut end = current_pos;
+                            Self::update_position(&mut end, coords);
+                            if in_region {
+                                // In a region, a move operation starts a new path segment
+                                // If we already have vertices, close the current segment
+                                if !current_region_vertices.is_empty() {
+                                    current_region_vertices.push(*current_region_vertices.first().unwrap());
+                                }
+                                // Start new segment
+                                current_region_vertices.push(end);
+                            }
+                            current_pos = end;
                         }
                         Operation::Interpolate(coords, ..) => {
-                            if let Some(aperture) = current_aperture {
-                                let mut end = current_pos;
-                                Self::update_position(&mut end, coords);
+                            let mut end = current_pos;
+                            Self::update_position(&mut end, coords);
+                            if in_region {
+                                // Add vertex to current region
+                                current_region_vertices.push(end);
+                            } else if let Some(aperture) = current_aperture {
                                 match aperture {
                                     ApertureKind::Standard(Aperture::Circle(gerber_types::Circle {
                                         diameter,
@@ -635,99 +695,104 @@ impl GerberLayer {
                                         // TODO support more Apertures (rectangle, obround, etc)
                                     }
                                 }
-                                current_pos = end;
                             }
+                            current_pos = end;
                         }
                         Operation::Flash(coords, ..) => {
-                            Self::update_position(&mut current_pos, coords);
+                            if in_region {
+                                warn!("Flash operation found within region - ignoring");
+                            } else {
+                                Self::update_position(&mut current_pos, coords);
 
-                            if let Some(aperture) = current_aperture {
-                                match aperture {
-                                    ApertureKind::Macro(named_primitive) => {
-                                        let mut primitive = named_primitive.primitive.clone();
-                                        // Update the primitive's position based on flash coordinates
-                                        match &mut primitive {
-                                            GerberPrimitive::Polygon {
-                                                center, ..
-                                            } => {
-                                                *center = current_pos;
-                                            }
-                                            GerberPrimitive::Circle {
-                                                x,
-                                                y,
-                                                ..
-                                            } => {
-                                                *x = current_pos.0;
-                                                *y = current_pos.1;
-                                            }
-                                            GerberPrimitive::Rectangle {
-                                                x,
-                                                y,
-                                                ..
-                                            } => {
-                                                *x = current_pos.0;
-                                                *y = current_pos.1;
-                                            }
-                                            _ => {
-                                                warn!(
-                                                    "macro uses a primitive that is not supported.  named_primitive: {:?}",
-                                                    named_primitive
-                                                );
-                                            }
-                                        }
-                                        primitives.push(primitive);
-                                    }
-                                    ApertureKind::Standard(aperture) => {
-                                        match aperture {
-                                            Aperture::Circle(circle) => {
-                                                primitives.push(GerberPrimitive::Circle {
-                                                    x: current_pos.0,
-                                                    y: current_pos.1,
-                                                    diameter: circle.diameter,
-                                                    exposure: Exposure::Add,
-                                                });
-                                            }
-                                            Aperture::Rectangle(rect) => {
-                                                primitives.push(GerberPrimitive::Rectangle {
-                                                    x: current_pos.0 - rect.x / 2.0,
-                                                    y: current_pos.1 - rect.y / 2.0,
-                                                    width: rect.x,
-                                                    height: rect.y,
-                                                    exposure: Exposure::Add,
-                                                });
-                                            }
-                                            Aperture::Polygon(polygon) => {
-                                                let radius = polygon.diameter / 2.0;
-                                                let vertices_count = polygon.vertices as usize;
-                                                let mut vertices = Vec::with_capacity(vertices_count);
-
-                                                // For standard aperture polygon, we need to generate vertices
-                                                // starting at angle 0 and moving counterclockwise
-                                                for i in 0..vertices_count {
-                                                    let angle =
-                                                        (2.0 * std::f64::consts::PI * i as f64) / vertices_count as f64;
-                                                    let x = radius * angle.cos();
-                                                    let y = radius * angle.sin();
-
-                                                    // Apply rotation if specified
-                                                    let (final_x, final_y) = if let Some(rotation) = polygon.rotation {
-                                                        let rot_rad = rotation * std::f64::consts::PI / 180.0;
-                                                        let (sin_rot, cos_rot) = rot_rad.sin_cos();
-                                                        (x * cos_rot - y * sin_rot, x * sin_rot + y * cos_rot)
-                                                    } else {
-                                                        (x, y)
-                                                    };
-
-                                                    vertices.push((final_x, final_y));
+                                if let Some(aperture) = current_aperture {
+                                    match aperture {
+                                        ApertureKind::Macro(named_primitive) => {
+                                            let mut primitive = named_primitive.primitive.clone();
+                                            // Update the primitive's position based on flash coordinates
+                                            match &mut primitive {
+                                                GerberPrimitive::Polygon {
+                                                    center, ..
+                                                } => {
+                                                    *center = current_pos;
                                                 }
-
-                                                primitives.push(GerberPrimitive::Polygon {
-                                                    center: (current_pos.0, current_pos.1),
-                                                    vertices,
-                                                    exposure: Exposure::Add,
-                                                });
+                                                GerberPrimitive::Circle {
+                                                    x,
+                                                    y,
+                                                    ..
+                                                } => {
+                                                    *x = current_pos.0;
+                                                    *y = current_pos.1;
+                                                }
+                                                GerberPrimitive::Rectangle {
+                                                    x,
+                                                    y,
+                                                    ..
+                                                } => {
+                                                    *x = current_pos.0;
+                                                    *y = current_pos.1;
+                                                }
+                                                _ => {
+                                                    warn!(
+                                                        "macro uses a primitive that is not supported.  named_primitive: {:?}",
+                                                        named_primitive
+                                                    );
+                                                }
                                             }
-                                            _ => {}
+                                            primitives.push(primitive);
+                                        }
+                                        ApertureKind::Standard(aperture) => {
+                                            match aperture {
+                                                Aperture::Circle(circle) => {
+                                                    primitives.push(GerberPrimitive::Circle {
+                                                        x: current_pos.0,
+                                                        y: current_pos.1,
+                                                        diameter: circle.diameter,
+                                                        exposure: Exposure::Add,
+                                                    });
+                                                }
+                                                Aperture::Rectangle(rect) => {
+                                                    primitives.push(GerberPrimitive::Rectangle {
+                                                        x: current_pos.0 - rect.x / 2.0,
+                                                        y: current_pos.1 - rect.y / 2.0,
+                                                        width: rect.x,
+                                                        height: rect.y,
+                                                        exposure: Exposure::Add,
+                                                    });
+                                                }
+                                                Aperture::Polygon(polygon) => {
+                                                    let radius = polygon.diameter / 2.0;
+                                                    let vertices_count = polygon.vertices as usize;
+                                                    let mut vertices = Vec::with_capacity(vertices_count);
+
+                                                    // For standard aperture polygon, we need to generate vertices
+                                                    // starting at angle 0 and moving counterclockwise
+                                                    for i in 0..vertices_count {
+                                                        let angle = (2.0 * std::f64::consts::PI * i as f64)
+                                                            / vertices_count as f64;
+                                                        let x = radius * angle.cos();
+                                                        let y = radius * angle.sin();
+
+                                                        // Apply rotation if specified
+                                                        let (final_x, final_y) =
+                                                            if let Some(rotation) = polygon.rotation {
+                                                                let rot_rad = rotation * std::f64::consts::PI / 180.0;
+                                                                let (sin_rot, cos_rot) = rot_rad.sin_cos();
+                                                                (x * cos_rot - y * sin_rot, x * sin_rot + y * cos_rot)
+                                                            } else {
+                                                                (x, y)
+                                                            };
+
+                                                        vertices.push((final_x, final_y));
+                                                    }
+
+                                                    primitives.push(GerberPrimitive::Polygon {
+                                                        center: (current_pos.0, current_pos.1),
+                                                        vertices,
+                                                        exposure: Exposure::Add,
+                                                    });
+                                                }
+                                                _ => {}
+                                            }
                                         }
                                     }
                                 }
