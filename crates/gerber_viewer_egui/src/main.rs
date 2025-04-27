@@ -62,6 +62,7 @@ impl Default for ViewState {
     }
 }
 
+#[derive(Debug)]
 struct BoundingBox {
     min_x: f64,
     min_y: f64,
@@ -964,18 +965,22 @@ impl GerberLayer {
         let content_width = bbox.max_x - bbox.min_x;
         let content_height = bbox.max_y - bbox.min_y;
 
-        let scale_x = viewport.width() as f64 / content_width;
-        let scale_y = viewport.height() as f64 / content_height;
+        // Calculate scale to fit the content
+        let scale = f32::min(
+            viewport.width() / (content_width as f32),
+            viewport.height() / (content_height as f32)
+        ) * INITIAL_GERBER_AREA_PERCENT;
 
-        let scale = scale_x.min(scale_y) as f32 * INITIAL_GERBER_AREA_PERCENT;
+        // Calculate the content center in mm
+        let content_center_x = (bbox.min_x + bbox.max_x) / 2.0;
+        let content_center_y = (bbox.min_y + bbox.max_y) / 2.0;
 
-        let center_x = (bbox.min_x + bbox.max_x) / 2.0;
-        let center_y = (bbox.min_y + bbox.max_y) / 2.0;
-
+        // Offset from viewport center to place content center
         self.view.translation = Vec2::new(
-            (viewport.width() / 2.0) - (center_x as f32 * scale),
-            (viewport.height() / 2.0) - (center_y as f32 * scale),
+            viewport.center().x - (content_center_x as f32 * scale),
+            viewport.center().y + (content_center_y as f32 * scale)  // Note the + here since we flip Y
         );
+
         self.view.scale = scale;
         self.needs_initial_view = false;
     }
