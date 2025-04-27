@@ -5,6 +5,7 @@ use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use earcut::Earcut;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, Frame, NativeOptions, egui, run_native};
 use egui::ahash::HashMap;
@@ -129,7 +130,70 @@ enum GerberPrimitive {
         /// Relative to center
         vertices: Vec<(f64, f64)>,
         exposure: Exposure,
+        is_convex: bool,
     },
+}
+
+struct GerberPolygon {
+    center: (f64, f64),
+    /// Relative to center
+    vertices: Vec<(f64, f64)>,
+    exposure: Exposure,
+}
+
+impl GerberPolygon {
+    /// Checks if a polygon is convex by verifying that all cross products
+    /// between consecutive edges have the same sign
+    pub fn is_convex(&self) -> bool {
+        if self.vertices.len() < 3 {
+            return true;
+        }
+
+        let n = self.vertices.len();
+        let mut sign = 0;
+
+        for i in 0..n {
+            let p1 = self.vertices[i];
+            let p2 = self.vertices[(i + 1) % n];
+            let p3 = self.vertices[(i + 2) % n];
+
+            let v1_x = p2.0 - p1.0;
+            let v1_y = p2.1 - p1.1;
+            let v2_x = p3.0 - p2.0;
+            let v2_y = p3.1 - p2.1;
+
+            // Cross product in 2D
+            let cross = v1_x * v2_y - v1_y * v2_x;
+
+            if sign == 0 {
+                sign = if cross > 0.0 { 1 } else { -1 };
+            } else if (cross > 0.0 && sign < 0) || (cross < 0.0 && sign > 0) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl GerberPrimitive {
+    fn new_polygon(polygon: GerberPolygon) -> Self {
+        if polygon.is_convex() {
+            GerberPrimitive::Polygon {
+                center: polygon.center,
+                vertices: polygon.vertices,
+                exposure: polygon.exposure,
+                is_convex: true,
+            }
+        } else {
+            GerberPrimitive::Polygon {
+                center: polygon.center,
+                vertices: polygon.vertices,
+                exposure: polygon.exposure,
+                is_convex: false,
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -498,11 +562,11 @@ impl GerberLayer {
                                         .collect();
                                 }
 
-                                Some(GerberPrimitive::Polygon {
+                                Some(GerberPrimitive::new_polygon(GerberPolygon {
                                     center: (0.0, 0.0), // The flash operation will move this to final position
                                     vertices,
                                     exposure: outline.exposure.into(),
-                                })
+                                }))
                             }
                             MacroContent::Polygon(polygon) => {
                                 let Some(center) = macro_decimal_pair_to_f64(&polygon.center, &macro_context) else {
@@ -535,11 +599,11 @@ impl GerberLayer {
                                 let rotated_center_x = center.0 * cos_theta - center.1 * sin_theta;
                                 let rotated_center_y = center.0 * sin_theta + center.1 * cos_theta;
 
-                                Some(GerberPrimitive::Polygon {
+                                Some(GerberPrimitive::new_polygon(GerberPolygon {
                                     center: (rotated_center_x, rotated_center_y),
                                     vertices,
                                     exposure: polygon.exposure.into(),
-                                })
+                                }))
                             }
                             MacroContent::Moire(_) => None,
                             MacroContent::Thermal(_) => None,
@@ -619,22 +683,27 @@ impl GerberLayer {
                     } else {
                         // G37 - End Region
                         if in_region && current_region_vertices.len() >= 3 {
-                            // Close the polygon by adding the first vertex if needed
-                            if current_region_vertices.first() != current_region_vertices.last() {
-                                current_region_vertices.push(*current_region_vertices.first().unwrap());
-                            }
+                            // Find bounding box
+                            let min_x = current_region_vertices
+                                .iter()
+                                .map(|(x, _)| *x)
+                                .fold(f64::INFINITY, f64::min);
+                            let max_x = current_region_vertices
+                                .iter()
+                                .map(|(x, _)| *x)
+                                .fold(f64::NEG_INFINITY, f64::max);
+                            let min_y = current_region_vertices
+                                .iter()
+                                .map(|(_, y)| *y)
+                                .fold(f64::INFINITY, f64::min);
+                            let max_y = current_region_vertices
+                                .iter()
+                                .map(|(_, y)| *y)
+                                .fold(f64::NEG_INFINITY, f64::max);
 
-                            // Calculate center point as average of all vertices
-                            let center_x = current_region_vertices
-                                .iter()
-                                .map(|(x, _)| x)
-                                .sum::<f64>()
-                                / current_region_vertices.len() as f64;
-                            let center_y = current_region_vertices
-                                .iter()
-                                .map(|(_, y)| y)
-                                .sum::<f64>()
-                                / current_region_vertices.len() as f64;
+                            // Calculate center from bounding box
+                            let center_x = (min_x + max_x) / 2.0;
+                            let center_y = (min_y + max_y) / 2.0;
 
                             // Make vertices relative to center
                             let relative_vertices: Vec<(f64, f64)> = current_region_vertices
@@ -642,14 +711,14 @@ impl GerberLayer {
                                 .map(|(x, y)| (x - center_x, y - center_y))
                                 .collect();
 
-                            primitives.push(GerberPrimitive::Polygon {
+                            let polygon = GerberPrimitive::new_polygon(GerberPolygon {
                                 center: (center_x, center_y),
                                 vertices: relative_vertices,
                                 exposure: Exposure::Add,
                             });
+                            primitives.push(polygon);
+                            in_region = false;
                         }
-                        in_region = false;
-                        current_region_vertices.clear();
                     }
                 }
 
@@ -668,7 +737,7 @@ impl GerberLayer {
                                     current_region_vertices.push(*current_region_vertices.first().unwrap());
                                 }
                                 // Start new segment
-                                current_region_vertices.push(end);
+                                //current_region_vertices.push(end);
                             }
                             current_pos = end;
                         }
@@ -785,11 +854,11 @@ impl GerberLayer {
                                                         vertices.push((final_x, final_y));
                                                     }
 
-                                                    primitives.push(GerberPrimitive::Polygon {
+                                                    primitives.push(GerberPrimitive::new_polygon(GerberPolygon {
                                                         center: (current_pos.0, current_pos.1),
                                                         vertices,
                                                         exposure: Exposure::Add,
-                                                    });
+                                                    }));
                                                 }
                                                 Aperture::Obround(rect) => {
                                                     // For an obround, we need to:
@@ -990,6 +1059,7 @@ impl GerberLayer {
                     center,
                     vertices,
                     exposure,
+                    is_convex,
                 } => {
                     let color = exposure.to_color(&self.color);
 
@@ -1006,7 +1076,38 @@ impl GerberLayer {
                         .collect();
 
                     // Draw the polygon
-                    painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
+                    match is_convex {
+                        true => {
+                            painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
+                        }
+                        false => {
+                            // FIXME due to floating-point rounding errors, triangles don't line up exactly and
+                            //       artifacts are visible.
+                            fn triangulate(vertices: &[Pos2]) -> Vec<Vec<Pos2>> {
+                                let flat_vertices: Vec<[f64; 2]> = vertices
+                                    .iter()
+                                    .map(|p| [p.x as f64, p.y as f64])
+                                    .collect();
+
+                                let mut triangles = Vec::new();
+                                let mut earcut = Earcut::new();
+                                earcut.earcut(flat_vertices, &[], &mut triangles);
+
+                                triangles
+                                    .chunks(3)
+                                    .map(|chunk: &[usize]| {
+                                        vec![vertices[chunk[0]], vertices[chunk[1]], vertices[chunk[2]]]
+                                    })
+                                    .collect()
+                            }
+
+                            // Triangulate the polygon
+                            let triangles = triangulate(&screen_vertices);
+                            for triangle in triangles {
+                                painter.add(Shape::convex_polygon(triangle, color, Stroke::NONE));
+                            }
+                        }
+                    };
                 }
             }
         }

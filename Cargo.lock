@@ -1492,6 +1492,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c2d035d21af5cde1a6f5c7b444a5bf963520a9f142e5d06931178433d7d5388"
 
 [[package]]
+name = "earcut"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d565e947a723df9f069393f8c3e723cf386ff9a052443339235ae2a4d9ffee3f"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ecolor"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2243,6 +2252,7 @@ dependencies = [
 name = "gerber_viewer_egui"
 version = "0.1.0"
 dependencies = [
+ "earcut",
  "eframe",
  "egui",
  "env_logger",

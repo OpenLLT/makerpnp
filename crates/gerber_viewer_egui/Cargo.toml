@@ -27,3 +27,6 @@ gerber-types = "0.3.0"
 
 # Errors
 thiserror = "2.0.12"
+
+# Math
+earcut = "0.4.4"
