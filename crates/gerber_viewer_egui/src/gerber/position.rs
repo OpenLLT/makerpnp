@@ -4,9 +4,10 @@ use egui::Vec2;
 
 pub const ZERO: Position = Position::new(0.0, 0.0);
 
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct Position {
-    pub(crate) x: f64,
-    pub(crate) y: f64,
+    pub x: f64,
+    pub y: f64,
 }
 
 #[allow(dead_code)]
