@@ -340,6 +340,10 @@ impl GerberViewer {
         Ok(())
     }
 
+    pub fn close_file(&mut self) {
+        self.state = None;
+    }
+
     pub fn clear_log(&mut self) {
         self.log.clear();
     }
@@ -1208,6 +1212,11 @@ impl eframe::App for GerberViewer {
                     if ui.button("Open").clicked() {
                         self.open_gerber_file();
                     }
+                    ui.add_enabled_ui(self.state.is_some(), |ui| {
+                        if ui.button("Close").clicked() {
+                            self.close_file();
+                        }
+                    });
                     if ui.button("Quit").clicked() {
                         self.handle_quit(ui.ctx());
                     }
