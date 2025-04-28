@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
@@ -7,18 +6,21 @@ use std::path::PathBuf;
 
 use earcut::Earcut;
 use eframe::emath::Vec2;
-use eframe::{CreationContext, Frame, NativeOptions, egui, run_native};
+use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::ahash::HashMap;
-use egui::scroll_area::ScrollBarVisibility;
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Painter, Pos2, Rect, Response, Ui};
+use egui::{Color32, Context, Frame, Painter, Pos2, Rect, Response, Ui};
 use egui_extras::{Column, TableBuilder};
-use epaint::{Primitive, Shape, Stroke, StrokeKind};
+use egui_taffy::taffy::Dimension::Length;
+use egui_taffy::taffy::prelude::{auto, percent};
+use egui_taffy::taffy::{Size, Style};
+use egui_taffy::{TuiBuilderLogic, taffy};
+use epaint::{Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::parser::parse_gerber;
 use gerber_types::{
-    Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, ExtendedCode, FunctionCode, GCode, MacroContent,
-    MacroDecimal, Operation, Rectangular,
+    Aperture, ApertureDefinition, Command, Coordinates, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal,
+    Operation,
 };
 use log::{error, info, warn};
 use rfd::FileDialog;
@@ -217,12 +219,6 @@ impl GerberPrimitive {
             triangles,
         }
     }
-}
-
-#[derive(Debug)]
-struct MacroDefinition {
-    name: String,
-    vertices: Vec<(f64, f64)>,
 }
 
 #[derive(Debug)]
@@ -937,7 +933,6 @@ impl GerberLayer {
                                 }
                             }
                         }
-                        _ => {}
                     }
                 }
                 _ => {}
@@ -969,7 +964,7 @@ impl GerberLayer {
         // Calculate scale to fit the content
         let scale = f32::min(
             viewport.width() / (content_width as f32),
-            viewport.height() / (content_height as f32)
+            viewport.height() / (content_height as f32),
         ) * INITIAL_GERBER_AREA_PERCENT;
 
         // Calculate the content center in mm
@@ -979,7 +974,7 @@ impl GerberLayer {
         // Offset from viewport center to place content center
         self.view.translation = Vec2::new(
             viewport.center().x - (content_center_x as f32 * scale),
-            viewport.center().y + (content_center_y as f32 * scale)  // Note the + here since we flip Y
+            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
         );
 
         self.view.scale = scale;
@@ -999,7 +994,7 @@ impl GerberLayer {
         if !response.hovered() {
             return;
         }
-        
+
         let zoom_factor = 1.1;
         let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
         if ui.input(|i| i.modifiers.ctrl) {
@@ -1167,60 +1162,152 @@ impl GerberViewer {
             log: Vec::new(),
         }
     }
+
+    fn handle_quit(&self, ctx: &egui::Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
 }
 
 impl eframe::App for GerberViewer {
-    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
-        egui::TopBottomPanel::bottom("bottom_panel")
-            .resizable(true)
-            .min_height(150.0)
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.button("Clear").clicked() {
-                        self.clear_log();
-                    }
-                });
-
-                let text_height = egui::TextStyle::Body
-                    .resolve(ui.style())
-                    .size
-                    .max(ui.spacing().interact_size.y);
-
-                TableBuilder::new(ui)
-                    .column(Column::auto().at_least(100.0))
-                    .column(Column::remainder())
-                    .striped(true)
-                    .resizable(true)
-                    .auto_shrink([false, false])
-                    .stick_to_bottom(true)
-                    .header(20.0, |mut header| {
-                        header.col(|ui| {
-                            ui.strong("Log Level");
-                        });
-                        header.col(|ui| {
-                            ui.strong("Message");
-                        });
-                    })
-                    .body(|mut body| {
-                        body.rows(text_height, self.log.len(), |mut row| {
-                            if let Some(log_item) = self.log.get(row.index()) {
-                                row.col(|ui| {
-                                    ui.label(log_item.level());
-                                });
-                                row.col(|ui| {
-                                    ui.label(log_item.message());
-                                });
-                            }
-                        });
-                    });
-
-            });
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        // Disable text wrapping
+        //
+        // egui text layouting tries to utilize minimal width possible
+        ctx.style_mut(|style| {
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            if ui.button("Open Gerber File").clicked() {
-                self.open_gerber_file();
-            }
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("Open").clicked() {
+                        self.open_gerber_file();
+                    }
+                    if ui.button("Quit").clicked() {
+                        self.handle_quit(ui.ctx());
+                    }
+                });
+            });
+
+            ui.horizontal(|ui| {
+                if ui.button("Open Gerber File").clicked() {
+                    self.open_gerber_file();
+                }
+            })
         });
+
+        let panel_fill_color = ctx.style().visuals.panel_fill;
+        let light_panel_fill = ctx
+            .style()
+            .visuals
+            .widgets
+            .inactive
+            .bg_fill;
+        // We just want to get rid of the margin in the panel, but we have to find the right color too...
+        let panel_frame = Frame::default()
+            .inner_margin(0.0)
+            .fill(panel_fill_color);
+
+        egui::TopBottomPanel::bottom("bottom_panel")
+            .resizable(true)
+            .default_height(150.0)
+            .min_height(80.0)
+            .frame(panel_frame)
+            .show(ctx, |ui| {
+                let cell_style = Style {
+                    ..Style::default()
+                };
+
+                egui_taffy::tui(ui, ui.id().with("bottom_panel_content"))
+                    .reserve_available_space()
+                    .style(Style {
+                        flex_direction: taffy::FlexDirection::Column,
+                        size: percent(1.),
+                        justify_items: Some(taffy::AlignItems::FlexStart),
+                        align_items: Some(taffy::AlignItems::Stretch),
+                        ..Style::default()
+                    })
+                    .show(|tui| {
+                        tui.style(Style {
+                            flex_grow: 0.0,
+                            ..cell_style.clone()
+                        })
+                        .add(|tui| {
+                            tui.ui(|ui| {
+                                ui.horizontal(|ui| {
+                                    if ui.button("Clear").clicked() {
+                                        self.clear_log();
+                                    }
+                                });
+                            });
+                        });
+
+                        tui.separator();
+
+                        tui.style(Style {
+                            flex_grow: 1.0,
+                            min_size: Size {
+                                width: auto(),
+                                height: Length(100.0),
+                            },
+                            ..cell_style.clone()
+                        })
+                        .add_with_border(|tui| {
+                            tui.ui(|ui| {
+                                let text_height = egui::TextStyle::Body
+                                    .resolve(ui.style())
+                                    .size
+                                    .max(ui.spacing().interact_size.y);
+
+                                TableBuilder::new(ui)
+                                    .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                                    .min_scrolled_height(80.0)
+                                    .column(Column::auto())
+                                    .column(Column::remainder())
+                                    .striped(true)
+                                    .resizable(true)
+                                    .auto_shrink([false, false])
+                                    .stick_to_bottom(true)
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("Log Level");
+                                        });
+                                        header.col(|ui| {
+                                            ui.strong("Message");
+                                        });
+                                    })
+                                    .body(|body| {
+                                        body.rows(text_height, self.log.len(), |mut row| {
+                                            if let Some(log_item) = self.log.get(row.index()) {
+                                                row.col(|ui| {
+                                                    ui.label(log_item.level());
+                                                });
+                                                row.col(|ui| {
+                                                    // FIXME the width of this column expands when rows with longer messages are scrolled-to.
+                                                    //       the issue is apparent after loading a gerber file, and then expanding the window horizontally
+                                                    //       you'll see that table's scrollbar is not on the right of the panel, but somewhere in the middle.
+                                                    //       if you then scroll the table, the scrollbar will move to the right.
+                                                    ui.label(log_item.message());
+                                                });
+                                            }
+                                        });
+                                    });
+                            })
+                        });
+
+                        let style = tui.egui_style_mut();
+                        style.visuals.panel_fill = light_panel_fill;
+
+                        // Status bar
+                        tui.style(Style {
+                            flex_grow: 0.0,
+                            ..cell_style.clone()
+                        })
+                        .add_with_background_color(|tui| {
+                            tui.label("Status Bar");
+                        });
+                    });
+            });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());

@@ -13,6 +13,7 @@ egui = "0.31.1"
 eframe = { version = "0.31.1", features = ["default"] }
 epaint = "0.31.1"
 egui_extras = "0.31.1"
+egui_taffy = "0.7.0"
 
 # File Dialog
 rfd = "0.15.2"

@@ -2257,6 +2257,7 @@ dependencies = [
  "eframe",
  "egui",
  "egui_extras",
+ "egui_taffy",
  "env_logger",
  "epaint",
  "gerber-types",
