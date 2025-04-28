@@ -217,6 +217,21 @@ Options:
           Print help
 ```
 
+## Gerber Viewer
+
+There's a stand-alone gerber viewer, it can render gerbers generated with DipTrace 4.3 and other tools (untested).
+
+Here's a screenshot:
+
+[<img src="assets/screenshots/gerber_viewer/gerber_viewer_2025-04-28_140410.png" width="800" alt="GerberViewer">](assets/screenshots/gerber_viewer/gerber_viewer_2025-04-28_140410.png)
+
+
+### Feedback 
+
+If you have gerber files and have rendering issues, please create an issue with screenshots and a gerber file.  If
+you're able to create a gerber file with just the elements that have issues that would be preferred.
+
+
 ## Getting started
 
 Currently, you have to build from source, but WAIT! it's EASY!
@@ -233,9 +248,10 @@ After it's built there's executable files in the `target/release` directory:
 
 ```
 $ ls -g target/release/*.exe
--rwxr-xr-x 2 None  5762560 Apr 22 13:49 target/release/planner_cli.exe
--rwxr-xr-x 2 None 22111232 Apr 22 13:49 target/release/planner_gui_egui.exe
--rwxr-xr-x 2 None  3706368 Apr 22 13:49 target/release/variantbuilder_cli.exe
+-rwxr-xr-x 2 None 13341184 Apr 28 14:06 target/release/gerber_viewer_egui.exe
+-rwxr-xr-x 2 None  5775872 Apr 28 14:06 target/release/planner_cli.exe
+-rwxr-xr-x 2 None 22119936 Apr 28 14:06 target/release/planner_gui_egui.exe
+-rwxr-xr-x 2 None  3703296 Apr 28 14:06 target/release/variantbuilder_cli.exe
 ```
 
 ## Running the tools
@@ -255,16 +271,17 @@ The current architecture is to use Crux to provide rust-based back-ends (cores),
 does add a layer of complexity, but should future-proof the project somewhat and also allows creation of non-rust
 native apps that use the rust core.  Check out the 'Crux' documentation.
 
-Given the state of Rust GUI frameworks, and that a 3 month-long investigation was done and documented in the form of a 40+ video
-series of livestreams, using Crux gives the project a way of being able to change the GUI library for a different one
-if the chosen GUI library, Cushy, does not meet future requirements.
+Given the state of Rust GUI frameworks, and that a 3 month-long investigation was done and documented in the form of a 
+40+ livestream series. Using Crux gives the project a way of being able to change the GUI library for a different one
+if the chosen GUI library, egui, does not meet future requirements.  This approach turned out to be very useful when
+the Cushy GUI framework was replaced with egui.
 
 See:
 * Comparison of GUI libraries - https://docs.google.com/spreadsheets/d/1cxH_GgzrGDpXm4CN0cWvQ9RF_PLf6HEvVYcZhqOO0nc/edit?usp=sharing
 * 'Trying Rust GUI tech in 2024' video series playlist - https://www.youtube.com/playlist?list=PLUCLWCDEWm8g7pHKQGE7Pokk4wiVU8rLl 
 
-In the end, [egui](https://github.com/emilk/egui) was chosen for the GUI framework due to it's large community and ability to create usable
-productivity-style GUIs.
+In the end, [egui](https://github.com/emilk/egui) was chosen for the GUI framework due to it's large community and
+ability to create usable productivity-style GUIs.
 
 Currently, it's thought that the software wil have these main components:
 * Machine control - for co-ordination of hardware control through one or more drivers (gcode, cameras, vision).
@@ -291,8 +308,8 @@ Examples of hardware which *could* be interacted with include:
 Written documentation for the project is sparse, further documentation will be created in due course.  However, the 
 design and operation of the tools is detailed in the livestreams.
 
-There are also functional tests which detail the expected input/output and operation sequences
-so you can refer to those to gain additional understanding.  See `crates/planner_cli/tests/planner.rs` and
+There are also functional tests which detail the expected input/output and operation sequences, so you can refer to
+those to gain additional understanding.  See `crates/planner_cli/tests/planner.rs` and
 `crates/variantbuilder/tests/variantbuider.rs`.
 
 ## Links
