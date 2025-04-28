@@ -22,7 +22,7 @@ use gerber_types::{
     Aperture, ApertureDefinition, Command, Coordinates, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal,
     Operation,
 };
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rfd::FileDialog;
 use thiserror::Error;
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
@@ -37,21 +37,117 @@ fn main() -> eframe::Result<()> {
     )
 }
 struct GerberViewer {
-    state: Option<GerberLayer>,
+    state: Option<GerberViewState>,
     log: Vec<AppLogItem>,
+}
+
+struct GerberViewState {
+    view: ViewState,
+    needs_initial_view: bool,
+    bounding_box: BoundingBox,
+    cursor_position: Option<(f64, f64)>,
+
+    layers: Vec<GerberLayer>,
+}
+
+impl GerberViewState {
+    fn calculate_initial_view(&mut self, viewport: Rect) {
+        let bbox = &self.bounding_box;
+
+        let content_width = bbox.max_x - bbox.min_x;
+        let content_height = bbox.max_y - bbox.min_y;
+
+        // Calculate scale to fit the content
+        let scale = f32::min(
+            viewport.width() / (content_width as f32),
+            viewport.height() / (content_height as f32),
+        ) * INITIAL_GERBER_AREA_PERCENT;
+
+        // Calculate the content center in mm
+        let content_center_x = (bbox.min_x + bbox.max_x) / 2.0;
+        let content_center_y = (bbox.min_y + bbox.max_y) / 2.0;
+
+        // Offset from viewport center to place content center
+        self.view.translation = Vec2::new(
+            viewport.center().x - (content_center_x as f32 * scale),
+            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
+        );
+
+        self.view.scale = scale;
+        self.needs_initial_view = false;
+    }
+
+    pub fn update_cursor_position(&mut self, response: &Response, ui: &Ui) {
+        if !response.hovered() {
+            return;
+        }
+
+        if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+            self.cursor_position = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
+        }
+    }
+
+    pub fn handle_panning(&mut self, response: &Response, ui: &mut Ui) {
+        if response.dragged_by(egui::PointerButton::Primary) {
+            let delta = response.drag_delta();
+            self.view.translation += delta;
+            ui.ctx().clear_animations();
+        }
+    }
+
+    pub fn handle_zooming(&mut self, response: &Response, viewport: Rect, ui: &mut Ui) {
+        // Only process zoom if mouse is actually over the viewport
+        if !response.hovered() {
+            return;
+        }
+
+        let zoom_factor = 1.1;
+        let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
+        if ui.input(|i| i.modifiers.ctrl) {
+            scroll_delta *= 0.0; // Disable zoom when Ctrl is held (for text scaling)
+        }
+
+        if scroll_delta != 0.0 {
+            let old_scale = self.view.scale;
+            let new_scale = if scroll_delta > 0.0 {
+                old_scale * zoom_factor
+            } else {
+                old_scale / zoom_factor
+            };
+
+            if let Some(mouse_pos) = response.hover_pos() {
+                let mouse_pos = mouse_pos - viewport.min.to_vec2();
+                let mouse_world = (mouse_pos - self.view.translation) / old_scale;
+                self.view.translation = mouse_pos - mouse_world * new_scale;
+            }
+
+            self.view.scale = new_scale;
+        }
+    }
+
+    /// Convert to gerber coordinates using view transformation
+    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> (f64, f64) {
+        let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
+        (gerber_pos.x as f64, gerber_pos.y as f64)
+    }
+
+    /// Convert from gerber coordinates using view transformation
+    pub fn gerber_to_screen_coords(&self, gerber_pos: (f64, f64)) -> Vec2 {
+        let gerber_pos = Vec2::new(gerber_pos.0 as f32, gerber_pos.1 as f32);
+        let origin_screen_pos = self.view.translation + (gerber_pos * self.view.scale);
+        origin_screen_pos
+    }
 }
 
 struct GerberLayer {
     color: Color32,
-    gerber_doc: GerberDoc,
     path: PathBuf,
-    view: ViewState,
-    needs_initial_view: bool,
-    bounding_box: BoundingBox,
+    gerber_doc: GerberDoc,
     gerber_primitives: Vec<GerberPrimitive>,
-    cursor_position: Option<(f64, f64)>,
+    bounding_box: BoundingBox,
 }
 
+#[derive(Copy, Clone)]
 struct ViewState {
     translation: Vec2,
     scale: f32,
@@ -66,7 +162,7 @@ impl Default for ViewState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct BoundingBox {
     min_x: f64,
     min_y: f64,
@@ -299,6 +395,7 @@ impl GerberViewer {
 
         Ok(())
     }
+
     pub fn parse_gerber_file(&mut self, path: PathBuf) -> Result<(), AppError> {
         let file = File::open(path.clone()).map_err(AppError::IoError)?;
         let reader = BufReader::new(file);
@@ -316,20 +413,24 @@ impl GerberViewer {
         self.log.extend(log);
 
         let gerber_primitives = GerberLayer::build_primitives(&gerber_doc);
+
+        // FUTURE the VIEW bounding box needs to use all layers, for now, just use the only layer
         let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
 
-        self.state = Some(GerberLayer {
+        let layer = GerberLayer {
             color: Color32::LIGHT_GRAY,
             gerber_doc,
             path,
             gerber_primitives,
-            view: ViewState {
-                translation: Default::default(),
-                scale: 0.0,
-            },
+            bounding_box: bounding_box.clone(),
+        };
+
+        self.state = Some(GerberViewState {
+            view: Default::default(),
             needs_initial_view: true,
             bounding_box,
             cursor_position: None,
+            layers: vec![layer],
         });
 
         let message = "Gerber file parsed successfully";
@@ -350,6 +451,19 @@ impl GerberViewer {
 }
 
 impl GerberLayer {
+    fn update_position(current_pos: &mut (f64, f64), coords: &Coordinates) {
+        *current_pos = (
+            coords
+                .x
+                .map(|value| value.into())
+                .unwrap_or(current_pos.0),
+            coords
+                .y
+                .map(|value| value.into())
+                .unwrap_or(current_pos.1),
+        )
+    }
+
     fn calculate_bounding_box(primitives: &Vec<GerberPrimitive>) -> BoundingBox {
         let mut bbox = BoundingBox::default();
 
@@ -948,107 +1062,7 @@ impl GerberLayer {
         primitives
     }
 
-    fn update_position(current_pos: &mut (f64, f64), coords: &Coordinates) {
-        *current_pos = (
-            coords
-                .x
-                .map(|value| value.into())
-                .unwrap_or(current_pos.0),
-            coords
-                .y
-                .map(|value| value.into())
-                .unwrap_or(current_pos.1),
-        )
-    }
-
-    fn calculate_initial_view(&mut self, viewport: Rect) {
-        let bbox = &self.bounding_box;
-
-        let content_width = bbox.max_x - bbox.min_x;
-        let content_height = bbox.max_y - bbox.min_y;
-
-        // Calculate scale to fit the content
-        let scale = f32::min(
-            viewport.width() / (content_width as f32),
-            viewport.height() / (content_height as f32),
-        ) * INITIAL_GERBER_AREA_PERCENT;
-
-        // Calculate the content center in mm
-        let content_center_x = (bbox.min_x + bbox.max_x) / 2.0;
-        let content_center_y = (bbox.min_y + bbox.max_y) / 2.0;
-
-        // Offset from viewport center to place content center
-        self.view.translation = Vec2::new(
-            viewport.center().x - (content_center_x as f32 * scale),
-            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
-        );
-
-        self.view.scale = scale;
-        self.needs_initial_view = false;
-    }
-
-    pub fn update_cursor_position(&mut self, response: &Response, ui: &Ui) {
-        if !response.hovered() {
-            return;
-        }
-
-        if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
-            self.cursor_position = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
-        }
-    }
-
-    pub fn handle_panning(&mut self, response: &Response, ui: &mut Ui) {
-        if response.dragged_by(egui::PointerButton::Primary) {
-            let delta = response.drag_delta();
-            self.view.translation += delta;
-            ui.ctx().clear_animations();
-        }
-    }
-
-    pub fn handle_zooming(&mut self, response: &Response, viewport: Rect, ui: &mut Ui) {
-        // Only process zoom if mouse is actually over the viewport
-        if !response.hovered() {
-            return;
-        }
-
-        let zoom_factor = 1.1;
-        let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
-        if ui.input(|i| i.modifiers.ctrl) {
-            scroll_delta *= 0.0; // Disable zoom when Ctrl is held (for text scaling)
-        }
-
-        if scroll_delta != 0.0 {
-            let old_scale = self.view.scale;
-            let new_scale = if scroll_delta > 0.0 {
-                old_scale * zoom_factor
-            } else {
-                old_scale / zoom_factor
-            };
-
-            if let Some(mouse_pos) = response.hover_pos() {
-                let mouse_pos = mouse_pos - viewport.min.to_vec2();
-                let mouse_world = (mouse_pos - self.view.translation) / old_scale;
-                self.view.translation = mouse_pos - mouse_world * new_scale;
-            }
-
-            self.view.scale = new_scale;
-        }
-    }
-
-    /// Convert to gerber coordinates using view transformation
-    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> (f64, f64) {
-        let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
-        (gerber_pos.x as f64, gerber_pos.y as f64)
-    }
-
-    /// Convert from gerber coordinates using view transformation
-    pub fn gerber_to_screen_coords(&self, gerber_pos: (f64, f64)) -> Vec2 {
-        let gerber_pos = Vec2::new(gerber_pos.0 as f32, gerber_pos.1 as f32);
-        let origin_screen_pos = self.view.translation + (gerber_pos * self.view.scale);
-        origin_screen_pos
-    }
-
-    pub fn paint_gerber(&self, painter: Painter) {
+    pub fn paint_gerber(&self, painter: &Painter, view: ViewState) {
         for primitive in &self.gerber_primitives {
             match primitive {
                 GerberPrimitive::Circle {
@@ -1059,8 +1073,8 @@ impl GerberLayer {
                 } => {
                     let color = exposure.to_color(&self.color);
 
-                    let center = self.view.translation + Vec2::new(*x as f32, -(*y as f32)) * self.view.scale;
-                    let radius = (*diameter as f32 / 2.0) * self.view.scale;
+                    let center = view.translation + Vec2::new(*x as f32, -(*y as f32)) * view.scale;
+                    let radius = (*diameter as f32 / 2.0) * view.scale;
                     painter.circle(center.to_pos2(), radius, color, Stroke::NONE);
                 }
                 GerberPrimitive::Rectangle {
@@ -1073,13 +1087,13 @@ impl GerberLayer {
                     let color = exposure.to_color(&self.color);
 
                     // Calculate center-based position
-                    let center = self.view.translation
+                    let center = view.translation
                         + Vec2::new(
                             *x as f32 + *width as f32 / 2.0,     // Add half width to get center
                             -(*y as f32 + *height as f32 / 2.0), // Flip Y and add half height
-                        ) * self.view.scale;
+                        ) * view.scale;
 
-                    let size = Vec2::new(*width as f32, *height as f32) * self.view.scale;
+                    let size = Vec2::new(*width as f32, *height as f32) * view.scale;
                     let top_left = center - size / 2.0; // Calculate top-left from center
 
                     painter.rect(
@@ -1098,16 +1112,14 @@ impl GerberLayer {
                 } => {
                     let color = exposure.to_color(&self.color);
 
-                    let start_position =
-                        self.view.translation + Vec2::new(start.0 as f32, -(start.1 as f32)) * self.view.scale;
-                    let end_position =
-                        self.view.translation + Vec2::new(end.0 as f32, -(end.1 as f32)) * self.view.scale;
+                    let start_position = view.translation + Vec2::new(start.0 as f32, -(start.1 as f32)) * view.scale;
+                    let end_position = view.translation + Vec2::new(end.0 as f32, -(end.1 as f32)) * view.scale;
                     painter.line_segment(
                         [start_position.to_pos2(), end_position.to_pos2()],
-                        Stroke::new((*width as f32) * self.view.scale, color),
+                        Stroke::new((*width as f32) * view.scale, color),
                     );
                     // Draw circles at either end of the line.
-                    let radius = (*width as f32 / 2.0) * self.view.scale;
+                    let radius = (*width as f32 / 2.0) * view.scale;
                     painter.circle(start_position.to_pos2(), radius, color, Stroke::NONE);
                     painter.circle(end_position.to_pos2(), radius, color, Stroke::NONE);
                 }
@@ -1120,8 +1132,7 @@ impl GerberLayer {
                 } => {
                     let color = exposure.to_color(&self.color);
 
-                    let screen_center =
-                        self.view.translation + Vec2::new(center.0 as f32, -(center.1 as f32)) * self.view.scale;
+                    let screen_center = view.translation + Vec2::new(center.0 as f32, -(center.1 as f32)) * view.scale;
 
                     // Draw the polygon
                     match is_convex {
@@ -1130,8 +1141,7 @@ impl GerberLayer {
                             let screen_vertices: Vec<Pos2> = vertices
                                 .iter()
                                 .map(|(dx, dy)| {
-                                    let screen_pos =
-                                        screen_center + Vec2::new(*dx as f32, -(*dy as f32)) * self.view.scale;
+                                    let screen_pos = screen_center + Vec2::new(*dx as f32, -(*dy as f32)) * view.scale;
                                     screen_pos.to_pos2()
                                 })
                                 .collect();
@@ -1143,7 +1153,7 @@ impl GerberLayer {
                             for triangle in triangles {
                                 let screen_triangle: Vec<Pos2> = triangle
                                     .iter()
-                                    .map(|pos| (screen_center + Vec2::new(pos.x, -pos.y) * self.view.scale).to_pos2())
+                                    .map(|pos| (screen_center + Vec2::new(pos.x, -pos.y) * view.scale).to_pos2())
                                     .collect();
                                 painter.add(Shape::convex_polygon(screen_triangle, color, Stroke::NONE));
                             }
@@ -1152,33 +1162,6 @@ impl GerberLayer {
                 }
             }
         }
-
-        // Draw origin crosshair
-        let origin_screen_pos = self.gerber_to_screen_coords((0.0, 0.0));
-        Self::draw_origin_crosshair(painter, origin_screen_pos);
-    }
-
-    fn draw_origin_crosshair(painter: Painter, origin_screen_pos: Vec2) {
-        // Calculate viewport bounds to extend lines across entire view
-        let viewport = painter.clip_rect();
-
-        // Draw a horizontal line (extending across viewport)
-        painter.line_segment(
-            [
-                Pos2::new(viewport.min.x, origin_screen_pos.y),
-                Pos2::new(viewport.max.x, origin_screen_pos.y),
-            ],
-            Stroke::new(1.0, Color32::BLUE),
-        );
-
-        // Draw a vertical line (extending across viewport)
-        painter.line_segment(
-            [
-                Pos2::new(origin_screen_pos.x, viewport.min.y),
-                Pos2::new(origin_screen_pos.x, viewport.max.y),
-            ],
-            Stroke::new(1.0, Color32::BLUE),
-        );
     }
 }
 
@@ -1194,6 +1177,29 @@ impl GerberViewer {
 
     fn handle_quit(&self, ctx: &egui::Context) {
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    fn draw_crosshair(painter: &Painter, origin_screen_pos: Vec2, color: Color32) {
+        // Calculate viewport bounds to extend lines across entire view
+        let viewport = painter.clip_rect();
+
+        // Draw a horizontal line (extending across viewport)
+        painter.line_segment(
+            [
+                Pos2::new(viewport.min.x, origin_screen_pos.y),
+                Pos2::new(viewport.max.x, origin_screen_pos.y),
+            ],
+            Stroke::new(1.0, color),
+        );
+
+        // Draw a vertical line (extending across viewport)
+        painter.line_segment(
+            [
+                Pos2::new(origin_screen_pos.x, viewport.min.y),
+                Pos2::new(origin_screen_pos.x, viewport.max.y),
+            ],
+            Stroke::new(1.0, color),
+        );
     }
 }
 
@@ -1341,12 +1347,18 @@ impl eframe::App for GerberViewer {
                             tui.ui(|ui| {
                                 ui.horizontal(|ui| {
                                     if let Some(state) = &self.state {
-                                        let unit_text = match state.gerber_doc.units {
+                                        let unit_text = match state
+                                            .layers
+                                            .first()
+                                            .unwrap()
+                                            .gerber_doc
+                                            .units
+                                        {
                                             Some(gerber_types::Unit::Millimeters) => "MM",
                                             Some(gerber_types::Unit::Inches) => "Inches",
                                             None => "Unknown Units",
                                         };
-                                        ui.label(format!("Units: {}", unit_text));
+                                        ui.label(format!("Layer units: {}", unit_text));
 
                                         ui.separator();
 
@@ -1378,7 +1390,18 @@ impl eframe::App for GerberViewer {
                 state.handle_zooming(&response, viewport, ui);
 
                 let painter = ui.painter().with_clip_rect(viewport);
-                state.paint_gerber(painter);
+                for layer in state.layers.iter() {
+                    layer.paint_gerber(&painter, state.view);
+                }
+
+                // Draw origin crosshair
+                let origin_screen_pos = state.gerber_to_screen_coords((0.0, 0.0));
+                Self::draw_crosshair(&painter, origin_screen_pos, Color32::BLUE);
+
+                let viewport = painter.clip_rect();
+
+                let center_screen_pos = viewport.center().to_vec2();
+                Self::draw_crosshair(&painter, center_screen_pos, Color32::LIGHT_GRAY);
             }
         });
     }
