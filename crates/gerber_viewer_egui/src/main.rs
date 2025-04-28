@@ -39,15 +39,18 @@ fn main() -> eframe::Result<()> {
 struct GerberViewer {
     state: Option<GerberViewState>,
     log: Vec<AppLogItem>,
+    coord_input: (String, String),
 }
 
 struct GerberViewState {
     view: ViewState,
     needs_initial_view: bool,
     bounding_box: BoundingBox,
-    cursor_position: Option<(f64, f64)>,
+    cursor_gerber_coords: Option<(f64, f64)>,
 
     layers: Vec<GerberLayer>,
+    center_screen_pos: Option<Vec2>,
+    origin_screen_pos: Option<Vec2>,
 }
 
 impl GerberViewState {
@@ -83,7 +86,7 @@ impl GerberViewState {
         }
 
         if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
-            self.cursor_position = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
+            self.cursor_gerber_coords = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
         }
     }
 
@@ -128,14 +131,43 @@ impl GerberViewState {
     /// Convert to gerber coordinates using view transformation
     pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> (f64, f64) {
         let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
-        (gerber_pos.x as f64, gerber_pos.y as f64)
+        (gerber_pos.x as f64, -gerber_pos.y as f64)
     }
 
     /// Convert from gerber coordinates using view transformation
     pub fn gerber_to_screen_coords(&self, gerber_pos: (f64, f64)) -> Vec2 {
-        let gerber_pos = Vec2::new(gerber_pos.0 as f32, gerber_pos.1 as f32);
-        let origin_screen_pos = self.view.translation + (gerber_pos * self.view.scale);
-        origin_screen_pos
+        let gerber_pos = Vec2::new(gerber_pos.0 as f32, -gerber_pos.1 as f32);
+        self.view.translation + (gerber_pos * self.view.scale)
+    }
+
+    /// X and Y are in GERBER units.
+    pub fn move_view(&mut self, x: f64, y: f64) {
+        debug!("move view. x: {}, y: {}", x, y);
+        debug!("view translation (before): {:?}", self.view.translation);
+
+        let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation);
+        gerber_coords.0 += x;
+        gerber_coords.1 += y;
+        debug!("gerber_coords: {:?}", self.view.translation);
+        let screen_coords = self.gerber_to_screen_coords(gerber_coords);
+
+        debug!("screen_cords: {:?}", screen_coords);
+
+        let delta = screen_coords - self.view.translation;
+        debug!("delta: {:?}", delta);
+
+        self.view.translation -= delta;
+        debug!("view translation (after): {:?}", self.view.translation);
+    }
+
+    /// X and Y are in GERBER units.
+    pub fn locate_view(&mut self, x: f64, y: f64) {
+        debug!("locate view. x: {}, y: {}", x, y);
+        self.view.translation = Vec2::new(
+            self.center_screen_pos.unwrap().x - (x as f32 * self.view.scale),
+            self.center_screen_pos.unwrap().y + (y as f32 * self.view.scale),
+        );
+        debug!("view translation (after): {:?}", self.view.translation);
     }
 }
 
@@ -429,7 +461,10 @@ impl GerberViewer {
             view: Default::default(),
             needs_initial_view: true,
             bounding_box,
-            cursor_position: None,
+            cursor_gerber_coords: None,
+            center_screen_pos: None,
+            origin_screen_pos: None,
+
             layers: vec![layer],
         });
 
@@ -1172,6 +1207,7 @@ impl GerberViewer {
         Self {
             state: None,
             log: Vec::new(),
+            coord_input: ("0.0".to_string(), "0.0".to_string()),
         }
     }
 
@@ -1233,6 +1269,52 @@ impl eframe::App for GerberViewer {
                 if ui.button("Open Gerber File").clicked() {
                     self.open_gerber_file();
                 }
+
+                let x_is_valid = self
+                    .coord_input
+                    .0
+                    .parse::<f64>()
+                    .is_ok();
+                let mut x_editor = egui::TextEdit::singleline(&mut self.coord_input.0).hint_text("X");
+                if !x_is_valid {
+                    x_editor = x_editor.background_color(Color32::DARK_RED);
+                }
+                ui.add(x_editor);
+
+                let y_is_valid = self
+                    .coord_input
+                    .1
+                    .parse::<f64>()
+                    .is_ok();
+                let mut y_editor = egui::TextEdit::singleline(&mut self.coord_input.1).hint_text("Y");
+                if !y_is_valid {
+                    y_editor = y_editor.background_color(Color32::DARK_RED);
+                }
+                ui.add(y_editor);
+
+                let x = self.coord_input.0.parse::<f64>();
+                let y = self.coord_input.1.parse::<f64>();
+
+                let enabled = x.is_ok() && y.is_ok() && self.state.is_some();
+
+                ui.add_enabled_ui(enabled, |ui| {
+                    if ui.button("Locate").clicked() {
+                        // Safety: ui is disabled unless x and y are `Result::ok`
+                        let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                        self.state
+                            .as_mut()
+                            .unwrap()
+                            .locate_view(*x, *y);
+                    }
+                    if ui.button("Move").clicked() {
+                        // Safety: ui is disabled unless x and y are `Result::ok`
+                        let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                        self.state
+                            .as_mut()
+                            .unwrap()
+                            .move_view(*x, *y);
+                    }
+                });
             })
         });
 
@@ -1362,10 +1444,10 @@ impl eframe::App for GerberViewer {
 
                                         ui.separator();
 
-                                        if let Some((x, y)) = state.cursor_position {
-                                            ui.label(format!("X: {:.3} Y: {:.3} {}", x, y, unit_text));
+                                        if let Some((x, y)) = state.cursor_gerber_coords {
+                                            ui.label(format!("Cursor: X={:.3} Y={:.3} {}", x, y, unit_text));
                                         } else {
-                                            ui.label("X: -- Y: --");
+                                            ui.label("X= N/A Y= N/A");
                                         }
                                     } else {
                                         ui.label("No file loaded");
@@ -1379,29 +1461,32 @@ impl eframe::App for GerberViewer {
         egui::CentralPanel::default().show(ctx, |ui| {
             let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
             let viewport = response.rect;
-
             if let Some(state) = &mut self.state {
                 if state.needs_initial_view {
                     state.calculate_initial_view(viewport);
                 }
 
+                let painter = ui.painter().with_clip_rect(viewport);
+                let viewport = painter.clip_rect();
+
+                state.center_screen_pos = Some(viewport.center().to_vec2());
+                state.origin_screen_pos = Some(state.gerber_to_screen_coords((0.0, 0.0)));
+
                 state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
-                let painter = ui.painter().with_clip_rect(viewport);
                 for layer in state.layers.iter() {
                     layer.paint_gerber(&painter, state.view);
                 }
 
                 // Draw origin crosshair
-                let origin_screen_pos = state.gerber_to_screen_coords((0.0, 0.0));
-                Self::draw_crosshair(&painter, origin_screen_pos, Color32::BLUE);
-
-                let viewport = painter.clip_rect();
-
-                let center_screen_pos = viewport.center().to_vec2();
-                Self::draw_crosshair(&painter, center_screen_pos, Color32::LIGHT_GRAY);
+                if let Some(position) = state.origin_screen_pos {
+                    Self::draw_crosshair(&painter, position, Color32::BLUE);
+                }
+                if let Some(position) = state.center_screen_pos {
+                    Self::draw_crosshair(&painter, position, Color32::LIGHT_GRAY);
+                }
             }
         });
     }
