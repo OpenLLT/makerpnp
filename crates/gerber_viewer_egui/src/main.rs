@@ -49,6 +49,7 @@ struct GerberLayer {
     needs_initial_view: bool,
     bounding_box: BoundingBox,
     gerber_primitives: Vec<GerberPrimitive>,
+    cursor_position: Option<(f64, f64)>,
 }
 
 struct ViewState {
@@ -328,6 +329,7 @@ impl GerberViewer {
             },
             needs_initial_view: true,
             bounding_box,
+            cursor_position: None,
         });
 
         let message = "Gerber file parsed successfully";
@@ -981,6 +983,16 @@ impl GerberLayer {
         self.needs_initial_view = false;
     }
 
+    pub fn update_cursor_position(&mut self, response: &Response, ui: &Ui) {
+        if !response.hovered() {
+            return;
+        }
+
+        if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+            self.cursor_position = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
+        }
+    }
+
     pub fn handle_panning(&mut self, response: &Response, ui: &mut Ui) {
         if response.dragged_by(egui::PointerButton::Primary) {
             let delta = response.drag_delta();
@@ -1017,6 +1029,19 @@ impl GerberLayer {
 
             self.view.scale = new_scale;
         }
+    }
+
+    /// Convert to gerber coordinates using view transformation
+    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> (f64, f64) {
+        let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
+        (gerber_pos.x as f64, gerber_pos.y as f64)
+    }
+
+    /// Convert from gerber coordinates using view transformation
+    pub fn gerber_to_screen_coords(&self, gerber_pos: (f64, f64)) -> Vec2 {
+        let gerber_pos = Vec2::new(gerber_pos.0 as f32, gerber_pos.1 as f32);
+        let origin_screen_pos = self.view.translation + (gerber_pos * self.view.scale);
+        origin_screen_pos
     }
 
     pub fn paint_gerber(&self, painter: Painter) {
@@ -1125,7 +1150,7 @@ impl GerberLayer {
         }
 
         // Draw origin crosshair
-        let origin_screen_pos = self.view.translation + Vec2::ZERO * self.view.scale;
+        let origin_screen_pos = self.gerber_to_screen_coords((0.0, 0.0));
         Self::draw_origin_crosshair(painter, origin_screen_pos);
     }
 
@@ -1133,7 +1158,7 @@ impl GerberLayer {
         // Calculate viewport bounds to extend lines across entire view
         let viewport = painter.clip_rect();
 
-        // Draw horizontal line (extending across viewport)
+        // Draw a horizontal line (extending across viewport)
         painter.line_segment(
             [
                 Pos2::new(viewport.min.x, origin_screen_pos.y),
@@ -1142,7 +1167,7 @@ impl GerberLayer {
             Stroke::new(1.0, Color32::BLUE),
         );
 
-        // Draw vertical line (extending across viewport)
+        // Draw a vertical line (extending across viewport)
         painter.line_segment(
             [
                 Pos2::new(origin_screen_pos.x, viewport.min.y),
@@ -1304,7 +1329,28 @@ impl eframe::App for GerberViewer {
                             ..cell_style.clone()
                         })
                         .add_with_background_color(|tui| {
-                            tui.label("Status Bar");
+                            tui.ui(|ui| {
+                                ui.horizontal(|ui| {
+                                    if let Some(state) = &self.state {
+                                        let unit_text = match state.gerber_doc.units {
+                                            Some(gerber_types::Unit::Millimeters) => "MM",
+                                            Some(gerber_types::Unit::Inches) => "Inches",
+                                            None => "Unknown Units",
+                                        };
+                                        ui.label(format!("Units: {}", unit_text));
+
+                                        ui.separator();
+
+                                        if let Some((x, y)) = state.cursor_position {
+                                            ui.label(format!("X: {:.3} Y: {:.3} {}", x, y, unit_text));
+                                        } else {
+                                            ui.label("X: -- Y: --");
+                                        }
+                                    } else {
+                                        ui.label("No file loaded");
+                                    }
+                                });
+                            });
                         });
                     });
             });
@@ -1318,6 +1364,7 @@ impl eframe::App for GerberViewer {
                     state.calculate_initial_view(viewport);
                 }
 
+                state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
