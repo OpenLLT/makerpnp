@@ -25,6 +25,8 @@ use gerber_types::{
 use log::{debug, error, info, warn};
 use rfd::FileDialog;
 use thiserror::Error;
+
+mod gerber;
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
 fn main() -> eframe::Result<()> {
@@ -46,7 +48,7 @@ struct GerberViewState {
     view: ViewState,
     needs_initial_view: bool,
     bounding_box: BoundingBox,
-    cursor_gerber_coords: Option<(f64, f64)>,
+    cursor_gerber_coords: Option<gerber::Position>,
 
     layers: Vec<GerberLayer>,
     center_screen_pos: Option<Vec2>,
@@ -129,25 +131,24 @@ impl GerberViewState {
     }
 
     /// Convert to gerber coordinates using view transformation
-    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> (f64, f64) {
+    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> gerber::Position {
         let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
-        (gerber_pos.x as f64, -gerber_pos.y as f64)
+        gerber::Position::new(gerber_pos.x as f64, gerber_pos.y as f64).invert_y()
     }
 
     /// Convert from gerber coordinates using view transformation
-    pub fn gerber_to_screen_coords(&self, gerber_pos: (f64, f64)) -> Vec2 {
-        let gerber_pos = Vec2::new(gerber_pos.0 as f32, -gerber_pos.1 as f32);
+    pub fn gerber_to_screen_coords(&self, gerber_pos: gerber::Position) -> Vec2 {
+        let gerber_pos = gerber_pos.invert_y().to_vec2();
         self.view.translation + (gerber_pos * self.view.scale)
     }
 
     /// X and Y are in GERBER units.
-    pub fn move_view(&mut self, x: f64, y: f64) {
-        debug!("move view. x: {}, y: {}", x, y);
+    pub fn move_view(&mut self, position: gerber::Position) {
+        debug!("move view. x: {}, y: {}", position.x, position.y);
         debug!("view translation (before): {:?}", self.view.translation);
 
         let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation);
-        gerber_coords.0 += x;
-        gerber_coords.1 += y;
+        gerber_coords += position;
         debug!("gerber_coords: {:?}", self.view.translation);
         let screen_coords = self.gerber_to_screen_coords(gerber_coords);
 
@@ -1312,7 +1313,7 @@ impl eframe::App for GerberViewer {
                         self.state
                             .as_mut()
                             .unwrap()
-                            .move_view(*x, *y);
+                            .move_view((*x, *y).into());
                     }
                 });
             })
@@ -1444,7 +1445,11 @@ impl eframe::App for GerberViewer {
 
                                         ui.separator();
 
-                                        if let Some((x, y)) = state.cursor_gerber_coords {
+                                        if let Some(gerber::Position {
+                                            x,
+                                            y,
+                                        }) = state.cursor_gerber_coords
+                                        {
                                             ui.label(format!("Cursor: X={:.3} Y={:.3} {}", x, y, unit_text));
                                         } else {
                                             ui.label("X= N/A Y= N/A");
@@ -1470,7 +1475,7 @@ impl eframe::App for GerberViewer {
                 let viewport = painter.clip_rect();
 
                 state.center_screen_pos = Some(viewport.center().to_vec2());
-                state.origin_screen_pos = Some(state.gerber_to_screen_coords((0.0, 0.0)));
+                state.origin_screen_pos = Some(state.gerber_to_screen_coords(gerber::position::ZERO));
 
                 state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
