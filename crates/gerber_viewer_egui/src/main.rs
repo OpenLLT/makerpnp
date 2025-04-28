@@ -58,7 +58,11 @@ struct GerberViewState {
 }
 
 impl GerberViewState {
-    fn calculate_initial_view(&mut self, viewport: Rect) {
+    pub fn request_reset(&mut self) {
+        self.needs_initial_view = true;
+    }
+
+    fn reset_view(&mut self, viewport: Rect) {
         let bbox = &self.bounding_box;
 
         let content_width = bbox.max_x - bbox.min_x;
@@ -1303,49 +1307,64 @@ impl eframe::App for GerberViewer {
                     self.open_gerber_file();
                 }
 
-                let x_is_valid = self
-                    .coord_input
-                    .0
-                    .parse::<f64>()
-                    .is_ok();
-                let mut x_editor = egui::TextEdit::singleline(&mut self.coord_input.0).hint_text("X");
-                if !x_is_valid {
-                    x_editor = x_editor.background_color(Color32::DARK_RED);
-                }
-                ui.add(x_editor);
+                ui.separator();
 
-                let y_is_valid = self
-                    .coord_input
-                    .1
-                    .parse::<f64>()
-                    .is_ok();
-                let mut y_editor = egui::TextEdit::singleline(&mut self.coord_input.1).hint_text("Y");
-                if !y_is_valid {
-                    y_editor = y_editor.background_color(Color32::DARK_RED);
-                }
-                ui.add(y_editor);
-
-                let x = self.coord_input.0.parse::<f64>();
-                let y = self.coord_input.1.parse::<f64>();
-
-                let enabled = x.is_ok() && y.is_ok() && self.state.is_some();
-
-                ui.add_enabled_ui(enabled, |ui| {
-                    if ui.button("Locate").clicked() {
-                        // Safety: ui is disabled unless x and y are `Result::ok`
-                        let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
-                        self.state
-                            .as_mut()
-                            .unwrap()
-                            .locate_view(*x, *y);
+                ui.add_enabled_ui(self.state.is_some(), |ui| {
+                    let x_is_valid = self
+                        .coord_input
+                        .0
+                        .parse::<f64>()
+                        .is_ok();
+                    let mut x_editor = egui::TextEdit::singleline(&mut self.coord_input.0)
+                        .desired_width(50.0)
+                        .hint_text("X");
+                    if !x_is_valid {
+                        x_editor = x_editor.background_color(Color32::DARK_RED);
                     }
-                    if ui.button("Move").clicked() {
-                        // Safety: ui is disabled unless x and y are `Result::ok`
-                        let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                    ui.add(x_editor);
+
+                    let y_is_valid = self
+                        .coord_input
+                        .1
+                        .parse::<f64>()
+                        .is_ok();
+                    let mut y_editor = egui::TextEdit::singleline(&mut self.coord_input.1)
+                        .desired_width(50.0)
+                        .hint_text("Y");
+                    if !y_is_valid {
+                        y_editor = y_editor.background_color(Color32::DARK_RED);
+                    }
+                    ui.add(y_editor);
+
+                    let x = self.coord_input.0.parse::<f64>();
+                    let y = self.coord_input.1.parse::<f64>();
+
+                    let enabled = x.is_ok() && y.is_ok() && self.state.is_some();
+
+                    ui.add_enabled_ui(enabled, |ui| {
+                        if ui.button("Locate").clicked() {
+                            // Safety: ui is disabled unless x and y are `Result::ok`
+                            let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                            self.state
+                                .as_mut()
+                                .unwrap()
+                                .locate_view(*x, *y);
+                        }
+                        if ui.button("Move").clicked() {
+                            // Safety: ui is disabled unless x and y are `Result::ok`
+                            let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                            self.state
+                                .as_mut()
+                                .unwrap()
+                                .move_view((*x, *y).into());
+                        }
+                    });
+
+                    if ui.button("Reset").clicked() {
                         self.state
                             .as_mut()
                             .unwrap()
-                            .move_view((*x, *y).into());
+                            .request_reset();
                     }
                 });
             })
@@ -1500,7 +1519,7 @@ impl eframe::App for GerberViewer {
             let viewport = response.rect;
             if let Some(state) = &mut self.state {
                 if state.needs_initial_view {
-                    state.calculate_initial_view(viewport);
+                    state.reset_view(viewport);
                 }
 
                 let painter = ui.painter().with_clip_rect(viewport);
