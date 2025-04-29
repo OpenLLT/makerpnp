@@ -1552,15 +1552,22 @@ impl eframe::App for GerberViewer {
 
                                         ui.separator();
 
-                                        if let Some(gerber::Position {
-                                            x,
-                                            y,
-                                        }) = state.cursor_gerber_coords
-                                        {
-                                            ui.label(format!("Cursor: X={:.3} Y={:.3} {}", x, y, unit_text));
-                                        } else {
-                                            ui.label("X= N/A Y= N/A");
-                                        }
+                                        let (x, y) = state
+                                            .cursor_gerber_coords
+                                            .map(
+                                                |Position {
+                                                     x,
+                                                     y,
+                                                 }| {
+                                                    fn format_coord(coord: f64) -> String {
+                                                        format!("{:.3}", coord)
+                                                    }
+                                                    (format_coord(x), format_coord(y))
+                                                },
+                                            )
+                                            .unwrap_or(("N/A".to_string(), "N/A".to_string()));
+
+                                        ui.label(format!("Cursor: X={} Y={} {}", x, y, unit_text));
                                     } else {
                                         ui.label("No file loaded");
                                     }
