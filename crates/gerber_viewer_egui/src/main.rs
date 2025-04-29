@@ -46,18 +46,67 @@ struct GerberViewer {
     coord_input: (String, String),
 }
 
+struct LayerViewState {
+    enabled: bool,
+    color: Color32,
+}
+
+impl LayerViewState {
+    fn new(color: Color32) -> Self {
+        Self {
+            enabled: true,
+            color,
+        }
+    }
+}
+
 struct GerberViewState {
     view: ViewState,
     needs_initial_view: bool,
     bounding_box: BoundingBox,
-    cursor_gerber_coords: Option<gerber::Position>,
-
-    layers: Vec<GerberLayer>,
+    cursor_gerber_coords: Option<Position>,
+    layers: Vec<(LayerViewState, GerberLayer)>,
     center_screen_pos: Option<Vec2>,
     origin_screen_pos: Option<Vec2>,
 }
 
+impl Default for GerberViewState {
+    fn default() -> Self {
+        Self {
+            view: Default::default(),
+            needs_initial_view: true,
+            bounding_box: BoundingBox::default(),
+            cursor_gerber_coords: None,
+            center_screen_pos: None,
+            origin_screen_pos: None,
+            layers: vec![],
+        }
+    }
+}
+
 impl GerberViewState {
+    pub fn add_layer(&mut self, layer_view_state: LayerViewState, layer: GerberLayer) {
+        self.layers
+            .push((layer_view_state, layer));
+        self.update_bbox_from_layers();
+        self.request_reset();
+    }
+
+    fn update_bbox_from_layers(&mut self) {
+        let mut bbox = BoundingBox::default();
+
+        for (_, layer) in self.layers.iter() {
+            let layer_bbox = &layer.bounding_box;
+            bbox.min_x = f64::min(bbox.min_x, layer_bbox.min_x);
+            bbox.min_y = f64::min(bbox.min_y, layer_bbox.min_y);
+            bbox.max_x = f64::max(bbox.max_x, layer_bbox.max_x);
+            bbox.max_y = f64::max(bbox.max_y, layer_bbox.max_y);
+        }
+        debug!("view bbox: {:?}", bbox);
+
+        self.bounding_box = bbox;
+    }
+
     pub fn request_reset(&mut self) {
         self.needs_initial_view = true;
     }
@@ -179,11 +228,24 @@ impl GerberViewState {
 }
 
 struct GerberLayer {
-    color: Color32,
     path: PathBuf,
     gerber_doc: GerberDoc,
     gerber_primitives: Vec<GerberPrimitive>,
     bounding_box: BoundingBox,
+}
+
+impl GerberLayer {
+    fn new(gerber_doc: GerberDoc, path: PathBuf) -> Self {
+        let gerber_primitives = GerberLayer::build_primitives(&gerber_doc);
+        let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
+
+        Self {
+            path,
+            gerber_doc,
+            gerber_primitives,
+            bounding_box,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -414,7 +476,7 @@ impl Display for AppLogItem {
 
 impl GerberViewer {
     /// FIXME: Blocks main thread when file selector is open
-    fn open_gerber_file(&mut self) {
+    fn add_layer_files(&mut self) {
         self.open_gerber_file_inner()
             .inspect_err(|e| {
                 let message = format!("Error opening file: {:?}", e);
@@ -426,17 +488,19 @@ impl GerberViewer {
     }
 
     fn open_gerber_file_inner(&mut self) -> Result<(), AppError> {
-        let path = FileDialog::new()
+        let paths = FileDialog::new()
             .add_filter("Gerber Files", &["gbr", "gbl", "gbo", "gbs", "gko", "gko", "gto"])
-            .pick_file()
+            .pick_files()
             .ok_or(AppError::NoFileSelected)?;
 
-        self.parse_gerber_file(path)?;
+        for path in paths {
+            self.add_gerber_layer_from_file(path)?;
+        }
 
         Ok(())
     }
 
-    pub fn parse_gerber_file(&mut self, path: PathBuf) -> Result<(), AppError> {
+    pub fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), AppError> {
         let file = File::open(path.clone()).map_err(AppError::IoError)?;
         let reader = BufReader::new(file);
 
@@ -452,31 +516,14 @@ impl GerberViewer {
             .collect::<Vec<_>>();
         self.log.extend(log);
 
-        let gerber_primitives = GerberLayer::build_primitives(&gerber_doc);
+        let layer = GerberLayer::new(gerber_doc, path.clone());
 
-        // FUTURE the VIEW bounding box needs to use all layers, for now, just use the only layer
-        let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
+        let layer_view_state = LayerViewState::new(Color32::LIGHT_GRAY);
 
-        let layer = GerberLayer {
-            color: Color32::LIGHT_GRAY,
-            gerber_doc,
-            path,
-            gerber_primitives,
-            bounding_box: bounding_box.clone(),
-        };
+        let state = self.state.get_or_insert_default();
+        state.add_layer(layer_view_state, layer);
 
-        self.state = Some(GerberViewState {
-            view: Default::default(),
-            needs_initial_view: true,
-            bounding_box,
-            cursor_gerber_coords: None,
-            center_screen_pos: None,
-            origin_screen_pos: None,
-
-            layers: vec![layer],
-        });
-
-        let message = "Gerber file parsed successfully";
+        let message = format!("Gerber file parsed successfully. path: {}", path.to_str().unwrap());
         info!("{}", message);
         self.log
             .push(AppLogItem::Info(message.to_string()));
@@ -484,7 +531,7 @@ impl GerberViewer {
         Ok(())
     }
 
-    pub fn close_file(&mut self) {
+    pub fn close_all(&mut self) {
         self.state = None;
     }
 
@@ -1130,7 +1177,7 @@ impl GerberLayer {
         primitives
     }
 
-    pub fn paint_gerber(&self, painter: &Painter, view: ViewState) {
+    pub fn paint_gerber(&self, painter: &Painter, view: ViewState, color: Color32) {
         for primitive in &self.gerber_primitives {
             match primitive {
                 GerberPrimitive::Circle {
@@ -1138,7 +1185,7 @@ impl GerberLayer {
                     diameter,
                     exposure,
                 } => {
-                    let color = exposure.to_color(&self.color);
+                    let color = exposure.to_color(&color);
 
                     let center = view.translation + center.invert_y().to_vec2() * view.scale;
                     let radius = (*diameter as f32 / 2.0) * view.scale;
@@ -1150,7 +1197,7 @@ impl GerberLayer {
                     height,
                     exposure,
                 } => {
-                    let color = exposure.to_color(&self.color);
+                    let color = exposure.to_color(&color);
 
                     // Calculate center-based position
                     let center = view.translation
@@ -1176,7 +1223,7 @@ impl GerberLayer {
                     width,
                     exposure,
                 } => {
-                    let color = exposure.to_color(&self.color);
+                    let color = exposure.to_color(&color);
 
                     let start_position = view.translation + Vec2::new(start.x as f32, -(start.y as f32)) * view.scale;
                     let end_position = view.translation + Vec2::new(end.x as f32, -(end.y as f32)) * view.scale;
@@ -1196,7 +1243,7 @@ impl GerberLayer {
                     is_convex,
                     triangles,
                 } => {
-                    let color = exposure.to_color(&self.color);
+                    let color = exposure.to_color(&color);
 
                     let screen_center = view.translation + Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
 
@@ -1288,12 +1335,12 @@ impl eframe::App for GerberViewer {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open").clicked() {
-                        self.open_gerber_file();
+                    if ui.button("Add layers...").clicked() {
+                        self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
-                        if ui.button("Close").clicked() {
-                            self.close_file();
+                        if ui.button("Close all").clicked() {
+                            self.close_all();
                         }
                     });
                     if ui.button("Quit").clicked() {
@@ -1303,8 +1350,8 @@ impl eframe::App for GerberViewer {
             });
 
             ui.horizontal(|ui| {
-                if ui.button("Open Gerber File").clicked() {
-                    self.open_gerber_file();
+                if ui.button("Open").clicked() {
+                    self.add_layer_files();
                 }
 
                 ui.separator();
@@ -1485,6 +1532,7 @@ impl eframe::App for GerberViewer {
                                             .layers
                                             .first()
                                             .unwrap()
+                                            .1
                                             .gerber_doc
                                             .units
                                         {
@@ -1514,6 +1562,27 @@ impl eframe::App for GerberViewer {
                     });
             });
 
+        egui::SidePanel::left("left_panel")
+            .resizable(true)
+            .show(ctx, |ui| {
+                if let Some(state) = &mut self.state {
+                    for (layer_view_state, layer) in state.layers.iter_mut() {
+                        ui.horizontal(|ui| {
+                            ui.color_edit_button_srgba(&mut layer_view_state.color);
+                            ui.checkbox(
+                                &mut layer_view_state.enabled,
+                                layer
+                                    .path
+                                    .file_stem()
+                                    .unwrap()
+                                    .to_string_lossy()
+                                    .to_string(),
+                            );
+                        });
+                    }
+                }
+            });
+
         egui::CentralPanel::default().show(ctx, |ui| {
             let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
             let viewport = response.rect;
@@ -1532,8 +1601,10 @@ impl eframe::App for GerberViewer {
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
-                for layer in state.layers.iter() {
-                    layer.paint_gerber(&painter, state.view);
+                for (layer_state, layer) in state.layers.iter() {
+                    if layer_state.enabled {
+                        layer.paint_gerber(&painter, state.view, layer_state.color);
+                    }
                 }
 
                 // Draw origin crosshair
