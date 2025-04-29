@@ -1480,6 +1480,8 @@ impl eframe::App for GerberViewer {
                                     .size
                                     .max(ui.spacing().interact_size.y);
 
+                                let text_color = ui.style().visuals.text_color();
+
                                 TableBuilder::new(ui)
                                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                                     .min_scrolled_height(80.0)
@@ -1500,15 +1502,21 @@ impl eframe::App for GerberViewer {
                                     .body(|body| {
                                         body.rows(text_height, self.log.len(), |mut row| {
                                             if let Some(log_item) = self.log.get(row.index()) {
+                                                let color = match log_item {
+                                                    AppLogItem::Error(_) => Color32::LIGHT_RED,
+                                                    AppLogItem::Info(_) => text_color,
+                                                    AppLogItem::Warning(_) => Color32::LIGHT_YELLOW,
+                                                };
+
                                                 row.col(|ui| {
-                                                    ui.label(log_item.level());
+                                                    ui.colored_label(color, log_item.level());
                                                 });
                                                 row.col(|ui| {
                                                     // FIXME the width of this column expands when rows with longer messages are scrolled-to.
                                                     //       the issue is apparent after loading a gerber file, and then expanding the window horizontally
                                                     //       you'll see that table's scrollbar is not on the right of the panel, but somewhere in the middle.
                                                     //       if you then scroll the table, the scrollbar will move to the right.
-                                                    ui.label(log_item.message());
+                                                    ui.colored_label(color, log_item.message());
                                                 });
                                             }
                                         });
