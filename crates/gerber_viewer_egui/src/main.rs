@@ -95,7 +95,11 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (_, layer) in self.layers.iter() {
+        for (_, layer) in self
+            .layers
+            .iter()
+            .filter(|(state, _)| state.enabled)
+        {
             let layer_bbox = &layer.bounding_box;
             bbox.min_x = f64::min(bbox.min_x, layer_bbox.min_x);
             bbox.min_y = f64::min(bbox.min_y, layer_bbox.min_y);
@@ -112,6 +116,8 @@ impl GerberViewState {
     }
 
     fn reset_view(&mut self, viewport: Rect) {
+        self.update_bbox_from_layers();
+
         let bbox = &self.bounding_box;
 
         let content_width = bbox.max_x - bbox.min_x;
