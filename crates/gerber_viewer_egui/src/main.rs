@@ -1591,9 +1591,6 @@ impl eframe::App for GerberViewer {
                     state.reset_view(viewport);
                 }
 
-                let painter = ui.painter().with_clip_rect(viewport);
-                let viewport = painter.clip_rect();
-
                 state.center_screen_pos = Some(viewport.center().to_vec2());
                 state.origin_screen_pos = Some(state.gerber_to_screen_coords(gerber::position::ZERO));
 
@@ -1601,6 +1598,7 @@ impl eframe::App for GerberViewer {
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
+                let painter = ui.painter().with_clip_rect(viewport);
                 for (layer_state, layer) in state.layers.iter() {
                     if layer_state.enabled {
                         layer.paint_gerber(&painter, state.view, layer_state.color);
