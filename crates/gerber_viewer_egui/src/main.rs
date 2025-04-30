@@ -24,6 +24,7 @@ use gerber_parser::gerber_types::{
 };
 use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info, warn};
+use rand::{Rng, rng};
 use rfd::FileDialog;
 use thiserror::Error;
 
@@ -2036,4 +2037,12 @@ mod gerber_expressions {
             assert_eq!(result, 1.5);
         }
     }
+}
+
+fn generate_random_pastel_color() -> Color32 {
+    let mut rng = rng();
+    let r = rng.random_range(150_u8..255u8);
+    let g = rng.random_range(150_u8..255u8);
+    let b = rng.random_range(150_u8..255u8);
+    Color32::from_rgb(r, g, b)
 }
