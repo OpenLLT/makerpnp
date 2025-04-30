@@ -509,20 +509,7 @@ impl GerberViewer {
     }
 
     pub fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), AppError> {
-        let file = File::open(path.clone()).map_err(AppError::IoError)?;
-        let reader = BufReader::new(file);
-
-        let gerber_doc: GerberDoc = parse_gerber(reader);
-
-        let log = gerber_doc
-            .commands
-            .iter()
-            .map(|c| match c {
-                Ok(command) => AppLogItem::Info(format!("{:?}", command)),
-                Err(error) => AppLogItem::Error(format!("{:?}", error)),
-            })
-            .collect::<Vec<_>>();
-        self.log.extend(log);
+        let gerber_doc = Self::parse_gerber(&mut self.log, &path)?;
 
         let state = self.state.get_or_insert_default();
 
@@ -534,12 +521,53 @@ impl GerberViewer {
 
         state.add_layer(layer_view_state, layer);
 
+        Ok(())
+    }
+
+    fn parse_gerber(log: &mut Vec<AppLogItem>, path: &PathBuf) -> Result<GerberDoc, AppError> {
+        let file = File::open(path.clone())
+            .inspect_err(|error| {
+                let message = format!(
+                    "Error parsing gerber file: {}, cause: {}",
+                    path.to_str().unwrap(),
+                    error
+                );
+                error!("{}", message);
+                log.push(AppLogItem::Error(message.to_string()));
+            })
+            .map_err(AppError::IoError)?;
+
+        let reader = BufReader::new(file);
+
+        let gerber_doc: GerberDoc = parse_gerber(reader);
+
+        let log_entries = gerber_doc
+            .commands
+            .iter()
+            .map(|c| match c {
+                Ok(command) => AppLogItem::Info(format!("{:?}", command)),
+                Err(error) => AppLogItem::Error(format!("{:?}", error)),
+            })
+            .collect::<Vec<_>>();
+        log.extend(log_entries);
+
         let message = format!("Gerber file parsed successfully. path: {}", path.to_str().unwrap());
         info!("{}", message);
-        self.log
-            .push(AppLogItem::Info(message.to_string()));
+        log.push(AppLogItem::Info(message.to_string()));
 
-        Ok(())
+        Ok(gerber_doc)
+    }
+
+    pub fn reload_all_layer_files(&mut self) {
+        let Some(state) = &mut self.state else { return };
+
+        for (_state, layer) in state.layers.iter_mut() {
+            let path = layer.path.clone();
+
+            if let Ok(gerber_doc) = Self::parse_gerber(&mut self.log, &path) {
+                *layer = GerberLayer::new(gerber_doc, path.clone());
+            }
+        }
     }
 
     pub fn close_all(&mut self) {
@@ -1491,6 +1519,9 @@ impl eframe::App for GerberViewer {
                         self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
+                        if ui.button("Reload all layers").clicked() {
+                            self.reload_all_layer_files();
+                        }
                         if ui.button("Close all").clicked() {
                             self.close_all();
                         }
