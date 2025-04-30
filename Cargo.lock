@@ -2225,9 +2225,8 @@ dependencies = [
 
 [[package]]
 name = "gerber-types"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aecf78a269d7b4f73953f30174b18f52c1bb44f7d58f4d830a76c0ea023ad8bc"
+version = "0.4.0"
+source = "git+https://github.com/hydra/gerber-types-rs.git?rev=d93cb0d4954c39cf17f924e003b5b396aeaaafd1#d93cb0d4954c39cf17f924e003b5b396aeaaafd1"
 dependencies = [
  "chrono",
  "conv",
@@ -2239,7 +2238,7 @@ dependencies = [
 [[package]]
 name = "gerber_parser"
 version = "0.1.2"
-source = "git+https://github.com/hydra/gerber-parser.git?rev=4e57e8098feb79f734779d6eb5734cfc7b0e4446#4e57e8098feb79f734779d6eb5734cfc7b0e4446"
+source = "git+https://github.com/hydra/gerber-parser.git?rev=505676753512939cb92402a5ae91b5af692e7675#505676753512939cb92402a5ae91b5af692e7675"
 dependencies = [
  "gerber-types",
  "lazy-regex",
@@ -2260,7 +2259,6 @@ dependencies = [
  "egui_taffy",
  "env_logger",
  "epaint",
- "gerber-types",
  "gerber_parser",
  "log",
  "rfd",

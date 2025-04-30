@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
-use std::io::BufReader;
+use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
 
 use earcut::Earcut;
@@ -17,16 +17,21 @@ use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy};
 use epaint::{Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
-use gerber_parser::parser::parse_gerber;
-use gerber_types::{
-    Aperture, ApertureDefinition, Command, Coordinates, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal,
-    Operation,
+use gerber_parser::gerber_types;
+use gerber_parser::gerber_types::{
+    Aperture, ApertureDefinition, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent,
+    MacroDecimal, Operation, VariableDefinition,
 };
+use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info, warn};
 use rfd::FileDialog;
 use thiserror::Error;
 
 use crate::gerber::Position;
+use crate::gerber_expressions::{
+    ExpressionEvaluationError, MacroContext, MacroContextError, evaluate_expression, macro_boolean_to_bool,
+    macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32,
+};
 
 mod gerber;
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
@@ -427,15 +432,9 @@ impl GerberPrimitive {
 }
 
 #[derive(Debug)]
-enum ApertureKind<'macros> {
+enum ApertureKind {
     Standard(Aperture),
-    Macro(&'macros NamedPrimitive),
-}
-
-#[derive(Debug, Clone)]
-struct NamedPrimitive {
-    name: String,
-    primitive: GerberPrimitive,
+    Macro(Vec<GerberPrimitive>),
 }
 
 #[derive(Error, Debug)]
@@ -632,33 +631,7 @@ impl GerberLayer {
     }
 
     fn build_primitives(doc: &GerberDoc) -> Vec<GerberPrimitive> {
-        #[derive(Debug, Default)]
-        struct MacroContext {
-            variables: HashMap<u32, f64>,
-        }
-
-        fn macro_decimal_to_f64(macro_decimal: &MacroDecimal, context: &MacroContext) -> Option<f64> {
-            match macro_decimal {
-                MacroDecimal::Value(value) => Some(*value),
-                MacroDecimal::Variable(id) => context.variables.get(id).copied(),
-            }
-        }
-
-        fn macro_decimal_pair_to_f64(
-            input: &(MacroDecimal, MacroDecimal),
-            context: &MacroContext,
-        ) -> Option<(f64, f64)> {
-            let (x, y) = (
-                macro_decimal_to_f64(&input.0, context)?,
-                macro_decimal_to_f64(&input.1, context)?,
-            );
-            Some((x, y))
-        }
-
         let mut macro_definitions = HashMap::default();
-
-        // TODO get the macro context from the GerberDoc
-        let macro_context = MacroContext::default();
 
         // First pass: collect aperture macros
         for cmd in doc
@@ -667,217 +640,11 @@ impl GerberLayer {
             .filter_map(|result| result.as_ref().ok())
         {
             if let Command::ExtendedCode(ExtendedCode::ApertureMacro(macro_def)) = cmd {
-                for content in &macro_def.content {
-                    // TODO add logging context which includes the macro name
-                    fn build_primitive(
-                        content: &MacroContent,
-                        macro_context: &MacroContext,
-                    ) -> Option<GerberPrimitive> {
-                        match content {
-                            MacroContent::Circle(circle) => {
-                                let Some(diameter) = macro_decimal_to_f64(&circle.diameter, &macro_context) else {
-                                    return None;
-                                };
-
-                                let Some((center_x, center_y)) =
-                                    macro_decimal_pair_to_f64(&circle.center, &macro_context)
-                                else {
-                                    return None;
-                                };
-
-                                // Get rotation angle and convert to radians
-                                let rotation_radians = if let Some(angle) = &circle.angle {
-                                    macro_decimal_to_f64(angle, &macro_context)? * std::f64::consts::PI / 180.0
-                                } else {
-                                    0.0
-                                };
-
-                                // Apply rotation to center coordinates around macro origin (0,0)
-                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-                                let rotated_x = center_x * cos_theta - center_y * sin_theta;
-                                let rotated_y = center_x * sin_theta + center_y * cos_theta;
-
-                                Some(GerberPrimitive::Circle {
-                                    center: (rotated_x, rotated_y).into(),
-                                    diameter,
-                                    exposure: circle.exposure.into(),
-                                })
-                            }
-                            MacroContent::VectorLine(vector_line) => {
-                                // Get start and end points
-                                let Some((start_x, start_y)) =
-                                    macro_decimal_pair_to_f64(&vector_line.start, &macro_context)
-                                else {
-                                    return None;
-                                };
-                                let Some((end_x, end_y)) = macro_decimal_pair_to_f64(&vector_line.end, &macro_context)
-                                else {
-                                    return None;
-                                };
-                                let width = macro_decimal_to_f64(&vector_line.width, &macro_context)?;
-
-                                // Get rotation and prepare rotation matrix
-                                let rotation_angle = macro_decimal_to_f64(&vector_line.angle, &macro_context)?;
-                                let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
-                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-
-                                // First rotate start and end points around (0,0)
-                                let rotated_start_x = start_x * cos_theta - start_y * sin_theta;
-                                let rotated_start_y = start_x * sin_theta + start_y * cos_theta;
-                                let rotated_end_x = end_x * cos_theta - end_y * sin_theta;
-                                let rotated_end_y = end_x * sin_theta + end_y * cos_theta;
-
-                                // Calculate center point and length after rotation
-                                let center_x = (rotated_start_x + rotated_end_x) / 2.0;
-                                let center_y = (rotated_start_y + rotated_end_y) / 2.0;
-                                let dx = rotated_end_x - rotated_start_x;
-                                let dy = rotated_end_y - rotated_start_y;
-                                let length = (dx * dx + dy * dy).sqrt();
-
-                                Some(GerberPrimitive::Rectangle {
-                                    origin: Position::new(center_x, center_y),
-                                    width: length,
-                                    height: width, // height is the line width
-                                    exposure: vector_line.exposure.into(),
-                                })
-                            }
-                            MacroContent::CenterLine(center_line) => {
-                                // Get center point and dimensions
-                                let Some((center_x, center_y)) =
-                                    macro_decimal_pair_to_f64(&center_line.center, &macro_context)
-                                else {
-                                    return None;
-                                };
-                                let Some((width, height)) =
-                                    macro_decimal_pair_to_f64(&center_line.dimensions, &macro_context)
-                                else {
-                                    return None;
-                                };
-
-                                // Get rotation and prepare rotation matrix
-                                let rotation_angle = macro_decimal_to_f64(&center_line.angle, &macro_context)?;
-                                let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
-                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-
-                                // Rotate center point around macro origin (0,0)
-                                let rotated_center_x = center_x * cos_theta - center_y * sin_theta;
-                                let rotated_center_y = center_x * sin_theta + center_y * cos_theta;
-
-                                Some(GerberPrimitive::Rectangle {
-                                    origin: Position::new(rotated_center_x, rotated_center_y),
-                                    width,
-                                    height,
-                                    exposure: center_line.exposure.into(),
-                                })
-                            }
-                            MacroContent::Outline(outline) => {
-                                // Need at least 3 points to form a polygon
-                                if outline.points.len() < 3 {
-                                    warn!("Outline with less than 3 points. outline: {:?}", outline);
-                                    return None;
-                                }
-
-                                // Get vertices - points are already relative to (0,0)
-                                let mut vertices: Vec<Position> = outline
-                                    .points
-                                    .iter()
-                                    .filter_map(|point| {
-                                        macro_decimal_pair_to_f64(point, &macro_context).map(|d| d.into())
-                                    })
-                                    .collect();
-
-                                // Get rotation angle and convert to radians
-                                let rotation_degrees = macro_decimal_to_f64(&outline.angle, &macro_context)?;
-                                let rotation_radians = rotation_degrees * std::f64::consts::PI / 180.0;
-
-                                // If there's rotation, apply it to all vertices around (0,0)
-                                if rotation_radians != 0.0 {
-                                    let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-                                    vertices = vertices
-                                        .into_iter()
-                                        .map(
-                                            |Position {
-                                                 x,
-                                                 y,
-                                             }| {
-                                                let rotated_x = x * cos_theta - y * sin_theta;
-                                                let rotated_y = x * sin_theta + y * cos_theta;
-                                                (rotated_x, rotated_y).into()
-                                            },
-                                        )
-                                        .collect();
-                                }
-
-                                Some(GerberPrimitive::new_polygon(GerberPolygon {
-                                    center: (0.0, 0.0).into(), // The flash operation will move this to final position
-                                    vertices,
-                                    exposure: outline.exposure.into(),
-                                }))
-                            }
-                            MacroContent::Polygon(polygon) => {
-                                let Some(center) = macro_decimal_pair_to_f64(&polygon.center, &macro_context) else {
-                                    return None;
-                                };
-
-                                let vertices_count = polygon.vertices as usize;
-                                let diameter = macro_decimal_to_f64(&polygon.diameter, &macro_context)?;
-                                let rotation_degrees = macro_decimal_to_f64(&polygon.angle, &macro_context)?;
-                                let rotation_radians = rotation_degrees * std::f64::consts::PI / 180.0;
-
-                                // First generate vertices around (0,0)
-                                let radius = diameter / 2.0;
-                                let mut vertices = Vec::with_capacity(vertices_count);
-                                for i in 0..vertices_count {
-                                    let angle = (2.0 * std::f64::consts::PI * i as f64) / vertices_count as f64;
-                                    let x = radius * angle.cos();
-                                    let y = radius * angle.sin();
-
-                                    // Apply rotation around macro origin (0,0)
-                                    let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-                                    let rotated_x = x * cos_theta - y * sin_theta;
-                                    let rotated_y = x * sin_theta + y * cos_theta;
-
-                                    vertices.push((rotated_x, rotated_y).into());
-                                }
-
-                                // Rotate center point around macro origin
-                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
-                                let rotated_center_x = center.0 * cos_theta - center.1 * sin_theta;
-                                let rotated_center_y = center.0 * sin_theta + center.1 * cos_theta;
-
-                                Some(GerberPrimitive::new_polygon(GerberPolygon {
-                                    center: (rotated_center_x, rotated_center_y).into(),
-                                    vertices,
-                                    exposure: polygon.exposure.into(),
-                                }))
-                            }
-                            MacroContent::Moire(_) => None,
-                            MacroContent::Thermal(_) => None,
-                            MacroContent::VariableDefinition(_) => None,
-                            MacroContent::Comment(_) => None,
-                        }
-                    }
-
-                    let primitive = build_primitive(content, &macro_context);
-
-                    if let Some(primitive) = primitive {
-                        let old_definition = macro_definitions.insert(macro_def.name.clone(), NamedPrimitive {
-                            name: macro_def.name.clone(),
-                            primitive,
-                        });
-
-                        if old_definition.is_some() {
-                            warn!(
-                                "Unsupported macro definition: {}, only one primitive currently supported. Overriding previous definition",
-                                macro_def.name
-                            );
-                        }
-                    }
-                }
+                macro_definitions.insert(macro_def.name.clone(), macro_def);
             }
         }
 
-        // Second pass - collect aperture definitions
+        // Second pass - collect aperture definitions, build their primitives (using supplied args)
 
         let mut apertures = HashMap::default();
 
@@ -892,10 +659,319 @@ impl GerberLayer {
             })) = cmd
             {
                 match aperture {
-                    Aperture::Other(macro_name) => {
+                    Aperture::Macro(macro_name, args) => {
                         // Handle macro-based apertures
-                        if let Some(primitive_def) = macro_definitions.get(macro_name) {
-                            apertures.insert(*code, ApertureKind::Macro(primitive_def));
+
+                        if let Some(macro_def) = macro_definitions.get(macro_name) {
+                            //
+                            // build a unique name based on the macro name and args
+                            //
+                            let macro_name_and_args = match args {
+                                None => macro_name,
+                                Some(args) => {
+                                    let args_str = args
+                                        .iter()
+                                        .map(|arg| {
+                                            let meh = match arg {
+                                                MacroDecimal::Value(value) => value.to_string(),
+                                                MacroDecimal::Variable(variable) => format!("${}", variable),
+                                                MacroDecimal::Expression(expression) => expression.clone(),
+                                            };
+
+                                            meh
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("X");
+
+                                    &format!("{}_{}", macro_name, args_str)
+                                }
+                            };
+                            debug!("macro_name_and_args: {}", macro_name_and_args);
+
+                            let mut macro_context = MacroContext::default();
+
+                            //
+                            // populate the macro_context from the args.
+                            //
+                            if let Some(args) = args {
+                                for (index, arg) in args.iter().enumerate() {
+                                    let arg_number = (index + 1) as u32;
+
+                                    match arg {
+                                        MacroDecimal::Value(value) => {
+                                            macro_context
+                                                .put(arg_number, *value)
+                                                .inspect_err(|error| {
+                                                    error!("Error setting variable {}: {}", arg_number, error);
+                                                })
+                                                .ok();
+                                        }
+                                        MacroDecimal::Variable(variable) => {
+                                            macro_context
+                                                .put(arg_number, macro_context.get(variable))
+                                                .inspect_err(|error| {
+                                                    error!("Error setting variable {}: {}", arg_number, error);
+                                                })
+                                                .ok();
+                                        }
+                                        MacroDecimal::Expression(expression) => {
+                                            evaluate_expression(&expression, &macro_context)
+                                                .map(|value| {
+                                                    macro_context
+                                                        .put(arg_number, value)
+                                                        .inspect_err(|error| {
+                                                            error!("Error setting variable {}: {}", arg_number, error);
+                                                        })
+                                                        .ok();
+                                                })
+                                                .inspect_err(|error| {
+                                                    error!("Error evaluating expression {}: {}", expression, error);
+                                                })
+                                                .ok();
+                                        }
+                                    }
+                                }
+                            }
+
+                            debug!("macro_context: {:?}", macro_context);
+
+                            let mut primitive_defs = vec![];
+
+                            for content in &macro_def.content {
+                                debug!("content: {:?}", content);
+
+                                fn process_content(
+                                    content: &MacroContent,
+                                    macro_context: &mut MacroContext,
+                                ) -> Result<Option<GerberPrimitive>, ExpressionEvaluationError>
+                                {
+                                    match content {
+                                        MacroContent::Circle(circle) => {
+                                            let diameter = macro_decimal_to_f64(&circle.diameter, macro_context)?;
+                                            let (center_x, center_y) =
+                                                macro_decimal_pair_to_f64(&circle.center, macro_context)?;
+
+                                            // Get rotation angle and convert to radians
+                                            let rotation_radians = if let Some(angle) = &circle.angle {
+                                                macro_decimal_to_f64(angle, macro_context)? * std::f64::consts::PI
+                                                    / 180.0
+                                            } else {
+                                                0.0
+                                            };
+
+                                            // Apply rotation to center coordinates around macro origin (0,0)
+                                            let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+                                            let rotated_x = center_x * cos_theta - center_y * sin_theta;
+                                            let rotated_y = center_x * sin_theta + center_y * cos_theta;
+
+                                            Ok(Some(GerberPrimitive::Circle {
+                                                center: (rotated_x, rotated_y).into(),
+                                                diameter,
+                                                exposure: macro_boolean_to_bool(&circle.exposure, macro_context)?
+                                                    .into(),
+                                            }))
+                                        }
+                                        MacroContent::VectorLine(vector_line) => {
+                                            // Get start and end points
+                                            let (start_x, start_y) =
+                                                macro_decimal_pair_to_f64(&vector_line.start, macro_context)?;
+                                            let (end_x, end_y) =
+                                                macro_decimal_pair_to_f64(&vector_line.end, macro_context)?;
+                                            let width = macro_decimal_to_f64(&vector_line.width, macro_context)?;
+
+                                            // Get rotation and prepare rotation matrix
+                                            let rotation_angle =
+                                                macro_decimal_to_f64(&vector_line.angle, macro_context)?;
+                                            let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
+                                            let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+
+                                            // First rotate start and end points around (0,0)
+                                            let rotated_start_x = start_x * cos_theta - start_y * sin_theta;
+                                            let rotated_start_y = start_x * sin_theta + start_y * cos_theta;
+                                            let rotated_end_x = end_x * cos_theta - end_y * sin_theta;
+                                            let rotated_end_y = end_x * sin_theta + end_y * cos_theta;
+
+                                            // Calculate center point and length after rotation
+                                            let center_x = (rotated_start_x + rotated_end_x) / 2.0;
+                                            let center_y = (rotated_start_y + rotated_end_y) / 2.0;
+                                            let dx = rotated_end_x - rotated_start_x;
+                                            let dy = rotated_end_y - rotated_start_y;
+                                            let length = (dx * dx + dy * dy).sqrt();
+
+                                            Ok(Some(GerberPrimitive::Rectangle {
+                                                origin: Position::new(center_x, center_y),
+                                                width: length,
+                                                height: width, // height is the line width
+                                                exposure: macro_boolean_to_bool(&vector_line.exposure, macro_context)?
+                                                    .into(),
+                                            }))
+                                        }
+                                        MacroContent::CenterLine(center_line) => {
+                                            // Get center point and dimensions
+                                            let (center_x, center_y) =
+                                                macro_decimal_pair_to_f64(&center_line.center, macro_context)?;
+                                            let (width, height) =
+                                                macro_decimal_pair_to_f64(&center_line.dimensions, macro_context)?;
+
+                                            // Get rotation and prepare rotation matrix
+                                            let rotation_angle =
+                                                macro_decimal_to_f64(&center_line.angle, macro_context)?;
+                                            let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
+                                            let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+
+                                            // Rotate center point around macro origin (0,0)
+                                            let rotated_center_x = center_x * cos_theta - center_y * sin_theta;
+                                            let rotated_center_y = center_x * sin_theta + center_y * cos_theta;
+
+                                            Ok(Some(GerberPrimitive::Rectangle {
+                                                origin: Position::new(rotated_center_x, rotated_center_y),
+                                                width,
+                                                height,
+                                                exposure: macro_boolean_to_bool(&center_line.exposure, &macro_context)?
+                                                    .into(),
+                                            }))
+                                        }
+                                        MacroContent::Outline(outline) => {
+                                            // Need at least 3 points to form a polygon
+                                            if outline.points.len() < 3 {
+                                                warn!("Outline with less than 3 points. outline: {:?}", outline);
+                                                return Ok(None);
+                                            }
+
+                                            // Get vertices - points are already relative to (0,0)
+                                            let mut vertices: Vec<Position> = outline
+                                                .points
+                                                .iter()
+                                                .filter_map(|point| {
+                                                    macro_decimal_pair_to_f64(point, macro_context)
+                                                        .map(|d| d.into())
+                                                        .inspect_err(|err| {
+                                                            error!("Error building vertex: {}", err);
+                                                        })
+                                                        .ok()
+                                                })
+                                                .collect::<Vec<_>>();
+
+                                            // Get rotation angle and convert to radians
+                                            let rotation_degrees = macro_decimal_to_f64(&outline.angle, macro_context)?;
+                                            let rotation_radians = rotation_degrees * std::f64::consts::PI / 180.0;
+
+                                            // If there's rotation, apply it to all vertices around (0,0)
+                                            if rotation_radians != 0.0 {
+                                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+                                                vertices = vertices
+                                                    .into_iter()
+                                                    .map(
+                                                        |Position {
+                                                             x,
+                                                             y,
+                                                         }| {
+                                                            let rotated_x = x * cos_theta - y * sin_theta;
+                                                            let rotated_y = x * sin_theta + y * cos_theta;
+                                                            (rotated_x, rotated_y).into()
+                                                        },
+                                                    )
+                                                    .collect();
+                                            }
+
+                                            Ok(Some(GerberPrimitive::new_polygon(GerberPolygon {
+                                                center: (0.0, 0.0).into(), // The flash operation will move this to final position
+                                                vertices,
+                                                exposure: macro_boolean_to_bool(&outline.exposure, macro_context)?
+                                                    .into(),
+                                            })))
+                                        }
+                                        MacroContent::Polygon(polygon) => {
+                                            let center = macro_decimal_pair_to_f64(&polygon.center, macro_context)?;
+
+                                            let vertices_count =
+                                                macro_integer_to_u32(&polygon.vertices, macro_context)? as usize;
+                                            let diameter = macro_decimal_to_f64(&polygon.diameter, macro_context)?;
+                                            let rotation_degrees = macro_decimal_to_f64(&polygon.angle, macro_context)?;
+                                            let rotation_radians = rotation_degrees * std::f64::consts::PI / 180.0;
+
+                                            // First generate vertices around (0,0)
+                                            let radius = diameter / 2.0;
+                                            let mut vertices = Vec::with_capacity(vertices_count);
+                                            for i in 0..vertices_count {
+                                                let angle =
+                                                    (2.0 * std::f64::consts::PI * i as f64) / vertices_count as f64;
+                                                let x = radius * angle.cos();
+                                                let y = radius * angle.sin();
+
+                                                // Apply rotation around macro origin (0,0)
+                                                let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+                                                let rotated_x = x * cos_theta - y * sin_theta;
+                                                let rotated_y = x * sin_theta + y * cos_theta;
+
+                                                vertices.push((rotated_x, rotated_y).into());
+                                            }
+
+                                            // Rotate center point around macro origin
+                                            let (sin_theta, cos_theta) = rotation_radians.sin_cos();
+                                            let rotated_center_x = center.0 * cos_theta - center.1 * sin_theta;
+                                            let rotated_center_y = center.0 * sin_theta + center.1 * cos_theta;
+
+                                            Ok(Some(GerberPrimitive::new_polygon(GerberPolygon {
+                                                center: (rotated_center_x, rotated_center_y).into(),
+                                                vertices,
+                                                exposure: macro_boolean_to_bool(&polygon.exposure, macro_context)?
+                                                    .into(),
+                                            })))
+                                        }
+                                        MacroContent::Moire(_) => {
+                                            error!("Moire not supported");
+                                            Ok(None)
+                                        }
+                                        MacroContent::Thermal(_) => {
+                                            error!("Moire not supported");
+                                            Ok(None)
+                                        }
+                                        MacroContent::VariableDefinition(VariableDefinition {
+                                            number,
+                                            expression,
+                                        }) => {
+                                            let result = evaluate_expression(&expression, macro_context);
+                                            match result {
+                                                Ok(value) => {
+                                                    macro_context
+                                                        .put(*number, value)
+                                                        .inspect_err(|error| {
+                                                            error!("Error setting variable {}: {}", number, error);
+                                                        })
+                                                        .ok();
+                                                }
+                                                Err(cause) => {
+                                                    error!("Error evaluating expression {}: {}", expression, cause);
+                                                }
+                                            };
+                                            Ok(None)
+                                        }
+                                        MacroContent::Comment(_) => {
+                                            // Nothing to do
+                                            Ok(None)
+                                        }
+                                    }
+                                };
+
+                                let result = process_content(content, &mut macro_context);
+                                match result {
+                                    Err(cause) => {
+                                        error!("Error processing macro content: {:?}, cause: {}", content, cause);
+                                    }
+                                    Ok(Some(primitive)) => primitive_defs.push(primitive),
+                                    Ok(None) => {}
+                                }
+                            }
+
+                            debug!("primitive_defs: {:?}", primitive_defs);
+
+                            apertures.insert(*code, ApertureKind::Macro(primitive_defs));
+                        } else {
+                            error!(
+                                "Aperture definition references unknown macro. macro_name: {}",
+                                macro_name
+                            );
                         }
                     }
                     _ => {
@@ -907,7 +983,7 @@ impl GerberLayer {
 
         // Third pass: collect all primitives, handle regions
 
-        let mut primitives = Vec::new();
+        let mut layer_primitives = Vec::new();
         let mut current_aperture = None;
         let mut current_pos = gerber::position::ZERO;
 
@@ -980,16 +1056,16 @@ impl GerberLayer {
                                 vertices: relative_vertices,
                                 exposure: Exposure::Add,
                             });
-                            primitives.push(polygon);
+                            layer_primitives.push(polygon);
                             in_region = false;
                         }
                     }
                 }
 
-                Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::SelectAperture(code))) => {
+                Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(code))) => {
                     current_aperture = apertures.get(&code);
                 }
-                Command::FunctionCode(FunctionCode::DCode(gerber_types::DCode::Operation(operation))) => {
+                Command::FunctionCode(FunctionCode::DCode(DCode::Operation(operation))) => {
                     match operation {
                         Operation::Move(coords) => {
                             let mut end = current_pos;
@@ -1017,7 +1093,7 @@ impl GerberLayer {
                                         diameter,
                                         ..
                                     })) => {
-                                        primitives.push(GerberPrimitive::Line {
+                                        layer_primitives.push(GerberPrimitive::Line {
                                             start: current_pos,
                                             end,
                                             width: *diameter,
@@ -1039,45 +1115,48 @@ impl GerberLayer {
 
                                 if let Some(aperture) = current_aperture {
                                     match aperture {
-                                        ApertureKind::Macro(named_primitive) => {
-                                            let mut primitive = named_primitive.primitive.clone();
-                                            // Update the primitive's position based on flash coordinates
-                                            match &mut primitive {
-                                                GerberPrimitive::Polygon {
-                                                    center, ..
-                                                } => {
-                                                    *center = current_pos;
+                                        ApertureKind::Macro(macro_primitives) => {
+                                            for primitive in macro_primitives {
+                                                let mut primitive = primitive.clone();
+                                                // Update the primitive's position based on flash coordinates
+                                                match &mut primitive {
+                                                    GerberPrimitive::Polygon {
+                                                        center, ..
+                                                    } => {
+                                                        *center = current_pos;
+                                                    }
+                                                    GerberPrimitive::Circle {
+                                                        center, ..
+                                                    } => {
+                                                        *center = current_pos;
+                                                    }
+                                                    GerberPrimitive::Rectangle {
+                                                        origin, ..
+                                                    } => {
+                                                        *origin = current_pos;
+                                                    }
+                                                    // TODO support vector line, obround, etc.
+                                                    _ => {
+                                                        warn!(
+                                                            "macro uses a primitive that is not supported.  primitive: {:?}",
+                                                            primitive
+                                                        );
+                                                    }
                                                 }
-                                                GerberPrimitive::Circle {
-                                                    center, ..
-                                                } => {
-                                                    *center = current_pos;
-                                                }
-                                                GerberPrimitive::Rectangle {
-                                                    origin, ..
-                                                } => {
-                                                    *origin = current_pos;
-                                                }
-                                                _ => {
-                                                    warn!(
-                                                        "macro uses a primitive that is not supported.  named_primitive: {:?}",
-                                                        named_primitive
-                                                    );
-                                                }
+                                                layer_primitives.push(primitive);
                                             }
-                                            primitives.push(primitive);
                                         }
                                         ApertureKind::Standard(aperture) => {
                                             match aperture {
                                                 Aperture::Circle(circle) => {
-                                                    primitives.push(GerberPrimitive::Circle {
+                                                    layer_primitives.push(GerberPrimitive::Circle {
                                                         center: current_pos,
                                                         diameter: circle.diameter,
                                                         exposure: Exposure::Add,
                                                     });
                                                 }
                                                 Aperture::Rectangle(rect) => {
-                                                    primitives.push(GerberPrimitive::Rectangle {
+                                                    layer_primitives.push(GerberPrimitive::Rectangle {
                                                         origin: Position::new(
                                                             current_pos.x - rect.x / 2.0,
                                                             current_pos.y - rect.y / 2.0,
@@ -1113,11 +1192,13 @@ impl GerberLayer {
                                                         vertices.push(final_position);
                                                     }
 
-                                                    primitives.push(GerberPrimitive::new_polygon(GerberPolygon {
-                                                        center: current_pos,
-                                                        vertices,
-                                                        exposure: Exposure::Add,
-                                                    }));
+                                                    layer_primitives.push(GerberPrimitive::new_polygon(
+                                                        GerberPolygon {
+                                                            center: current_pos,
+                                                            vertices,
+                                                            exposure: Exposure::Add,
+                                                        },
+                                                    ));
                                                 }
                                                 Aperture::Obround(rect) => {
                                                     // For an obround, we need to:
@@ -1144,7 +1225,7 @@ impl GerberLayer {
                                                     };
 
                                                     // Add the center rectangle
-                                                    primitives.push(GerberPrimitive::Rectangle {
+                                                    layer_primitives.push(GerberPrimitive::Rectangle {
                                                         origin: Position::new(
                                                             current_pos.x - rect_width / 2.0,
                                                             current_pos.y - rect_height / 2.0,
@@ -1157,16 +1238,16 @@ impl GerberLayer {
                                                     // Add the end circles
                                                     let circle_radius = rect.x.min(rect.y) / 2.0;
                                                     for (dx, dy) in circle_centers {
-                                                        primitives.push(GerberPrimitive::Circle {
+                                                        layer_primitives.push(GerberPrimitive::Circle {
                                                             center: current_pos + (dx, dy).into(),
                                                             diameter: circle_radius * 2.0,
                                                             exposure: Exposure::Add,
                                                         });
                                                     }
                                                 }
-                                                Aperture::Other(code) => {
+                                                Aperture::Macro(code, _args) => {
                                                     // if the aperture referred to a macro, and the macro was supported, it will have been handled by the `ApertureKind::Macro` handling.
-                                                    warn!("Unsupported aperture: {:?}, code: {}", aperture, code);
+                                                    warn!("Unsupported macro aperture: {:?}, code: {}", aperture, code);
                                                 }
                                             }
                                         }
@@ -1180,7 +1261,7 @@ impl GerberLayer {
             }
         }
 
-        primitives
+        layer_primitives
     }
 
     pub fn paint_gerber(&self, painter: &Painter, view: ViewState, color: Color32) {
@@ -1635,5 +1716,97 @@ impl eframe::App for GerberViewer {
                 }
             }
         });
+    }
+}
+
+mod gerber_expressions {
+    use std::collections::hash_map::Entry;
+
+    use egui::ahash::HashMap;
+    use gerber_parser::gerber_types::{MacroBoolean, MacroDecimal, MacroInteger};
+    use thiserror::Error;
+
+    /// Gerber spec 2024.05 - 4.5.4.3 - "The undefined variables are 0".
+    #[derive(Debug, Default)]
+    pub struct MacroContext {
+        variables: HashMap<u32, f64>,
+    }
+
+    impl MacroContext {
+        pub fn get(&self, variable: &u32) -> f64 {
+            self.variables
+                .get(&variable)
+                .copied()
+                .unwrap_or(0.0)
+        }
+
+        pub fn put(&mut self, variable: u32, decimal: f64) -> Result<&mut f64, MacroContextError> {
+            match self.variables.entry(variable) {
+                Entry::Occupied(_) => Err(MacroContextError::AlreadyDefined(variable)),
+                Entry::Vacant(entry) => Ok(entry.insert(decimal)),
+            }
+        }
+    }
+
+    #[derive(Error, Debug)]
+    pub enum MacroContextError {
+        /// Gerber spec (2024.05) - 4.5.4.3 - "Macro variables cannot be redefined"
+        #[error("Already defined. variable: {0}")]
+        AlreadyDefined(u32),
+    }
+
+    #[derive(Error, Debug)]
+    pub enum ExpressionEvaluationError {
+        #[error("Unknown error")]
+        Unknown,
+    }
+
+    pub fn evaluate_expression(expression: &String, context: &MacroContext) -> Result<f64, ExpressionEvaluationError> {
+        // TODO
+        Ok(0.0)
+    }
+
+    pub fn macro_decimal_to_f64(
+        macro_decimal: &MacroDecimal,
+        context: &MacroContext,
+    ) -> Result<f64, ExpressionEvaluationError> {
+        match macro_decimal {
+            MacroDecimal::Value(value) => Ok(*value),
+            MacroDecimal::Variable(id) => Ok(context.get(id)),
+            MacroDecimal::Expression(args) => evaluate_expression(args, context),
+        }
+    }
+
+    pub fn macro_boolean_to_bool(
+        macro_boolean: &MacroBoolean,
+        context: &MacroContext,
+    ) -> Result<bool, ExpressionEvaluationError> {
+        match macro_boolean {
+            MacroBoolean::Value(value) => Ok(*value),
+            MacroBoolean::Variable(id) => Ok(context.get(id) == 1.0),
+            MacroBoolean::Expression(args) => evaluate_expression(args, context).map(|value| value != 0.0),
+        }
+    }
+
+    pub fn macro_integer_to_u32(
+        macro_integer: &MacroInteger,
+        context: &MacroContext,
+    ) -> Result<u32, ExpressionEvaluationError> {
+        match macro_integer {
+            MacroInteger::Value(value) => Ok(*value),
+            MacroInteger::Variable(id) => Ok(context.get(id) as u32),
+            MacroInteger::Expression(args) => evaluate_expression(args, context).map(|value| value as u32),
+        }
+    }
+
+    pub fn macro_decimal_pair_to_f64(
+        input: &(MacroDecimal, MacroDecimal),
+        context: &MacroContext,
+    ) -> Result<(f64, f64), ExpressionEvaluationError> {
+        let (x, y) = (
+            macro_decimal_to_f64(&input.0, context)?,
+            macro_decimal_to_f64(&input.1, context)?,
+        );
+        Ok((x, y))
     }
 }
