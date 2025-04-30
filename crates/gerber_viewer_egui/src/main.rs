@@ -773,63 +773,110 @@ impl GerberLayer {
                                             }))
                                         }
                                         MacroContent::VectorLine(vector_line) => {
-                                            // Get start and end points
+                                            // Get parameters
                                             let (start_x, start_y) =
                                                 macro_decimal_pair_to_f64(&vector_line.start, macro_context)?;
                                             let (end_x, end_y) =
                                                 macro_decimal_pair_to_f64(&vector_line.end, macro_context)?;
                                             let width = macro_decimal_to_f64(&vector_line.width, macro_context)?;
-
-                                            // Get rotation and prepare rotation matrix
                                             let rotation_angle =
                                                 macro_decimal_to_f64(&vector_line.angle, macro_context)?;
-                                            let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
+                                            let rotation_radians = rotation_angle.to_radians();
                                             let (sin_theta, cos_theta) = rotation_radians.sin_cos();
 
-                                            // First rotate start and end points around (0,0)
+                                            // Rotate start and end points
                                             let rotated_start_x = start_x * cos_theta - start_y * sin_theta;
                                             let rotated_start_y = start_x * sin_theta + start_y * cos_theta;
                                             let rotated_end_x = end_x * cos_theta - end_y * sin_theta;
                                             let rotated_end_y = end_x * sin_theta + end_y * cos_theta;
 
-                                            // Calculate center point and length after rotation
-                                            let center_x = (rotated_start_x + rotated_end_x) / 2.0;
-                                            let center_y = (rotated_start_y + rotated_end_y) / 2.0;
+                                            // Calculate direction vector
                                             let dx = rotated_end_x - rotated_start_x;
                                             let dy = rotated_end_y - rotated_start_y;
                                             let length = (dx * dx + dy * dy).sqrt();
 
-                                            Ok(Some(GerberPrimitive::Rectangle {
-                                                origin: Position::new(center_x, center_y),
-                                                width: length,
-                                                height: width, // height is the line width
+                                            if length == 0.0 {
+                                                return Ok(None);
+                                            }
+
+                                            // Calculate perpendicular direction
+                                            let ux = dx / length;
+                                            let uy = dy / length;
+                                            let perp_x = -uy;
+                                            let perp_y = ux;
+
+                                            // Calculate width offsets
+                                            let half_width = width / 2.0;
+                                            let hw_perp_x = perp_x * half_width;
+                                            let hw_perp_y = perp_y * half_width;
+
+                                            // Calculate corners in absolute coordinates
+                                            let corners = [
+                                                (rotated_start_x - hw_perp_x, rotated_start_y - hw_perp_y),
+                                                (rotated_start_x + hw_perp_x, rotated_start_y + hw_perp_y),
+                                                (rotated_end_x + hw_perp_x, rotated_end_y + hw_perp_y),
+                                                (rotated_end_x - hw_perp_x, rotated_end_y - hw_perp_y),
+                                            ];
+
+                                            // Calculate center point
+                                            let center_x = (rotated_start_x + rotated_end_x) / 2.0;
+                                            let center_y = (rotated_start_y + rotated_end_y) / 2.0;
+
+                                            // Convert to relative vertices
+                                            let vertices = corners
+                                                .iter()
+                                                .map(|&(x, y)| Position::new(x - center_x, y - center_y))
+                                                .collect();
+
+                                            Ok(Some(GerberPrimitive::Polygon {
+                                                center: Position::new(center_x, center_y),
+                                                vertices,
                                                 exposure: macro_boolean_to_bool(&vector_line.exposure, macro_context)?
                                                     .into(),
+                                                is_convex: true,
+                                                triangles: Vec::new(),
                                             }))
                                         }
                                         MacroContent::CenterLine(center_line) => {
-                                            // Get center point and dimensions
+                                            // Get parameters
                                             let (center_x, center_y) =
                                                 macro_decimal_pair_to_f64(&center_line.center, macro_context)?;
-                                            let (width, height) =
+                                            let (length, width) =
                                                 macro_decimal_pair_to_f64(&center_line.dimensions, macro_context)?;
-
-                                            // Get rotation and prepare rotation matrix
                                             let rotation_angle =
                                                 macro_decimal_to_f64(&center_line.angle, macro_context)?;
-                                            let rotation_radians = rotation_angle * std::f64::consts::PI / 180.0;
+                                            let rotation_radians = rotation_angle.to_radians();
                                             let (sin_theta, cos_theta) = rotation_radians.sin_cos();
 
-                                            // Rotate center point around macro origin (0,0)
-                                            let rotated_center_x = center_x * cos_theta - center_y * sin_theta;
-                                            let rotated_center_y = center_x * sin_theta + center_y * cos_theta;
+                                            // Calculate half dimensions
+                                            let half_length = length / 2.0;
+                                            let half_width = width / 2.0;
 
-                                            Ok(Some(GerberPrimitive::Rectangle {
-                                                origin: Position::new(rotated_center_x, rotated_center_y),
-                                                width,
-                                                height,
-                                                exposure: macro_boolean_to_bool(&center_line.exposure, &macro_context)?
+                                            // Define unrotated vertices relative to center
+                                            let unrotated_vertices = [
+                                                Position::new(half_length, half_width),
+                                                Position::new(-half_length, half_width),
+                                                Position::new(-half_length, -half_width),
+                                                Position::new(half_length, -half_width),
+                                            ];
+
+                                            // Rotate each vertex relative to the center
+                                            let vertices = unrotated_vertices
+                                                .iter()
+                                                .map(|pos| {
+                                                    let x = pos.x * cos_theta - pos.y * sin_theta;
+                                                    let y = pos.x * sin_theta + pos.y * cos_theta;
+                                                    Position::new(x, y)
+                                                })
+                                                .collect();
+
+                                            Ok(Some(GerberPrimitive::Polygon {
+                                                center: Position::new(center_x, center_y),
+                                                vertices,
+                                                exposure: macro_boolean_to_bool(&center_line.exposure, macro_context)?
                                                     .into(),
+                                                is_convex: true,
+                                                triangles: Vec::new(),
                                             }))
                                         }
                                         MacroContent::Outline(outline) => {
