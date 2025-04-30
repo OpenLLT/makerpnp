@@ -1123,26 +1123,28 @@ impl GerberLayer {
                                                     GerberPrimitive::Polygon {
                                                         center, ..
                                                     } => {
-                                                        *center = current_pos;
+                                                        *center += current_pos;
                                                     }
                                                     GerberPrimitive::Circle {
                                                         center, ..
                                                     } => {
-                                                        *center = current_pos;
+                                                        *center += current_pos;
                                                     }
                                                     GerberPrimitive::Rectangle {
                                                         origin, ..
                                                     } => {
-                                                        *origin = current_pos;
+                                                        *origin += current_pos;
                                                     }
-                                                    // TODO support vector line, obround, etc.
-                                                    _ => {
-                                                        warn!(
-                                                            "macro uses a primitive that is not supported.  primitive: {:?}",
-                                                            primitive
-                                                        );
+                                                    GerberPrimitive::Line {
+                                                        start,
+                                                        end,
+                                                        ..
+                                                    } => {
+                                                        *start += current_pos;
+                                                        *end += current_pos;
                                                     }
                                                 }
+                                                debug!("flashing macro primitive: {:?}", primitive);
                                                 layer_primitives.push(primitive);
                                             }
                                         }
