@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
 use std::path::PathBuf;
 
 use earcut::Earcut;
@@ -31,8 +31,8 @@ use thiserror::Error;
 
 use crate::gerber::Position;
 use crate::gerber_expressions::{
-    ExpressionEvaluationError, MacroContext, MacroContextError, evaluate_expression, macro_boolean_to_bool,
-    macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32,
+    ExpressionEvaluationError, MacroContext, evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64,
+    macro_decimal_to_f64, macro_integer_to_u32,
 };
 
 mod gerber;
@@ -1033,7 +1033,7 @@ impl GerberLayer {
                                             Ok(None)
                                         }
                                     }
-                                };
+                                }
 
                                 let result = process_content(content, &mut macro_context);
                                 match result {
@@ -1908,8 +1908,6 @@ mod gerber_expressions {
         UnexpectedEnd,
         #[error("Invalid number")]
         InvalidNumber,
-        #[error("Unknown error")]
-        Unknown,
     }
 
     /// Evaluates a Gerber macro expression using a recursive descent parser.
