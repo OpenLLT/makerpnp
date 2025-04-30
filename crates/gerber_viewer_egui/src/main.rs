@@ -524,11 +524,14 @@ impl GerberViewer {
             .collect::<Vec<_>>();
         self.log.extend(log);
 
-        let layer = GerberLayer::new(gerber_doc, path.clone());
-
-        let layer_view_state = LayerViewState::new(Color32::LIGHT_GRAY);
-
         let state = self.state.get_or_insert_default();
+
+        let layer_count = state.layers.len();
+        let color = generate_pastel_color(layer_count as u64);
+
+        let layer = GerberLayer::new(gerber_doc, path.clone());
+        let layer_view_state = LayerViewState::new(color);
+
         state.add_layer(layer_view_state, layer);
 
         let message = format!("Gerber file parsed successfully. path: {}", path.to_str().unwrap());
