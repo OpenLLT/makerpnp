@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
-use std::sync::Arc;
 use eframe::emath::Vec2;
 use eframe::{egui, run_native, CreationContext, NativeOptions};
 use egui::style::ScrollStyle;
@@ -15,6 +14,7 @@ use egui_taffy::{taffy, TuiBuilderLogic};
 use epaint::Stroke;
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
+use gerber_parser::gerber_types::Command;
 use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info};
 use rfd::FileDialog;
@@ -66,7 +66,7 @@ struct GerberViewState {
     needs_initial_view: bool,
     bounding_box: BoundingBox,
     cursor_gerber_coords: Option<Position>,
-    layers: Vec<(LayerViewState, GerberLayer)>,
+    layers: Vec<(LayerViewState, GerberLayer, GerberDoc)>,
     center_screen_pos: Option<Vec2>,
     origin_screen_pos: Option<Vec2>,
 }
@@ -86,9 +86,9 @@ impl Default for GerberViewState {
 }
 
 impl GerberViewState {
-    pub fn add_layer(&mut self, layer_view_state: LayerViewState, layer: GerberLayer) {
+    pub fn add_layer(&mut self, layer_view_state: LayerViewState, layer: GerberLayer, gerber_doc: GerberDoc) {
         self.layers
-            .push((layer_view_state, layer));
+            .push((layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_reset();
     }
@@ -96,10 +96,10 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (_, layer) in self
+        for (_, layer, _) in self
             .layers
             .iter()
-            .filter(|(state, _)| state.enabled)
+            .filter(|(state, _, _)| state.enabled)
         {
             let layer_bbox = &layer.bounding_box();
             bbox.min_x = f64::min(bbox.min_x, layer_bbox.min_x);
@@ -284,22 +284,22 @@ impl GerberViewer {
     }
 
     pub fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), AppError> {
-        let gerber_doc = Self::parse_gerber(&mut self.log, &path)?;
+        let (gerber_doc, commands) = Self::parse_gerber(&mut self.log, &path)?;
 
         let state = self.state.get_or_insert_default();
 
         let layer_count = state.layers.len();
         let color = color::generate_pastel_color(layer_count as u64);
-
-        let layer = GerberLayer::new(gerber_doc, path.clone());
+        
+        let layer = GerberLayer::new(commands, path.clone());
         let layer_view_state = LayerViewState::new(color);
-
-        state.add_layer(layer_view_state, layer);
+        
+        state.add_layer(layer_view_state, layer, gerber_doc);
 
         Ok(())
     }
 
-    fn parse_gerber(log: &mut Vec<AppLogItem>, path: &PathBuf) -> Result<GerberDoc, AppError> {
+    fn parse_gerber(log: &mut Vec<AppLogItem>, path: &PathBuf) -> Result<(GerberDoc, Vec<Command>), AppError> {
         let file = File::open(path.clone())
             .inspect_err(|error| {
                 let message = format!(
@@ -330,17 +330,28 @@ impl GerberViewer {
         info!("{}", message);
         log.push(AppLogItem::Info(message.to_string()));
 
-        Ok(gerber_doc)
+        let commands = gerber_doc
+            .commands
+            .iter().filter_map(|c| {
+            match c {
+                Ok(command) => Some(command.clone()),
+                Err(_) => None
+            }
+        })
+            .collect();
+
+        Ok((gerber_doc, commands))
     }
 
     pub fn reload_all_layer_files(&mut self) {
         let Some(state) = &mut self.state else { return };
 
-        for (_state, layer) in state.layers.iter_mut() {
+        for (_state, layer, doc) in state.layers.iter_mut() {
             let path = layer.path().clone();
 
-            if let Ok(gerber_doc) = Self::parse_gerber(&mut self.log, &path) {
-                *layer = GerberLayer::new(gerber_doc, path.clone());
+            if let Ok((gerber_doc, commands)) = Self::parse_gerber(&mut self.log, &path) {
+                *layer = GerberLayer::new(commands, path.clone());
+                *doc = gerber_doc;
             }
         }
     }
@@ -618,8 +629,7 @@ impl eframe::App for GerberViewer {
                                             .layers
                                             .first()
                                             .unwrap()
-                                            .1
-                                            .gerber_doc()
+                                            .2
                                             .units
                                         {
                                             Some(gerber_types::Unit::Millimeters) => "MM",
@@ -659,7 +669,7 @@ impl eframe::App for GerberViewer {
             .resizable(true)
             .show(ctx, |ui| {
                 if let Some(state) = &mut self.state {
-                    for (layer_view_state, layer) in state.layers.iter_mut() {
+                    for (layer_view_state, layer, _doc) in state.layers.iter_mut() {
                         ui.horizontal(|ui| {
                             ui.color_edit_button_srgba(&mut layer_view_state.color);
                             ui.checkbox(
@@ -694,7 +704,7 @@ impl eframe::App for GerberViewer {
                 debug!("view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}", state.view, INITIAL_GERBER_AREA_PERCENT, state.center_screen_pos.unwrap(), state.origin_screen_pos.unwrap());
 
                 let painter = ui.painter().with_clip_rect(viewport);
-                for (layer_state, layer) in state.layers.iter() {
+                for (layer_state, layer, _doc) in state.layers.iter() {
                     if layer_state.enabled {
                         layer.paint_gerber(&painter, state.view, layer_state.color, self.use_unique_shape_colors);
                     }

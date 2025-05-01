@@ -1,7 +1,6 @@
-use gerber_parser::gerber_types;
-use gerber_parser::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
+use super::gerber_types;
+use super::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
 use log::{debug, error, warn};
-use gerber_parser::gerber_doc::GerberDoc;
 use std::collections::HashMap;
 use egui::{Color32, Painter};
 use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
@@ -16,34 +15,32 @@ use crate::gerber::expressions::{evaluate_expression, macro_boolean_to_bool, mac
 
 pub struct GerberLayer {
     path: PathBuf,
-    gerber_doc: GerberDoc,
+    /// Storing the commands, soon we'll want to tag the primitives with the `Command` used to build them.
+    #[allow(unused)]
+    commands: Vec<Command>,
     gerber_primitives: Vec<GerberPrimitive>,
     bounding_box: BoundingBox,
 }
 
 impl GerberLayer {
-    pub fn new(gerber_doc: GerberDoc, path: PathBuf) -> Self {
-        let gerber_primitives = GerberLayer::build_primitives(&gerber_doc);
+    pub fn new(commands: Vec<Command>, path: PathBuf) -> Self {
+        let gerber_primitives = GerberLayer::build_primitives(&commands);
         let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
 
         Self {
             path,
-            gerber_doc,
+            commands,
             gerber_primitives,
             bounding_box,
         }
     }
-    
+
     pub fn bounding_box(&self) -> &BoundingBox {
         &self.bounding_box
     }
-    
+
     pub fn path(&self) -> &PathBuf {
         &self.path
-    }
-    
-    pub fn gerber_doc(&self) -> &GerberDoc {
-        &self.gerber_doc
     }
 }
 
@@ -128,20 +125,18 @@ impl GerberLayer {
                 }
             }
         }
-        
+
         debug!("layer bbox: {:?}", bbox);
 
         bbox
     }
 
-    fn build_primitives(doc: &GerberDoc) -> Vec<GerberPrimitive> {
+    fn build_primitives(commands: &[Command]) -> Vec<GerberPrimitive> {
         let mut macro_definitions: HashMap<String, &ApertureMacro> = HashMap::default();
 
         // First pass: collect aperture macros
-        for cmd in doc
-            .commands
+        for cmd in commands
             .iter()
-            .filter_map(|result| result.as_ref().ok())
         {
             if let Command::ExtendedCode(ExtendedCode::ApertureMacro(macro_def)) = cmd {
                 macro_definitions.insert(macro_def.name.clone(), macro_def);
@@ -152,10 +147,8 @@ impl GerberLayer {
 
         let mut apertures: HashMap<i32, ApertureKind> = HashMap::default();
 
-        for cmd in doc
-            .commands
+        for cmd in commands
             .iter()
-            .filter_map(|result| result.as_ref().ok())
         {
             if let Command::ExtendedCode(ExtendedCode::ApertureDefinition(ApertureDefinition {
                 code,
@@ -538,10 +531,8 @@ impl GerberLayer {
         let mut current_region_vertices: Vec<Position> = Vec::new();
         let mut in_region = false;
 
-        for cmd in doc
-            .commands
+        for cmd in commands
             .iter()
-            .filter_map(|result| result.as_ref().ok())
         {
             match cmd {
                 Command::FunctionCode(FunctionCode::GCode(GCode::RegionMode(enabled))) => {

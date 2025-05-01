@@ -2,9 +2,11 @@ pub mod layer;
 pub mod position;
 pub mod expressions;
 
-use egui::Color32;
 pub use position::*;
 
+pub use gerber_parser::gerber_types;
+
+use egui::Color32;
 pub enum Winding {
     /// Aka 'Positive' in Geometry
     Clockwise,
