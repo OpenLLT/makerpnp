@@ -179,7 +179,10 @@ pub mod deduplicate {
 
         #[test]
         fn test_single_element() {
-            let vertices = vec![Position { x: 1.0, y: 2.0 }];
+            let vertices = vec![Position {
+                x: 1.0,
+                y: 2.0,
+            }];
             let result = vertices.dedup_with_epsilon(0.001);
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].x, 1.0);
@@ -189,9 +192,18 @@ pub mod deduplicate {
         #[test]
         fn test_no_duplicates() {
             let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 1.0, y: 1.0 },
-                Position { x: 2.0, y: 2.0 },
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                Position {
+                    x: 1.0,
+                    y: 1.0,
+                },
+                Position {
+                    x: 2.0,
+                    y: 2.0,
+                },
             ];
 
             let expected_result = vertices.clone();
@@ -206,26 +218,58 @@ pub mod deduplicate {
         #[test]
         fn test_with_adjacent_duplicates() {
             let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 0.0, y: 0.0 }, // dup
-                Position { x: 1.0, y: 1.0 },
-                Position { x: 2.0, y: 2.0 },
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                }, // dup
+                Position {
+                    x: 1.0,
+                    y: 1.0,
+                },
+                Position {
+                    x: 2.0,
+                    y: 2.0,
+                },
             ];
             let result = vertices.dedup_with_epsilon(1e-6);
             assert_eq!(result.len(), 3);
-            assert_eq!(result[0], Position { x: 0.0, y: 0.0 });
-            assert_eq!(result[1], Position { x: 1.0, y: 1.0 });
-            assert_eq!(result[2], Position { x: 2.0, y: 2.0 });
+            assert_eq!(result[0], Position {
+                x: 0.0,
+                y: 0.0
+            });
+            assert_eq!(result[1], Position {
+                x: 1.0,
+                y: 1.0
+            });
+            assert_eq!(result[2], Position {
+                x: 2.0,
+                y: 2.0
+            });
         }
 
         #[test]
         fn test_dedup_would_leave_too_few() {
             let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 0.0, y: 0.0 }, // dup
-                Position { x: 0.0, y: 0.0 }, // dup
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                }, // dup
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                }, // dup
             ];
-            let result = vertices.clone().dedup_with_epsilon(1e-6);
+            let result = vertices
+                .clone()
+                .dedup_with_epsilon(1e-6);
             assert_eq!(result, vertices); // Should return original
         }
 
@@ -233,33 +277,67 @@ pub mod deduplicate {
         fn test_dedup_edge_epsilon() {
             // given
             let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                },
                 // ensure positive numbers on y axis are detected
-                Position { x: 0.0, y: 0.0000005 }, // Within epsilon of first point
-                Position { x: 0.0, y: 0.0000009 }, // Within epsilon of removed point and first point
-
+                Position {
+                    x: 0.0,
+                    y: 0.0000005,
+                }, // Within epsilon of first point
+                Position {
+                    x: 0.0,
+                    y: 0.0000009,
+                }, // Within epsilon of removed point and first point
                 // ensure negative numbers on x axis are detected
-                Position { x: -3.0000000, y: 1.0 },
-                Position { x: -3.0000001, y: 1.0 }, // Within epsilon
-
+                Position {
+                    x: -3.0000000,
+                    y: 1.0,
+                },
+                Position {
+                    x: -3.0000001,
+                    y: 1.0,
+                }, // Within epsilon
                 // ensure negative numbers on y axis are detected
-                Position { x: 2.0, y: -2.0 },
-                Position { x: 2.0, y: -2.0000001 },
-
+                Position {
+                    x: 2.0,
+                    y: -2.0,
+                },
+                Position {
+                    x: 2.0,
+                    y: -2.0000001,
+                },
                 // ensure positive numbers on x axis are detected
-                Position { x: 4.0, y: 0.0 },
-                Position { x: 4.00000001, y: 0.0 },
+                Position {
+                    x: 4.0,
+                    y: 0.0,
+                },
+                Position {
+                    x: 4.00000001,
+                    y: 0.0,
+                },
             ];
 
             // and
             let expected_result = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: -3.0, y: 1.0 },
-                Position { x: 2.0, y: -2.0 },
-                Position { x: 4.0, y: 0.0 }
+                Position {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                Position {
+                    x: -3.0,
+                    y: 1.0,
+                },
+                Position {
+                    x: 2.0,
+                    y: -2.0,
+                },
+                Position {
+                    x: 4.0,
+                    y: 0.0,
+                },
             ];
-
 
             // when
             let result = vertices.dedup_with_epsilon(0.000001);
@@ -268,5 +346,4 @@ pub mod deduplicate {
             assert_eq!(result, expected_result);
         }
     }
-
 }

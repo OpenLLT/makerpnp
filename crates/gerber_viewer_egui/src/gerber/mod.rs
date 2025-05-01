@@ -1,14 +1,12 @@
-pub mod layer;
-pub mod position;
+pub mod color;
 pub mod expressions;
 pub mod geometry;
-pub mod color;
-
-pub use position::*;
-
-pub use gerber_types;
+pub mod layer;
+pub mod position;
 
 use egui::Color32;
+pub use gerber_types;
+pub use position::*;
 pub enum Winding {
     /// Aka 'Positive' in Geometry
     Clockwise,
@@ -52,4 +50,3 @@ impl Exposure {
         }
     }
 }
-

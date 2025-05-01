@@ -56,10 +56,7 @@ pub struct PolygonMesh {
 
 pub fn tessellate_polygon(vertices: &[Position]) -> PolygonMesh {
     use lyon::path::Path;
-    use lyon::tessellation::{
-        FillOptions, FillTessellator, FillRule,
-        VertexBuffers, BuffersBuilder
-    };
+    use lyon::tessellation::{BuffersBuilder, FillOptions, FillRule, FillTessellator, VertexBuffers};
 
     let mut path_builder = Path::builder();
     if let Some(first) = vertices.first() {
@@ -74,16 +71,15 @@ pub fn tessellate_polygon(vertices: &[Position]) -> PolygonMesh {
     let mut geometry = VertexBuffers::new();
     let mut tessellator = FillTessellator::new();
 
-    tessellator.tessellate_path(
-        &path,
-        &FillOptions::default().with_fill_rule(FillRule::EvenOdd),
-        &mut BuffersBuilder::new(
-            &mut geometry,
-            |vertex: lyon::tessellation::FillVertex| {
+    tessellator
+        .tessellate_path(
+            &path,
+            &FillOptions::default().with_fill_rule(FillRule::EvenOdd),
+            &mut BuffersBuilder::new(&mut geometry, |vertex: lyon::tessellation::FillVertex| {
                 [vertex.position().x, vertex.position().y]
-            }
+            }),
         )
-    ).unwrap();
+        .unwrap();
 
     PolygonMesh {
         vertices: geometry.vertices,

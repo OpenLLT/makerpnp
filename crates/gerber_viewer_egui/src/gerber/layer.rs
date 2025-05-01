@@ -1,17 +1,24 @@
-use log::{debug, error, warn};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use eframe::emath::{Align2, Pos2, Rect, Vec2};
 use egui::{Color32, Painter};
 use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
-use eframe::emath::{Align2, Pos2, Rect, Vec2};
-use std::sync::Arc;
-use std::path::PathBuf;
+use log::{debug, error, warn};
 
-use super::{calculate_winding, color, geometry, gerber_types};
-use super::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
-use super::geometry::{BoundingBox, PolygonMesh};
-use super::{Exposure, Position, Winding};
 use super::deduplicate::DedupEpsilon;
-use super::expressions::{evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32, ExpressionEvaluationError, MacroContext};
+use super::expressions::{
+    ExpressionEvaluationError, MacroContext, evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64,
+    macro_decimal_to_f64, macro_integer_to_u32,
+};
+use super::geometry::{BoundingBox, PolygonMesh};
+use super::gerber_types::{
+    Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode,
+    MacroContent, MacroDecimal, Operation, VariableDefinition,
+};
+use super::{Exposure, Position, Winding};
+use super::{calculate_winding, color, geometry, gerber_types};
 
 pub struct GerberLayer {
     path: PathBuf,
@@ -135,9 +142,7 @@ impl GerberLayer {
         let mut macro_definitions: HashMap<String, &ApertureMacro> = HashMap::default();
 
         // First pass: collect aperture macros
-        for cmd in commands
-            .iter()
-        {
+        for cmd in commands.iter() {
             if let Command::ExtendedCode(ExtendedCode::ApertureMacro(macro_def)) = cmd {
                 macro_definitions.insert(macro_def.name.clone(), macro_def);
             }
@@ -147,9 +152,7 @@ impl GerberLayer {
 
         let mut apertures: HashMap<i32, ApertureKind> = HashMap::default();
 
-        for cmd in commands
-            .iter()
-        {
+        for cmd in commands.iter() {
             if let Command::ExtendedCode(ExtendedCode::ApertureDefinition(ApertureDefinition {
                 code,
                 aperture,
@@ -531,9 +534,7 @@ impl GerberLayer {
         let mut current_region_vertices: Vec<Position> = Vec::new();
         let mut in_region = false;
 
-        for cmd in commands
-            .iter()
-        {
+        for cmd in commands.iter() {
             match cmd {
                 Command::FunctionCode(FunctionCode::GCode(GCode::RegionMode(enabled))) => {
                     if *enabled {
@@ -804,7 +805,14 @@ impl GerberLayer {
         layer_primitives
     }
 
-    pub fn paint_gerber(&self, painter: &Painter, view: ViewState, base_color: Color32, use_unique_shape_colors: bool, use_polygon_numbering: bool) {
+    pub fn paint_gerber(
+        &self,
+        painter: &Painter,
+        view: ViewState,
+        base_color: Color32,
+        use_unique_shape_colors: bool,
+        use_polygon_numbering: bool,
+    ) {
         for (index, primitive) in self
             .gerber_primitives
             .iter()
@@ -880,24 +888,25 @@ impl GerberLayer {
                     let color = exposure.to_color(&color);
                     let screen_center = Vec2::new(
                         view.translation.x + (center.x as f32) * view.scale,
-                        view.translation.y - (center.y as f32) * view.scale
+                        view.translation.y - (center.y as f32) * view.scale,
                     );
 
                     if geometry.is_convex {
                         // Direct convex rendering
-                        let screen_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
+                        let screen_vertices: Vec<Pos2> = geometry
+                            .relative_vertices
+                            .iter()
                             .map(|v| {
-                                (screen_center + Vec2::new(
-                                    v.x as f32 * view.scale,
-                                    -v.y as f32 * view.scale
-                                )).to_pos2()
+                                (screen_center + Vec2::new(v.x as f32 * view.scale, -v.y as f32 * view.scale)).to_pos2()
                             })
                             .collect();
 
                         painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
                     } else if let Some(tess) = &geometry.tessellation {
                         // Transform tessellated geometry
-                        let vertices: Vec<Vertex> = tess.vertices.iter()
+                        let vertices: Vec<Vertex> = tess
+                            .vertices
+                            .iter()
                             .map(|[x, y]| Vertex {
                                 pos: (screen_center + Vec2::new(*x * view.scale, -*y * view.scale)).to_pos2(),
                                 uv: egui::epaint::WHITE_UV,
@@ -914,12 +923,12 @@ impl GerberLayer {
 
                     if use_polygon_numbering {
                         // Debug visualization
-                        let debug_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
+                        let debug_vertices: Vec<Pos2> = geometry
+                            .relative_vertices
+                            .iter()
                             .map(|v| {
-                                let point = screen_center + Vec2::new(
-                                    v.x as f32 * view.scale,
-                                    -v.y as f32 * view.scale
-                                );
+                                let point =
+                                    screen_center + Vec2::new(v.x as f32 * view.scale, -v.y as f32 * view.scale);
                                 point.to_pos2()
                             })
                             .collect();
@@ -968,7 +977,7 @@ enum GerberPrimitive {
     Polygon {
         center: Position,
         exposure: Exposure,
-        geometry: Arc<PolygonGeometry>
+        geometry: Arc<PolygonGeometry>,
     },
 }
 
@@ -996,7 +1005,6 @@ impl GerberPolygon {
 }
 
 impl GerberPrimitive {
-
     fn new_polygon(polygon: GerberPolygon) -> Self {
         debug!("new_polygon: {:?}", polygon);
         let is_convex = polygon.is_convex();

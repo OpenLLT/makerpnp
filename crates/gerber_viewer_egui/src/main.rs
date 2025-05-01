@@ -2,28 +2,30 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
+
 use eframe::emath::Vec2;
-use eframe::{egui, run_native, CreationContext, NativeOptions};
+use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::style::ScrollStyle;
 use egui::{Color32, Context, Frame, Id, Modal, Painter, Pos2, Rect, Response, RichText, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{Size, Style};
-use egui_taffy::{taffy, tui, TuiBuilderLogic};
+use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::{FontFamily, Stroke};
+use gerber::color;
+use gerber::geometry::BoundingBox;
+use gerber::layer::{GerberLayer, ViewState};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::Command;
 use gerber_parser::parser::parse_gerber;
 use log::{error, info, trace};
+use logging::AppLogItem;
 use rfd::FileDialog;
 use thiserror::Error;
-use gerber::color;
-use gerber::geometry::BoundingBox;
-use logging::AppLogItem;
+
 use crate::gerber::Position;
-use gerber::layer::{GerberLayer, ViewState};
 
 mod gerber;
 mod logging;
@@ -43,17 +45,17 @@ struct GerberViewer {
     state: Option<GerberViewState>,
     log: Vec<AppLogItem>,
     coord_input: (String, String),
-    
+
     use_unique_shape_colors: bool,
     use_polygon_numbering: bool,
-    
+
     is_about_modal_open: bool,
 }
 
 impl GerberViewer {
     fn show_about_modal(&mut self) {
         if self.is_about_modal_open {
-            return
+            return;
         }
 
         self.is_about_modal_open = true;
@@ -288,10 +290,10 @@ impl GerberViewer {
 
         let layer_count = state.layers.len();
         let color = color::generate_pastel_color(layer_count as u64);
-        
+
         let layer = GerberLayer::new(commands, path.clone());
         let layer_view_state = LayerViewState::new(color);
-        
+
         state.add_layer(layer_view_state, layer, gerber_doc);
 
         Ok(())
@@ -330,12 +332,11 @@ impl GerberViewer {
 
         let commands = gerber_doc
             .commands
-            .iter().filter_map(|c| {
-            match c {
+            .iter()
+            .filter_map(|c| match c {
                 Ok(command) => Some(command.clone()),
-                Err(_) => None
-            }
-        })
+                Err(_) => None,
+            })
             .collect();
 
         Ok((gerber_doc, commands))
@@ -373,7 +374,7 @@ impl GerberViewer {
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             use_unique_shape_colors: false,
             use_polygon_numbering: false,
-            
+
             is_about_modal_open: false,
         }
     }
@@ -423,7 +424,10 @@ impl eframe::App for GerberViewer {
                         self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
-                        if ui.button("🔃 Reload all layers").clicked() {
+                        if ui
+                            .button("🔃 Reload all layers")
+                            .clicked()
+                        {
                             ui.close_menu();
                             self.reload_all_layer_files();
                         }
@@ -460,10 +464,10 @@ impl eframe::App for GerberViewer {
                 });
 
                 ui.separator();
-                
+
                 ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
                 ui.toggle_value(&mut self.use_polygon_numbering, "＃");
-                
+
                 ui.separator();
 
                 ui.add_enabled_ui(self.state.is_some(), |ui| {
@@ -525,7 +529,6 @@ impl eframe::App for GerberViewer {
                             .unwrap()
                             .request_reset();
                     }
-
                 });
                 ui.separator();
             })
@@ -650,13 +653,7 @@ impl eframe::App for GerberViewer {
                             tui.ui(|ui| {
                                 ui.horizontal(|ui| {
                                     if let Some(state) = &self.state {
-                                        let unit_text = match state
-                                            .layers
-                                            .first()
-                                            .unwrap()
-                                            .2
-                                            .units
-                                        {
+                                        let unit_text = match state.layers.first().unwrap().2.units {
                                             Some(gerber_types::Unit::Millimeters) => "MM",
                                             Some(gerber_types::Unit::Inches) => "Inches",
                                             None => "Unknown Units",
@@ -733,12 +730,24 @@ impl eframe::App for GerberViewer {
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
-                trace!("view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}", state.view, INITIAL_GERBER_AREA_PERCENT, state.center_screen_pos.unwrap(), state.origin_screen_pos.unwrap());
+                trace!(
+                    "view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}",
+                    state.view,
+                    INITIAL_GERBER_AREA_PERCENT,
+                    state.center_screen_pos.unwrap(),
+                    state.origin_screen_pos.unwrap()
+                );
 
                 let painter = ui.painter().with_clip_rect(viewport);
                 for (layer_state, layer, _doc) in state.layers.iter() {
                     if layer_state.enabled {
-                        layer.paint_gerber(&painter, state.view, layer_state.color, self.use_unique_shape_colors, self.use_polygon_numbering);
+                        layer.paint_gerber(
+                            &painter,
+                            state.view,
+                            layer_state.color,
+                            self.use_unique_shape_colors,
+                            self.use_polygon_numbering,
+                        );
                     }
                 }
 
@@ -750,13 +759,12 @@ impl eframe::App for GerberViewer {
                     Self::draw_crosshair(&painter, position, Color32::LIGHT_GRAY);
                 }
             } else {
-
                 let default_style = || Style {
                     padding: length(8.),
                     gap: length(8.),
                     ..Default::default()
                 };
-                
+
                 tui(ui, ui.id().with("no-file-loaded-panel"))
                     .reserve_available_space()
                     .style(Style {
@@ -774,36 +782,32 @@ impl eframe::App for GerberViewer {
                             flex_direction: taffy::FlexDirection::Column,
                             ..default_style()
                         })
-                            .add(|tui| {
-                                tui.label(
-                                    RichText::new("MakerPnP")
-                                        .size(48.0)
-                                        .family(FontFamily::Proportional)
-                                );
-                                tui.label(
-                                    RichText::new("Gerber Viewer")
-                                        .size(32.0)
-                                        .family(FontFamily::Proportional)
-                                );
-                            });
-
+                        .add(|tui| {
+                            tui.label(
+                                RichText::new("MakerPnP")
+                                    .size(48.0)
+                                    .family(FontFamily::Proportional),
+                            );
+                            tui.label(
+                                RichText::new("Gerber Viewer")
+                                    .size(32.0)
+                                    .family(FontFamily::Proportional),
+                            );
+                        });
                     });
-                
             }
         });
-        
+
         //
         // modals
         //
-        
-        if self.is_about_modal_open {
 
+        if self.is_about_modal_open {
             let modal = Modal::new(Id::new("About")).show(ctx, |ui| {
                 use egui::special_emojis::GITHUB;
 
-
                 ui.set_width(250.0);
-                
+
                 ui.vertical_centered(|ui| {
                     ui.heading("About");
                     ui.separator();
@@ -826,13 +830,19 @@ impl eframe::App for GerberViewer {
                     });
                     ui.horizontal(|ui| {
                         ui.label("Gerber types: ");
-                        ui.hyperlink_to(format!("{GITHUB} gerber-types-rs"), "https://github.com/dbrgn/gerber-types-rs");
+                        ui.hyperlink_to(
+                            format!("{GITHUB} gerber-types-rs"),
+                            "https://github.com/dbrgn/gerber-types-rs",
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("Gerber parser: ");
-                        ui.hyperlink_to(format!("{GITHUB} gerber_parser"), "https://github.com/NemoAndrea/gerber-parser");
+                        ui.hyperlink_to(
+                            format!("{GITHUB} gerber_parser"),
+                            "https://github.com/NemoAndrea/gerber-parser",
+                        );
                     });
-                    
+
                     ui.separator();
 
                     if ui.button("Ok").clicked() {
@@ -847,4 +857,3 @@ impl eframe::App for GerberViewer {
         }
     }
 }
-
