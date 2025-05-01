@@ -27,6 +27,7 @@ use thiserror::Error;
 use geometry::{BoundingBox, PolygonMesh};
 use gerber::Exposure;
 use gerber::position::deduplicate::DedupEpsilon;
+use logging::AppLogItem;
 use crate::gerber::{Position, Winding};
 use crate::gerber_expressions::{
     evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32,
@@ -35,6 +36,7 @@ use crate::gerber_expressions::{
 
 mod gerber;
 mod geometry;
+mod logging;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
@@ -378,40 +380,6 @@ enum AppError {
     NoFileSelected,
     #[error("IO Error. cause: {0:?}")]
     IoError(io::Error),
-}
-
-enum AppLogItem {
-    Info(String),
-    Warning(String),
-    Error(String),
-}
-
-impl AppLogItem {
-    pub fn message(&self) -> &str {
-        match self {
-            AppLogItem::Info(message) => message,
-            AppLogItem::Warning(message) => message,
-            AppLogItem::Error(message) => message,
-        }
-    }
-
-    pub fn level(&self) -> &'static str {
-        match self {
-            AppLogItem::Info(_) => "info",
-            AppLogItem::Warning(_) => "warning",
-            AppLogItem::Error(_) => "error",
-        }
-    }
-}
-
-impl Display for AppLogItem {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AppLogItem::Info(message) => f.write_fmt(format_args!("Info: {}", message)),
-            AppLogItem::Warning(message) => f.write_fmt(format_args!("Warning: {}", message)),
-            AppLogItem::Error(message) => f.write_fmt(format_args!("Error: {}", message)),
-        }
-    }
 }
 
 impl GerberViewer {
