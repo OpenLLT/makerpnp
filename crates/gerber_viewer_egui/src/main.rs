@@ -4,7 +4,6 @@ use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use earcut::Earcut;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::ahash::HashMap;
@@ -262,7 +261,7 @@ impl GerberLayer {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 struct ViewState {
     translation: Vec2,
     scale: f32,
@@ -349,6 +348,7 @@ enum GerberPrimitive {
     },
 }
 
+#[derive(Debug)]
 struct GerberPolygon {
     center: Position,
     /// Relative to center
@@ -388,49 +388,101 @@ impl GerberPolygon {
         true
     }
 }
-
 impl GerberPrimitive {
     fn new_polygon(polygon: GerberPolygon) -> Self {
-        let is_convex = polygon.is_convex();
+        // Convert to f32 with high precision first
+        let absolute_vertices: Vec<lyon::math::Point> = polygon.vertices
+            .iter()
+            .map(|v| {
+                lyon::math::Point::new(
+                    (polygon.center.x + v.x) as f32,
+                    (polygon.center.y + v.y) as f32
+                )
+            })
+            .collect();
+
         let mut triangles = Vec::new();
+        let is_convex = polygon.is_convex();
 
         if !is_convex {
-            // Convert vertices to flat array for triangulation
-            let vertices: Vec<[f64; 2]> = polygon
-                .vertices
-                .iter()
-                .map(
-                    |Position {
-                         x,
-                         y,
-                     }| [*x, *y],
+            use lyon::path::Path;
+            use lyon::tessellation::*;
+
+            let mut path_builder = Path::builder();
+            if let Some(first) = absolute_vertices.first() {
+                path_builder.begin(*first);
+                for v in &absolute_vertices[1..] {
+                    path_builder.line_to(*v);
+                }
+                path_builder.close();
+            }
+            let path = path_builder.build();
+
+            let mut geometry: VertexBuffers<lyon::math::Point, u32> = VertexBuffers::new();
+            let mut tessellator = FillTessellator::new();
+
+            let mut options = FillOptions::default();
+            options.tolerance = 1e-5; // Higher precision
+            options.with_fill_rule(FillRule::EvenOdd);
+
+            tessellator.tessellate_path(
+                &path,
+                &options,
+                &mut BuffersBuilder::new(
+                    &mut geometry,
+                    |vertex: FillVertex| vertex.position()
                 )
-                .collect();
+            ).unwrap();
 
-            let mut indices = Vec::new();
-            let mut earcut = Earcut::new();
-            earcut.earcut(vertices.clone(), &[], &mut indices);
+            // triangles = geometry.indices.chunks(3).map(|chunk| {
+            //     chunk.iter().map(|i| {
+            //         let v = geometry.vertices[*i as usize];
+            //         Pos2::new(v.x, v.y) // Direct f32 conversion
+            //     }).collect::<Vec<_>>()
+            // }).collect();
 
-            // Convert indices back to triangle vertices
-            triangles = indices
-                .chunks(3)
-                .map(|chunk: &[usize]| {
-                    vec![
-                        Pos2::new(vertices[chunk[0]][0] as f32, vertices[chunk[0]][1] as f32),
-                        Pos2::new(vertices[chunk[1]][0] as f32, vertices[chunk[1]][1] as f32),
-                        Pos2::new(vertices[chunk[2]][0] as f32, vertices[chunk[2]][1] as f32),
-                    ]
+            // Precompute absolute original vertices for snapping
+            let original_absolute_vertices: Vec<lyon::math::Point> = polygon.vertices
+                .iter()
+                .map(|v| {
+                    lyon::math::Point::new(
+                        (polygon.center.x + v.x) as f32,
+                        -(polygon.center.y + v.y) as f32, // Y flipped
+                    )
                 })
                 .collect();
+
+            // Snap vertices to original points
+            let snapped_vertices: Vec<lyon::math::Point> = geometry.vertices
+                .iter()
+                .map(|vertex| {
+                    original_absolute_vertices.iter()
+                        .find(|&orig| (orig.x - vertex.x).abs() < 1e-5 &&
+                            (orig.y - vertex.y).abs() < 1e-5)
+                        .cloned()
+                        .unwrap_or(*vertex)
+                })
+                .collect();
+
+            // Rebuild triangles with snapped vertices
+            triangles = geometry.indices.chunks(3).map(|chunk| {
+                chunk.iter().map(|i| {
+                    let v = snapped_vertices[*i as usize];
+                    Pos2::new(v.x, v.y)
+                }).collect::<Vec<_>>()
+            }).collect();
         }
 
-        GerberPrimitive::Polygon {
+        let polygon = GerberPrimitive::Polygon {
             center: polygon.center,
             vertices: polygon.vertices,
             exposure: polygon.exposure,
             is_convex,
             triangles,
-        }
+        };
+        debug!("polygon: {:?}", polygon);
+
+        polygon
     }
 }
 
@@ -660,6 +712,8 @@ impl GerberLayer {
                 }
             }
         }
+        
+        debug!("layer bbox: {:?}", bbox);
 
         bbox
     }
@@ -1447,12 +1501,20 @@ impl GerberLayer {
                             painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
                         }
                         false => {
+                            debug!("concave polygon");
                             // Transform stored triangles to screen space and draw them
+
                             for triangle in triangles {
                                 let screen_triangle: Vec<Pos2> = triangle
                                     .iter()
-                                    .map(|pos| (screen_center + Vec2::new(pos.x, -pos.y) * view.scale).to_pos2())
+                                    .map(|pos| {
+                                        // Remove screen_center - use raw view transform
+                                        view.translation + Vec2::new(pos.x, -pos.y) * view.scale
+                                    })
+                                    .map(|vec| vec.to_pos2())
                                     .collect();
+                                debug!("screen_triangle: {:?}", screen_triangle);
+
                                 painter.add(Shape::convex_polygon(screen_triangle, color, Stroke::NONE));
                             }
                         }
@@ -1799,6 +1861,8 @@ impl eframe::App for GerberViewer {
                 state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
+
+                debug!("view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}", state.view, INITIAL_GERBER_AREA_PERCENT, state.center_screen_pos.unwrap(), state.origin_screen_pos.unwrap());
 
                 let painter = ui.painter().with_clip_rect(viewport);
                 for (layer_state, layer) in state.layers.iter() {

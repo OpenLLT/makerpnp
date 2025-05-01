@@ -29,5 +29,6 @@ gerber_parser = { git = "https://github.com/hydra/gerber-parser.git", rev = "505
 thiserror = "2.0.12"
 
 # Math
-earcut = "0.4.4"
 rand = "0.9.1"
+lyon = "1.0.1"
+
