@@ -6,14 +6,14 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::Arc;
 use eframe::emath::Vec2;
-use eframe::{CreationContext, NativeOptions, egui, run_native};
+use eframe::{egui, run_native, CreationContext, NativeOptions};
 use egui::style::ScrollStyle;
 use egui::{Align2, Color32, Context, Frame, Painter, Pos2, Rect, Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
 use egui_taffy::taffy::{Size, Style};
-use egui_taffy::{TuiBuilderLogic, taffy};
+use egui_taffy::{taffy, TuiBuilderLogic};
 use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
@@ -24,11 +24,11 @@ use rand::prelude::SmallRng;
 use rand::{Rng, SeedableRng};
 use rfd::FileDialog;
 use thiserror::Error;
-use crate::deduplicate::DedupEpsilon;
-use crate::gerber::Position;
+use gerber::position::deduplicate::DedupEpsilon;
+use crate::gerber::{Position, Winding};
 use crate::gerber_expressions::{
-    ExpressionEvaluationError, MacroContext, evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64,
-    macro_decimal_to_f64, macro_integer_to_u32,
+    evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32,
+    ExpressionEvaluationError, MacroContext,
 };
 
 mod gerber;
@@ -398,8 +398,8 @@ impl GerberPrimitive {
         let mut relative_vertices = polygon.vertices;
 
         // Calculate and fix winding order
-        let winding = calculate_winding(&relative_vertices);
-        if winding > 0.0 {
+        let winding = gerber::calculate_winding(&relative_vertices);
+        if matches!(winding, Winding::Clockwise) {
             relative_vertices.reverse();
         }
 
@@ -428,158 +428,6 @@ impl GerberPrimitive {
 
         polygon
     }
-}
-
-pub mod deduplicate {
-    use crate::gerber::Position;
-
-    pub trait DedupEpsilon {
-        fn dedup_with_epsilon(self, epsilon: f64) -> Self;
-    }
-
-    impl DedupEpsilon for Vec<Position> {
-        fn dedup_with_epsilon(mut self, epsilon: f64) -> Self {
-            if self.len() < 2 {
-                return self;
-            }
-
-            let mut to_remove = Vec::new();
-            let mut last_index = 0;
-
-            for i in 1..self.len() {
-                let a = &self[last_index];
-                let b = &self[i];
-                if (a.x - b.x).abs() < epsilon && (a.y - b.y).abs() < epsilon {
-                    to_remove.push(i);
-                } else {
-                    last_index = i;
-                }
-            }
-
-            if self.len() - to_remove.len() < 3 {
-                return self; // Too few remaining
-            }
-
-            for &i in to_remove.iter().rev() {
-                self.remove(i);
-            }
-
-            self
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn test_empty_vec() {
-            let vertices: Vec<Position> = vec![];
-            let result = vertices.dedup_with_epsilon(0.001);
-            assert_eq!(result.len(), 0);
-        }
-
-        #[test]
-        fn test_single_element() {
-            let vertices = vec![Position { x: 1.0, y: 2.0 }];
-            let result = vertices.dedup_with_epsilon(0.001);
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].x, 1.0);
-            assert_eq!(result[0].y, 2.0);
-        }
-
-        #[test]
-        fn test_no_duplicates() {
-            let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 1.0, y: 1.0 },
-                Position { x: 2.0, y: 2.0 },
-            ];
-
-            let expected_result = vertices.clone();
-
-            // when
-            let result = vertices.dedup_with_epsilon(0.0001);
-
-            // then
-            assert_eq!(result, expected_result);
-        }
-
-        #[test]
-        fn test_with_adjacent_duplicates() {
-            let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 0.0, y: 0.0 }, // dup
-                Position { x: 1.0, y: 1.0 },
-                Position { x: 2.0, y: 2.0 },
-            ];
-            let result = vertices.dedup_with_epsilon(1e-6);
-            assert_eq!(result.len(), 3);
-            assert_eq!(result[0], Position { x: 0.0, y: 0.0 });
-            assert_eq!(result[1], Position { x: 1.0, y: 1.0 });
-            assert_eq!(result[2], Position { x: 2.0, y: 2.0 });
-        }
-
-        #[test]
-        fn test_dedup_would_leave_too_few() {
-            let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: 0.0, y: 0.0 }, // dup
-                Position { x: 0.0, y: 0.0 }, // dup
-            ];
-            let result = vertices.clone().dedup_with_epsilon(1e-6);
-            assert_eq!(result, vertices); // Should return original
-        }
-
-        #[test]
-        fn test_dedup_edge_epsilon() {
-            // given
-            let vertices = vec![
-                Position { x: 0.0, y: 0.0 },
-
-                // ensure positive numbers on y axis are detected
-                Position { x: 0.0, y: 0.0000005 }, // Within epsilon of first point
-                Position { x: 0.0, y: 0.0000009 }, // Within epsilon of removed point and first point
-
-                // ensure negative numbers on x axis are detected
-                Position { x: -3.0000000, y: 1.0 },
-                Position { x: -3.0000001, y: 1.0 }, // Within epsilon
-
-                // ensure negative numbers on y axis are detected
-                Position { x: 2.0, y: -2.0 },
-                Position { x: 2.0, y: -2.0000001 },
-
-                // ensure positive numbers on x axis are detected
-                Position { x: 4.0, y: 0.0 },
-                Position { x: 4.00000001, y: 0.0 },
-            ];
-
-            // and
-            let expected_result = vec![
-                Position { x: 0.0, y: 0.0 },
-                Position { x: -3.0, y: 1.0 },
-                Position { x: 2.0, y: -2.0 },
-                Position { x: 4.0, y: 0.0 }
-            ];
-
-
-            // when
-            let result = vertices.dedup_with_epsilon(0.000001);
-
-            // then
-            assert_eq!(result, expected_result);
-        }
-    }
-
-}
-
-fn calculate_winding(vertices: &[Position]) -> f64 {
-    let mut sum = 0.0;
-    for i in 0..vertices.len() {
-        let j = (i + 1) % vertices.len();
-        sum += vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y;
-    }
-    sum
 }
 
 #[derive(Debug, Clone)]
