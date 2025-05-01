@@ -339,11 +339,16 @@ enum GerberPrimitive {
     },
     Polygon {
         center: Position,
-        /// Relative to center
-        vertices: Vec<Position>,
         exposure: Exposure,
-        is_convex: bool,
+        geometry: Arc<PolygonGeometry>
     },
+}
+
+#[derive(Debug, Clone)]
+struct PolygonGeometry {
+    relative_vertices: Vec<Position>,  // Relative to center
+    tessellation: Option<PolygonMesh>, // Precomputed tessellation data
+    is_convex: bool,
 }
 
 #[derive(Debug)]
@@ -388,19 +393,90 @@ impl GerberPolygon {
 }
 
 impl GerberPrimitive {
+
     fn new_polygon(polygon: GerberPolygon) -> Self {
         debug!("new_polygon: {:?}", polygon);
         let is_convex = polygon.is_convex();
+        let mut relative_vertices = polygon.vertices;
+
+        // Calculate and fix winding order
+        let winding = calculate_winding(&relative_vertices);
+        if winding > 0.0 {
+            relative_vertices.reverse();
+        }
+
+        // Precompute tessellation for concave polygons
+        let tessellation = if !is_convex {
+            Some(tessellate_polygon(&relative_vertices))
+        } else {
+            None
+        };
+
         let polygon = GerberPrimitive::Polygon {
             center: polygon.center,
-            vertices: polygon.vertices,
             exposure: polygon.exposure,
-            is_convex,
+            geometry: Arc::new(PolygonGeometry {
+                relative_vertices,
+                tessellation,
+                is_convex,
+            }),
         };
 
         debug!("polygon: {:?}", polygon);
-        
+
         polygon
+    }
+}
+
+fn calculate_winding(vertices: &[Position]) -> f64 {
+    let mut sum = 0.0;
+    for i in 0..vertices.len() {
+        let j = (i + 1) % vertices.len();
+        sum += vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y;
+    }
+    sum
+}
+
+#[derive(Debug, Clone)]
+struct PolygonMesh {
+    vertices: Vec<[f32; 2]>,
+    indices: Vec<u32>,
+}
+
+fn tessellate_polygon(vertices: &[Position]) -> PolygonMesh {
+    use lyon::path::Path;
+    use lyon::tessellation::{
+        FillOptions, FillTessellator, FillRule,
+        VertexBuffers, BuffersBuilder
+    };
+
+    let mut path_builder = Path::builder();
+    if let Some(first) = vertices.first() {
+        path_builder.begin(lyon::math::Point::new(first.x as f32, first.y as f32));
+        for pos in &vertices[1..] {
+            path_builder.line_to(lyon::math::Point::new(pos.x as f32, pos.y as f32));
+        }
+        path_builder.close();
+    }
+    let path = path_builder.build();
+
+    let mut geometry = VertexBuffers::new();
+    let mut tessellator = FillTessellator::new();
+
+    tessellator.tessellate_path(
+        &path,
+        &FillOptions::default().with_fill_rule(FillRule::EvenOdd),
+        &mut BuffersBuilder::new(
+            &mut geometry,
+            |vertex: lyon::tessellation::FillVertex| {
+                [vertex.position().x, vertex.position().y]
+            }
+        )
+    ).unwrap();
+
+    PolygonMesh {
+        vertices: geometry.vertices,
+        indices: geometry.indices,
     }
 }
 
@@ -611,14 +687,14 @@ impl GerberLayer {
                     }
                 }
                 GerberPrimitive::Polygon {
-                    center,
-                    vertices,
+                    center, 
+                    geometry,
                     ..
                 } => {
                     for &Position {
                         x: dx,
                         y: dy,
-                    } in vertices
+                    } in geometry.relative_vertices.iter()
                     {
                         let x = center.x + dx;
                         let y = center.y + dy;
@@ -833,13 +909,12 @@ impl GerberLayer {
                                                 .map(|&(x, y)| Position::new(x - center_x, y - center_y))
                                                 .collect();
 
-                                            Ok(Some(GerberPrimitive::Polygon {
+                                            Ok(Some(GerberPrimitive::new_polygon(GerberPolygon {
                                                 center: Position::new(center_x, center_y),
                                                 vertices,
                                                 exposure: macro_boolean_to_bool(&vector_line.exposure, macro_context)?
                                                     .into(),
-                                                is_convex: true,
-                                            }))
+                                            })))
                                         }
                                         MacroContent::CenterLine(center_line) => {
                                             // Get parameters
@@ -874,13 +949,12 @@ impl GerberLayer {
                                                 })
                                                 .collect();
 
-                                            Ok(Some(GerberPrimitive::Polygon {
+                                            Ok(Some(GerberPrimitive::new_polygon(GerberPolygon {
                                                 center: Position::new(center_x, center_y),
                                                 vertices,
                                                 exposure: macro_boolean_to_bool(&center_line.exposure, macro_context)?
                                                     .into(),
-                                                is_convex: true,
-                                            }))
+                                            })))
                                         }
                                         MacroContent::Outline(outline) => {
                                             // Need at least 3 points to form a polygon
@@ -1387,85 +1461,64 @@ impl GerberLayer {
                 }
                 GerberPrimitive::Polygon {
                     center,
-                    vertices,
                     exposure,
-                    is_convex,
+                    geometry,
                 } => {
                     let color = exposure.to_color(&color);
-                    let screen_center = view.translation +
-                        Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
+                    let screen_center = Vec2::new(
+                        view.translation.x + (center.x as f32) * view.scale,
+                        view.translation.y - (center.y as f32) * view.scale
+                    );
 
+                    if geometry.is_convex {
+                        // Direct convex rendering
+                        let screen_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
+                            .map(|v| {
+                                (screen_center + Vec2::new(
+                                    v.x as f32 * view.scale,
+                                    -v.y as f32 * view.scale
+                                )).to_pos2()
+                            })
+                            .collect();
 
-                    // Convert vertices to screen space with high precision
-                    let mut screen_vertices: Vec<Pos2> = vertices
-                        .iter()
-                        .map(|p| {
-                            let x = (p.x as f64 * view.scale as f64) + screen_center.x as f64;
-                            let y = (-p.y as f64 * view.scale as f64) + screen_center.y as f64;
-                            Pos2::new(x as f32, y as f32)
+                        painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
+                    } else if let Some(tess) = &geometry.tessellation {
+                        // Transform tessellated geometry
+                        let vertices: Vec<Vertex> = tess.vertices.iter()
+                            .map(|[x, y]| Vertex {
+                                pos: (screen_center + Vec2::new(*x * view.scale, -*y * view.scale)).to_pos2(),
+                                uv: egui::epaint::WHITE_UV,
+                                color,
+                            })
+                            .collect();
+
+                        painter.add(Shape::Mesh(Arc::new(Mesh {
+                            vertices,
+                            indices: tess.indices.clone(),
+                            texture_id: egui::TextureId::default(),
+                        })));
+                    }
+
+                    // Debug visualization
+                    let debug_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
+                        .map(|v| {
+                            let point = screen_center + Vec2::new(
+                                v.x as f32 * view.scale,
+                                -v.y as f32 * view.scale
+                            );
+                            point.to_pos2()
+                            
                         })
                         .collect();
 
-                    // Remove adjacent duplicates
-                    screen_vertices.dedup_by(|a, b| a.distance(*b) < 0.1);
-
-                    if *is_convex {
-                        painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
-                    } else {
-                        use lyon::path::Path;
-                        use lyon::tessellation::{
-                            FillOptions, FillTessellator, FillRule,
-                            VertexBuffers, BuffersBuilder, StrokeOptions
-                        };
-
-                        // Create Lyon path
-                        let mut path_builder = Path::builder();
-                        if let Some(first) = screen_vertices.first() {
-                            path_builder.begin(lyon::math::Point::new(first.x, first.y));
-                            for pos in &screen_vertices[1..] {
-                                path_builder.line_to(lyon::math::Point::new(pos.x, pos.y));
-                            }
-                            path_builder.close();
-                        }
-                        let path = path_builder.build();
-
-                        // Prepare vertex buffers
-                        let mut geometry: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                        let mut tessellator = FillTessellator::new();
-
-                        // Tessellate with even-odd rule
-                        tessellator.tessellate_path(
-                            &path,
-                            &FillOptions::default().with_fill_rule(FillRule::EvenOdd),
-                            &mut BuffersBuilder::new(
-                                &mut geometry,
-                                |vertex: lyon::tessellation::FillVertex| egui::epaint::Vertex {
-                                    pos: [vertex.position().x, vertex.position().y].into(),
-                                    uv: egui::epaint::WHITE_UV,
-                                    color,
-                                }
-                            )
-                        ).unwrap();
-
-                        // Create egui mesh
-                        let mesh = egui::epaint::Mesh {
-                            vertices: geometry.vertices.into_iter().map(|v| v.into()).collect(),
-                            indices: geometry.indices,
-                            texture_id: egui::TextureId::default(),
-                        };
-
-                        painter.add(Shape::Mesh(Arc::new(mesh)));
-
-                        // Keep debug visualization
-                        for (i, pos) in screen_vertices.iter().enumerate() {
-                            painter.text(
-                                *pos,
-                                Align2::CENTER_CENTER,
-                                format!("{}", i),
-                                FontId::monospace(8.0),
-                                Color32::RED,
-                            );
-                        }
+                    for (i, pos) in debug_vertices.iter().enumerate() {
+                        painter.text(
+                            *pos,
+                            Align2::CENTER_CENTER,
+                            format!("{}", i),
+                            FontId::monospace(8.0),
+                            Color32::RED,
+                        );
                     }
                 }
             }
