@@ -8,13 +8,13 @@ use std::path::PathBuf;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Frame, Painter, Pos2, Rect, Response, Ui};
+use egui::{Align2, Color32, Context, Frame, Painter, Pos2, Rect, Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy};
-use epaint::{PathShape, PathStroke, Shape, Stroke, StrokeKind};
+use epaint::{FontId, PathShape, PathStroke, Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
@@ -1389,12 +1389,21 @@ impl GerberLayer {
                     exposure,
                     is_convex,
                 } => {
+                    fn calculate_winding_order(vertices: &[Position]) -> f64 {
+                        let mut sum = 0.0;
+                        for i in 0..vertices.len() {
+                            let j = (i + 1) % vertices.len();
+                            sum += vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y;
+                        }
+                        sum
+                    }
+
                     let color = exposure.to_color(&color);
                     let screen_center = view.translation +
                         Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
 
                     // Convert all vertices to screen space
-                    let screen_vertices: Vec<Pos2> = vertices
+                    let mut screen_vertices: Vec<Pos2> = vertices
                         .iter()
                         .map(|Position { x: dx, y: dy }| {
                             let screen_pos = screen_center +
@@ -1402,8 +1411,20 @@ impl GerberLayer {
                             screen_pos.to_pos2()
                         })
                         .collect();
+
+                    // Handle winding order for concave polygons
+                    if !is_convex {
+                        // Calculate original polygon's winding order
+                        let winding = calculate_winding_order(vertices);
+
+                        // Reverse vertices if they're clockwise wound
+                        if winding > 0.0 {
+                            debug!("Reversing winding order for concave polygon");
+                            screen_vertices.reverse();
+                        }
+                    }
+
                     debug!("center: {:?}, is_convex: {}, vertices: {:?}, screen_vertices: {:?}", center, is_convex, vertices, screen_vertices);
-                    
 
                     if *is_convex {
                         painter.add(Shape::convex_polygon(
@@ -1413,11 +1434,21 @@ impl GerberLayer {
                         ));
                     } else {
                         painter.add(Shape::Path(PathShape {
-                            points: screen_vertices,
+                            points: screen_vertices.clone(),
                             closed: true,
                             fill: color,
                             stroke: PathStroke::NONE,
                         }));
+
+                        for (i, pos) in screen_vertices.into_iter().enumerate() {
+                            painter.text(
+                                pos,
+                                Align2::CENTER_CENTER,
+                                format!("{}", i),
+                                FontId::monospace(8.0),
+                                Color32::RED,
+                            );
+                        }
                     }
                 }
             }
