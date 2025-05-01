@@ -30,3 +30,4 @@ thiserror = "2.0.12"
 
 # Math
 rand = "0.9.1"
+lyon = "1.0"

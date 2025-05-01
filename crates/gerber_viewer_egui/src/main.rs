@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
-
+use std::sync::Arc;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::style::ScrollStyle;
@@ -14,12 +14,14 @@ use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy};
-use epaint::{FontId, PathShape, PathStroke, Shape, Stroke, StrokeKind};
+use epaint::{FontId, Mesh, PathShape, PathStroke, Shape, Stroke, StrokeKind, Vertex};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
 use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info, warn};
+use lyon::path::{FillRule, Winding};
+use lyon::tessellation;
 use rand::prelude::SmallRng;
 use rand::{Rng, SeedableRng};
 use rfd::FileDialog;
@@ -1389,60 +1391,75 @@ impl GerberLayer {
                     exposure,
                     is_convex,
                 } => {
-                    fn calculate_winding_order(vertices: &[Position]) -> f64 {
-                        let mut sum = 0.0;
-                        for i in 0..vertices.len() {
-                            let j = (i + 1) % vertices.len();
-                            sum += vertices[i].x * vertices[j].y - vertices[j].x * vertices[i].y;
-                        }
-                        sum
-                    }
-
                     let color = exposure.to_color(&color);
                     let screen_center = view.translation +
                         Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
 
-                    // Convert all vertices to screen space
+
+                    // Convert vertices to screen space with high precision
                     let mut screen_vertices: Vec<Pos2> = vertices
                         .iter()
-                        .map(|Position { x: dx, y: dy }| {
-                            let screen_pos = screen_center +
-                                Vec2::new(*dx as f32, -(*dy as f32)) * view.scale;
-                            screen_pos.to_pos2()
+                        .map(|p| {
+                            let x = (p.x as f64 * view.scale as f64) + screen_center.x as f64;
+                            let y = (-p.y as f64 * view.scale as f64) + screen_center.y as f64;
+                            Pos2::new(x as f32, y as f32)
                         })
                         .collect();
 
-                    // Handle winding order for concave polygons
-                    if !is_convex {
-                        // Calculate original polygon's winding order
-                        let winding = calculate_winding_order(vertices);
-
-                        // Reverse vertices if they're clockwise wound
-                        if winding > 0.0 {
-                            debug!("Reversing winding order for concave polygon");
-                            screen_vertices.reverse();
-                        }
-                    }
-
-                    debug!("center: {:?}, is_convex: {}, vertices: {:?}, screen_vertices: {:?}", center, is_convex, vertices, screen_vertices);
+                    // Remove adjacent duplicates
+                    screen_vertices.dedup_by(|a, b| a.distance(*b) < 0.1);
 
                     if *is_convex {
-                        painter.add(Shape::convex_polygon(
-                            screen_vertices,
-                            color,
-                            Stroke::NONE
-                        ));
+                        painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
                     } else {
-                        painter.add(Shape::Path(PathShape {
-                            points: screen_vertices.clone(),
-                            closed: true,
-                            fill: color,
-                            stroke: PathStroke::NONE,
-                        }));
+                        use lyon::path::Path;
+                        use lyon::tessellation::{
+                            FillOptions, FillTessellator, FillRule,
+                            VertexBuffers, BuffersBuilder, StrokeOptions
+                        };
 
-                        for (i, pos) in screen_vertices.into_iter().enumerate() {
+                        // Create Lyon path
+                        let mut path_builder = Path::builder();
+                        if let Some(first) = screen_vertices.first() {
+                            path_builder.begin(lyon::math::Point::new(first.x, first.y));
+                            for pos in &screen_vertices[1..] {
+                                path_builder.line_to(lyon::math::Point::new(pos.x, pos.y));
+                            }
+                            path_builder.close();
+                        }
+                        let path = path_builder.build();
+
+                        // Prepare vertex buffers
+                        let mut geometry: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+                        let mut tessellator = FillTessellator::new();
+
+                        // Tessellate with even-odd rule
+                        tessellator.tessellate_path(
+                            &path,
+                            &FillOptions::default().with_fill_rule(FillRule::EvenOdd),
+                            &mut BuffersBuilder::new(
+                                &mut geometry,
+                                |vertex: lyon::tessellation::FillVertex| egui::epaint::Vertex {
+                                    pos: [vertex.position().x, vertex.position().y].into(),
+                                    uv: egui::epaint::WHITE_UV,
+                                    color,
+                                }
+                            )
+                        ).unwrap();
+
+                        // Create egui mesh
+                        let mesh = egui::epaint::Mesh {
+                            vertices: geometry.vertices.into_iter().map(|v| v.into()).collect(),
+                            indices: geometry.indices,
+                            texture_id: egui::TextureId::default(),
+                        };
+
+                        painter.add(Shape::Mesh(Arc::new(mesh)));
+
+                        // Keep debug visualization
+                        for (i, pos) in screen_vertices.iter().enumerate() {
                             painter.text(
-                                pos,
+                                *pos,
                                 Align2::CENTER_CENTER,
                                 format!("{}", i),
                                 FontId::monospace(8.0),
