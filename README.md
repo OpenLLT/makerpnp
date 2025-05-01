@@ -219,12 +219,40 @@ Options:
 
 ## Gerber Viewer
 
-There's a stand-alone gerber viewer, it can render gerbers generated with DipTrace 4.3 and other tools (untested).
+There's a stand-alone gerber viewer, it can render gerber files generated with DipTrace 4.3, KiCad 8.0, and other tools.
 
 Here's a screenshot:
 
-[<img src="assets/screenshots/gerber_viewer/gerber_viewer_2025-04-28_140410.png" width="800" alt="GerberViewer">](assets/screenshots/gerber_viewer/gerber_viewer_2025-04-28_140410.png)
+[<img src="assets/screenshots/gerber_viewer/gerber_viewer_2025-05-01_221636.png" width="800" alt="GerberViewer">](assets/screenshots/gerber_viewer/gerber_viewer_2025-05-01_221636.png)
 
+### Supported gerber features
+
+| Supported | Feature                              |
+|----------|--------------------------------------|
+| ✅        | Plot/Move/Flash (D01/D02/D03)        |
+| ✅        | Regions                              |
+| ✅        | Aperture macros (AM)                 |
+| ✅        | Macro variables                      |
+| ✅        | Macro expressions                    |
+| ✅        | Vector Line Primitive                |
+| ✅        | Center Line Primitive                |
+| ✅        | Obround Primitive                    |
+| ✅        | Rectangle Primitive                  |
+| ✅        | Concave and Convex Polygon Primitive |
+| ✅        | Outline Primitive                    |
+| ❌        | Thermal Primitive                    |
+| ✅        | Linear plotting (G01)                |
+| ❌        | Circular plotting (G02/G03)          |
+| ❌        | Exposure (Currently only additive)   |
+| ❌        | Step-repeat blocks (SR)              |
+| ❌        | Block aperture (AB)                  |
+| ❌        | File attributes (TF)                 |
+| ❌        | Aperture attributes (TA)             |
+
+The above list is likely sufficient for viewing most modern PCB gerber files, the macro support is a key feature.
+
+The list of supported features will be improved as developer time permits, if you'd like to contribute, please see the
+![contributing](#contributing) section below.
 
 ### Feedback 
 
@@ -329,3 +357,8 @@ Please subscribe to be notified of live-stream events so you can follow the deve
 ## License
 
 TBD (Probably GPL3, Apache or MIT)
+
+## Contributing
+
+If you'd like to contribute, please raise an issue or a PR on the github issue tracker, work-in-progress PRs are fine
+to let us know you're working on something, and/or visit the discord server.  See the ![Links](#links) section above.
