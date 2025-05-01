@@ -43,7 +43,9 @@ struct GerberViewer {
     state: Option<GerberViewState>,
     log: Vec<AppLogItem>,
     coord_input: (String, String),
+    
     use_unique_shape_colors: bool,
+    use_polygon_numbering: bool,
     
     is_about_modal_open: bool,
 }
@@ -370,6 +372,8 @@ impl GerberViewer {
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             use_unique_shape_colors: false,
+            use_polygon_numbering: false,
+            
             is_about_modal_open: false,
         }
     }
@@ -435,6 +439,7 @@ impl eframe::App for GerberViewer {
                 });
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.use_unique_shape_colors, "🎉 Unique shape colors");
+                    ui.checkbox(&mut self.use_polygon_numbering, "＃ Polygon numbering");
                 });
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
@@ -455,6 +460,7 @@ impl eframe::App for GerberViewer {
                 ui.separator();
                 
                 ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
+                ui.toggle_value(&mut self.use_polygon_numbering, "＃");
                 
                 ui.separator();
 
@@ -723,7 +729,7 @@ impl eframe::App for GerberViewer {
                 let painter = ui.painter().with_clip_rect(viewport);
                 for (layer_state, layer, _doc) in state.layers.iter() {
                     if layer_state.enabled {
-                        layer.paint_gerber(&painter, state.view, layer_state.color, self.use_unique_shape_colors);
+                        layer.paint_gerber(&painter, state.view, layer_state.color, self.use_unique_shape_colors, self.use_polygon_numbering);
                     }
                 }
 

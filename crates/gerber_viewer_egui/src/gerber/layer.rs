@@ -804,7 +804,7 @@ impl GerberLayer {
         layer_primitives
     }
 
-    pub fn paint_gerber(&self, painter: &Painter, view: ViewState, base_color: Color32, use_unique_shape_colors: bool) {
+    pub fn paint_gerber(&self, painter: &Painter, view: ViewState, base_color: Color32, use_unique_shape_colors: bool, use_polygon_numbering: bool) {
         for (index, primitive) in self
             .gerber_primitives
             .iter()
@@ -912,26 +912,27 @@ impl GerberLayer {
                         })));
                     }
 
-                    // Debug visualization
-                    let debug_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
-                        .map(|v| {
-                            let point = screen_center + Vec2::new(
-                                v.x as f32 * view.scale,
-                                -v.y as f32 * view.scale
+                    if use_polygon_numbering {
+                        // Debug visualization
+                        let debug_vertices: Vec<Pos2> = geometry.relative_vertices.iter()
+                            .map(|v| {
+                                let point = screen_center + Vec2::new(
+                                    v.x as f32 * view.scale,
+                                    -v.y as f32 * view.scale
+                                );
+                                point.to_pos2()
+                            })
+                            .collect();
+
+                        for (i, pos) in debug_vertices.iter().enumerate() {
+                            painter.text(
+                                *pos,
+                                Align2::CENTER_CENTER,
+                                format!("{}", i),
+                                FontId::monospace(8.0),
+                                Color32::RED,
                             );
-                            point.to_pos2()
-
-                        })
-                        .collect();
-
-                    for (i, pos) in debug_vertices.iter().enumerate() {
-                        painter.text(
-                            *pos,
-                            Align2::CENTER_CENTER,
-                            format!("{}", i),
-                            FontId::monospace(8.0),
-                            Color32::RED,
-                        );
+                        }
                     }
                 }
             }
