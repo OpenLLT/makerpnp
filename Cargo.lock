@@ -2264,6 +2264,7 @@ dependencies = [
  "egui_taffy",
  "env_logger",
  "epaint",
+ "gerber-types",
  "gerber_parser",
  "log",
  "lyon",

@@ -4,7 +4,7 @@ pub mod expressions;
 
 pub use position::*;
 
-pub use gerber_parser::gerber_types;
+pub use gerber_types;
 
 use egui::Color32;
 pub enum Winding {
