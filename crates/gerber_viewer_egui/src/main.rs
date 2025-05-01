@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use eframe::emath::Vec2;
 use eframe::{egui, run_native, CreationContext, NativeOptions};
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Frame, Painter, Pos2, Rect, Response, Ui};
+use egui::{Color32, Context, Frame, Id, Modal, Painter, Pos2, Rect, Response, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
@@ -44,6 +44,18 @@ struct GerberViewer {
     log: Vec<AppLogItem>,
     coord_input: (String, String),
     use_unique_shape_colors: bool,
+    
+    is_about_modal_open: bool,
+}
+
+impl GerberViewer {
+    fn show_about_modal(&mut self) {
+        if self.is_about_modal_open {
+            return
+        }
+
+        self.is_about_modal_open = true;
+    }
 }
 
 struct LayerViewState {
@@ -358,6 +370,7 @@ impl GerberViewer {
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             use_unique_shape_colors: false,
+            is_about_modal_open: false,
         }
     }
 
@@ -401,12 +414,12 @@ impl eframe::App for GerberViewer {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Add layers...").clicked() {
+                    if ui.button("🗁 Add layers...").clicked() {
                         ui.close_menu();
                         self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
-                        if ui.button("Reload all layers").clicked() {
+                        if ui.button("🔃 Reload all layers").clicked() {
                             ui.close_menu();
                             self.reload_all_layer_files();
                         }
@@ -421,17 +434,28 @@ impl eframe::App for GerberViewer {
                     }
                 });
                 ui.menu_button("View", |ui| {
-                    ui.add_enabled_ui(self.state.is_some(), |ui| {
-                        ui.checkbox(&mut self.use_unique_shape_colors, "Unique shape colors");
-                    });
+                    ui.checkbox(&mut self.use_unique_shape_colors, "🎉 Unique shape colors");
                 });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("About").clicked() {
+                        ui.close_menu();
+                        self.show_about_modal();
+                    }
+                })
             });
 
             ui.horizontal(|ui| {
-                if ui.button("Open").clicked() {
+                if ui.button("🗁").clicked() {
                     self.add_layer_files();
                 }
+                if ui.button("🔃").clicked() {
+                    self.reload_all_layer_files();
+                }
 
+                ui.separator();
+                
+                ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
+                
                 ui.separator();
 
                 ui.add_enabled_ui(self.state.is_some(), |ui| {
@@ -467,7 +491,7 @@ impl eframe::App for GerberViewer {
                     let enabled = x.is_ok() && y.is_ok() && self.state.is_some();
 
                     ui.add_enabled_ui(enabled, |ui| {
-                        if ui.button("Locate").clicked() {
+                        if ui.button("⛶ Go To").clicked() {
                             // Safety: ui is disabled unless x and y are `Result::ok`
                             let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
                             self.state
@@ -475,7 +499,7 @@ impl eframe::App for GerberViewer {
                                 .unwrap()
                                 .locate_view(*x, *y);
                         }
-                        if ui.button("Move").clicked() {
+                        if ui.button("➡ Move by").clicked() {
                             // Safety: ui is disabled unless x and y are `Result::ok`
                             let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
                             self.state
@@ -485,6 +509,8 @@ impl eframe::App for GerberViewer {
                         }
                     });
 
+                    ui.separator();
+
                     if ui.button("Reset").clicked() {
                         self.state
                             .as_mut()
@@ -492,10 +518,8 @@ impl eframe::App for GerberViewer {
                             .request_reset();
                     }
 
-                    ui.separator();
-
-                    ui.toggle_value(&mut self.use_unique_shape_colors, "Unique shape colors");
                 });
+                ui.separator();
             })
         });
 
@@ -712,6 +736,58 @@ impl eframe::App for GerberViewer {
                 }
             }
         });
+        
+        //
+        // modals
+        //
+        
+        if self.is_about_modal_open {
+
+            let modal = Modal::new(Id::new("About")).show(ctx, |ui| {
+                use egui::special_emojis::GITHUB;
+
+
+                ui.set_width(250.0);
+                
+                ui.vertical_centered(|ui| {
+                    ui.heading("About");
+                    ui.separator();
+                    ui.label("MakerPnP - Gerber Viewer");
+                    ui.label("Written by Dominic Clifton");
+                    ui.separator();
+                    ui.label("A pure-rust Gerber Viewer.");
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.label("Source:");
+                        ui.hyperlink_to(format!("{GITHUB} MakerPnP"), "https://github.com/MakerPnP/makerpnp");
+                    });
+                    ui.separator();
+                    ui.label("Acknowledgements:");
+                    ui.horizontal(|ui| {
+                        ui.label("UI framework: ");
+                        ui.hyperlink_to(format!("{GITHUB} egui"), "https://github.com/emilk/egui");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Gerber types: ");
+                        ui.hyperlink_to(format!("{GITHUB} gerber-types-rs"), "https://github.com/dbrgn/gerber-types-rs");
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Gerber parser: ");
+                        ui.hyperlink_to(format!("{GITHUB} gerber_parser"), "https://github.com/NemoAndrea/gerber-parser");
+                    });
+                    
+                    ui.separator();
+
+                    if ui.button("Ok").clicked() {
+                        self.is_about_modal_open = false;
+                    }
+                });
+            });
+
+            if modal.should_close() {
+                self.is_about_modal_open = false;
+            }
+        }
     }
 }
 
