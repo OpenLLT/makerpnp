@@ -405,6 +405,10 @@ impl GerberPrimitive {
             relative_vertices.reverse();
         }
 
+        // Deduplicate adjacent vertices with geometric tolerance
+        let epsilon = 1e-6; // 1 nanometer in mm units
+        let relative_vertices = deduplicate_vertices(relative_vertices, epsilon);
+
         // Precompute tessellation for concave polygons
         let tessellation = if !is_convex {
             Some(tessellate_polygon(&relative_vertices))
@@ -425,6 +429,20 @@ impl GerberPrimitive {
         debug!("polygon: {:?}", polygon);
 
         polygon
+    }
+}
+
+fn deduplicate_vertices(vertices: Vec<Position>, epsilon: f64) -> Vec<Position> {
+    let mut deduplicated_vertices = vertices.clone();
+    deduplicated_vertices.dedup_by(|a, b| {
+        (a.x - b.x).abs() < epsilon &&
+            (a.y - b.y).abs() < epsilon
+    });
+
+    if deduplicated_vertices.len() < 3 {
+        vertices.clone()
+    } else {
+        deduplicated_vertices
     }
 }
 
@@ -687,7 +705,7 @@ impl GerberLayer {
                     }
                 }
                 GerberPrimitive::Polygon {
-                    center, 
+                    center,
                     geometry,
                     ..
                 } => {
@@ -1507,7 +1525,7 @@ impl GerberLayer {
                                 -v.y as f32 * view.scale
                             );
                             point.to_pos2()
-                            
+
                         })
                         .collect();
 
