@@ -2265,6 +2265,7 @@ dependencies = [
  "env_logger",
  "epaint",
  "gerber_parser",
+ "indexmap 2.9.0",
  "log",
  "lyon",
  "rand 0.9.1",
@@ -2816,9 +2817,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.7.1"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
+checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
@@ -3325,7 +3326,7 @@ dependencies = [
  "cfg_aliases",
  "codespan-reporting",
  "hexf-parse",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "log",
  "rustc-hash",
  "spirv",
@@ -3848,7 +3849,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "serde",
  "serde_derive",
 ]
@@ -3982,7 +3983,7 @@ dependencies = [
  "csv",
  "dyn-clone",
  "dyn-eq",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "indoc",
  "planner_app",
  "planner_cli",
@@ -4027,7 +4028,7 @@ dependencies = [
  "futures",
  "i18n",
  "image",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "petgraph",
  "planner_app",
  "regex",
@@ -4053,7 +4054,7 @@ dependencies = [
  "dyn-clone",
  "dyn-eq",
  "heck",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "json2markdown",
  "lexical-sort",
  "pnp",
@@ -4187,7 +4188,7 @@ checksum = "35d34aad26c181c38e0399695bb8cd445c65222e40f68bebfea809650eb3eda6"
 dependencies = [
  "autocfg",
  "equivalent",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
 ]
 
 [[package]]
@@ -4840,7 +4841,7 @@ version = "1.0.139"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "44f86c3acccc9c65b153fe1b85a3be07fe5515274ec9f0653b4a0875731c72a6"
 dependencies = [
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "itoa",
  "memchr",
  "ryu",
@@ -4887,7 +4888,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5440,7 +5441,7 @@ version = "0.22.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17b4795ff5edd201c7cd6dca065ae59972ce77d1b80fa0a84d94950ece7d1474"
 dependencies = [
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -6100,7 +6101,7 @@ dependencies = [
  "bitflags 2.8.0",
  "cfg_aliases",
  "document-features",
- "indexmap 2.7.1",
+ "indexmap 2.9.0",
  "log",
  "naga",
  "once_cell",
