@@ -402,19 +402,28 @@ impl eframe::App for GerberViewer {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Add layers...").clicked() {
+                        ui.close_menu();
                         self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
                         if ui.button("Reload all layers").clicked() {
+                            ui.close_menu();
                             self.reload_all_layer_files();
                         }
                         if ui.button("Close all").clicked() {
+                            ui.close_menu();
                             self.close_all();
                         }
                     });
                     if ui.button("Quit").clicked() {
+                        ui.close_menu();
                         self.handle_quit(ui.ctx());
                     }
+                });
+                ui.menu_button("View", |ui| {
+                    ui.add_enabled_ui(self.state.is_some(), |ui| {
+                        ui.checkbox(&mut self.use_unique_shape_colors, "Unique shape colors");
+                    });
                 });
             });
 
