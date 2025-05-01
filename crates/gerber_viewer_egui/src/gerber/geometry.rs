@@ -1,4 +1,5 @@
 use crate::gerber::Position;
+
 #[derive(Debug, Clone)]
 pub struct BoundingBox {
     pub min_x: f64,
@@ -17,8 +18,6 @@ impl Default for BoundingBox {
         }
     }
 }
-
-
 
 pub fn is_convex(vertices: &[Position]) -> bool {
     if vertices.len() < 3 {

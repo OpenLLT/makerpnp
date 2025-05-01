@@ -2,7 +2,7 @@ use std::collections::hash_map::Entry;
 use std::str::Chars;
 
 use egui::ahash::HashMap;
-use gerber_parser::gerber_types::{MacroBoolean, MacroDecimal, MacroInteger};
+use gerber_types::{MacroBoolean, MacroDecimal, MacroInteger};
 use thiserror::Error;
 
 /// Gerber spec 2024.05 - 4.5.4.3 - "The undefined variables are 0".

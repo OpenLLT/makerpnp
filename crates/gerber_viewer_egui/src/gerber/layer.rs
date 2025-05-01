@@ -1,5 +1,3 @@
-use super::gerber_types;
-use super::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
 use log::{debug, error, warn};
 use std::collections::HashMap;
 use egui::{Color32, Painter};
@@ -7,11 +5,13 @@ use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
 use eframe::emath::{Align2, Pos2, Rect, Vec2};
 use std::sync::Arc;
 use std::path::PathBuf;
-use crate::geometry::{BoundingBox, PolygonMesh};
-use crate::gerber::{Exposure, Position, Winding};
-use crate::{color, geometry, gerber, ViewState};
-use crate::gerber::deduplicate::DedupEpsilon;
-use crate::gerber::expressions::{evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32, ExpressionEvaluationError, MacroContext};
+
+use super::{calculate_winding, color, geometry, gerber_types};
+use super::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
+use super::geometry::{BoundingBox, PolygonMesh};
+use super::{Exposure, Position, Winding};
+use super::deduplicate::DedupEpsilon;
+use super::expressions::{evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64, macro_decimal_to_f64, macro_integer_to_u32, ExpressionEvaluationError, MacroContext};
 
 pub struct GerberLayer {
     path: PathBuf,
@@ -1002,7 +1002,7 @@ impl GerberPrimitive {
         let mut relative_vertices = polygon.vertices;
 
         // Calculate and fix winding order
-        let winding = gerber::calculate_winding(&relative_vertices);
+        let winding = calculate_winding(&relative_vertices);
         if matches!(winding, Winding::Clockwise) {
             relative_vertices.reverse();
         }
@@ -1031,5 +1031,20 @@ impl GerberPrimitive {
         debug!("polygon: {:?}", polygon);
 
         polygon
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct ViewState {
+    pub translation: Vec2,
+    pub scale: f32,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            translation: Vec2::ZERO,
+            scale: 1.0,
+        }
     }
 }

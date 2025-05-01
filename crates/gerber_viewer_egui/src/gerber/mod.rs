@@ -1,6 +1,8 @@
 pub mod layer;
 pub mod position;
 pub mod expressions;
+pub mod geometry;
+pub mod color;
 
 pub use position::*;
 

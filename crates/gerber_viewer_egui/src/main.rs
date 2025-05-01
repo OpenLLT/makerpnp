@@ -19,15 +19,14 @@ use gerber_parser::parser::parse_gerber;
 use log::{error, info, trace};
 use rfd::FileDialog;
 use thiserror::Error;
-use geometry::{BoundingBox};
+use gerber::color;
+use gerber::geometry::BoundingBox;
 use logging::AppLogItem;
-use crate::gerber::{Position};
-use gerber::layer::GerberLayer;
+use crate::gerber::Position;
+use gerber::layer::{GerberLayer, ViewState};
 
 mod gerber;
-mod geometry;
 mod logging;
-mod color;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
@@ -231,21 +230,6 @@ impl GerberViewState {
             self.center_screen_pos.unwrap().y + (y as f32 * self.view.scale),
         );
         trace!("view translation (after): {:?}", self.view.translation);
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-struct ViewState {
-    translation: Vec2,
-    scale: f32,
-}
-
-impl Default for ViewState {
-    fn default() -> Self {
-        Self {
-            translation: Vec2::ZERO,
-            scale: 1.0,
-        }
     }
 }
 
