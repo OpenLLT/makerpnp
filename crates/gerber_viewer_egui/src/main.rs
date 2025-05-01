@@ -754,6 +754,8 @@ impl eframe::App for GerberViewer {
                     ui.separator();
                     ui.label("MakerPnP - Gerber Viewer");
                     ui.label("Written by Dominic Clifton");
+                    ui.hyperlink_to(format!("💰 ko-fi"), "https://ko-fi.com/dominicclifton");
+                    ui.separator();
                     ui.separator();
                     ui.label("A pure-rust Gerber Viewer.");
                     ui.separator();
