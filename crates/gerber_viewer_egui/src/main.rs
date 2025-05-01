@@ -5,13 +5,13 @@ use std::path::PathBuf;
 use eframe::emath::Vec2;
 use eframe::{egui, run_native, CreationContext, NativeOptions};
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Frame, Id, Modal, Painter, Pos2, Rect, Response, Ui};
+use egui::{Color32, Context, Frame, Id, Modal, Painter, Pos2, Rect, Response, RichText, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
-use egui_taffy::taffy::prelude::{auto, percent};
+use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{Size, Style};
-use egui_taffy::{taffy, TuiBuilderLogic};
-use epaint::Stroke;
+use egui_taffy::{taffy, tui, TuiBuilderLogic};
+use epaint::{FontFamily, Stroke};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::Command;
@@ -585,7 +585,7 @@ impl eframe::App for GerberViewer {
                             },
                             ..cell_style.clone()
                         })
-                        .add_with_border(|tui| {
+                        .add(|tui| {
                             tui.ui(|ui| {
                                 let text_height = egui::TextStyle::Body
                                     .resolve(ui.style())
@@ -706,13 +706,20 @@ impl eframe::App for GerberViewer {
                             );
                         });
                     }
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        Frame::default().show(ui, |ui| {
+                            ui.label("Add layer files...");
+                        });
+                    });
                 }
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
-            let viewport = response.rect;
             if let Some(state) = &mut self.state {
+                let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
+                let viewport = response.rect;
+
                 if state.needs_initial_view {
                     state.reset_view(viewport);
                 }
@@ -740,6 +747,46 @@ impl eframe::App for GerberViewer {
                 if let Some(position) = state.center_screen_pos {
                     Self::draw_crosshair(&painter, position, Color32::LIGHT_GRAY);
                 }
+            } else {
+
+                let default_style = || Style {
+                    padding: length(8.),
+                    gap: length(8.),
+                    ..Default::default()
+                };
+                
+                tui(ui, ui.id().with("no-file-loaded-panel"))
+                    .reserve_available_space()
+                    .style(Style {
+                        justify_content: Some(taffy::JustifyContent::Center),
+                        align_items: Some(taffy::AlignItems::Center),
+                        flex_direction: taffy::FlexDirection::Column,
+                        size: Size {
+                            width: percent(1.),
+                            height: percent(1.),
+                        },
+                        ..default_style()
+                    })
+                    .show(|tui| {
+                        tui.style(Style {
+                            flex_direction: taffy::FlexDirection::Column,
+                            ..default_style()
+                        })
+                            .add(|tui| {
+                                tui.label(
+                                    RichText::new("MakerPnP")
+                                        .size(48.0)
+                                        .family(FontFamily::Proportional)
+                                );
+                                tui.label(
+                                    RichText::new("Gerber Viewer")
+                                        .size(32.0)
+                                        .family(FontFamily::Proportional)
+                                );
+                            });
+
+                    });
+                
             }
         });
         
