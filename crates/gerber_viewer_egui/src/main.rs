@@ -16,7 +16,7 @@ use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::Command;
 use gerber_parser::parser::parse_gerber;
-use log::{debug, error, info};
+use log::{error, info, trace};
 use rfd::FileDialog;
 use thiserror::Error;
 use geometry::{BoundingBox};
@@ -107,7 +107,7 @@ impl GerberViewState {
             bbox.max_x = f64::max(bbox.max_x, layer_bbox.max_x);
             bbox.max_y = f64::max(bbox.max_y, layer_bbox.max_y);
         }
-        debug!("view bbox: {:?}", bbox);
+        trace!("view bbox: {:?}", bbox);
 
         self.bounding_box = bbox;
     }
@@ -206,31 +206,31 @@ impl GerberViewState {
 
     /// X and Y are in GERBER units.
     pub fn move_view(&mut self, position: gerber::Position) {
-        debug!("move view. x: {}, y: {}", position.x, position.y);
-        debug!("view translation (before): {:?}", self.view.translation);
+        trace!("move view. x: {}, y: {}", position.x, position.y);
+        trace!("view translation (before): {:?}", self.view.translation);
 
         let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation);
         gerber_coords += position;
-        debug!("gerber_coords: {:?}", self.view.translation);
+        trace!("gerber_coords: {:?}", self.view.translation);
         let screen_coords = self.gerber_to_screen_coords(gerber_coords);
 
-        debug!("screen_cords: {:?}", screen_coords);
+        trace!("screen_cords: {:?}", screen_coords);
 
         let delta = screen_coords - self.view.translation;
-        debug!("delta: {:?}", delta);
+        trace!("delta: {:?}", delta);
 
         self.view.translation -= delta;
-        debug!("view translation (after): {:?}", self.view.translation);
+        trace!("view translation (after): {:?}", self.view.translation);
     }
 
     /// X and Y are in GERBER units.
     pub fn locate_view(&mut self, x: f64, y: f64) {
-        debug!("locate view. x: {}, y: {}", x, y);
+        trace!("locate view. x: {}, y: {}", x, y);
         self.view.translation = Vec2::new(
             self.center_screen_pos.unwrap().x - (x as f32 * self.view.scale),
             self.center_screen_pos.unwrap().y + (y as f32 * self.view.scale),
         );
-        debug!("view translation (after): {:?}", self.view.translation);
+        trace!("view translation (after): {:?}", self.view.translation);
     }
 }
 
@@ -701,7 +701,7 @@ impl eframe::App for GerberViewer {
                 state.handle_panning(&response, ui);
                 state.handle_zooming(&response, viewport, ui);
 
-                debug!("view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}", state.view, INITIAL_GERBER_AREA_PERCENT, state.center_screen_pos.unwrap(), state.origin_screen_pos.unwrap());
+                trace!("view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}", state.view, INITIAL_GERBER_AREA_PERCENT, state.center_screen_pos.unwrap(), state.origin_screen_pos.unwrap());
 
                 let painter = ui.painter().with_clip_rect(viewport);
                 for (layer_state, layer, _doc) in state.layers.iter() {
