@@ -14,14 +14,12 @@ use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy};
-use epaint::{FontId, Mesh, PathShape, PathStroke, Shape, Stroke, StrokeKind, Vertex};
+use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
 use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info, warn};
-use lyon::path::{FillRule, Winding};
-use lyon::tessellation;
 use rand::prelude::SmallRng;
 use rand::{Rng, SeedableRng};
 use rfd::FileDialog;
@@ -497,12 +495,12 @@ pub mod deduplicate {
                 Position { x: 1.0, y: 1.0 },
                 Position { x: 2.0, y: 2.0 },
             ];
-            
+
             let expected_result = vertices.clone();
-            
+
             // when
             let result = vertices.dedup_with_epsilon(0.0001);
-            
+
             // then
             assert_eq!(result, expected_result);
         }
