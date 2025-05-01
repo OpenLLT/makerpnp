@@ -1,5 +1,6 @@
 pub mod position;
 
+use egui::Color32;
 pub use position::*;
 
 pub enum Winding {
@@ -19,5 +20,29 @@ pub fn calculate_winding(vertices: &[Position]) -> Winding {
         Winding::Clockwise
     } else {
         Winding::CounterClockwise
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Exposure {
+    CutOut,
+    Add,
+}
+
+impl From<bool> for Exposure {
+    fn from(value: bool) -> Self {
+        match value {
+            true => Exposure::Add,
+            false => Exposure::CutOut,
+        }
+    }
+}
+
+impl Exposure {
+    pub fn to_color(&self, color: &Color32) -> Color32 {
+        match self {
+            Exposure::CutOut => Color32::BLACK,
+            Exposure::Add => *color,
+        }
     }
 }

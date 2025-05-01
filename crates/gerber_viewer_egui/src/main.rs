@@ -24,6 +24,8 @@ use rand::prelude::SmallRng;
 use rand::{Rng, SeedableRng};
 use rfd::FileDialog;
 use thiserror::Error;
+use geometry::BoundingBox;
+use gerber::Exposure;
 use gerber::position::deduplicate::DedupEpsilon;
 use crate::gerber::{Position, Winding};
 use crate::gerber_expressions::{
@@ -32,6 +34,8 @@ use crate::gerber_expressions::{
 };
 
 mod gerber;
+mod geometry;
+
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
 fn main() -> eframe::Result<()> {
@@ -269,49 +273,6 @@ impl Default for ViewState {
         Self {
             translation: Vec2::ZERO,
             scale: 1.0,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct BoundingBox {
-    min_x: f64,
-    min_y: f64,
-    max_x: f64,
-    max_y: f64,
-}
-
-impl Default for BoundingBox {
-    fn default() -> Self {
-        Self {
-            min_x: f64::MAX,
-            min_y: f64::MAX,
-            max_x: f64::MIN,
-            max_y: f64::MIN,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum Exposure {
-    CutOut,
-    Add,
-}
-
-impl From<bool> for Exposure {
-    fn from(value: bool) -> Self {
-        match value {
-            true => Exposure::Add,
-            false => Exposure::CutOut,
-        }
-    }
-}
-
-impl Exposure {
-    fn to_color(&self, color: &Color32) -> Color32 {
-        match self {
-            Exposure::CutOut => Color32::BLACK,
-            Exposure::Add => *color,
         }
     }
 }
