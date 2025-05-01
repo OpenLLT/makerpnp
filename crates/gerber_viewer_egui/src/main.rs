@@ -14,13 +14,12 @@ use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy};
-use epaint::{Shape, Stroke, StrokeKind};
+use epaint::{PathShape, PathStroke, Shape, Stroke, StrokeKind};
 use gerber_parser::gerber_doc::GerberDoc;
 use gerber_parser::gerber_types;
 use gerber_parser::gerber_types::{Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode, MacroContent, MacroDecimal, Operation, VariableDefinition};
 use gerber_parser::parser::parse_gerber;
 use log::{debug, error, info, warn};
-use lyon::math::Point;
 use rand::prelude::SmallRng;
 use rand::{Rng, SeedableRng};
 use rfd::FileDialog;
@@ -342,9 +341,6 @@ enum GerberPrimitive {
         vertices: Vec<Position>,
         exposure: Exposure,
         is_convex: bool,
-        triangles: Vec<Vec<Pos2>>,
-        local_origin: Position,
-        local_bounds: (f64, f64),
     },
 }
 
@@ -392,110 +388,14 @@ impl GerberPolygon {
 impl GerberPrimitive {
     fn new_polygon(polygon: GerberPolygon) -> Self {
         debug!("new_polygon: {:?}", polygon);
-        // 1. Calculate bounding box in original coordinates
-        let mut min_x = f64::MAX;
-        let mut min_y = f64::MAX;
-        let mut max_x = f64::MIN;
-        let mut max_y = f64::MIN;
-
-        let absolute_vertices: Vec<(f64, f64)> = polygon.vertices
-            .iter()
-            .map(|v| {
-                let x = polygon.center.x + v.x;
-                let y = polygon.center.y + v.y;
-                (x, y)
-            })
-            .collect();
-        debug!("absolute_vertices: {:?}", absolute_vertices);
-
-        for &(x, y) in &absolute_vertices {
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
-        }
-        debug!("bounding box: {:?}", (min_x, min_y, max_x, max_y));
-
-        // 2. Convert to local coordinates relative to bounding box
-        let local_vertices: Vec<lyon::math::Point> = absolute_vertices
-            .iter()
-            .map(|&(x, y)| {
-                lyon::math::Point::new(
-                    (x - min_x) as f32,
-                    (y - min_y) as f32
-                )
-            })
-            .collect();
-        debug!("local_vertices: {:?}", local_vertices);
-
-        let mut triangles = Vec::new();
         let is_convex = polygon.is_convex();
-
-        if !is_convex {
-            use lyon::path::Path;
-            use lyon::tessellation::*;
-
-            // 3. Build path with local coordinates
-            let mut path_builder = Path::builder();
-            if let Some(first) = local_vertices.first() {
-                path_builder.begin(*first);
-                for v in &local_vertices[1..] {
-                    path_builder.line_to(*v);
-                }
-                path_builder.close();
-            }
-            let path = path_builder.build();
-            debug!("path: {:?}", path);
-
-            // 4. Tessellate with adaptive tolerance
-            let mut geometry: VertexBuffers<lyon::math::Point, u32> = VertexBuffers::new();
-            let mut tessellator = FillTessellator::new();
-
-            let options = FillOptions::default()
-                .with_fill_rule(FillRule::EvenOdd);
-
-            tessellator.tessellate_path(
-                &path,
-                &options,
-                &mut BuffersBuilder::new(&mut geometry, |vertex: FillVertex| vertex.position())
-            ).unwrap();
-
-            // 5. Weld vertices to eliminate micro-gaps
-            const WELD_THRESHOLD: f32 = 1e-5;
-            let mut welded_vertices: Vec<Point> = Vec::new();
-            let mut index_map = Vec::new();
-
-            for v in &geometry.vertices {
-                if let Some(existing) = welded_vertices.iter().find(|&&ev|
-                    (ev.x - v.x).abs() < WELD_THRESHOLD &&
-                        (ev.y - v.y).abs() < WELD_THRESHOLD
-                ) {
-                    index_map.push(welded_vertices.len() - 1);
-                } else {
-                    index_map.push(welded_vertices.len());
-                    welded_vertices.push(*v);
-                }
-            }
-
-            // 6. Store triangles with welded vertices
-            triangles = geometry.indices.chunks(3).map(|chunk| {
-                chunk.iter().map(|i| {
-                    let v = welded_vertices[index_map[*i as usize]];
-                    Pos2::new(v.x, v.y)
-                }).collect::<Vec<_>>()
-            }).collect();
-        }
-
         let polygon = GerberPrimitive::Polygon {
             center: polygon.center,
             vertices: polygon.vertices,
             exposure: polygon.exposure,
             is_convex,
-            triangles,
-            local_origin: Position { x: min_x, y: min_y }, // Store for rendering
-            local_bounds: (max_x - min_x, max_y - min_y),  // width, height
         };
-        
+
         debug!("polygon: {:?}", polygon);
         
         polygon
@@ -937,13 +837,6 @@ impl GerberLayer {
                                                 exposure: macro_boolean_to_bool(&vector_line.exposure, macro_context)?
                                                     .into(),
                                                 is_convex: true,
-                                                
-                                                // TODO consider make them optional to avoid having to specify them
-                                                //      or add them to an internal enum like 'PolygonMode' with 'Convex' and 'Concave' variants 
-                                                // unused for convex polygon 
-                                                triangles: Vec::new(),
-                                                local_origin: Position { x: 0.0, y: 0.0 },
-                                                local_bounds: (0.0, 0.0),
                                             }))
                                         }
                                         MacroContent::CenterLine(center_line) => {
@@ -985,10 +878,6 @@ impl GerberLayer {
                                                 exposure: macro_boolean_to_bool(&center_line.exposure, macro_context)?
                                                     .into(),
                                                 is_convex: true,
-                                                // unused for convex polygon 
-                                                triangles: Vec::new(),
-                                                local_origin: Position { x: 0.0, y: 0.0 },
-                                                local_bounds: (0.0, 0.0),
                                             }))
                                         }
                                         MacroContent::Outline(outline) => {
@@ -1499,74 +1388,36 @@ impl GerberLayer {
                     vertices,
                     exposure,
                     is_convex,
-                    triangles,
-                    local_origin,
-                    local_bounds,
                 } => {
-                    let color = exposure.to_color(&base_color);
+                    let color = exposure.to_color(&color);
+                    let screen_center = view.translation +
+                        Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
 
-                    match is_convex {
-                        true => {
-                            let screen_center = view.translation + Vec2::new(center.x as f32, -(center.y as f32)) * view.scale;
+                    // Convert all vertices to screen space
+                    let screen_vertices: Vec<Pos2> = vertices
+                        .iter()
+                        .map(|Position { x: dx, y: dy }| {
+                            let screen_pos = screen_center +
+                                Vec2::new(*dx as f32, -(*dy as f32)) * view.scale;
+                            screen_pos.to_pos2()
+                        })
+                        .collect();
+                    debug!("center: {:?}, is_convex: {}, vertices: {:?}, screen_vertices: {:?}", center, is_convex, vertices, screen_vertices);
+                    
 
-                            // Convert vertices to screen space
-                            let screen_vertices: Vec<Pos2> = vertices
-                                .iter()
-                                .map(
-                                    |Position {
-                                         x: dx,
-                                         y: dy,
-                                     }| {
-                                        let screen_pos =
-                                            screen_center + Vec2::new(*dx as f32, -(*dy as f32)) * view.scale;
-                                        screen_pos.to_pos2()
-                                    },
-                                )
-                                .collect();
-
-                            painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));                            
-                        },
-                        false => {
-                            debug!("concave polygon");
-
-                            // Precision-aware transformation
-                            let view_scale = view.scale as f64;
-                            let view_translation = (
-                                view.translation.x as f64,
-                                view.translation.y as f64
-                            );
-
-                            // Get origin with proper Y inversion
-                            let origin_x = local_origin.x;
-                            let origin_y = -local_origin.y; // Invert here!
-
-                            for triangle in triangles {
-                                let screen_triangle: Vec<Pos2> = triangle
-                                    .iter()
-                                    .map(|pos| {
-                                        // Convert local to absolute with Y inversion
-                                        let abs_x = origin_x + pos.x as f64;
-                                        let abs_y = origin_y - pos.y as f64; // Subtract instead of add
-
-                                        // Apply view transform with subpixel quantization
-                                        let screen_x = (abs_x * view_scale + view_translation.0)
-                                            .mul_add(8.0, 0.5).floor() / 8.0;
-                                        let screen_y = (abs_y * view_scale + view_translation.1)
-                                            .mul_add(8.0, 0.5).floor() / 8.0;
-
-                                        Pos2::new(screen_x as f32, screen_y as f32)
-                                    })
-                                    .collect();
-
-                                debug!("screen_triangle: {:?}", screen_triangle);
-
-                                painter.add(Shape::convex_polygon(
-                                    screen_triangle,
-                                    color,
-                                    Stroke::new(0.5, color) // Tiny stroke to fill gaps
-                                ));
-                            }
-                        }
+                    if *is_convex {
+                        painter.add(Shape::convex_polygon(
+                            screen_vertices,
+                            color,
+                            Stroke::NONE
+                        ));
+                    } else {
+                        painter.add(Shape::Path(PathShape {
+                            points: screen_vertices,
+                            closed: true,
+                            fill: color,
+                            stroke: PathStroke::NONE,
+                        }));
                     }
                 }
             }
