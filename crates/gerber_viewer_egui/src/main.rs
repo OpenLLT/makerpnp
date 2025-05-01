@@ -453,9 +453,11 @@ impl eframe::App for GerberViewer {
                 if ui.button("🗁").clicked() {
                     self.add_layer_files();
                 }
-                if ui.button("🔃").clicked() {
-                    self.reload_all_layer_files();
-                }
+                ui.add_enabled_ui(self.state.is_some(), |ui| {
+                    if ui.button("🔃").clicked() {
+                        self.reload_all_layer_files();
+                    }
+                });
 
                 ui.separator();
                 
