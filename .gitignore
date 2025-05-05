@@ -1,6 +1,8 @@
 /target
-/assets/eda/kicad/*/test1-backups
-/assets/eda/kicad/*/fp-info-cache
+
+# Kicad files
+/**/*-backups
+/**/fp-info-cache
 
 /crates/gerber_viewer/target
 /crates/gerber_viewer/demo/target
