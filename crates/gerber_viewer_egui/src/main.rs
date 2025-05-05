@@ -14,8 +14,6 @@ use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::{FontFamily, Stroke};
 use gerber_viewer::gerber_parser::gerber_doc::GerberDoc;
-use gerber_viewer::gerber_parser::gerber_types;
-use gerber_viewer::gerber_parser::gerber_types::Command;
 use gerber_viewer::gerber_parser::parser::parse_gerber;
 use gerber_viewer::position::{Position, ZERO};
 use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, ViewState, generate_pastel_color};
@@ -301,7 +299,10 @@ impl GerberViewer {
         Ok(())
     }
 
-    fn parse_gerber(log: &mut Vec<AppLogItem>, path: &PathBuf) -> Result<(GerberDoc, Vec<Command>), AppError> {
+    fn parse_gerber(
+        log: &mut Vec<AppLogItem>,
+        path: &PathBuf,
+    ) -> Result<(GerberDoc, Vec<gerber_viewer::gerber_types::Command>), AppError> {
         let file = File::open(path.clone())
             .inspect_err(|error| {
                 let message = format!(
@@ -339,7 +340,7 @@ impl GerberViewer {
                 Ok(command) => Some(command.clone()),
                 Err(_) => None,
             })
-            .collect();
+            .collect::<Vec<gerber_viewer::gerber_parser::gerber_types::Command>>();
 
         Ok((gerber_doc, commands))
     }
@@ -654,8 +655,8 @@ impl eframe::App for GerberViewer {
                                 ui.horizontal(|ui| {
                                     if let Some(state) = &self.state {
                                         let unit_text = match state.layers.first().unwrap().3.units {
-                                            Some(gerber_types::Unit::Millimeters) => "MM",
-                                            Some(gerber_types::Unit::Inches) => "Inches",
+                                            Some(gerber_viewer::gerber_parser::gerber_types::Unit::Millimeters) => "MM",
+                                            Some(gerber_viewer::gerber_parser::gerber_types::Unit::Inches) => "Inches",
                                             None => "Unknown Units",
                                         };
                                         ui.label(format!("Layer units: {}", unit_text));
