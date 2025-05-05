@@ -1,6 +1,8 @@
 <div align="center">
 
-![rust](https://github.com/makerpnp/makerpnp/actions/workflows/rust.yml/badge.svg?event=push)
+[![Build Status](https://github.com/makerpnp/makerpnp/workflows/Rust/badge.svg)](https://github.com/makerpnp/makerpnp/actions/workflows/rust.yml)
+[![Discord](https://img.shields.io/discord/1255867192503832688?label=MakerPnP%20discord)](https://discord.gg/ffwj5rKZuf)
+
 
 ![MakerPnP](assets/logos/makerpnp_icon_1_384x384.png)
 
