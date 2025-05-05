@@ -1,5 +1,6 @@
 use std::ops::{AddAssign, DivAssign, MulAssign, SubAssign};
 
+#[cfg(feature = "egui")]
 use egui::Vec2;
 
 pub const ZERO: Position = Position::new(0.0, 0.0);
@@ -19,6 +20,7 @@ impl Position {
         }
     }
 
+    #[cfg(feature = "egui")]
     pub const fn to_vec2(self) -> Vec2 {
         Vec2::new(self.x as f32, self.y as f32)
     }
@@ -110,6 +112,7 @@ impl DivAssign for Position {
     }
 }
 
+#[cfg(feature = "egui")]
 impl From<Vec2> for Position {
     fn from(value: Vec2) -> Self {
         Self {
@@ -129,7 +132,7 @@ impl From<(f64, f64)> for Position {
 }
 
 pub mod deduplicate {
-    use crate::gerber::Position;
+    use crate::Position;
 
     pub trait DedupEpsilon {
         fn dedup_with_epsilon(self, epsilon: f64) -> Self;

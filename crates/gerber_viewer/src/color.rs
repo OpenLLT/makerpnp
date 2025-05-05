@@ -1,8 +1,13 @@
-use egui::Color32;
-use rand::prelude::SmallRng;
-use rand::{Rng, SeedableRng};
+#[cfg(feature = "egui")]
+use egui::epaint::Color32;
 
+use crate::Exposure;
+
+#[cfg(feature = "egui")]
 pub fn generate_pastel_color(index: u64) -> Color32 {
+    use rand::prelude::SmallRng;
+    use rand::{Rng, SeedableRng};
+
     let mut rng = SmallRng::seed_from_u64(index);
 
     let hue = rng.random_range(0.0..360.0);
@@ -42,4 +47,34 @@ pub fn hsv_to_rgb(hue: f32, saturation: f32, value: f32) -> (u8, u8, u8) {
         .clamp(0.0, 255.0) as u8;
 
     (red, green, blue)
+}
+
+impl Exposure {
+    #[cfg(feature = "egui")]
+    pub fn to_color(&self, color: &Color32) -> Color32 {
+        match self {
+            Exposure::CutOut => Color32::BLACK,
+            Exposure::Add => *color,
+        }
+    }
+}
+
+#[cfg(all(test, feature = "egui"))]
+mod exposure_tests {
+    use super::*;
+
+    #[test]
+    fn test_exposure_add_to_color() {
+        let color = Color32::from_rgb(127, 127, 127);
+        let exposure = Exposure::Add;
+        assert_eq!(exposure.to_color(&color), color);
+    }
+
+    #[test]
+    fn test_exposure_cutout_to_color() {
+        let color = Color32::from_rgb(127, 127, 127);
+        let exposure = Exposure::CutOut;
+        let expected = Color32::BLACK;
+        assert_eq!(exposure.to_color(&color), expected);
+    }
 }

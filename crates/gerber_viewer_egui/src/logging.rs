@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 
+#[allow(dead_code)]
 pub enum AppLogItem {
     Info(String),
     Warning(String),

@@ -13,21 +13,17 @@ use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::{FontFamily, Stroke};
-use gerber::color;
-use gerber::geometry::BoundingBox;
-use gerber::layer::{GerberLayer, ViewState};
-use gerber_parser::gerber_doc::GerberDoc;
-use gerber_parser::gerber_types;
-use gerber_parser::gerber_types::Command;
-use gerber_parser::parser::parse_gerber;
+use gerber_viewer::gerber_parser::gerber_doc::GerberDoc;
+use gerber_viewer::gerber_parser::gerber_types;
+use gerber_viewer::gerber_parser::gerber_types::Command;
+use gerber_viewer::gerber_parser::parser::parse_gerber;
+use gerber_viewer::position::{Position, ZERO};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, ViewState, generate_pastel_color};
 use log::{error, info, trace};
 use logging::AppLogItem;
 use rfd::FileDialog;
 use thiserror::Error;
 
-use crate::gerber::Position;
-
-mod gerber;
 mod logging;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
@@ -81,7 +77,7 @@ struct GerberViewState {
     needs_initial_view: bool,
     bounding_box: BoundingBox,
     cursor_gerber_coords: Option<Position>,
-    layers: Vec<(LayerViewState, GerberLayer, GerberDoc)>,
+    layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
     center_screen_pos: Option<Vec2>,
     origin_screen_pos: Option<Vec2>,
 }
@@ -101,9 +97,15 @@ impl Default for GerberViewState {
 }
 
 impl GerberViewState {
-    pub fn add_layer(&mut self, layer_view_state: LayerViewState, layer: GerberLayer, gerber_doc: GerberDoc) {
+    pub fn add_layer(
+        &mut self,
+        path: PathBuf,
+        layer_view_state: LayerViewState,
+        layer: GerberLayer,
+        gerber_doc: GerberDoc,
+    ) {
         self.layers
-            .push((layer_view_state, layer, gerber_doc));
+            .push((path, layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_reset();
     }
@@ -111,10 +113,10 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (_, layer, _) in self
+        for (_, _, layer, _) in self
             .layers
             .iter()
-            .filter(|(state, _, _)| state.enabled)
+            .filter(|(_path, state, _, _)| state.enabled)
         {
             let layer_bbox = &layer.bounding_box();
             bbox.min_x = f64::min(bbox.min_x, layer_bbox.min_x);
@@ -208,19 +210,19 @@ impl GerberViewState {
     }
 
     /// Convert to gerber coordinates using view transformation
-    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> gerber::Position {
+    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> Position {
         let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
-        gerber::Position::new(gerber_pos.x as f64, gerber_pos.y as f64).invert_y()
+        Position::new(gerber_pos.x as f64, gerber_pos.y as f64).invert_y()
     }
 
     /// Convert from gerber coordinates using view transformation
-    pub fn gerber_to_screen_coords(&self, gerber_pos: gerber::Position) -> Vec2 {
+    pub fn gerber_to_screen_coords(&self, gerber_pos: Position) -> Vec2 {
         let gerber_pos = gerber_pos.invert_y().to_vec2();
         self.view.translation + (gerber_pos * self.view.scale)
     }
 
     /// X and Y are in GERBER units.
-    pub fn move_view(&mut self, position: gerber::Position) {
+    pub fn move_view(&mut self, position: Position) {
         trace!("move view. x: {}, y: {}", position.x, position.y);
         trace!("view translation (before): {:?}", self.view.translation);
 
@@ -289,12 +291,12 @@ impl GerberViewer {
         let state = self.state.get_or_insert_default();
 
         let layer_count = state.layers.len();
-        let color = color::generate_pastel_color(layer_count as u64);
+        let color = generate_pastel_color(layer_count as u64);
 
-        let layer = GerberLayer::new(commands, path.clone());
+        let layer = GerberLayer::new(commands);
         let layer_view_state = LayerViewState::new(color);
 
-        state.add_layer(layer_view_state, layer, gerber_doc);
+        state.add_layer(path, layer_view_state, layer, gerber_doc);
 
         Ok(())
     }
@@ -345,11 +347,9 @@ impl GerberViewer {
     pub fn reload_all_layer_files(&mut self) {
         let Some(state) = &mut self.state else { return };
 
-        for (_state, layer, doc) in state.layers.iter_mut() {
-            let path = layer.path().clone();
-
+        for (path, _state, layer, doc) in state.layers.iter_mut() {
             if let Ok((gerber_doc, commands)) = Self::parse_gerber(&mut self.log, &path) {
-                *layer = GerberLayer::new(commands, path.clone());
+                *layer = GerberLayer::new(commands);
                 *doc = gerber_doc;
             }
         }
@@ -653,7 +653,7 @@ impl eframe::App for GerberViewer {
                             tui.ui(|ui| {
                                 ui.horizontal(|ui| {
                                     if let Some(state) = &self.state {
-                                        let unit_text = match state.layers.first().unwrap().2.units {
+                                        let unit_text = match state.layers.first().unwrap().3.units {
                                             Some(gerber_types::Unit::Millimeters) => "MM",
                                             Some(gerber_types::Unit::Inches) => "Inches",
                                             None => "Unknown Units",
@@ -691,14 +691,12 @@ impl eframe::App for GerberViewer {
             .resizable(true)
             .show(ctx, |ui| {
                 if let Some(state) = &mut self.state {
-                    for (layer_view_state, layer, _doc) in state.layers.iter_mut() {
+                    for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
                         ui.horizontal(|ui| {
                             ui.color_edit_button_srgba(&mut layer_view_state.color);
                             ui.checkbox(
                                 &mut layer_view_state.enabled,
-                                layer
-                                    .path()
-                                    .file_stem()
+                                path.file_stem()
                                     .unwrap()
                                     .to_string_lossy()
                                     .to_string(),
@@ -724,7 +722,7 @@ impl eframe::App for GerberViewer {
                 }
 
                 state.center_screen_pos = Some(viewport.center().to_vec2());
-                state.origin_screen_pos = Some(state.gerber_to_screen_coords(gerber::position::ZERO));
+                state.origin_screen_pos = Some(state.gerber_to_screen_coords(ZERO));
 
                 state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
@@ -739,11 +737,12 @@ impl eframe::App for GerberViewer {
                 );
 
                 let painter = ui.painter().with_clip_rect(viewport);
-                for (layer_state, layer, _doc) in state.layers.iter() {
+                for (_, layer_state, layer, _doc) in state.layers.iter() {
                     if layer_state.enabled {
-                        layer.paint_gerber(
+                        GerberRenderer::default().paint_layer(
                             &painter,
                             state.view,
+                            &layer,
                             layer_state.color,
                             self.use_unique_shape_colors,
                             self.use_polygon_numbering,

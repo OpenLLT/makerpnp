@@ -1,4 +1,4 @@
-use crate::gerber::Position;
+use crate::Position;
 
 #[derive(Debug, Clone)]
 pub struct BoundingBox {

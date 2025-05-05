@@ -1,12 +1,26 @@
-pub mod color;
-pub mod expressions;
-pub mod geometry;
-pub mod layer;
+mod color;
+mod expressions;
+mod geometry;
+mod layer;
 pub mod position;
 
-use egui::Color32;
+#[cfg(feature = "egui")]
+mod renderer;
+
+pub use color::*;
+pub use geometry::*;
+/// re-export 'gerber_parser' crate
+#[cfg(feature = "parser")]
+pub use gerber_parser;
+/// re-export 'gerber_types' crate
+#[cfg(feature = "types")]
 pub use gerber_types;
-pub use position::*;
+pub use layer::*;
+#[cfg(feature = "egui")]
+pub use renderer::*;
+
+use crate::position::Position;
+
 pub enum Winding {
     /// Aka 'Positive' in Geometry
     Clockwise,
@@ -38,15 +52,6 @@ impl From<bool> for Exposure {
         match value {
             true => Exposure::Add,
             false => Exposure::CutOut,
-        }
-    }
-}
-
-impl Exposure {
-    pub fn to_color(&self, color: &Color32) -> Color32 {
-        match self {
-            Exposure::CutOut => Color32::BLACK,
-            Exposure::Add => *color,
         }
     }
 }

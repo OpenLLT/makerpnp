@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use eframe::emath::{Align2, Pos2, Rect, Vec2};
-use egui::{Color32, Painter};
-use epaint::{FontId, Mesh, Shape, Stroke, StrokeKind, Vertex};
+#[cfg(feature = "egui")]
+use egui::epaint::emath::Vec2;
 use log::{debug, error, warn};
 
-use super::deduplicate::DedupEpsilon;
 use super::expressions::{
     ExpressionEvaluationError, MacroContext, evaluate_expression, macro_boolean_to_bool, macro_decimal_pair_to_f64,
     macro_decimal_to_f64, macro_integer_to_u32,
@@ -17,11 +14,11 @@ use super::gerber_types::{
     Aperture, ApertureDefinition, ApertureMacro, Command, Coordinates, DCode, ExtendedCode, FunctionCode, GCode,
     MacroContent, MacroDecimal, Operation, VariableDefinition,
 };
+use super::position::deduplicate::DedupEpsilon;
 use super::{Exposure, Position, Winding};
-use super::{calculate_winding, color, geometry, gerber_types};
+use super::{calculate_winding, geometry, gerber_types};
 
 pub struct GerberLayer {
-    path: PathBuf,
     /// Storing the commands, soon we'll want to tag the primitives with the `Command` used to build them.
     #[allow(unused)]
     commands: Vec<Command>,
@@ -30,12 +27,11 @@ pub struct GerberLayer {
 }
 
 impl GerberLayer {
-    pub fn new(commands: Vec<Command>, path: PathBuf) -> Self {
+    pub fn new(commands: Vec<Command>) -> Self {
         let gerber_primitives = GerberLayer::build_primitives(&commands);
         let bounding_box = GerberLayer::calculate_bounding_box(&gerber_primitives);
 
         Self {
-            path,
             commands,
             gerber_primitives,
             bounding_box,
@@ -46,8 +42,8 @@ impl GerberLayer {
         &self.bounding_box
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+    pub fn primitives(&self) -> &[GerberPrimitive] {
+        &self.gerber_primitives
     }
 }
 
@@ -528,7 +524,7 @@ impl GerberLayer {
 
         let mut layer_primitives = Vec::new();
         let mut current_aperture = None;
-        let mut current_pos = crate::gerber::ZERO;
+        let mut current_pos = crate::position::ZERO;
 
         // regions are a special case - they are defined by aperture codes
         let mut current_region_vertices: Vec<Position> = Vec::new();
@@ -804,149 +800,6 @@ impl GerberLayer {
 
         layer_primitives
     }
-
-    pub fn paint_gerber(
-        &self,
-        painter: &Painter,
-        view: ViewState,
-        base_color: Color32,
-        use_unique_shape_colors: bool,
-        use_polygon_numbering: bool,
-    ) {
-        for (index, primitive) in self
-            .gerber_primitives
-            .iter()
-            .enumerate()
-        {
-            let color = match use_unique_shape_colors {
-                true => color::generate_pastel_color(index as u64),
-                false => base_color,
-            };
-
-            match primitive {
-                GerberPrimitive::Circle {
-                    center,
-                    diameter,
-                    exposure,
-                } => {
-                    let color = exposure.to_color(&color);
-
-                    let center = view.translation + center.invert_y().to_vec2() * view.scale;
-                    let radius = (*diameter as f32 / 2.0) * view.scale;
-                    painter.circle(center.to_pos2(), radius, color, Stroke::NONE);
-                }
-                GerberPrimitive::Rectangle {
-                    origin,
-                    width,
-                    height,
-                    exposure,
-                } => {
-                    let color = exposure.to_color(&color);
-
-                    // Calculate center-based position
-                    let center = view.translation
-                        + Vec2::new(
-                            origin.x as f32 + *width as f32 / 2.0,     // Add half width to get center
-                            -(origin.y as f32 + *height as f32 / 2.0), // Flip Y and add half height
-                        ) * view.scale;
-
-                    let size = Vec2::new(*width as f32, *height as f32) * view.scale;
-                    let top_left = center - size / 2.0; // Calculate top-left from center
-
-                    painter.rect(
-                        Rect::from_min_size(top_left.to_pos2(), size),
-                        0.0,
-                        color,
-                        Stroke::NONE,
-                        StrokeKind::Middle,
-                    );
-                }
-                GerberPrimitive::Line {
-                    start,
-                    end,
-                    width,
-                    exposure,
-                } => {
-                    let color = exposure.to_color(&color);
-
-                    let start_position = view.translation + Vec2::new(start.x as f32, -(start.y as f32)) * view.scale;
-                    let end_position = view.translation + Vec2::new(end.x as f32, -(end.y as f32)) * view.scale;
-                    painter.line_segment(
-                        [start_position.to_pos2(), end_position.to_pos2()],
-                        Stroke::new((*width as f32) * view.scale, color),
-                    );
-                    // Draw circles at either end of the line.
-                    let radius = (*width as f32 / 2.0) * view.scale;
-                    painter.circle(start_position.to_pos2(), radius, color, Stroke::NONE);
-                    painter.circle(end_position.to_pos2(), radius, color, Stroke::NONE);
-                }
-                GerberPrimitive::Polygon {
-                    center,
-                    exposure,
-                    geometry,
-                } => {
-                    let color = exposure.to_color(&color);
-                    let screen_center = Vec2::new(
-                        view.translation.x + (center.x as f32) * view.scale,
-                        view.translation.y - (center.y as f32) * view.scale,
-                    );
-
-                    if geometry.is_convex {
-                        // Direct convex rendering
-                        let screen_vertices: Vec<Pos2> = geometry
-                            .relative_vertices
-                            .iter()
-                            .map(|v| {
-                                (screen_center + Vec2::new(v.x as f32 * view.scale, -v.y as f32 * view.scale)).to_pos2()
-                            })
-                            .collect();
-
-                        painter.add(Shape::convex_polygon(screen_vertices, color, Stroke::NONE));
-                    } else if let Some(tess) = &geometry.tessellation {
-                        // Transform tessellated geometry
-                        let vertices: Vec<Vertex> = tess
-                            .vertices
-                            .iter()
-                            .map(|[x, y]| Vertex {
-                                pos: (screen_center + Vec2::new(*x * view.scale, -*y * view.scale)).to_pos2(),
-                                uv: egui::epaint::WHITE_UV,
-                                color,
-                            })
-                            .collect();
-
-                        painter.add(Shape::Mesh(Arc::new(Mesh {
-                            vertices,
-                            indices: tess.indices.clone(),
-                            texture_id: egui::TextureId::default(),
-                        })));
-                    }
-
-                    if use_polygon_numbering {
-                        // Debug visualization
-                        let debug_vertices: Vec<Pos2> = geometry
-                            .relative_vertices
-                            .iter()
-                            .map(|v| {
-                                let point =
-                                    screen_center + Vec2::new(v.x as f32 * view.scale, -v.y as f32 * view.scale);
-                                point.to_pos2()
-                            })
-                            .collect();
-
-                        for (i, pos) in debug_vertices.iter().enumerate() {
-                            painter.text(
-                                *pos,
-                                Align2::CENTER_CENTER,
-                                format!("{}", i),
-                                FontId::monospace(8.0),
-                                Color32::RED,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -956,7 +809,7 @@ enum ApertureKind {
 }
 
 #[derive(Debug, Clone)]
-enum GerberPrimitive {
+pub enum GerberPrimitive {
     Circle {
         center: Position,
         diameter: f64,
@@ -982,14 +835,14 @@ enum GerberPrimitive {
 }
 
 #[derive(Debug, Clone)]
-struct PolygonGeometry {
-    relative_vertices: Vec<Position>,  // Relative to center
-    tessellation: Option<PolygonMesh>, // Precomputed tessellation data
-    is_convex: bool,
+pub struct PolygonGeometry {
+    pub relative_vertices: Vec<Position>,  // Relative to center
+    pub tessellation: Option<PolygonMesh>, // Precomputed tessellation data
+    pub is_convex: bool,
 }
 
 #[derive(Debug)]
-struct GerberPolygon {
+pub struct GerberPolygon {
     center: Position,
     /// Relative to center
     vertices: Vec<Position>,
@@ -1043,12 +896,14 @@ impl GerberPrimitive {
     }
 }
 
+#[cfg(feature = "egui")]
 #[derive(Debug, Copy, Clone)]
 pub struct ViewState {
     pub translation: Vec2,
     pub scale: f32,
 }
 
+#[cfg(feature = "egui")]
 impl Default for ViewState {
     fn default() -> Self {
         Self {

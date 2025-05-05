@@ -5,6 +5,8 @@
 //! Each operation can be pending, incomplete, complete or abandoned.
 //! Some operations just have a simple status, others require per-operation actions to be performed before they are
 //! complete
+//! Each operation can have one or more tasks.
+//! Each task can be pending, incomplete, complete or abandoned.
 //!
 //! Phases can be abandoned or skipped.
 //! Operations can be abandoned or skipped.
