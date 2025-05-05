@@ -143,6 +143,7 @@ mod test {
     use super::*;
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn clip_with_same_parent_folder() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Project1"#);
         let file_path_1 = PathBuf::from(r#"D:\Users\Hydra\Project1\file.mpnp"#);
@@ -151,6 +152,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn clip_with_same_parent_folder_but_longer_path_to_file() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Project1"#);
         let file_path_1 = PathBuf::from(r#"D:\Users\Hydra\Project1\additional\path\entries\file.mpnp"#);
@@ -159,6 +161,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn clip_with_different_parent_folder() {
         let folder_path = PathBuf::from(r#"C:\Some\Other\Folder"#);
         let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Project1\file.mpnp"#);
@@ -167,6 +170,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     fn clip_with_nested_file_and_short_length() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Project1"#);
         let file_path = PathBuf::from(r#"D:\Users\Hydra\Project1\src\utils\mod.rs"#);
@@ -175,6 +179,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     fn clip_with_nested_file_and_long_length() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Project1"#);
         let file_path = PathBuf::from(r#"D:\Users\Hydra\Project1\src\utils\mod.rs"#);
@@ -183,6 +188,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     fn clip_with_nested_file_and_result_matching_exact_desired_length() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Project1"#);
         let file_path = PathBuf::from(r#"D:\Users\Hydra\Project1\src\utils\mod.rs"#);
@@ -191,6 +197,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn clip_with_different_parent_folder_and_desired_length() {
         let folder_path = PathBuf::from(r#"C:\Some\Other\Folder"#);
         let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Project1\file.mpnp"#);
@@ -199,6 +206,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn real_world_test_1() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1"#);
         let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1\loadout.csv"#);
@@ -207,6 +215,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(not(target_os = "windows"), ignore)]
     pub fn real_world_test_2() {
         let folder_path = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1"#);
         let file_path_2 = PathBuf::from(r#"D:\Users\Hydra\Documents\dev\projects\makerpnp\projects\Test1\loadout.csv"#);
