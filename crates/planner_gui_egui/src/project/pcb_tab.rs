@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::PcbOverview;
+use planner_app::{DesignName, PcbOverview};
 use tracing::{debug, trace};
 
 use crate::project::dialogs::manage_gerbers::{
@@ -36,15 +38,19 @@ impl PcbUi {
     }
 
     fn show_manage_gerbers_modal(&mut self, design_index: usize) {
-        let Some(design_name) = self
+        let Some((design_name, design_gerbers)) = self
             .pcb_overview
             .as_ref()
-            .map(|pcb_overview| pcb_overview.designs[design_index].clone())
+            .map(|pcb_overview| {
+                let design_name = pcb_overview.designs[design_index].clone();
+                let gerbers = pcb_overview.gerbers[design_index].clone();
+                (design_name, gerbers)
+            })
         else {
             return;
         };
 
-        let mut modal = ManageGerbersModal::new(design_index, design_name);
+        let mut modal = ManageGerbersModal::new(design_index, design_name, design_gerbers);
         modal
             .component
             .configure_mapper(self.component.sender.clone(), move |command| {
@@ -66,6 +72,16 @@ pub enum PcbUiCommand {
 #[derive(Debug, Clone)]
 pub enum PcbUiAction {
     None,
+    AddGerberFiles {
+        pcb_index: usize,
+        design: DesignName,
+        files: Vec<PathBuf>,
+    },
+    RemoveGerberFiles {
+        pcb_index: usize,
+        design: DesignName,
+        files: Vec<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -160,13 +176,53 @@ impl UiComponent for PcbUi {
             PcbUiCommand::ManageGerbersModalUiCommand(command) => {
                 if let Some(dialog) = &mut self.manage_gerbers_modal {
                     match dialog.update(command, &mut ()) {
-                        None => {}
+                        None => None,
                         Some(ManagerGerberModalAction::CloseDialog) => {
                             self.manage_gerbers_modal = None;
+                            None
+                        }
+                        Some(ManagerGerberModalAction::RemoveGerberFiles {
+                            design_index,
+                            files,
+                        }) => {
+                            debug!(
+                                "removing gerber file. design_index: {}, files: {:?}",
+                                design_index, files
+                            );
+                            if let Some(pcb_overview) = &mut self.pcb_overview {
+                                let design = pcb_overview.designs[design_index].clone();
+                                Some(PcbUiAction::RemoveGerberFiles {
+                                    pcb_index: pcb_overview.index,
+                                    design,
+                                    files,
+                                })
+                            } else {
+                                None
+                            }
+                        }
+                        Some(ManagerGerberModalAction::AddGerberFiles {
+                            design_index,
+                            files,
+                        }) => {
+                            debug!(
+                                "gerber files picked. design_index: {}, picked: {:?}",
+                                design_index, files
+                            );
+                            if let Some(pcb_overview) = &mut self.pcb_overview {
+                                let design = pcb_overview.designs[design_index].clone();
+                                Some(PcbUiAction::AddGerberFiles {
+                                    pcb_index: pcb_overview.index,
+                                    design,
+                                    files,
+                                })
+                            } else {
+                                None
+                            }
                         }
                     }
+                } else {
+                    None
                 }
-                None
             }
         }
     }

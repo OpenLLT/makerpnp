@@ -82,6 +82,7 @@ table-load-out-column-mpn = MPN
 
 pcb-side-top = Top
 pcb-side-bottom = Bottom
+pcb-side-both = Both
 
 project-explorer-tab-label = Project explorer
 
@@ -101,6 +102,8 @@ project-explorer-node-process = { $name }
 form-button-ok = Ok
 form-button-cancel = Cancel
 form-button-close = Close
+form-button-add = Add
+form-button-remove = Remove
 
 form-add-pcb-input-name = Name
 form-add-pcb-input-name-placeholder = PCB name (e.g. 'default')
@@ -165,6 +168,13 @@ process-status-incomplete = Incomplete
 process-status-complete = Complete
 process-status-abandoned = Abandoned
 
+gerber-purpose-assembly = Assembly
+gerber-purpose-copper = Copper
+gerber-purpose-legend = Legend
+gerber-purpose-pastemask = Paste mask
+gerber-purpose-other = Other
+gerber-purpose-soldermask = Soler mask
+
 table-placements-column-index = #
 table-placements-column-object-path = Object path
 table-placements-column-refdes = Ref. Des.
@@ -190,6 +200,12 @@ table-parts-column-quantity = Quantity
 table-designs-column-index = #
 table-designs-column-actions = Actions
 table-designs-column-name = Name
+
+table-gerbers-column-index = #
+table-gerbers-column-file = File
+table-gerbers-column-pcb-side = PCB Side
+table-gerbers-column-gerber-purpose = Purpose
+table-gerbers-column-actions = Actions
 
 filter-expression = Search...
 

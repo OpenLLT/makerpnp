@@ -10,6 +10,7 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignName, DesignVariant};
+pub use planning::gerber::GerberPurpose;
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementSortingItem;
@@ -36,7 +37,7 @@ use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
 use crate::capabilities::view_renderer;
 use crate::capabilities::view_renderer::ProjectViewRenderer;
@@ -73,9 +74,10 @@ pub struct Capabilities {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PcbGerberItem {
+    pub path: PathBuf,
     /// if `None` then the gerber applies to both sides, e.g. 'pcb outline'
     pub pcb_side: Option<PcbSide>,
-    pub path: PathBuf,
+    pub purpose: GerberPurpose,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -86,8 +88,8 @@ pub struct PcbOverview {
     /// A list of unique designs, a panel can have multiple designs.
     pub designs: Vec<DesignName>,
 
-    /// each design can have gerbers
-    pub gerbers: Vec<(DesignName, PcbGerberItem)>,
+    /// each design can have multiple gerbers
+    pub gerbers: Vec<Vec<PcbGerberItem>>,
     // FUTURE add dimensions (per design)
 }
 
@@ -342,6 +344,18 @@ pub enum Event {
     },
     /// Reset operations
     ResetOperations {},
+
+    //
+    // Gerber file management
+    //
+    AddGerberFiles {
+        design: DesignName,
+        files: Vec<PathBuf>,
+    },
+    RemoveGerberFiles {
+        design: DesignName,
+        files: Vec<PathBuf>,
+    },
 
     //
     // Views
@@ -810,6 +824,46 @@ impl Planner {
             }),
 
             //
+            // Gerber file management
+            //
+            Event::AddGerberFiles {
+                design,
+                files,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                debug!("adding gerbers. design: {} files: {:?}", design, files);
+                *modified |= true;
+
+                Ok(render::render())
+            }),
+            Event::RemoveGerberFiles {
+                design,
+                files,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                debug!("removing gerbers. design: {} files: {:?}", design, files);
+                *modified |= true;
+
+                Ok(render::render())
+            }),
+
+            //
             // Views
             //
             Event::RequestOverviewView {} => Box::new(|model: &mut Model| {
@@ -851,7 +905,8 @@ impl Planner {
                     .filter_map(|(path, design_variant)| match path.pcb_kind_and_instance() {
                         // Note: instance is 1-based.
                         Some((kind, instance)) if kind.eq(&pcb.kind) && (instance - 1) == pcb_index => {
-                            Some(design_variant.design_name.clone())
+                            let design_name = design_variant.design_name.clone();
+                            Some(design_name)
                         }
                         _ => None,
                     })
@@ -859,13 +914,35 @@ impl Planner {
 
                 designs.dedup();
 
+                let gerbers = designs
+                    .iter()
+                    .map(|design_name| {
+                        let design_gerbers = project
+                            .design_gerbers
+                            .get(design_name)
+                            .map_or(Vec::new(), |v| {
+                                v.iter()
+                                    .map(|gerber_file| {
+                                        // convert from project type to view type
+                                        PcbGerberItem {
+                                            path: gerber_file.path.clone(),
+                                            pcb_side: gerber_file.pcb_side.clone(),
+                                            purpose: gerber_file.purpose,
+                                        }
+                                    })
+                                    .collect::<Vec<_>>()
+                            });
+
+                        design_gerbers
+                    })
+                    .collect::<Vec<_>>();
+
                 let pcb_overview = PcbOverview {
                     index: pcb_index,
                     name: pcb.name.clone(),
                     kind: pcb.kind.clone(),
                     designs,
-                    // TODO
-                    gerbers: vec![],
+                    gerbers,
                 };
                 Ok(view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
             }),

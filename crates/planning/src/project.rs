@@ -28,7 +28,8 @@ use tracing::{debug, error, info, trace, warn};
 use util::sorting::SortOrder;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
-use crate::design::DesignVariant;
+use crate::design::{DesignName, DesignVariant};
+use crate::gerber::GerberFile;
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
     ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
@@ -66,6 +67,11 @@ pub struct Project {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
     pub unit_assignments: BTreeMap<ObjectPath, DesignVariant>,
+
+    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub design_gerbers: BTreeMap<DesignName, Vec<GerberFile>>,
 
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -304,6 +310,7 @@ impl Default for Project {
             ],
             pcbs: vec![],
             unit_assignments: Default::default(),
+            design_gerbers: Default::default(),
             part_states: Default::default(),
             phases: Default::default(),
             placements: Default::default(),

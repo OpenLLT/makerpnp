@@ -1,5 +1,8 @@
 pub mod actions;
 pub mod design;
+
+pub mod gerber;
+
 pub mod operation;
 pub mod operation_history;
 pub mod part;

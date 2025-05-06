@@ -1470,6 +1470,68 @@ impl UiComponent for Project {
                 match pcb_ui_action {
                     None => None,
                     Some(PcbUiAction::None) => None,
+                    Some(PcbUiAction::AddGerberFiles {
+                        pcb_index,
+                        design,
+                        files,
+                    }) => {
+                        match self
+                            .planner_core_service
+                            .update(key, Event::AddGerberFiles {
+                                design,
+                                files,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<Task<ProjectAction>>>();
+
+                                let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestView(ProjectViewRequest::PcbOverview {
+                                        pcb: pcb_index,
+                                    }),
+                                ))];
+                                tasks.extend(additional_tasks);
+
+                                Some(ProjectAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
+                    Some(PcbUiAction::RemoveGerberFiles {
+                        pcb_index,
+                        design,
+                        files,
+                    }) => {
+                        match self
+                            .planner_core_service
+                            .update(key, Event::RemoveGerberFiles {
+                                design,
+                                files,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<Task<ProjectAction>>>();
+
+                                let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestView(ProjectViewRequest::PcbOverview {
+                                        pcb: pcb_index,
+                                    }),
+                                ))];
+                                tasks.extend(additional_tasks);
+
+                                Some(ProjectAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
                 }
             }
         }

@@ -80,8 +80,9 @@ table-load-out-column-reference = Reference
 table-load-out-column-manufacturer = Fabricante
 table-load-out-column-mpn = MPN
 
-pcb-side-top = Parte superior
-pcb-side-bottom = Parte inferior
+pcb-side-top = Superior
+pcb-side-bottom = Inferior
+pcb-side-both = Ambos
 
 project-explorer-tab-label = Explorador de proyecto
 
@@ -101,6 +102,8 @@ project-explorer-node-process = { $name }
 form-button-ok = Aceptar
 form-button-cancel = Cancelar
 form-button-close = Cerrar
+form-button-add = Añadir
+form-button-remove = Quitar
 
 form-add-pcb-input-name = Nombre
 form-add-pcb-input-name-placeholder = Nombre de PCB (por ejemplo, 'predeterminado')
@@ -165,6 +168,13 @@ process-status-incomplete = Incompleto
 process-status-complete = Completo
 process-status-abandoned = Abandonado
 
+gerber-purpose-assembly = Montaje
+gerber-purpose-copper = Cobre
+gerber-purpose-legend = Leyenda
+gerber-purpose-pastemask = Máscara de pasta
+gerber-purpose-other = Otro
+gerber-purpose-soldermask = Máscara Soler
+
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto
 table-placements-column-refdes = Des. de Ref.
@@ -190,6 +200,12 @@ table-parts-column-quantity = Cantidad
 table-designs-column-index = #
 table-designs-column-actions = Acciones
 table-designs-column-name = Nombre
+
+tabla-gerbers-columna-index = #
+table-gerbers-column-file = Archivo
+table-gerbers-column-pcb-side = Lado PCB
+table-gerbers-column-gerber-purpose = Propósito
+table-gerbers-column-actions = Acciones
 
 filter-expression = Buscar...
 
