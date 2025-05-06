@@ -4,7 +4,7 @@ use pnp::pcb::PcbSide;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct GerberFile {
-    pub path: PathBuf,
+    pub file: PathBuf,
 
     pub purpose: GerberPurpose,
     pub pcb_side: Option<PcbSide>,

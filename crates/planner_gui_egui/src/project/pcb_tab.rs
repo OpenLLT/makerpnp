@@ -4,7 +4,7 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::{DesignName, PcbOverview};
+use planner_app::{DesignName, GerberPurpose, PcbOverview, PcbSide};
 use tracing::{debug, trace};
 
 use crate::project::dialogs::manage_gerbers::{
@@ -75,7 +75,7 @@ pub enum PcbUiAction {
     AddGerberFiles {
         pcb_index: usize,
         design: DesignName,
-        files: Vec<PathBuf>,
+        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
         pcb_index: usize,
@@ -210,6 +210,10 @@ impl UiComponent for PcbUi {
                             );
                             if let Some(pcb_overview) = &mut self.pcb_overview {
                                 let design = pcb_overview.designs[design_index].clone();
+                                let files = files
+                                    .into_iter()
+                                    .map(|file| (file, None, GerberPurpose::Other))
+                                    .collect();
                                 Some(PcbUiAction::AddGerberFiles {
                                     pcb_index: pcb_overview.index,
                                     design,

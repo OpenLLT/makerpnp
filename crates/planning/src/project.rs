@@ -29,7 +29,7 @@ use util::sorting::SortOrder;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::{DesignName, DesignVariant};
-use crate::gerber::GerberFile;
+use crate::gerber::{GerberFile, GerberPurpose};
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
     ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
@@ -233,6 +233,57 @@ impl Project {
                 }
                 _ => true,
             });
+
+        modified
+    }
+
+    pub fn add_gerbers(&mut self, design: DesignName, files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>) -> bool {
+        let mut modified = false;
+        let gerbers = self
+            .design_gerbers
+            .entry(design)
+            .or_insert(vec![]);
+
+        for (file, pcb_side, purpose) in files {
+            if let Some(existing_gerber) = gerbers
+                .iter_mut()
+                .find(|candidate| candidate.file.eq(&file))
+            {
+                // change it
+                existing_gerber.purpose = purpose;
+                existing_gerber.pcb_side = pcb_side;
+                modified |= true;
+            } else {
+                // add it
+                gerbers.push(GerberFile {
+                    file,
+                    purpose,
+                    pcb_side,
+                });
+                modified |= true;
+            }
+        }
+
+        modified
+    }
+
+    // FUTURE currently this silently ignore paths that were not in the list, but perhaps we should return a result to
+    //        allow the user to be informed which files could not be removed.
+    pub fn remove_gerbers(&mut self, design: DesignName, files: Vec<PathBuf>) -> bool {
+        let mut modified = false;
+        let gerbers = self
+            .design_gerbers
+            .entry(design)
+            .or_insert(vec![]);
+
+        for file in files {
+            gerbers.retain(|candidate| {
+                let should_remove = candidate.file.eq(&file);
+                modified |= should_remove;
+
+                !should_remove
+            });
+        }
 
         modified
     }

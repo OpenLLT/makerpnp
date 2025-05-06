@@ -350,7 +350,7 @@ pub enum Event {
     //
     AddGerberFiles {
         design: DesignName,
-        files: Vec<PathBuf>,
+        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
         design: DesignName,
@@ -840,7 +840,8 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 debug!("adding gerbers. design: {} files: {:?}", design, files);
-                *modified |= true;
+
+                *modified |= project.add_gerbers(design, files);
 
                 Ok(render::render())
             }),
@@ -858,7 +859,7 @@ impl Planner {
                     .ok_or(AppError::OperationRequiresProject)?;
 
                 debug!("removing gerbers. design: {} files: {:?}", design, files);
-                *modified |= true;
+                *modified |= project.remove_gerbers(design, files);
 
                 Ok(render::render())
             }),
@@ -925,7 +926,7 @@ impl Planner {
                                     .map(|gerber_file| {
                                         // convert from project type to view type
                                         PcbGerberItem {
-                                            path: gerber_file.path.clone(),
+                                            path: gerber_file.file.clone(),
                                             pcb_side: gerber_file.pcb_side.clone(),
                                             purpose: gerber_file.purpose,
                                         }
