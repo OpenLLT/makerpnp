@@ -34,6 +34,9 @@ impl PcbUi {
     }
 
     pub fn update_overview(&mut self, pcb_overview: PcbOverview) {
+        if let Some(modal) = &mut self.manage_gerbers_modal {
+            modal.update_gerbers(&pcb_overview.gerbers)
+        }
         self.pcb_overview = Some(pcb_overview);
     }
 
