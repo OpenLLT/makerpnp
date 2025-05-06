@@ -6,10 +6,8 @@ use egui_extras::Column;
 use egui_i18n::tr;
 use egui_mobius::Value;
 use planner_app::{DesignName, GerberPurpose, PcbGerberItem, PcbSide};
-use tracing::debug;
 
 use crate::file_picker::Picker;
-use crate::project::dialogs::add_phase::AddPhaseModalUiCommand;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
@@ -34,6 +32,12 @@ impl ManageGerbersModal {
             component: Default::default(),
             file_picker: Default::default(),
         }
+    }
+
+    // the first vector is the designs, the second is the gerbers for the design
+    pub fn update_gerbers(&mut self, gerbers: &[Vec<PcbGerberItem>]) {
+        let design_gerbers = &gerbers[self.design_index];
+        self.gerbers = design_gerbers.clone();
     }
 }
 
