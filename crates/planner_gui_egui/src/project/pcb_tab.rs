@@ -1,9 +1,13 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_extras::Column;
 use egui_i18n::tr;
 use planner_app::PcbOverview;
-use tracing::debug;
+use tracing::{debug, trace};
 
+use crate::project::dialogs::manage_gerbers::{
+    ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand,
+};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -13,6 +17,8 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub struct PcbUi {
     pcb_overview: Option<PcbOverview>,
 
+    manage_gerbers_modal: Option<ManageGerbersModal>,
+
     pub component: ComponentState<PcbUiCommand>,
 }
 
@@ -20,6 +26,7 @@ impl PcbUi {
     pub fn new() -> Self {
         Self {
             pcb_overview: None,
+            manage_gerbers_modal: None,
             component: Default::default(),
         }
     }
@@ -27,11 +34,33 @@ impl PcbUi {
     pub fn update_overview(&mut self, pcb_overview: PcbOverview) {
         self.pcb_overview = Some(pcb_overview);
     }
+
+    fn show_manage_gerbers_modal(&mut self, design_index: usize) {
+        let Some(design_name) = self
+            .pcb_overview
+            .as_ref()
+            .map(|pcb_overview| pcb_overview.designs[design_index].clone())
+        else {
+            return;
+        };
+
+        let mut modal = ManageGerbersModal::new(design_index, design_name);
+        modal
+            .component
+            .configure_mapper(self.component.sender.clone(), move |command| {
+                trace!("manage gerbers modal mapper. command: {:?}", command);
+                PcbUiCommand::ManageGerbersModalUiCommand(command)
+            });
+
+        self.manage_gerbers_modal = Some(modal);
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum PcbUiCommand {
     None,
+    ManageGerbersClicked { design_index: usize },
+    ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -55,6 +84,64 @@ impl UiComponent for PcbUi {
         };
 
         ui.label(&pcb_overview.name);
+
+        let text_height = egui::TextStyle::Body
+            .resolve(ui.style())
+            .size
+            .max(ui.spacing().interact_size.y);
+
+        ui.separator();
+
+        ui.label(tr!("project-pcb-designs-header"));
+
+        egui_extras::TableBuilder::new(ui)
+            .striped(true)
+            .column(Column::auto())
+            .column(Column::auto())
+            .column(Column::remainder())
+            .header(text_height, |mut header| {
+                header.col(|ui| {
+                    ui.strong(tr!("table-designs-column-index"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-designs-column-actions"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-designs-column-name"));
+                });
+            })
+            .body(|mut body| {
+                for (index, design) in pcb_overview.designs.iter().enumerate() {
+                    body.row(text_height, |mut row| {
+                        row.col(|ui| {
+                            ui.label(index.to_string());
+                        });
+
+                        row.col(|ui| {
+                            if ui
+                                .button(tr!("project-pcb-designs-button-gerbers"))
+                                .clicked()
+                            {
+                                self.component
+                                    .send(PcbUiCommand::ManageGerbersClicked {
+                                        design_index: index,
+                                    });
+                            }
+                        });
+
+                        row.col(|ui| {
+                            ui.label(design.to_string());
+                        });
+                    })
+                }
+            });
+
+        //
+        // Modals
+        //
+        if let Some(dialog) = &self.manage_gerbers_modal {
+            dialog.ui(ui, &mut ());
+        }
     }
 
     fn update<'context>(
@@ -64,6 +151,23 @@ impl UiComponent for PcbUi {
     ) -> Option<Self::UiAction> {
         match command {
             PcbUiCommand::None => Some(PcbUiAction::None),
+            PcbUiCommand::ManageGerbersClicked {
+                design_index,
+            } => {
+                self.show_manage_gerbers_modal(design_index);
+                None
+            }
+            PcbUiCommand::ManageGerbersModalUiCommand(command) => {
+                if let Some(dialog) = &mut self.manage_gerbers_modal {
+                    match dialog.update(command, &mut ()) {
+                        None => {}
+                        Some(ManagerGerberModalAction::CloseDialog) => {
+                            self.manage_gerbers_modal = None;
+                        }
+                    }
+                }
+                None
+            }
         }
     }
 }

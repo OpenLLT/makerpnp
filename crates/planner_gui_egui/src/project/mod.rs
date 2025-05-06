@@ -27,7 +27,7 @@ use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, Ex
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
 use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
-use crate::project::pcb_tab::{PcbTab, PcbUi, PcbUiCommand};
+use crate::project::pcb_tab::{PcbTab, PcbUi, PcbUiAction, PcbUiCommand, PcbUiContext};
 use crate::project::phase_tab::{PhaseTab, PhaseUi, PhaseUiAction, PhaseUiCommand, PhaseUiContext};
 use crate::project::placements_tab::{
     PlacementsTab, PlacementsUi, PlacementsUiAction, PlacementsUiCommand, PlacementsUiContext,
@@ -251,7 +251,7 @@ impl Project {
                 debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .inspect_err(|_| {
-                self.ensure_load_out(key, phase, &load_out_source);
+                self.ensure_load_out(key, phase, load_out_source);
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
                 debug!("adding load-out tab. phase: {:?}, tab_key: {:?}", load_out_source, tab_key);
@@ -269,7 +269,7 @@ impl Project {
             .inspect(|tab_key|{
                 debug!("showing existing pcb tab. pcb: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
-            .inspect_err(|error|{
+            .inspect_err(|_|{
                 self.ensure_pcb(key, pcb_index);
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Pcb(tab));
@@ -1062,9 +1062,9 @@ impl UiComponent for Project {
                 let phase_ui_action = phase_ui.update(command, context);
 
                 match phase_ui_action {
+                    None => None,
                     Some(PhaseUiAction::None) => None,
                     Some(PhaseUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
-                    None => None,
                     Some(PhaseUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
@@ -1459,11 +1459,19 @@ impl UiComponent for Project {
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::PcbUiCommand {
-                pcb_index: _pcb_index,
+                pcb_index,
                 command,
-            } => match command {
-                PcbUiCommand::None => None,
-            },
+            } => {
+                let mut state = self.project_ui_state.lock().unwrap();
+                let pcb_ui = state.pcbs.get_mut(&pcb_index).unwrap();
+
+                let context = &mut PcbUiContext::default();
+                let pcb_ui_action = pcb_ui.update(command, context);
+                match pcb_ui_action {
+                    None => None,
+                    Some(PcbUiAction::None) => None,
+                }
+            }
         }
     }
 }

@@ -72,7 +72,7 @@ pub enum PhaseUiCommand {
         manufacturer_pattern: Regex,
         mpn_pattern: Regex,
     },
-    ShowPhasePlacementsOrderingsDialog,
+    PhasePlacementsOrderingsClicked,
     PlacementOrderingsModalUiCommand(PlacementOrderingsModalUiCommand),
     TaskAction {
         operation: OperationReference,
@@ -142,7 +142,7 @@ impl UiComponent for PhaseUi {
                 .clicked()
             {
                 self.component
-                    .send(PhaseUiCommand::ShowPhasePlacementsOrderingsDialog)
+                    .send(PhaseUiCommand::PhasePlacementsOrderingsClicked)
             }
         });
 
@@ -295,7 +295,7 @@ impl UiComponent for PhaseUi {
                 manufacturer_pattern,
                 mpn_pattern,
             }),
-            PhaseUiCommand::ShowPhasePlacementsOrderingsDialog => {
+            PhaseUiCommand::PhasePlacementsOrderingsClicked => {
                 if let Some(overview) = &self.overview {
                     let mut modal = PlacementOrderingsModal::new(
                         overview.phase_reference.clone(),
