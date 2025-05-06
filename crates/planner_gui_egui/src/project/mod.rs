@@ -27,6 +27,7 @@ use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, Ex
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
 use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
+use crate::project::pcb_tab::{PcbTab, PcbUi, PcbUiCommand};
 use crate::project::phase_tab::{PhaseTab, PhaseUi, PhaseUiAction, PhaseUiCommand, PhaseUiContext};
 use crate::project::placements_tab::{
     PlacementsTab, PlacementsUi, PlacementsUiAction, PlacementsUiCommand, PlacementsUiContext,
@@ -41,6 +42,7 @@ mod explorer_tab;
 mod load_out_tab;
 mod overview_tab;
 mod parts_tab;
+mod pcb_tab;
 mod phase_tab;
 mod placements_tab;
 mod tabs;
@@ -222,7 +224,7 @@ impl Project {
         let tab = PhaseTab::new(phase.clone());
         project_tabs
             .show_tab(
-                |candidate_tab| matches!(candidate_tab, ProjectTabKind::Phase(candidate_tab) if candidate_tab.eq(&tab)),
+                |candidate_tab_kind| matches!(candidate_tab_kind, ProjectTabKind::Phase(candidate_tab) if candidate_tab.eq(&tab)),
             )
             .inspect(|tab_key| {
                 debug!("showing existing phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
@@ -242,8 +244,8 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = LoadOutTab::new(project_directory.into(), load_out_source.clone());
         project_tabs
-            .show_tab(|candidate_tab| {
-                matches!(candidate_tab, ProjectTabKind::LoadOut(candidate_tab) if candidate_tab.eq(&tab))
+            .show_tab(|candidate_tab_kind| {
+                matches!(candidate_tab_kind, ProjectTabKind::LoadOut(candidate_tab) if candidate_tab.eq(&tab))
             })
             .inspect(|tab_key| {
                 debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
@@ -253,6 +255,25 @@ impl Project {
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
                 debug!("adding load-out tab. phase: {:?}, tab_key: {:?}", load_out_source, tab_key);
+            })
+            .ok();
+    }
+
+    pub fn show_pcb(&mut self, key: ProjectKey, pcb_index: usize) {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let tab = PcbTab::new(pcb_index);
+        project_tabs
+            .show_tab(|candidate_tab_kind| {
+                matches!(candidate_tab_kind, ProjectTabKind::Pcb(candidate_tab) if candidate_tab.eq(&tab))
+            })
+            .inspect(|tab_key|{
+                debug!("showing existing pcb tab. pcb: {:?}, tab_key: {:?}", pcb_index, tab_key);
+            })
+            .inspect_err(|error|{
+                self.ensure_pcb(key, pcb_index);
+
+                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Pcb(tab));
+                debug!("adding pcb tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
     }
@@ -304,6 +325,30 @@ impl Project {
                     });
 
                 load_out_ui
+            });
+    }
+
+    fn ensure_pcb(&self, key: ProjectKey, pcb_index: usize) {
+        let mut state = self.project_ui_state.lock().unwrap();
+        let _pcb_ui = state
+            .pcbs
+            .entry(pcb_index)
+            .or_insert_with(|| {
+                debug!("ensuring pcb ui. pcb_index: {:?}", pcb_index);
+                let mut pcb_ui = PcbUi::new();
+                pcb_ui
+                    .component
+                    .configure_mapper(self.component.sender.clone(), {
+                        move |command| {
+                            trace!("pcb ui mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::PcbUiCommand {
+                                pcb_index,
+                                command,
+                            })
+                        }
+                    });
+
+                pcb_ui
             });
     }
 
@@ -427,6 +472,32 @@ impl Project {
             }
         }
 
+        #[must_use]
+        fn handle_pcb(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+            let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}$").unwrap();
+            if let Some(captures) = phase_pattern.captures(&path) {
+                let pcb_index = captures
+                    .name("pcb")
+                    .unwrap()
+                    .as_str()
+                    .parse::<usize>()
+                    .unwrap();
+                debug!("pcb: {}", pcb_index);
+
+                project.show_pcb(key.clone(), pcb_index);
+
+                let tasks: Vec<_> = vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::PcbOverview {
+                        pcb: pcb_index.clone(),
+                    },
+                )))];
+
+                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+            } else {
+                None
+            }
+        }
+
         let handlers = [
             handle_root,
             handle_parts,
@@ -434,6 +505,7 @@ impl Project {
             handle_phase_loadout,
             handle_placements,
             handle_phase,
+            handle_pcb,
         ];
 
         handlers
@@ -771,6 +843,11 @@ impl UiComponent for Project {
                     } => Event::RequestPhasePlacementsView {
                         phase_reference: phase,
                     },
+                    ProjectViewRequest::PcbOverview {
+                        pcb,
+                    } => Event::RequestPcbOverviewView {
+                        pcb,
+                    },
                 };
 
                 self.planner_core_service
@@ -796,6 +873,22 @@ impl UiComponent for Project {
                             .explorer_ui
                             .update_tree(project_tree);
                     }
+                    ProjectView::PcbOverview(pcb_overview) => {
+                        trace!("pcb_overview: {:?}", pcb_overview);
+                        let name = pcb_overview.name.clone();
+
+                        self.ensure_pcb(key, pcb_overview.index);
+
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        let pcb_ui = state
+                            .pcbs
+                            .get_mut(&pcb_overview.index)
+                            .unwrap();
+
+                        pcb_ui.update_overview(pcb_overview);
+
+                        // TODO use the name to update the tab label
+                    }
                     ProjectView::Placements(placements) => {
                         trace!("placements: {:?}", placements);
                         let mut state = self.project_ui_state.lock().unwrap();
@@ -811,7 +904,7 @@ impl UiComponent for Project {
                         trace!("phase overview: {:?}", phase_overview);
                         let phase = phase_overview.phase_reference.clone();
 
-                        self.ensure_phase(key.clone(), &phase);
+                        self.ensure_phase(key, &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_ui = state.phases.get_mut(&phase).unwrap();
@@ -822,7 +915,7 @@ impl UiComponent for Project {
                         trace!("phase placements: {:?}", phase_placements);
                         let phase = phase_placements.phase_reference.clone();
 
-                        self.ensure_phase(key.clone(), &phase);
+                        self.ensure_phase(key, &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         let phase_ui = state.phases.get_mut(&phase).unwrap();
@@ -844,7 +937,7 @@ impl UiComponent for Project {
                         trace!("load_out: {:?}", load_out);
                         let load_out_source = load_out.source.clone();
 
-                        self.ensure_load_out(key.clone(), load_out.phase_reference.clone(), &load_out_source);
+                        self.ensure_load_out(key, load_out.phase_reference.clone(), &load_out_source);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         let load_out_ui = state
@@ -1365,6 +1458,12 @@ impl UiComponent for Project {
                 ];
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
+            ProjectUiCommand::PcbUiCommand {
+                pcb_index: _pcb_index,
+                command,
+            } => match command {
+                PcbUiCommand::None => None,
+            },
         }
     }
 }
@@ -1380,6 +1479,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
             ProjectTabKind::LoadOut(tab) => tab.label(),
+            ProjectTabKind::Pcb(tab) => tab.label(),
         }
     }
 
@@ -1391,6 +1491,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
         }
     }
 
@@ -1402,6 +1503,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
         }
     }
 }
@@ -1418,6 +1520,7 @@ pub struct ProjectUiState {
     explorer_ui: ExplorerUi,
     phases: HashMap<Reference, PhaseUi>,
     load_outs: HashMap<LoadOutSource, LoadOutUi>,
+    pcbs: HashMap<usize, PcbUi>,
 }
 
 impl ProjectUiState {
@@ -1431,6 +1534,7 @@ impl ProjectUiState {
             name,
             phases: HashMap::default(),
             load_outs: HashMap::default(),
+            pcbs: HashMap::default(),
             overview_ui: OverviewUi::new(),
             placements_ui: PlacementsUi::new(),
             parts_ui: PartsUi::new(),
@@ -1482,6 +1586,7 @@ enum ProjectTabKind {
     Placements(PlacementsTab),
     Parts(PartsTab),
     LoadOut(LoadOutTab),
+    Pcb(PcbTab),
 }
 
 #[derive(Debug, Clone)]
@@ -1518,6 +1623,10 @@ pub enum ProjectUiCommand {
     LoadOutUiCommand {
         load_out_source: LoadOutSource,
         command: LoadOutUiCommand,
+    },
+    PcbUiCommand {
+        pcb_index: usize,
+        command: PcbUiCommand,
     },
     RefreshPhase(Reference),
 }

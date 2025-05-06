@@ -204,7 +204,10 @@ impl Tab for LoadOutTab {
             .load_outs
             .remove(&self.load_out_source)
         {
-            debug!("removed orphaned load out: {:?}", &self.load_out_source);
+            debug!(
+                "removed orphaned load out ui. load_out_source: {:?}",
+                &self.load_out_source
+            );
         }
         true
     }
