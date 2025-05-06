@@ -72,6 +72,26 @@ pub struct Capabilities {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PcbGerberItem {
+    /// if `None` then the gerber applies to both sides, e.g. 'pcb outline'
+    pub pcb_side: Option<PcbSide>,
+    pub path: PathBuf,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PcbOverview {
+    pub index: usize,
+    pub name: String,
+    pub kind: PcbKind,
+    /// A list of unique designs, a panel can have multiple designs.
+    pub designs: Vec<DesignName>,
+
+    /// each design can have gerbers
+    pub gerbers: Vec<(DesignName, PcbGerberItem)>,
+    // FUTURE add dimensions (per design)
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct LoadOut {
     pub phase_reference: PhaseReference,
     pub source: LoadOutSource,
@@ -212,6 +232,7 @@ pub enum ProjectView {
     Placements(PlacementsList),
     ProjectTree(ProjectTreeView),
     Process(ProcessDefinition),
+    PcbOverview(PcbOverview),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -224,6 +245,7 @@ pub enum ProjectViewRequest {
     PhasePlacements { phase: PhaseReference },
     Placements,
     ProjectTree,
+    PcbOverview { pcb: usize },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -340,6 +362,10 @@ pub enum Event {
     RequestPartStatesView,
     RequestPhaseLoadOutView {
         phase_reference: PhaseReference,
+    },
+    RequestPcbOverviewView {
+        /// index
+        pcb: usize,
     },
 }
 
@@ -803,6 +829,45 @@ impl Planner {
                         .collect(),
                 };
                 Ok(view_renderer::view(ProjectView::Overview(overview)))
+            }),
+            Event::RequestPcbOverviewView {
+                pcb: pcb_index,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let pcb = project
+                    .pcbs
+                    .get(pcb_index)
+                    .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
+
+                let mut designs = project
+                    .unit_assignments
+                    .iter()
+                    .filter_map(|(path, design_variant)| match path.pcb_kind_and_instance() {
+                        // Note: instance is 1-based.
+                        Some((kind, instance)) if kind.eq(&pcb.kind) && (instance - 1) == pcb_index => {
+                            Some(design_variant.design_name.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>();
+
+                designs.dedup();
+
+                let pcb_overview = PcbOverview {
+                    index: pcb_index,
+                    name: pcb.name.clone(),
+                    kind: pcb.kind.clone(),
+                    designs,
+                    // TODO
+                    gerbers: vec![],
+                };
+                Ok(view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
             }),
             Event::RequestPlacementsView {} => Box::new(|model: &mut Model| {
                 let ModelProject {

@@ -382,7 +382,7 @@ impl Tab for PhaseTab {
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
         if let Some(_phase_ui) = state.phases.remove(&self.phase) {
-            debug!("removed orphaned phase: {:?}", &self.phase);
+            debug!("removed orphaned phase ui. phase: {:?}", &self.phase);
         }
         true
     }

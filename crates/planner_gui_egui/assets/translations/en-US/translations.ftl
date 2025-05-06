@@ -50,6 +50,8 @@ project-overview-tab-label = Overview
 project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
 
+project-pcb-header = PCB
+
 project-placements-tab-label = Placements
 project-placements-header = Project placements
 
