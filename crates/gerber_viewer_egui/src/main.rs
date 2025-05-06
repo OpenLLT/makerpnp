@@ -13,8 +13,8 @@ use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::{FontFamily, Stroke};
-use gerber_viewer::gerber_parser::gerber_doc::GerberDoc;
-use gerber_viewer::gerber_parser::parser::parse_gerber;
+use gerber_viewer::gerber_parser::parse;
+use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
 use gerber_viewer::position::{Position, ZERO};
 use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, ViewState, generate_pastel_color};
 use log::{error, info, trace};
@@ -255,6 +255,9 @@ enum AppError {
     NoFileSelected,
     #[error("IO Error. cause: {0:?}")]
     IoError(io::Error),
+
+    #[error("Parser error. cause: {0:?}")]
+    ParserError(ParseError),
 }
 
 impl GerberViewer {
@@ -317,7 +320,7 @@ impl GerberViewer {
 
         let reader = BufReader::new(file);
 
-        let gerber_doc: GerberDoc = parse_gerber(reader);
+        let gerber_doc: GerberDoc = parse(reader).map_err(|(_partial_doc, error)| AppError::ParserError(error))?;
 
         let log_entries = gerber_doc
             .commands

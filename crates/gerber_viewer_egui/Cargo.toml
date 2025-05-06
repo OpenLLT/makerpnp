@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Logging
-log = "0.4"
+log = "0.4.27"
 env_logger = "0.11"
 
 # GUI Framework
@@ -19,7 +19,7 @@ egui_taffy = "0.7.0"
 rfd = "0.15.2"
 
 # Gerber rendering, types and parser
-gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "385b2aa80d1223e4cf3de8759fb438ffdc22dfd0" }
+gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "37349dc2a344d3e4f03ef081b6a7b695d4aa1652" }
 
 # Errors
 thiserror = "2.0.12"

@@ -2232,6 +2232,18 @@ dependencies = [
 [[package]]
 name = "gerber-types"
 version = "0.4.0"
+source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=41b8ab178fb6ee646dfba3f000db1b1b8a9ae167#41b8ab178fb6ee646dfba3f000db1b1b8a9ae167"
+dependencies = [
+ "chrono",
+ "conv",
+ "num-rational",
+ "thiserror 2.0.12",
+ "uuid",
+]
+
+[[package]]
+name = "gerber-types"
+version = "0.4.0"
 source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=d93cb0d4954c39cf17f924e003b5b396aeaaafd1#d93cb0d4954c39cf17f924e003b5b396aeaaafd1"
 dependencies = [
  "chrono",
@@ -2246,7 +2258,7 @@ name = "gerber_parser"
 version = "0.1.2"
 source = "git+https://github.com/makerpnp/gerber-parser.git?rev=5c29840f11a9d7a727c8c573cfb6728e7b3f960a#5c29840f11a9d7a727c8c573cfb6728e7b3f960a"
 dependencies = [
- "gerber-types",
+ "gerber-types 0.4.0 (git+https://github.com/makerpnp/gerber-types-rs.git?rev=d93cb0d4954c39cf17f924e003b5b396aeaaafd1)",
  "lazy-regex",
  "log",
  "regex",
@@ -2255,13 +2267,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "gerber_parser"
+version = "0.2.0"
+source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=5131551a09165a7318aa29b46d621f867b319bbf#5131551a09165a7318aa29b46d621f867b319bbf"
+dependencies = [
+ "gerber-types 0.4.0 (git+https://github.com/makerpnp/gerber-types-rs.git?rev=41b8ab178fb6ee646dfba3f000db1b1b8a9ae167)",
+ "lazy-regex",
+ "log",
+ "regex",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "gerber_viewer"
+version = "0.1.0"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=37349dc2a344d3e4f03ef081b6a7b695d4aa1652#37349dc2a344d3e4f03ef081b6a7b695d4aa1652"
+dependencies = [
+ "egui",
+ "gerber-types 0.4.0 (git+https://github.com/makerpnp/gerber-types-rs.git?rev=41b8ab178fb6ee646dfba3f000db1b1b8a9ae167)",
+ "gerber_parser 0.2.0",
+ "log",
+ "lyon",
+ "rand 0.9.1",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "gerber_viewer"
 version = "0.1.0"
 source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=385b2aa80d1223e4cf3de8759fb438ffdc22dfd0#385b2aa80d1223e4cf3de8759fb438ffdc22dfd0"
 dependencies = [
  "egui",
- "gerber-types",
- "gerber_parser",
+ "gerber-types 0.4.0 (git+https://github.com/makerpnp/gerber-types-rs.git?rev=d93cb0d4954c39cf17f924e003b5b396aeaaafd1)",
+ "gerber_parser 0.1.2",
  "log",
  "lyon",
  "rand 0.9.1",
@@ -2278,7 +2316,7 @@ dependencies = [
  "egui_taffy",
  "env_logger",
  "epaint",
- "gerber_viewer",
+ "gerber_viewer 0.1.0 (git+https://github.com/makerpnp/gerber_viewer.git?rev=37349dc2a344d3e4f03ef081b6a7b695d4aa1652)",
  "log",
  "rfd",
  "thiserror 2.0.12",
@@ -3145,9 +3183,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.26"
+version = "0.4.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30bde2b3dc3671ae49d8e2e9f044c7c005836e7a023ee57cffa25ab82764bb9e"
+checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
 dependencies = [
  "value-bag",
 ]
@@ -4037,6 +4075,7 @@ dependencies = [
  "fluent",
  "fluent-bundle",
  "futures",
+ "gerber_viewer 0.1.0 (git+https://github.com/makerpnp/gerber_viewer.git?rev=385b2aa80d1223e4cf3de8759fb438ffdc22dfd0)",
  "i18n",
  "image",
  "indexmap 2.9.0",
