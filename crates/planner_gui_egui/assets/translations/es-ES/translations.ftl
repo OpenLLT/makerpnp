@@ -14,6 +14,7 @@ modal-add-pcb-title = Añadir PCB - { $file }
 modal-add-phase-title = Añadir fase - { $file }
 modal-create-unit-assignment-title = Crear asignación de unidad - { $file }
 modal-phase-placement-orderings-title = Ordenación de la colocación de fases - { $phase }
+modal-manager-gerbers-title = Gestionar gerbers  - { $design }
 
 toolbar-button-home = Inicio
 toolbar-button-new = Nuevo
@@ -51,6 +52,8 @@ project-overview-header = Visión general
 project-overview-detail-name = Nombre: { $name }
 
 project-pcb-header = PCB
+project-pcb-designs-header = Diseños
+project-pcb-designs-button-gerbers = Gerbers...
 
 project-placements-tab-label = Ubicaciones
 project-placements-header = Ubicaciones de proyecto
@@ -97,6 +100,7 @@ project-explorer-node-process = { $name }
 
 form-button-ok = Aceptar
 form-button-cancel = Cancelar
+form-button-close = Cerrar
 
 form-add-pcb-input-name = Nombre
 form-add-pcb-input-name-placeholder = Nombre de PCB (por ejemplo, 'predeterminado')
@@ -182,6 +186,10 @@ table-parts-column-mpn = MPN
 table-parts-column-processes = Procesos
 table-parts-column-ref-des-set = Des. de Ref. Conjunto
 table-parts-column-quantity = Cantidad
+
+table-designs-column-index = #
+table-designs-column-actions = Acciones
+table-designs-column-name = Nombre
 
 filter-expression = Buscar...
 
