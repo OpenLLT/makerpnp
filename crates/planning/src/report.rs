@@ -262,10 +262,10 @@ fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
                 // Note: the user may not have made any unit assignments yet.
                 let unit_assignments = find_unit_assignments(project, unit_path);
 
-                let pcb = project.pcbs.get(pcb_index).unwrap();
+                let project_pcb = project.pcbs.get(pcb_index).unwrap();
 
                 Some(PcbReportItem {
-                    name: pcb.name.clone(),
+                    name: project_pcb.pcb.name.clone(),
                     unit_assignments,
                 })
             } else {
@@ -597,7 +597,7 @@ mod report_issue_sorting {
 }
 
 fn find_unit_assignments(project: &Project, unit_path: &ObjectPath) -> Vec<PcbUnitAssignmentItem> {
-    let all_unit_assignments = project.unit_assignments();
+    let all_unit_assignments = project.all_unit_assignments();
 
     let unit_assignments = all_unit_assignments
         .iter()

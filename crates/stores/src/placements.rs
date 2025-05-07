@@ -88,7 +88,7 @@ pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyho
 }
 
 pub fn load_all_placements(
-    unique_design_variants: HashSet<&DesignVariant>,
+    unique_design_variants: HashSet<DesignVariant>,
     directory: &Path,
 ) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
     let mut all_placements: BTreeMap<DesignVariant, Vec<Placement>> = Default::default();
@@ -97,13 +97,13 @@ pub fn load_all_placements(
         let DesignVariant {
             design_name: design,
             variant_name: variant,
-        } = design_variant;
+        } = &design_variant;
 
         let mut placements_path = PathBuf::from(directory);
         placements_path.push(format!("{}_{}_placements.csv", design, variant));
 
         let placements = load_placements(placements_path)?;
-        let _ = all_placements.insert(design_variant.clone(), placements);
+        let _ = all_placements.insert(design_variant, placements);
     }
     Ok(all_placements)
 }

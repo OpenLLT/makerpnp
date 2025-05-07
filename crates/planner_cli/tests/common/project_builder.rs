@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
-use planning::design::DesignVariant;
+use planning::design::{DesignName, DesignVariant};
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use pnp::object_path::ObjectPath;
@@ -14,6 +14,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use planning::pcb::{DesignIndex, PcbUnitIndex};
+use planning::variant::VariantName;
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
 
@@ -28,7 +30,7 @@ pub struct TestProjectBuilder {
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
-    pub pcbs: Vec<TestPcb>,
+    pub pcbs: Vec<TestProjectPcb>,
 
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -107,7 +109,7 @@ impl TestProjectBuilder {
         self
     }
 
-    pub fn with_pcbs(mut self, pcbs: Vec<TestPcb>) -> Self {
+    pub fn with_pcbs(mut self, pcbs: Vec<TestProjectPcb>) -> Self {
         self.pcbs = pcbs;
         self
     }
@@ -171,11 +173,28 @@ pub struct TestOperationDefinition {
     pub tasks: Vec<TaskReference>,
 }
 
+#[serde_as]
 #[derive(Debug, serde::Serialize)]
 pub struct TestPcb {
     pub name: String,
     pub units: u16,
-    pub unit_assignments: Vec<Option<DesignVariant>>,
+    pub design_names: Vec<DesignName>,
+
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub design_to_unit_mapping: BTreeMap<PcbUnitIndex, DesignIndex>,
+}
+
+#[serde_as]
+#[derive(Debug, serde::Serialize)]
+pub struct TestProjectPcb {
+    pub pcb: TestPcb,
+
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
 }
 
 #[derive(Debug, serde::Serialize, Ord, PartialOrd, Eq, PartialEq)]

@@ -896,14 +896,13 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let pcb = project
+                let project_pcb = project
                     .pcbs
                     .get(pcb_index)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
-                let designs = pcb
-                    .unique_designs()
-                    .into_iter()
+                let designs = project_pcb
+                    .unique_designs_iter()
                     .cloned()
                     .collect::<Vec<_>>();
 
@@ -932,8 +931,8 @@ impl Planner {
 
                 let pcb_overview = PcbOverview {
                     index: pcb_index,
-                    name: pcb.name.clone(),
-                    units: pcb.units,
+                    name: project_pcb.pcb.name.clone(),
+                    units: project_pcb.pcb.units,
                     designs,
                     gerbers,
                 };
@@ -1017,12 +1016,12 @@ impl Planner {
                     .tree
                     .add_edge(root_node, pcbs_node, ());
 
-                for (pcb_index, pcb) in project.pcbs.iter().enumerate() {
+                for (pcb_index, project_pcb) in project.pcbs.iter().enumerate() {
                     let pcb_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "pcb".to_string(),
-                            args: HashMap::from([("name".to_string(), Arg::String(pcb.name.clone()))]),
+                            args: HashMap::from([("name".to_string(), Arg::String(project_pcb.pcb.name.clone()))]),
                             path: format!("/pcbs/{}", pcb_index).to_string(),
                         });
                     project_tree
@@ -1040,7 +1039,7 @@ impl Planner {
                         .tree
                         .add_edge(pcb_node, unit_assignments_node, ());
 
-                    for (unit_index, unit_assignment) in pcb
+                    for (unit_index, unit_assignment) in project_pcb
                         .unit_assignments()
                         .iter()
                         .enumerate()

@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::env::var;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -36,7 +37,7 @@ use crate::operation_history::{
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
-use crate::pcb::{Pcb, PcbError};
+use crate::pcb::{DesignIndex, Pcb, PcbUnitIndex};
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
@@ -50,6 +51,7 @@ use crate::process::{
 use crate::report::project_report_json_to_markdown;
 use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::{operation_history, placement, report};
+use crate::variant::VariantName;
 
 #[serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -62,7 +64,7 @@ pub struct Project {
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
-    pub pcbs: Vec<Pcb>,
+    pub pcbs: Vec<ProjectPcb>,
 
     #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -103,17 +105,16 @@ impl Project {
         }
     }
 
-    pub fn unit_assignments(&self) -> Vec<(ObjectPath, &DesignVariant)> {
+    pub fn all_unit_assignments(&self) -> Vec<(ObjectPath, DesignVariant)> {
         self.pcbs
             .iter()
             .enumerate()
-            .flat_map(|(pcb_index, pcb)| {
-                pcb.unit_assignments
-                    .iter()
+            .flat_map(|(pcb_index, project_pcb)| {
+                project_pcb.unit_assignments()
+                    .into_iter()
                     .enumerate()
                     .filter_map(move |(unit_index, unit_assignment)| {
                         unit_assignment
-                            .as_ref()
                             .map(|design_variant| {
                                 let mut object_path = ObjectPath::default();
                                 object_path.set_pcb_instance(pcb_index as u16 + 1);
@@ -160,8 +161,10 @@ impl Project {
         else {
             return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
         };
+        
+        let mut modified = pcb.ensure_design(design_variant.design_name.clone());
 
-        let modified = match pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
+        modified |= match pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
             Ok(None) => {
                 info!(
                     "Unit assignment added. unit: '{}', design_variant: {}",
@@ -176,7 +179,7 @@ impl Project {
                 );
                 true
             }
-            Err(PcbError::UnitAlreadyAssigned {
+            Err(ProjectPcbError::UnitAlreadyAssigned {
                 ..
             }) => {
                 info!("Unit assignment unchanged.");
@@ -242,16 +245,12 @@ impl Project {
             })
     }
 
-    pub fn unique_design_variants(&self) -> HashSet<&DesignVariant> {
-        let mut unique = HashSet::new();
-        for pcb in &self.pcbs {
-            for opt in &pcb.unit_assignments {
-                if let Some(ref s) = opt {
-                    unique.insert(s);
-                }
-            }
-        }
-        unique
+    pub fn unique_design_variants(&self) -> HashSet<DesignVariant> {
+        self.pcbs
+            .iter()
+            .flat_map(|pcb| pcb.unit_assignments())
+            .flatten()
+            .collect()
     }
 
     #[must_use]
@@ -330,6 +329,116 @@ impl Project {
         modified
     }
 }
+
+#[serde_as]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub struct ProjectPcb {
+    pub pcb: Pcb,
+
+    /// Individual units can have a design variant assigned.
+    #[serde_as(as = "Vec<(_, _)>")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[serde(default)]
+    // TODO remove `DesignIndex` from this tuple, and use `pcb.design_to_unit_mapping`
+    pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
+}
+
+impl ProjectPcb {
+    pub fn new(pcb: Pcb) -> Self {
+        Self {
+            pcb,
+            unit_assignments: BTreeMap::default(),
+        }
+    }
+
+    pub fn ensure_design(&mut self, design_name: DesignName) -> bool {
+        if !self.pcb.design_names
+            .iter().any(|candidate| candidate.eq(&design_name)) 
+        {
+            info!("Added design to PCB. design: {}", design_name);
+            self.pcb.design_names.push(design_name);
+            true
+        } else {
+            info!("Design already used by PCB. design: {}", design_name);
+            false
+        }
+    }
+
+    pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
+
+        self.pcb.design_names.iter()
+    }
+
+    pub fn unit_assignments(&self) -> Vec<Option<DesignVariant>> {
+
+        let mut unit_assignments = vec![None; self.pcb.units as usize];
+
+        for (unit_index, (design_index, variant_name)) in self.unit_assignments.iter() {
+            unit_assignments[*unit_index as usize] = Some(DesignVariant { design_name: self.pcb.design_names[*design_index as usize].clone(), variant_name: variant_name.clone() });
+        }
+
+        unit_assignments
+    }
+
+    /// Makes an assignment
+    ///
+    /// unit is 0-based
+    ///
+    /// Returns the previous assignment, which may be `None`
+    ///
+    /// Returns an error
+    /// * if the assignment has already been made
+    /// * if the unit is out of range
+    pub fn assign_unit(&mut self, unit: u16, design_variant: DesignVariant) -> Result<Option<DesignVariant>, ProjectPcbError> {
+        if unit >= self.pcb.units {
+            return Err(ProjectPcbError::UnitOutOfRange {
+                unit,
+                min: 0,
+                max: self.pcb.units - 1,
+            });
+        }
+
+        let design_index = self.pcb.design_names.iter().position(|design_name| design_name.eq(&design_variant.design_name))
+            .ok_or(ProjectPcbError::UnknownDesign(design_variant.design_name))?;
+        
+        match self.unit_assignments.entry(unit) {
+            Entry::Vacant(entry) => {
+                entry.insert((design_index, design_variant.variant_name));
+                Ok(None)
+            }
+            Entry::Occupied(mut entry) => {
+                let (other_design_index, other_variant_name) = entry.get();
+                if other_design_index.eq(&design_index) && other_variant_name.eq(&design_variant.variant_name) {
+                    return Err(ProjectPcbError::UnitAlreadyAssigned {
+                        unit,
+                    });
+                }
+                
+                let old_assigment = entry.insert((design_index, design_variant.variant_name));
+                
+                Ok(Some(DesignVariant {
+                    design_name: self.pcb.design_names[old_assigment.0].clone(),
+                    variant_name: old_assigment.1,
+                }))
+            }
+        }
+        
+    }
+}
+
+
+#[derive(Debug, Error)]
+pub enum ProjectPcbError {
+    #[error("Unit {unit} is out of range [{min}..{max}] (inclusive)")]
+    UnitOutOfRange { unit: u16, min: u16, max: u16 },
+    #[error("Unit {unit} has already been assigned")]
+    UnitAlreadyAssigned { unit: u16 },
+    
+    #[error("Unknown design. design: {0}.  Assign the design to the PCB.")]
+    UnknownDesign(DesignName),
+}
+
 
 #[derive(Error, Debug)]
 pub enum ProcessFactoryError {
@@ -420,7 +529,7 @@ pub enum PcbOperationError {
 
 pub fn add_pcb(project: &mut Project, name: String, units: u16) -> Result<(), PcbOperationError> {
     info!("Added PCB. name: '{}'", name);
-    project.pcbs.push(Pcb::new(name, units));
+    project.pcbs.push(ProjectPcb::new(Pcb::new(name, units)));
     Ok(())
 }
 
@@ -811,7 +920,7 @@ fn find_placement_changes(
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
 
     let unit_assignments = project
-        .unit_assignments()
+        .all_unit_assignments()
         .into_iter()
         .map(|(path, unit_assignment)| (path, unit_assignment.clone()))
         .collect::<Vec<_>>();
