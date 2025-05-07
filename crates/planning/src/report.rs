@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -11,7 +11,6 @@ use json2markdown::MarkdownRenderer;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::{Pcb, PcbKind};
 use pnp::reference::Reference;
 use serde::Serialize;
 use serde_with::serde_as;
@@ -147,9 +146,6 @@ pub fn project_generate_report(
         false => ProjectStatus::Incomplete,
     };
 
-    let invalid_unit_assignment_issues = generate_issues_for_invalid_unit_assignments(project);
-    issue_set.extend(invalid_unit_assignment_issues);
-
     let phase_specifications: Vec<PhaseSpecification> = project
         .phase_orderings
         .iter()
@@ -175,56 +171,6 @@ pub fn project_generate_report(
     report.issues = issues;
 
     report
-}
-
-fn generate_issues_for_invalid_unit_assignments(project: &Project) -> BTreeSet<ProjectReportIssue> {
-    let mut issues: BTreeSet<ProjectReportIssue> = BTreeSet::new();
-
-    for (object_path, _design_variant) in project.unit_assignments.iter() {
-        let pcb_kind_counts = count_pcb_kinds(&project.pcbs);
-
-        if let Some((pcb_kind, index)) = object_path.pcb_kind_and_instance() {
-            let issue = match pcb_kind_counts.get(&pcb_kind) {
-                Some(count) => {
-                    if index > *count {
-                        Some(ProjectReportIssue {
-                            message: "Invalid unit assignment, index out of range.".to_string(),
-                            severity: IssueSeverity::Severe,
-                            kind: IssueKind::InvalidUnitAssignment {
-                                object_path: object_path.clone(),
-                            },
-                        })
-                    } else {
-                        None
-                    }
-                }
-                None => Some(ProjectReportIssue {
-                    message: "Invalid unit assignment, no pcbs match the assignment.".to_string(),
-                    severity: IssueSeverity::Severe,
-                    kind: IssueKind::InvalidUnitAssignment {
-                        object_path: object_path.clone(),
-                    },
-                }),
-            };
-
-            if let Some(issue) = issue {
-                issues.insert(issue);
-            }
-        }
-    }
-
-    issues
-}
-
-fn count_pcb_kinds(pcbs: &[Pcb]) -> HashMap<PcbKind, usize> {
-    let mut pcb_kind_counts: HashMap<PcbKind, usize> = Default::default();
-    for pcb in pcbs.iter() {
-        pcb_kind_counts
-            .entry(pcb.kind.clone())
-            .and_modify(|e| *e += 1)
-            .or_insert(1);
-    }
-    pcb_kind_counts
 }
 
 fn build_phase_specification(
@@ -310,33 +256,18 @@ fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
     let pcbs: Vec<PcbReportItem> = unit_paths_with_placements
         .iter()
         .find_map(|unit_path| {
-            if let Some((kind, mut index)) = unit_path.pcb_kind_and_instance() {
-                // TODO consider if unit paths should use zero-based index
-                index -= 1;
+            if let Ok(pcb_instance) = unit_path.pcb_instance() {
+                let pcb_index = (pcb_instance - 1) as usize;
 
                 // Note: the user may not have made any unit assignments yet.
-                let mut unit_assignments = find_unit_assignments(project, unit_path);
+                let unit_assignments = find_unit_assignments(project, unit_path);
 
-                match kind {
-                    PcbKind::Panel => {
-                        let pcb = project.pcbs.get(index).unwrap();
+                let pcb = project.pcbs.get(pcb_index).unwrap();
 
-                        Some(PcbReportItem::Panel {
-                            name: pcb.name.clone(),
-                            unit_assignments,
-                        })
-                    }
-                    PcbKind::Single => {
-                        let pcb = project.pcbs.get(index).unwrap();
-
-                        assert!(unit_assignments.len() <= 1);
-
-                        Some(PcbReportItem::Single {
-                            name: pcb.name.clone(),
-                            unit_assignment: unit_assignments.pop(),
-                        })
-                    }
-                }
+                Some(PcbReportItem {
+                    name: pcb.name.clone(),
+                    unit_assignments,
+                })
             } else {
                 None
             }
@@ -352,7 +283,7 @@ fn build_unit_paths_with_placements(placement_states: &BTreeMap<ObjectPath, Plac
         BTreeSet::<ObjectPath>::new(),
         |mut acc, (object_path, placement_state)| {
             if placement_state.placement.place {
-                if let Ok(pcb_unit) = object_path.pcb_unit() {
+                if let Ok(pcb_unit) = object_path.pcb_unit_path() {
                     if acc.insert(pcb_unit) {
                         trace!("Phase pcb unit found.  object_path: {}", object_path);
                     }
@@ -402,15 +333,12 @@ fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
                     match kind {
                         IssueKind::NoPcbsAssigned => 0,
                         IssueKind::NoPhasesCreated => 1,
-                        IssueKind::InvalidUnitAssignment {
-                            ..
-                        } => 2,
                         IssueKind::UnassignedPlacement {
                             ..
-                        } => 3,
+                        } => 2,
                         IssueKind::UnassignedPartFeeder {
                             ..
-                        } => 4,
+                        } => 3,
                     }
                 }
                 fn severity_ordinal(severity: &IssueSeverity) -> usize {
@@ -429,14 +357,6 @@ fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
                         match ordinal_ordering {
                             Ordering::Less => ordinal_ordering,
                             Ordering::Equal => match (&a.kind, &b.kind) {
-                                (
-                                    IssueKind::InvalidUnitAssignment {
-                                        object_path: object_path_a,
-                                    },
-                                    IssueKind::InvalidUnitAssignment {
-                                        object_path: object_path_b,
-                                    },
-                                ) => object_path_a.cmp(object_path_b),
                                 (
                                     IssueKind::UnassignedPlacement {
                                         object_path: object_path_a,
@@ -549,32 +469,18 @@ mod report_issue_sorting {
         let issue3 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::InvalidUnitAssignment {
-                object_path: ObjectPath::from_str("pcb=panel::instance=1").expect("always ok"),
+            kind: IssueKind::UnassignedPlacement {
+                object_path: ObjectPath::from_str("pcb=1::unit=1::ref_des=R1").expect("always ok"),
             },
         };
         let issue4 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
-            kind: IssueKind::InvalidUnitAssignment {
-                object_path: ObjectPath::from_str("pcb=panel::instance=2").expect("always ok"),
+            kind: IssueKind::UnassignedPlacement {
+                object_path: ObjectPath::from_str("pcb=1::unit=1::ref_des=R2").expect("always ok"),
             },
         };
         let issue5 = ProjectReportIssue {
-            message: "EQUAL".to_string(),
-            severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPlacement {
-                object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").expect("always ok"),
-            },
-        };
-        let issue6 = ProjectReportIssue {
-            message: "EQUAL".to_string(),
-            severity: IssueSeverity::Severe,
-            kind: IssueKind::UnassignedPlacement {
-                object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R2").expect("always ok"),
-            },
-        };
-        let issue7 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
@@ -584,7 +490,7 @@ mod report_issue_sorting {
                 },
             },
         };
-        let issue8 = ProjectReportIssue {
+        let issue6 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
@@ -594,7 +500,7 @@ mod report_issue_sorting {
                 },
             },
         };
-        let issue9 = ProjectReportIssue {
+        let issue7 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
@@ -606,8 +512,6 @@ mod report_issue_sorting {
         };
 
         let mut issues: Vec<ProjectReportIssue> = vec![
-            issue9.clone(),
-            issue8.clone(),
             issue7.clone(),
             issue6.clone(),
             issue5.clone(),
@@ -624,8 +528,6 @@ mod report_issue_sorting {
             issue5.clone(),
             issue6.clone(),
             issue7.clone(),
-            issue8.clone(),
-            issue9.clone(),
         ];
 
         // when
@@ -653,7 +555,6 @@ mod report_issue_sorting {
             severity: IssueSeverity::Warning,
             kind: IssueKind::NoPcbsAssigned,
         };
-
         let issue4 = ProjectReportIssue {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
@@ -696,8 +597,9 @@ mod report_issue_sorting {
 }
 
 fn find_unit_assignments(project: &Project, unit_path: &ObjectPath) -> Vec<PcbUnitAssignmentItem> {
-    let unit_assignments = project
-        .unit_assignments
+    let all_unit_assignments = project.unit_assignments();
+
+    let unit_assignments = all_unit_assignments
         .iter()
         .filter_map(
             |(
@@ -846,17 +748,9 @@ pub struct PcbUnitAssignmentItem {
 }
 
 #[derive(Clone, serde::Serialize)]
-pub enum PcbReportItem {
-    /// there should be one or more assignments, but the assignment might not have been made yet.
-    Panel {
-        name: String,
-        unit_assignments: Vec<PcbUnitAssignmentItem>,
-    },
-    /// there should be exactly one assignment, but the assignment might not have been made yet.
-    Single {
-        name: String,
-        unit_assignment: Option<PcbUnitAssignmentItem>,
-    },
+pub struct PcbReportItem {
+    name: String,
+    unit_assignments: Vec<PcbUnitAssignmentItem>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -886,10 +780,6 @@ pub enum IssueSeverity {
 pub enum IssueKind {
     NoPcbsAssigned,
     NoPhasesCreated,
-    InvalidUnitAssignment {
-        #[serde_as(as = "DisplayFromStr")]
-        object_path: ObjectPath,
-    },
     UnassignedPlacement {
         #[serde_as(as = "DisplayFromStr")]
         object_path: ObjectPath,

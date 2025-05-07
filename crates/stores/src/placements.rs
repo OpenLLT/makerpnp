@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -88,7 +88,7 @@ pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyho
 }
 
 pub fn load_all_placements(
-    unique_design_variants: &[DesignVariant],
+    unique_design_variants: HashSet<&DesignVariant>,
     directory: &Path,
 ) -> anyhow::Result<BTreeMap<DesignVariant, Vec<Placement>>> {
     let mut all_placements: BTreeMap<DesignVariant, Vec<Placement>> = Default::default();

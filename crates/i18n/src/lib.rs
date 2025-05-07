@@ -108,6 +108,10 @@ pub mod fluent_argument_helpers {
                     Arg::Integer(value) => {
                         fluent_args.set(key, FluentValue::Number(value.into()));
                     }
+                    Arg::Boolean(value) => {
+                        let number: u8 = *value as u8;
+                        fluent_args.set(key, FluentValue::Number(number.into()));
+                    }
                 }
             }
             fluent_args

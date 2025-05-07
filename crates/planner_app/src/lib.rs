@@ -84,7 +84,7 @@ pub struct PcbGerberItem {
 pub struct PcbOverview {
     pub index: usize,
     pub name: String,
-    pub kind: PcbKind,
+    pub units: u16,
     /// A list of unique designs, a panel can have multiple designs.
     pub designs: Vec<DesignName>,
 
@@ -169,8 +169,10 @@ impl Default for ProjectTreeItem {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone, Eq)]
 pub enum Arg {
+    Boolean(bool),
     String(String),
-    Integer(i64), // Add other types, like 'Number' here as required.
+    Integer(i64),
+    // Add other types, like 'Number' here as required.
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug, Clone, Eq)]
@@ -276,8 +278,8 @@ pub enum Event {
     },
 
     AddPcb {
-        kind: PcbKind,
         name: String,
+        units: u16,
     },
     AssignVariantToUnit {
         design: DesignName,
@@ -450,8 +452,8 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::AddPcb {
-                kind,
                 name,
+                units,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project,
@@ -462,8 +464,7 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                project::add_pcb(project, kind.clone().into(), name)
-                    .map_err(|cause| AppError::PcbError(cause.into()))?;
+                project::add_pcb(project, name, units).map_err(|cause| AppError::PcbError(cause.into()))?;
 
                 *modified |= true;
 
@@ -900,20 +901,11 @@ impl Planner {
                     .get(pcb_index)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
-                let mut designs = project
-                    .unit_assignments
-                    .iter()
-                    .filter_map(|(path, design_variant)| match path.pcb_kind_and_instance() {
-                        // Note: instance is 1-based.
-                        Some((kind, instance)) if kind.eq(&pcb.kind) && (instance - 1) == pcb_index => {
-                            let design_name = design_variant.design_name.clone();
-                            Some(design_name)
-                        }
-                        _ => None,
-                    })
+                let designs = pcb
+                    .unique_designs()
+                    .into_iter()
+                    .cloned()
                     .collect::<Vec<_>>();
-
-                designs.dedup();
 
                 let gerbers = designs
                     .iter()
@@ -941,7 +933,7 @@ impl Planner {
                 let pcb_overview = PcbOverview {
                     index: pcb_index,
                     name: pcb.name.clone(),
-                    kind: pcb.kind.clone(),
+                    units: pcb.units,
                     designs,
                     gerbers,
                 };
@@ -1025,59 +1017,63 @@ impl Planner {
                     .tree
                     .add_edge(root_node, pcbs_node, ());
 
-                for (index, pcb) in project.pcbs.iter().enumerate() {
+                for (pcb_index, pcb) in project.pcbs.iter().enumerate() {
                     let pcb_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "pcb".to_string(),
-                            args: HashMap::from([
-                                ("name".to_string(), Arg::String(pcb.name.clone())),
-                                ("kind".to_string(), Arg::String(pcb.kind.to_string())),
-                            ]),
-                            path: format!("/pcbs/{}", index).to_string(),
+                            args: HashMap::from([("name".to_string(), Arg::String(pcb.name.clone()))]),
+                            path: format!("/pcbs/{}", pcb_index).to_string(),
                         });
                     project_tree
                         .tree
                         .add_edge(pcbs_node, pcb_node, ());
-                }
 
-                let unit_assignments_node = project_tree
-                    .tree
-                    .add_node(ProjectTreeItem {
-                        key: "unit-assignments".to_string(),
-                        path: "/units".to_string(),
-                        ..ProjectTreeItem::default()
-                    });
-                project_tree
-                    .tree
-                    .add_edge(root_node, unit_assignments_node, ());
-
-                for (index, (path, design_variant)) in project
-                    .unit_assignments
-                    .iter()
-                    .enumerate()
-                {
-                    let unit_assignment_node = project_tree
+                    let unit_assignments_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
-                            key: "unit-assignment".to_string(),
-                            args: HashMap::from([
-                                ("name".to_string(), Arg::String(path.to_string())),
-                                (
-                                    "design_name".to_string(),
-                                    Arg::String(design_variant.design_name.to_string()),
-                                ),
-                                (
-                                    "variant_name".to_string(),
-                                    Arg::String(design_variant.variant_name.to_string()),
-                                ),
-                            ]),
-                            path: format!("/units/{}", index).to_string(),
+                            key: "unit-assignments".to_string(),
+                            path: format!("/pcbs/{}/units", pcb_index).to_string(),
+                            ..ProjectTreeItem::default()
                         });
-
                     project_tree
                         .tree
-                        .add_edge(unit_assignments_node, unit_assignment_node, ());
+                        .add_edge(pcb_node, unit_assignments_node, ());
+
+                    for (unit_index, unit_assignment) in pcb
+                        .unit_assignments()
+                        .iter()
+                        .enumerate()
+                    {
+                        let mut object_path = ObjectPath::default();
+                        object_path.set_pcb_instance((pcb_index + 1) as u16);
+                        object_path.set_pcb_unit((unit_index + 1) as u16);
+
+                        let mut args = HashMap::from([("name".to_string(), Arg::String(object_path.to_string()))]);
+
+                        if let Some(design_variant) = unit_assignment {
+                            args.insert(
+                                "design_name".to_string(),
+                                Arg::String(design_variant.design_name.to_string()),
+                            );
+                            args.insert(
+                                "variant_name".to_string(),
+                                Arg::String(design_variant.variant_name.to_string()),
+                            );
+                        }
+
+                        let unit_assignment_node = project_tree
+                            .tree
+                            .add_node(ProjectTreeItem {
+                                key: "unit-assignment".to_string(),
+                                args,
+                                path: format!("/pcbs/{}/units/{}", pcb_index, unit_index).to_string(),
+                            });
+
+                        project_tree
+                            .tree
+                            .add_edge(unit_assignments_node, unit_assignment_node, ());
+                    }
                 }
 
                 let processes_node = project_tree
@@ -1461,7 +1457,7 @@ impl Planner {
         let directory = path.parent().unwrap();
 
         let unique_design_variants = project.unique_design_variants();
-        let design_variant_placement_map = stores::placements::load_all_placements(&unique_design_variants, directory)?;
+        let design_variant_placement_map = stores::placements::load_all_placements(unique_design_variants, directory)?;
         let refresh_result = project::refresh_from_design_variants(project, design_variant_placement_map);
 
         trace!("Refreshed from design variants. modified: {}", refresh_result.modified);

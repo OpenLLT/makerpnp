@@ -2,9 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use cli::args::{
-    AddOrRemoveOperationArg, PcbKindArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg, TaskActionArg,
-};
+use cli::args::{AddOrRemoveOperationArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg, TaskActionArg};
 use planner_app::Event;
 use planning::design::DesignName;
 use planning::placement::PlacementSortingItem;
@@ -52,13 +50,13 @@ pub(crate) enum Command {
     Create {},
     /// Add a PCB
     AddPcb {
-        /// PCB kind
-        #[arg(long)]
-        kind: PcbKindArg,
-
         /// Name of the PCB, e.g. 'panel_1'
         #[arg(long)]
         name: String,
+
+        /// Units
+        #[arg(long)]
+        units: u16,
     },
     /// Assign a design variant to a PCB unit
     AssignVariantToUnit {
@@ -216,11 +214,11 @@ impl TryFrom<Opts> for Event {
                 })
             }
             Command::AddPcb {
-                kind,
                 name,
+                units,
             } => Ok(Event::AddPcb {
-                kind: kind.into(),
                 name: name.to_string(),
+                units,
             }),
             Command::AssignVariantToUnit {
                 design,

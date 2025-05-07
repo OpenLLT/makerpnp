@@ -77,9 +77,10 @@ impl ExplorerUi {
         let item = &graph[node];
 
         fn handle_phase_loadout<'p>(
+            default_key: String,
             item: &'p ProjectTreeItem,
             project_directory: &'_ PathBuf,
-        ) -> Result<Cow<'p, ProjectTreeItem>, ()> {
+        ) -> Result<(String, Cow<'p, ProjectTreeItem>), ()> {
             if !item.key.eq("phase-loadout") {
                 return Err(());
             }
@@ -101,25 +102,54 @@ impl ExplorerUi {
 
             let item: Cow<'p, ProjectTreeItem> = Cow::Owned(item);
 
-            Ok(item)
+            Ok((default_key, item))
+        }
+
+        fn handle_unit_assignment<'p>(
+            default_key: String,
+            item: &'p ProjectTreeItem,
+            _project_directory: &'_ PathBuf,
+        ) -> Result<(String, Cow<'p, ProjectTreeItem>), ()> {
+            if !item.key.eq("unit-assignment") {
+                return Err(());
+            }
+
+            fn contains_all(values: &[&String], required: &[&str]) -> bool {
+                required
+                    .iter()
+                    .all(|item| values.iter().any(|s| s == item))
+            }
+
+            let required_keys = ["design_name", "variant_name"];
+
+            let keys: Vec<&String> = item.args.keys().collect();
+            let key = if contains_all(&keys, &required_keys) {
+                default_key
+            } else {
+                "project-explorer-node-unit-assignment-none".to_string()
+            };
+
+            Ok((key, Cow::Borrowed(item)))
         }
 
         fn default_handler<'p>(
+            default_key: String,
             item: &'p ProjectTreeItem,
             _project_directory: &'_ PathBuf,
-        ) -> Result<Cow<'p, ProjectTreeItem>, ()> {
-            Ok(Cow::Borrowed(item))
+        ) -> Result<(String, Cow<'p, ProjectTreeItem>), ()> {
+            Ok((default_key, Cow::Borrowed(item)))
         }
 
         // some items need additional processing
-        let handlers = [handle_phase_loadout, default_handler];
+        let handlers = [handle_phase_loadout, handle_unit_assignment, default_handler];
 
-        let item = handlers
+        let default_key = format!("project-explorer-node-{}", item.key);
+
+        let (key, item) = handlers
             .iter()
-            .find_map(|handler| handler(item, &self.project_directory).ok())
+            .find_map(|handler| handler(default_key.clone(), item, &self.project_directory).ok())
             .unwrap();
 
-        let key = format!("project-explorer-node-{}", item.key);
         let args = build_fluent_args(&item.args);
 
         let label = translate_fluent(&key, &args);

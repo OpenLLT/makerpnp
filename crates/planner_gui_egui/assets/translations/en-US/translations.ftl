@@ -94,8 +94,9 @@ project-explorer-node-phase = { $reference } ({ $process})
 project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Unit assignments
 project-explorer-node-unit-assignment = { $name } ({$design_name} - {$variant_name})
+project-explorer-node-unit-assignment-none = { $name } (Unassigned)
 project-explorer-node-pcbs = PCBs
-project-explorer-node-pcb = { $name } ({ $kind })
+project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Processes
 project-explorer-node-process = { $name }
 
@@ -107,6 +108,7 @@ form-button-remove = Remove
 
 form-add-pcb-input-name = Name
 form-add-pcb-input-name-placeholder = PCB name (e.g. 'default')
+form-add-pcb-input-units = Units
 
 form-create-unit-assignment-input-design-name = Design name
 form-create-unit-assignment-input-design-name-placeholder = Design name (e.g. 'my design')
@@ -140,6 +142,7 @@ form-option-error-required = * Required
 
 form-input-error-empty = Cannot be empty
 form-input-error-length = Minimum length { $min }
+form-input-error-range = Out of range, required range: { $min } - { $max } (inclusive)
 form-choice-empty = Choose an option
 
 form-input-number-require-greater-than-zero = Require a number greater than zero

@@ -3,7 +3,17 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
 pub struct VariantName(String);
 
 impl FromStr for VariantName {

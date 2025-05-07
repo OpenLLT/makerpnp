@@ -6,6 +6,7 @@ pub mod gerber;
 pub mod operation;
 pub mod operation_history;
 pub mod part;
+pub mod pcb;
 pub mod phase;
 pub mod placement;
 pub mod process;

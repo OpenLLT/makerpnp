@@ -7,7 +7,7 @@ use planning::design::DesignVariant;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use pnp::object_path::ObjectPath;
-use pnp::pcb::{PcbKind, PcbSide};
+use pnp::pcb::PcbSide;
 use pnp::placement::RefDes;
 use pnp::reference::Reference;
 use rust_decimal::Decimal;
@@ -29,11 +29,6 @@ pub struct TestProjectBuilder {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub pcbs: Vec<TestPcb>,
-
-    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    #[serde(default)]
-    pub unit_assignments: BTreeMap<ObjectPath, DesignVariant>,
 
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -117,11 +112,6 @@ impl TestProjectBuilder {
         self
     }
 
-    pub fn with_unit_assignments(mut self, unit_assignments: Vec<(ObjectPath, DesignVariant)>) -> Self {
-        self.unit_assignments = BTreeMap::from_iter(unit_assignments.into_iter());
-        self
-    }
-
     pub fn with_part_states(mut self, part_states: Vec<(TestPart, TestPartState)>) -> Self {
         self.part_states = BTreeMap::from_iter(part_states.into_iter());
         self
@@ -183,8 +173,9 @@ pub struct TestOperationDefinition {
 
 #[derive(Debug, serde::Serialize)]
 pub struct TestPcb {
-    pub kind: PcbKind,
     pub name: String,
+    pub units: u16,
+    pub unit_assignments: Vec<Option<DesignVariant>>,
 }
 
 #[derive(Debug, serde::Serialize, Ord, PartialOrd, Eq, PartialEq)]

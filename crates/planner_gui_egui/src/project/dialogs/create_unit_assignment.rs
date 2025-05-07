@@ -29,6 +29,8 @@ pub struct CreateUnitAssignmentModal {
     pub component: ComponentState<CreateUnitAssignmentModalUiCommand>,
 }
 
+// TODO replace with the pcb's units value
+
 const DEFAULT_PCB_UNIT_MAX: u16 = 256;
 
 impl CreateUnitAssignmentModal {

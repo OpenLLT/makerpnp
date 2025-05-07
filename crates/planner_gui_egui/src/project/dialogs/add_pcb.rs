@@ -11,7 +11,6 @@ use taffy::Size;
 use validator::Validate;
 
 use crate::forms::Form;
-use crate::project::dialogs::PcbKindChoice;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
@@ -73,48 +72,18 @@ impl AddPcbModal {
                         }
                     });
 
-                    form.add_field_ui("pcb_kind", tr!("form-common-choice-pcb-kind"), tui, {
+                    form.add_field_ui("units", tr!("form-add-pcb-input-units"), tui, {
                         move |ui: &mut Ui, fields, sender| {
-                            let kind = fields.kind.clone();
+                            let mut units = fields.units;
+                            ui.add(egui::DragValue::new(&mut units).range(1..=u16::MAX));
 
-                            let available_size = ui.available_size();
+                            if units != fields.units {
+                                sender
+                                    .send(AddPcbModalUiCommand::UnitsChanged(units))
+                                    .expect("sent");
+                            }
 
-                            ui.add_sized(available_size, |ui: &mut Ui| {
-                                egui::ComboBox::from_id_salt(ui.id().with("pcb_kind"))
-                                    .width(ui.available_width())
-                                    .selected_text(match kind {
-                                        None => tr!("form-common-combo-select"),
-                                        Some(PcbKindChoice::Single) => tr!("form-common-choice-pcb-kind-single"),
-                                        Some(PcbKindChoice::Panel) => {
-                                            tr!("form-common-choice-pcb-kind-panel")
-                                        }
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        if ui
-                                            .add(egui::SelectableLabel::new(
-                                                kind == Some(PcbKindChoice::Single),
-                                                tr!("form-common-choice-pcb-kind-single"),
-                                            ))
-                                            .clicked()
-                                        {
-                                            sender
-                                                .send(AddPcbModalUiCommand::PcbKindChanged(PcbKindChoice::Single))
-                                                .expect("sent");
-                                        }
-                                        if ui
-                                            .add(egui::SelectableLabel::new(
-                                                kind == Some(PcbKindChoice::Panel),
-                                                tr!("form-common-choice-pcb-kind-panel"),
-                                            ))
-                                            .clicked()
-                                        {
-                                            sender
-                                                .send(AddPcbModalUiCommand::PcbKindChanged(PcbKindChoice::Panel))
-                                                .expect("sent");
-                                        }
-                                    })
-                                    .response
-                            })
+                            ui.response()
                         }
                     });
                 });
@@ -126,8 +95,9 @@ impl AddPcbModal {
 pub struct AddPcbFields {
     #[validate(length(min = 1, code = "form-input-error-length"))]
     name: String,
-    #[validate(required(code = "form-option-error-required"))]
-    kind: Option<PcbKindChoice>,
+
+    #[validate(range(min = 1, max = 65535, code = "form-input-error-range"))]
+    units: u16,
 }
 
 #[derive(Debug, Clone)]
@@ -136,7 +106,7 @@ pub enum AddPcbModalUiCommand {
     Cancel,
 
     NameChanged(String),
-    PcbKindChanged(PcbKindChoice),
+    UnitsChanged(u16),
 }
 
 #[derive(Debug, Clone)]
@@ -149,7 +119,7 @@ pub enum AddPcbModalAction {
 #[derive(Debug, Clone)]
 pub struct AddPcbArgs {
     pub name: String,
-    pub kind: planner_app::PcbKind,
+    pub units: u16,
 }
 
 impl UiComponent for AddPcbModal {
@@ -215,12 +185,7 @@ impl UiComponent for AddPcbModal {
                 let args = AddPcbArgs {
                     name: fields.name.clone(),
                     // Safety: form validation prevents kind from being None
-                    kind: fields
-                        .kind
-                        .clone()
-                        .unwrap()
-                        .try_into()
-                        .unwrap(),
+                    units: fields.units,
                 };
                 Some(AddPcbModalAction::Submit(args))
             }
@@ -228,8 +193,8 @@ impl UiComponent for AddPcbModal {
                 self.fields.lock().unwrap().name = name;
                 None
             }
-            AddPcbModalUiCommand::PcbKindChanged(kind) => {
-                self.fields.lock().unwrap().kind = Some(kind);
+            AddPcbModalUiCommand::UnitsChanged(units) => {
+                self.fields.lock().unwrap().units = units;
                 None
             }
             AddPcbModalUiCommand::Cancel => Some(AddPcbModalAction::CloseDialog),
