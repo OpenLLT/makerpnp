@@ -95,7 +95,7 @@ project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Asignaciones de unidad
 project-explorer-node-unit-assignment = { $name } ({$design_name} - {$variant_name})
 project-explorer-node-pcbs = PCBs
-project-explorer-node-pcb = { $name } ({ $kind })
+project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Procesos
 project-explorer-node-process = { $name }
 

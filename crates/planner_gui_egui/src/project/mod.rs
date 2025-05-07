@@ -8,9 +8,9 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PcbKind, PhaseOverview, PhaseReference,
-    PlacementOperation, PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView,
-    ProjectViewRequest, Reference, SetOrClearAction, VariantName,
+    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PhaseReference, PlacementOperation,
+    PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
+    SetOrClearAction, VariantName,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -1270,8 +1270,8 @@ impl UiComponent for Project {
                             self.add_pcb_modal.take();
                             self.planner_core_service
                                 .update(key, Event::AddPcb {
-                                    kind: args.kind,
                                     name: args.name,
+                                    units: args.units,
                                 })
                                 .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
                         }
@@ -1347,7 +1347,7 @@ impl UiComponent for Project {
                                     instance,
                                 } => {
                                     let mut object_path = ObjectPath::default();
-                                    object_path.set_pcb_kind_and_instance(PcbKind::Single, instance);
+                                    object_path.set_pcb_instance(instance);
                                     object_path.set_pcb_unit(1);
 
                                     events.push(Event::AssignVariantToUnit {
@@ -1362,7 +1362,7 @@ impl UiComponent for Project {
                                 } => {
                                     for unit in unit_range {
                                         let mut object_path = ObjectPath::default();
-                                        object_path.set_pcb_kind_and_instance(PcbKind::Panel, instance);
+                                        object_path.set_pcb_instance(instance);
                                         object_path.set_pcb_unit(unit);
 
                                         events.push(Event::AssignVariantToUnit {

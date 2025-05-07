@@ -3,7 +3,7 @@ use eda::EdaTool;
 use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 use planning::placement::{PlacementOperation, PlacementSortingMode};
 use planning::process::TaskAction;
-use pnp::pcb::{PcbKind, PcbSide};
+use pnp::pcb::PcbSide;
 use util::sorting::SortOrder;
 
 /// Args decouple of CLI arg handling requirements from the internal data structures
@@ -57,22 +57,6 @@ impl From<PcbSideArg> for PcbSide {
         match value {
             PcbSideArg::Top => Self::Top,
             PcbSideArg::Bottom => Self::Bottom,
-        }
-    }
-}
-
-#[derive(ValueEnum, Clone, Debug)]
-#[value(rename_all = "lower")]
-pub enum PcbKindArg {
-    Single,
-    Panel,
-}
-
-impl From<PcbKindArg> for PcbKind {
-    fn from(value: PcbKindArg) -> Self {
-        match value {
-            PcbKindArg::Single => Self::Single,
-            PcbKindArg::Panel => Self::Panel,
         }
     }
 }

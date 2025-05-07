@@ -7,17 +7,13 @@ pub enum PcbSide {
     Bottom,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Pcb {
-    pub kind: PcbKind,
-    pub name: String,
-}
-
+#[deprecated(note = "Will be removed.")]
 #[derive(
     Debug,
     serde::Serialize,
     serde::Deserialize,
     Clone,
+    Copy,
     PartialEq,
     Eq,
     PartialOrd,

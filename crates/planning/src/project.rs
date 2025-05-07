@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,7 @@ use pnp;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::{Pcb, PcbKind, PcbSide};
+use pnp::pcb::PcbSide;
 use pnp::placement::Placement;
 use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
@@ -36,6 +36,7 @@ use crate::operation_history::{
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
+use crate::pcb::{Pcb, PcbError};
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
@@ -62,11 +63,6 @@ pub struct Project {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub pcbs: Vec<Pcb>,
-
-    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    #[serde(default)]
-    pub unit_assignments: BTreeMap<ObjectPath, DesignVariant>,
 
     #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -107,6 +103,29 @@ impl Project {
         }
     }
 
+    pub fn unit_assignments(&self) -> Vec<(ObjectPath, &DesignVariant)> {
+        self.pcbs
+            .iter()
+            .enumerate()
+            .flat_map(|(pcb_index, pcb)| {
+                pcb.unit_assignments
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(unit_index, unit_assignment)| {
+                        unit_assignment
+                            .as_ref()
+                            .map(|design_variant| {
+                                let mut object_path = ObjectPath::default();
+                                object_path.set_pcb_instance(pcb_index as u16 + 1);
+                                object_path.set_pcb_unit(unit_index as u16 + 1);
+
+                                (object_path, design_variant)
+                            })
+                    })
+            })
+            .collect::<Vec<_>>()
+    }
+
     pub fn ensure_process(&mut self, process: &ProcessDefinition) -> anyhow::Result<()> {
         if !self.processes.contains(process) {
             info!("Adding process to project.  process: '{}'", process.reference);
@@ -115,32 +134,58 @@ impl Project {
         Ok(())
     }
 
-    pub fn update_assignment(&mut self, object_path: ObjectPath, design_variant: DesignVariant) -> anyhow::Result<()> {
-        match self
-            .unit_assignments
-            .entry(object_path.clone())
-        {
-            Entry::Vacant(entry) => {
-                entry.insert(design_variant.clone());
+    /// makes the assignment if possible.
+    ///
+    /// returns if the assignment was modified (added or changed) or an error.
+    pub fn update_assignment(
+        &mut self,
+        object_path: ObjectPath,
+        design_variant: DesignVariant,
+    ) -> anyhow::Result<bool> {
+        // reminder: instance and pcb_unit are 1-based in the object path
+
+        let Ok((pcb_instance, pcb_unit)) = object_path.pcb_instance_and_unit() else {
+            return Err(anyhow::anyhow!(
+                "Unable to determine PCB instance and unit from object path: {:?}",
+                object_path
+            ));
+        };
+
+        let pcb_instance_index: u16 = pcb_instance - 1;
+        let pcb_unit_index: u16 = pcb_unit - 1;
+
+        let Some(pcb) = self
+            .pcbs
+            .get_mut(pcb_instance_index as usize)
+        else {
+            return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
+        };
+
+        let modified = match pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
+            Ok(None) => {
                 info!(
                     "Unit assignment added. unit: '{}', design_variant: {}",
                     object_path, design_variant
-                )
+                );
+                true
             }
-            Entry::Occupied(mut entry) => {
-                if entry.get().eq(&design_variant) {
-                    info!("Unit assignment unchanged.")
-                } else {
-                    let old_value = entry.insert(design_variant.clone());
-                    info!(
-                        "Unit assignment updated. unit: '{}', old: {}, new: {}",
-                        object_path, old_value, design_variant
-                    )
-                }
+            Ok(Some(old_design_variant)) => {
+                info!(
+                    "Unit assignment updated. unit: '{}', old: {}, new: {}",
+                    object_path, old_design_variant, design_variant
+                );
+                true
             }
-        }
+            Err(PcbError::UnitAlreadyAssigned {
+                ..
+            }) => {
+                info!("Unit assignment unchanged.");
+                false
+            }
+            Err(cause) => return Err(anyhow::anyhow!("Unable to assign unit to PCB. cause: {:?}", cause)),
+        };
 
-        Ok(())
+        Ok(modified)
     }
 
     pub fn update_phase(
@@ -197,19 +242,16 @@ impl Project {
             })
     }
 
-    pub fn unique_design_variants(&self) -> Vec<DesignVariant> {
-        let unique_design_variants: Vec<DesignVariant> =
-            self.unit_assignments
-                .iter()
-                .fold(vec![], |mut acc, (_path, design_variant)| {
-                    if !acc.contains(design_variant) {
-                        acc.push(design_variant.clone())
-                    }
-
-                    acc
-                });
-
-        unique_design_variants
+    pub fn unique_design_variants(&self) -> HashSet<&DesignVariant> {
+        let mut unique = HashSet::new();
+        for pcb in &self.pcbs {
+            for opt in &pcb.unit_assignments {
+                if let Some(ref s) = opt {
+                    unique.insert(s);
+                }
+            }
+        }
+        unique
     }
 
     #[must_use]
@@ -360,7 +402,6 @@ impl Default for Project {
                 ProcessFactory::by_name("manual").unwrap(),
             ],
             pcbs: vec![],
-            unit_assignments: Default::default(),
             design_gerbers: Default::default(),
             part_states: Default::default(),
             phases: Default::default(),
@@ -377,16 +418,9 @@ pub enum PcbOperationError {
     Unknown,
 }
 
-pub fn add_pcb(project: &mut Project, kind: PcbKind, name: String) -> Result<(), PcbOperationError> {
-    project.pcbs.push(Pcb {
-        kind: kind.clone(),
-        name: name.clone(),
-    });
-
-    match kind {
-        PcbKind::Single => info!("Added single PCB. name: '{}'", name),
-        PcbKind::Panel => info!("Added panel PCB. name: '{}'", name),
-    }
+pub fn add_pcb(project: &mut Project, name: String, units: u16) -> Result<(), PcbOperationError> {
+    info!("Added PCB. name: '{}'", name);
+    project.pcbs.push(Pcb::new(name, units));
     Ok(())
 }
 
@@ -531,8 +565,8 @@ pub fn sort_placements(
                             feeder_reference_a.cmp(&feeder_reference_b)
                         }
                         PlacementSortingMode::PcbUnit => {
-                            let pcb_unit_a = object_path_a.pcb_unit();
-                            let pcb_unit_b = object_path_b.pcb_unit();
+                            let pcb_unit_a = object_path_a.pcb_unit_path();
+                            let pcb_unit_b = object_path_b.pcb_unit_path();
 
                             trace!(
                                 "Comparing pcb units, pcb_unit_a: '{:?}', pcb_unit_b: '{:?}'",
@@ -776,10 +810,16 @@ fn find_placement_changes(
 ) -> Vec<(Change, ObjectPath, Placement)> {
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
 
+    let unit_assignments = project
+        .unit_assignments()
+        .into_iter()
+        .map(|(path, unit_assignment)| (path, unit_assignment.clone()))
+        .collect::<Vec<_>>();
+
     // find new or existing placements that are in the updated design_variant_placement_map
 
     for (design_variant, placements) in design_variant_placement_map.iter() {
-        for (unit_path, assignment_design_variant) in project.unit_assignments.iter() {
+        for (unit_path, assignment_design_variant) in unit_assignments.iter() {
             if !design_variant.eq(assignment_design_variant) {
                 continue;
             }
@@ -801,7 +841,7 @@ fn find_placement_changes(
     // find the placements that we knew about previously, but that are no-longer in the design_variant_placement_map
 
     for (path, state) in project.placements.iter_mut() {
-        for (unit_path, design_variant) in project.unit_assignments.iter() {
+        for (unit_path, design_variant) in unit_assignments.iter() {
             let path_str = path.to_string();
             let unit_path_str = unit_path.to_string();
             let is_matched_unit = path_str.starts_with(&unit_path_str);

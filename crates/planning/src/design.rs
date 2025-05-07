@@ -5,7 +5,17 @@ use thiserror::Error;
 
 use crate::variant::VariantName;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
 pub struct DesignVariant {
     pub design_name: DesignName,
     pub variant_name: VariantName,
@@ -17,7 +27,17 @@ impl Display for DesignVariant {
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
 pub struct DesignName(String);
 
 impl FromStr for DesignName {

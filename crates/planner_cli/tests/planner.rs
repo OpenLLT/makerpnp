@@ -15,7 +15,7 @@ mod operation_sequence_1 {
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
     use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;
-    use pnp::pcb::{PcbKind, PcbSide};
+    use pnp::pcb::PcbSide;
     use rust_decimal_macros::dec;
     use stores::test::load_out_builder::{LoadOutCSVBuilder, TestLoadOutRecord};
     use tempfile::tempdir;
@@ -220,8 +220,9 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![None, None],
             }])
             .content();
 
@@ -231,8 +232,8 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "add-pcb",
-            "--kind panel",
             "--name panel_a",
+            "--units 2",
         ]);
         println!("args: {:?}", args);
 
@@ -248,7 +249,7 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        assert_contains_inorder!(trace_content, ["Added panel PCB. name: 'panel_a'\n",]);
+        assert_contains_inorder!(trace_content, ["Added PCB. name: 'panel_a'\n",]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
@@ -293,16 +294,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (project::TestPart::new("CAP_MFR1", "CAP1"), TestPartState::default()),
                 (project::TestPart::new("CONN_MFR1", "CONN1"), TestPartState::default()),
@@ -310,9 +311,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -329,9 +330,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -348,9 +349,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -367,9 +368,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -396,7 +397,7 @@ mod operation_sequence_1 {
             "assign-variant-to-unit",
             "--design design_a",
             "--variant variant_a",
-            "--unit pcb=panel::instance=1::unit=1",
+            "--unit pcb=1::unit=1",
         ]);
 
         // when
@@ -412,7 +413,7 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Unit assignment added. unit: 'pcb=panel::instance=1::unit=1', design_variant: design_a-variant_a\n",
+            "Unit assignment added. unit: 'pcb=1::unit=1', design_variant: design_a-variant_a\n",
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
             "New part. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }\n",
@@ -462,16 +463,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -482,9 +483,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -501,9 +502,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -520,9 +521,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -539,9 +540,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -558,9 +559,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -638,16 +639,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -683,9 +684,9 @@ mod operation_sequence_1 {
             ])])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -702,9 +703,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -721,9 +722,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -740,9 +741,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -759,9 +760,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -849,16 +850,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -926,9 +927,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -945,9 +946,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -964,9 +965,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -983,9 +984,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -1002,9 +1003,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -1092,16 +1093,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -1169,9 +1170,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -1188,9 +1189,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -1207,9 +1208,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -1226,9 +1227,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -1245,9 +1246,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -1276,11 +1277,11 @@ mod operation_sequence_1 {
             "--phase top_1",
             "--operation set",
             // By placement path pattern
-            //"--placements pcb=panel::instance=1::unit=1::ref_des=R1"
-            "--placements pcb=panel::instance=1::unit=1::ref_des=R.*",
-            //"--placements pcb=panel::instance=1::unit=1::ref_des=J1",
+            //"--placements pcb=1::unit=1::ref_des=R1"
+            "--placements pcb=1::unit=1::ref_des=R.*",
+            //"--placements pcb=1::unit=1::ref_des=J1",
             //"--placements pcb=panel::instance=.*::unit=.*::ref_des=R1"
-            //"--placements pcb=panel::instance=1::unit=.*::ref_des=.*"
+            //"--placements pcb=1::unit=.*::ref_des=.*"
             //"--placements .*::ref_des=R.*"
             //"--placements .*",
 
@@ -1332,9 +1333,9 @@ mod operation_sequence_1 {
 
         assert_contains_inorder!(trace_content, [
             // assignments should be made
-            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R1",
-            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R2",
-            "Assigning placement to phase. phase: top_1, placement_path: pcb=panel::instance=1::unit=1::ref_des=R3",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=1::unit=1::ref_des=R1",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=1::unit=1::ref_des=R2",
+            "Assigning placement to phase. phase: top_1, placement_path: pcb=1::unit=1::ref_des=R3",
             // all phase status should be updated
             "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
             "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Pending, updated: true\n",
@@ -1443,16 +1444,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -1520,9 +1521,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -1539,9 +1540,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -1558,9 +1559,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -1577,9 +1578,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -1596,9 +1597,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -1670,7 +1671,7 @@ mod operation_sequence_1 {
         let expected_phase_1_placements_content = PhasePlacementsCSVBuilder::new()
             .with_items(&[
                 TestPhasePlacementRecord {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R2".to_string(),
+                    object_path: "pcb=1::unit=1::ref_des=R2".to_string(),
                     feeder_reference: "".to_string(),
                     manufacturer: "RES_MFR2".to_string(),
                     mpn: "RES2".to_string(),
@@ -1679,7 +1680,7 @@ mod operation_sequence_1 {
                     rotation: dec!(91),
                 },
                 TestPhasePlacementRecord {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R3".to_string(),
+                    object_path: "pcb=1::unit=1::ref_des=R3".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
@@ -1688,7 +1689,7 @@ mod operation_sequence_1 {
                     rotation: dec!(91),
                 },
                 TestPhasePlacementRecord {
-                    object_path: "pcb=panel::instance=1::unit=1::ref_des=R1".to_string(),
+                    object_path: "pcb=1::unit=1::ref_des=R1".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
@@ -1781,10 +1782,10 @@ mod operation_sequence_1 {
                             task_specifications: vec![(
                                 "core::load_pcbs".to_string(),
                                 Box::new(TestLoadPcbsTaskSpecification {
-                                    pcbs: vec![report::TestPcb::Panel {
+                                    pcbs: vec![report::TestPcb {
                                         name: "panel_a".to_string(),
                                         unit_assignments: vec![TestPcbUnitAssignment {
-                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            unit_path: "pcb=1::unit=1".to_string(),
                                             design_name: "design_a".to_string(),
                                             variant_name: "variant_a".to_string(),
                                         }],
@@ -1830,10 +1831,10 @@ mod operation_sequence_1 {
                             task_specifications: vec![(
                                 "core::load_pcbs".to_string(),
                                 Box::new(TestLoadPcbsTaskSpecification {
-                                    pcbs: vec![report::TestPcb::Panel {
+                                    pcbs: vec![report::TestPcb {
                                         name: "panel_a".to_string(),
                                         unit_assignments: vec![TestPcbUnitAssignment {
-                                            unit_path: "pcb=panel::instance=1::unit=1".to_string(),
+                                            unit_path: "pcb=1::unit=1".to_string(),
                                             design_name: "design_a".to_string(),
                                             variant_name: "variant_a".to_string(),
                                         }],
@@ -1863,7 +1864,7 @@ mod operation_sequence_1 {
                     message: "A placement has not been assigned to a phase".to_string(),
                     severity: TestIssueSeverity::Warning,
                     kind: TestIssueKind::UnassignedPlacement {
-                        object_path: "pcb=panel::instance=1::unit=1::ref_des=J1".to_string(),
+                        object_path: "pcb=1::unit=1::ref_des=J1".to_string(),
                     },
                 },
                 TestIssue {
@@ -1994,16 +1995,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2072,9 +2073,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -2091,9 +2092,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -2110,9 +2111,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -2129,9 +2130,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -2148,9 +2149,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -2313,16 +2314,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2394,9 +2395,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -2413,9 +2414,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -2432,9 +2433,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -2451,9 +2452,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -2470,9 +2471,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -2503,7 +2504,7 @@ mod operation_sequence_1 {
                     "top_1".to_string(),
                     "automated_pnp".to_string(),
                     Box::new(TestPlacementOperationHistoryKind {
-                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R1").unwrap(),
+                        object_path: ObjectPath::from_str("pcb=1::unit=1::ref_des=R1").unwrap(),
                         operation: PlacementOperation::Place,
                     }) as Box<dyn TestOperationHistoryKind>,
                 )),
@@ -2514,7 +2515,7 @@ mod operation_sequence_1 {
                     "top_1".to_string(),
                     "automated_pnp".to_string(),
                     Box::new(TestPlacementOperationHistoryKind {
-                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R2").unwrap(),
+                        object_path: ObjectPath::from_str("pcb=1::unit=1::ref_des=R2").unwrap(),
                         operation: PlacementOperation::Place,
                     }) as Box<dyn TestOperationHistoryKind>,
                 )),
@@ -2525,7 +2526,7 @@ mod operation_sequence_1 {
                     "top_1".to_string(),
                     "automated_pnp".to_string(),
                     Box::new(TestPlacementOperationHistoryKind {
-                        object_path: ObjectPath::from_str("pcb=panel::instance=1::unit=1::ref_des=R3").unwrap(),
+                        object_path: ObjectPath::from_str("pcb=1::unit=1::ref_des=R3").unwrap(),
                         operation: PlacementOperation::Place,
                     }) as Box<dyn TestOperationHistoryKind>,
                 )),
@@ -2539,7 +2540,7 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-placements-operation",
-            "--object-path-patterns pcb=panel::instance=1::unit=1::ref_des=R([1-3])?,pcb=panel::instance=1::unit=2::ref_des=.*",
+            "--object-path-patterns pcb=1::unit=1::ref_des=R([1-3])?,pcb=1::unit=2::ref_des=.*",
             "--operation placed",
         ]);
         // when
@@ -2557,10 +2558,10 @@ mod operation_sequence_1 {
         let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
-            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R1\n",
-            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R2\n",
-            "Placement marked as placed. object_path: pcb=panel::instance=1::unit=1::ref_des=R3\n",
-            "Unmatched object path pattern. object_path_pattern: pcb=panel::instance=1::unit=2::ref_des=.*\n",
+            "Placement marked as placed. object_path: pcb=1::unit=1::ref_des=R1\n",
+            "Placement marked as placed. object_path: pcb=1::unit=1::ref_des=R2\n",
+            "Placement marked as placed. object_path: pcb=1::unit=1::ref_des=R3\n",
+            "Unmatched object path pattern. object_path_pattern: pcb=1::unit=2::ref_des=.*\n",
             "Refreshed placement task state. phase: bottom_1, operation: manually_solder_components, task: core::place_components, status: Pending, updated: false\n",
             "Refreshed placement task state. phase: top_1, operation: automated_pnp, task: core::place_components, status: Complete, updated: true\n",
             &log_file_message,
@@ -2597,16 +2598,16 @@ mod operation_sequence_1 {
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestPcb {
-                kind: PcbKind::Panel,
                 name: "panel_a".to_string(),
+                units: 2,
+                unit_assignments: vec![
+                    Some(DesignVariant {
+                        design_name: "design_a".into(),
+                        variant_name: "variant_a".into(),
+                    }),
+                    None,
+                ],
             }])
-            .with_unit_assignments(vec![(
-                ObjectPath::from_str("pcb=panel::instance=1::unit=1")?,
-                DesignVariant {
-                    design_name: "design_a".into(),
-                    variant_name: "variant_a".into(),
-                },
-            )])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2674,9 +2675,9 @@ mod operation_sequence_1 {
             ])
             .with_placements(vec![
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=C1",
+                    "pcb=1::unit=1::ref_des=C1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "C1",
                             "CAP_MFR1",
@@ -2693,9 +2694,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=J1",
+                    "pcb=1::unit=1::ref_des=J1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "J1",
                             "CONN_MFR1",
@@ -2712,9 +2713,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R1",
+                    "pcb=1::unit=1::ref_des=R1",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R1",
                             "RES_MFR1",
@@ -2731,9 +2732,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R2",
+                    "pcb=1::unit=1::ref_des=R2",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R2",
                             "RES_MFR2",
@@ -2750,9 +2751,9 @@ mod operation_sequence_1 {
                     ),
                 ),
                 (
-                    "pcb=panel::instance=1::unit=1::ref_des=R3",
+                    "pcb=1::unit=1::ref_des=R3",
                     TestPlacementState::new(
-                        "pcb=panel::instance=1::unit=1",
+                        "pcb=1::unit=1",
                         TestPlacement::new(
                             "R3",
                             "RES_MFR1",
@@ -2937,14 +2938,14 @@ mod help {
         let expected_output = indoc! {"
             Add a PCB
 
-            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --kind <KIND> --name <NAME>
+            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --name <NAME> --units <UNITS>
 
             Options:
-                  --kind <KIND>  PCB kind [possible values: single, panel]
-                  --name <NAME>  Name of the PCB, e.g. 'panel_1'
-              -v, --verbose...   Increase logging verbosity
-              -q, --quiet...     Decrease logging verbosity
-              -h, --help         Print help
+                  --name <NAME>    Name of the PCB, e.g. 'panel_1'
+                  --units <UNITS>  Units
+              -v, --verbose...     Increase logging verbosity
+              -q, --quiet...       Decrease logging verbosity
+              -h, --help           Print help
         "};
 
         // when

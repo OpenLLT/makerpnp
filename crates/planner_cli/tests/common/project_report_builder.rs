@@ -145,15 +145,9 @@ pub struct TestLoadPcbsTaskSpecification {
 }
 
 #[derive(Clone, serde::Serialize)]
-pub enum TestPcb {
-    Single {
-        name: String,
-        unit_assignment: TestPcbUnitAssignment,
-    },
-    Panel {
-        name: String,
-        unit_assignments: Vec<TestPcbUnitAssignment>,
-    },
+pub struct TestPcb {
+    pub name: String,
+    pub unit_assignments: Vec<TestPcbUnitAssignment>,
 }
 
 #[derive(Clone, serde::Serialize)]
