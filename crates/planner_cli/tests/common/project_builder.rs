@@ -3,19 +3,18 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
-use planning::design::{DesignName, DesignVariant};
+use planning::design::{DesignIndex, DesignName, DesignVariant};
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
+use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
-use pnp::pcb::PcbSide;
+use pnp::pcb::{PcbSide, PcbUnitIndex};
 use pnp::placement::RefDes;
 use pnp::reference::Reference;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
-use planning::pcb::{DesignIndex, PcbUnitIndex};
-use planning::variant::VariantName;
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
 
@@ -183,7 +182,7 @@ pub struct TestPcb {
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
-    pub design_to_unit_mapping: BTreeMap<PcbUnitIndex, DesignIndex>,
+    pub unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
 }
 
 #[serde_as]

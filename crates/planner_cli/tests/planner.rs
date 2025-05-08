@@ -220,17 +220,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb { 
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec![],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::default(),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::default(),
+            }])
             .content();
 
         // and
@@ -240,7 +238,8 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "add-pcb",
             "--name panel_a",
-            "--units 2",
+            "--units 4",
+            "--design 1=design_a,2=design_b,3=design_a,4=design_b",
         ]);
         println!("args: {:?}", args);
 
@@ -256,7 +255,10 @@ mod operation_sequence_1 {
         let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
         println!("{}", trace_content);
 
-        assert_contains_inorder!(trace_content, ["Added PCB. name: 'panel_a'\n",]);
+        assert_contains_inorder!(trace_content, [
+            "Added PCB. name: 'panel_a'\n",
+            "Added designs to PCB. design: [design_a, design_b]\n",
+        ]);
 
         // and
         let project_content: String = read_to_string(ctx.test_project_path.clone())?;
@@ -300,19 +302,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (project::TestPart::new("CAP_MFR1", "CAP1"), TestPartState::default()),
                 (project::TestPart::new("CONN_MFR1", "CONN1"), TestPartState::default()),
@@ -422,7 +420,6 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Added design to PCB. design: design_a\n",
             "Unit assignment added. unit: 'pcb=1::unit=1', design_variant: design_a-variant_a\n",
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
@@ -472,19 +469,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -650,19 +643,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -863,19 +852,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -1108,19 +1093,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -1461,19 +1442,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2014,19 +1991,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2335,19 +2308,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2621,19 +2590,15 @@ mod operation_sequence_1 {
         let expected_project_content = TestProjectBuilder::new()
             .with_name("job1")
             .with_default_processes()
-            .with_pcbs(vec![
-                project::TestProjectPcb {
-                    pcb: project::TestPcb {
-                        name: "panel_a".to_string(),
-                        units: 2,
-                        design_names: vec!["design_a".into()],
-                        design_to_unit_mapping: BTreeMap::default(),
-                    },
-                    unit_assignments: BTreeMap::from_iter([
-                        (0, (0, "variant_a".into())),
-                    ]),
-                }
-            ])
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb: project::TestPcb {
+                    name: "panel_a".to_string(),
+                    units: 4,
+                    design_names: vec!["design_a".into(), "design_b".into()],
+                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+                },
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
             .with_part_states(vec![
                 (
                     project::TestPart::new("CONN_MFR1", "CONN1"),
@@ -2964,14 +2929,15 @@ mod help {
         let expected_output = indoc! {"
             Add a PCB
 
-            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --name <NAME> --units <UNITS>
+            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --name <NAME> --units <UNITS> --design [<DESIGN>...]
 
             Options:
-                  --name <NAME>    Name of the PCB, e.g. 'panel_1'
-                  --units <UNITS>  Units
-              -v, --verbose...     Increase logging verbosity
-              -q, --quiet...       Decrease logging verbosity
-              -h, --help           Print help
+                  --name <NAME>           Name of the PCB, e.g. 'panel_1'
+                  --units <UNITS>         The number of individual PCB units. 1 = single, >1 = panel
+                  --design [<DESIGN>...]  The mapping of designs to units e.g. '1=design_a,2=design_b,3=design_a,4=design_b'. unit is 1-based
+              -v, --verbose...            Increase logging verbosity
+              -q, --quiet...              Decrease logging verbosity
+              -h, --help                  Print help
         "};
 
         // when

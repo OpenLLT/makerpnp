@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::env::var;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -11,11 +10,12 @@ use anyhow::Error;
 use csv::QuoteStyle;
 use heck::ToShoutySnakeCase;
 use indexmap::IndexSet;
+use itertools::Itertools;
 use pnp;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::PcbSide;
+use pnp::pcb::{PcbSide, PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
 use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
@@ -29,7 +29,7 @@ use tracing::{debug, error, info, trace, warn};
 use util::sorting::SortOrder;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
-use crate::design::{DesignName, DesignVariant};
+use crate::design::{DesignIndex, DesignName, DesignVariant};
 use crate::gerber::{GerberFile, GerberPurpose};
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
@@ -37,7 +37,7 @@ use crate::operation_history::{
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
-use crate::pcb::{DesignIndex, Pcb, PcbUnitIndex};
+use crate::pcb::Pcb;
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
@@ -50,8 +50,8 @@ use crate::process::{
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
 use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
-use crate::{operation_history, placement, report};
 use crate::variant::VariantName;
+use crate::{operation_history, placement, report};
 
 #[serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -110,18 +110,18 @@ impl Project {
             .iter()
             .enumerate()
             .flat_map(|(pcb_index, project_pcb)| {
-                project_pcb.unit_assignments()
+                project_pcb
+                    .unit_assignments()
                     .into_iter()
                     .enumerate()
                     .filter_map(move |(unit_index, unit_assignment)| {
-                        unit_assignment
-                            .map(|design_variant| {
-                                let mut object_path = ObjectPath::default();
-                                object_path.set_pcb_instance(pcb_index as u16 + 1);
-                                object_path.set_pcb_unit(unit_index as u16 + 1);
+                        unit_assignment.map(|design_variant| {
+                            let mut object_path = ObjectPath::default();
+                            object_path.set_pcb_instance(pcb_index as u16 + 1);
+                            object_path.set_pcb_unit(unit_index as u16 + 1);
 
-                                (object_path, design_variant)
-                            })
+                            (object_path, design_variant)
+                        })
                     })
             })
             .collect::<Vec<_>>()
@@ -155,16 +155,24 @@ impl Project {
         let pcb_instance_index: u16 = pcb_instance - 1;
         let pcb_unit_index: u16 = pcb_unit - 1;
 
-        let Some(pcb) = self
+        let Some(project_pcb) = self
             .pcbs
             .get_mut(pcb_instance_index as usize)
         else {
             return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
         };
-        
-        let mut modified = pcb.ensure_design(design_variant.design_name.clone());
 
-        modified |= match pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
+        if !project_pcb.has_design(&design_variant.design_name) {
+            return Err(anyhow::anyhow!(
+                "PCB does not have requested design. requested: {}, applicable: {:?}",
+                design_variant.design_name,
+                project_pcb
+                    .unique_designs_iter()
+                    .collect::<Vec<_>>()
+            ));
+        }
+
+        let modified = match project_pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
             Ok(None) => {
                 info!(
                     "Unit assignment added. unit: '{}', design_variant: {}",
@@ -352,30 +360,31 @@ impl ProjectPcb {
         }
     }
 
-    pub fn ensure_design(&mut self, design_name: DesignName) -> bool {
-        if !self.pcb.design_names
-            .iter().any(|candidate| candidate.eq(&design_name)) 
-        {
-            info!("Added design to PCB. design: {}", design_name);
-            self.pcb.design_names.push(design_name);
-            true
-        } else {
-            info!("Design already used by PCB. design: {}", design_name);
-            false
-        }
+    pub fn has_design(&mut self, design_name: &DesignName) -> bool {
+        self.pcb
+            .design_names
+            .iter()
+            .any(|candidate| candidate.eq(design_name))
     }
 
     pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
-
         self.pcb.design_names.iter()
     }
 
     pub fn unit_assignments(&self) -> Vec<Option<DesignVariant>> {
-
         let mut unit_assignments = vec![None; self.pcb.units as usize];
 
         for (unit_index, (design_index, variant_name)) in self.unit_assignments.iter() {
-            unit_assignments[*unit_index as usize] = Some(DesignVariant { design_name: self.pcb.design_names[*design_index as usize].clone(), variant_name: variant_name.clone() });
+            unit_assignments[*unit_index as usize] = Some(DesignVariant {
+                design_name: self
+                    .pcb
+                    .design_names
+                    .iter()
+                    .nth(*design_index as usize)
+                    .unwrap()
+                    .clone(),
+                variant_name: variant_name.clone(),
+            });
         }
 
         unit_assignments
@@ -390,7 +399,11 @@ impl ProjectPcb {
     /// Returns an error
     /// * if the assignment has already been made
     /// * if the unit is out of range
-    pub fn assign_unit(&mut self, unit: u16, design_variant: DesignVariant) -> Result<Option<DesignVariant>, ProjectPcbError> {
+    pub fn assign_unit(
+        &mut self,
+        unit: u16,
+        design_variant: DesignVariant,
+    ) -> Result<Option<DesignVariant>, ProjectPcbError> {
         if unit >= self.pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
                 unit,
@@ -399,9 +412,13 @@ impl ProjectPcb {
             });
         }
 
-        let design_index = self.pcb.design_names.iter().position(|design_name| design_name.eq(&design_variant.design_name))
+        let design_index = self
+            .pcb
+            .design_names
+            .iter()
+            .position(|design_name| design_name.eq(&design_variant.design_name))
             .ok_or(ProjectPcbError::UnknownDesign(design_variant.design_name))?;
-        
+
         match self.unit_assignments.entry(unit) {
             Entry::Vacant(entry) => {
                 entry.insert((design_index, design_variant.variant_name));
@@ -414,19 +431,23 @@ impl ProjectPcb {
                         unit,
                     });
                 }
-                
+
                 let old_assigment = entry.insert((design_index, design_variant.variant_name));
-                
+
                 Ok(Some(DesignVariant {
-                    design_name: self.pcb.design_names[old_assigment.0].clone(),
+                    design_name: self
+                        .pcb
+                        .design_names
+                        .iter()
+                        .nth(old_assigment.0)
+                        .unwrap()
+                        .clone(),
                     variant_name: old_assigment.1,
                 }))
             }
         }
-        
     }
 }
-
 
 #[derive(Debug, Error)]
 pub enum ProjectPcbError {
@@ -434,11 +455,10 @@ pub enum ProjectPcbError {
     UnitOutOfRange { unit: u16, min: u16, max: u16 },
     #[error("Unit {unit} has already been assigned")]
     UnitAlreadyAssigned { unit: u16 },
-    
+
     #[error("Unknown design. design: {0}.  Assign the design to the PCB.")]
     UnknownDesign(DesignName),
 }
-
 
 #[derive(Error, Debug)]
 pub enum ProcessFactoryError {
@@ -527,9 +547,48 @@ pub enum PcbOperationError {
     Unknown,
 }
 
-pub fn add_pcb(project: &mut Project, name: String, units: u16) -> Result<(), PcbOperationError> {
+pub fn add_pcb(
+    project: &mut Project,
+    name: String,
+    units: u16,
+    unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
+) -> Result<(), PcbOperationError> {
     info!("Added PCB. name: '{}'", name);
-    project.pcbs.push(ProjectPcb::new(Pcb::new(name, units)));
+    trace!("unit_to_design_name_map: {:?}", unit_to_design_name_map);
+
+    // 'Intern' the DesignNames
+    let mut unit_to_design_index_mapping: BTreeMap<PcbUnitIndex, DesignIndex> = BTreeMap::new();
+    let mut unique_strings: Vec<DesignName> = Vec::new();
+    let mut design_names: BTreeSet<DesignName> = BTreeSet::new();
+
+    for (pcb_unit_number, design) in unit_to_design_name_map {
+        // Insert into unique list if not seen
+        let design_index = if let Some(position) = unique_strings
+            .iter()
+            .position(|s| s == &design)
+        {
+            position
+        } else {
+            unique_strings.push(design.clone());
+            unique_strings.len() - 1
+        };
+
+        design_names.insert(design.clone());
+        let pcb_unit_index = pcb_unit_number - 1;
+        unit_to_design_index_mapping.insert(pcb_unit_index, design_index);
+    }
+
+    info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
+    trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
+
+    project
+        .pcbs
+        .push(ProjectPcb::new(Pcb::new(
+            name,
+            units,
+            design_names,
+            unit_to_design_index_mapping,
+        )));
     Ok(())
 }
 

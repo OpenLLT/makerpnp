@@ -28,6 +28,7 @@ pub use planning::variant::VariantName;
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
+pub use pnp::pcb::PcbUnitNumber;
 pub use pnp::pcb::{PcbKind, PcbSide};
 pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
@@ -267,7 +268,6 @@ pub enum Event {
         /// The name of the project file
         path: PathBuf,
     },
-
     // TODO consider if the 'shell' should be loading and saving the project, not the core?
     //      currently the core does all loading/saving and uses stores too, this might not be how
     //      crux is intended to be used.
@@ -276,10 +276,10 @@ pub enum Event {
         /// The name of the project file
         path: PathBuf,
     },
-
     AddPcb {
         name: String,
         units: u16,
+        unit_map: BTreeMap<PcbUnitNumber, DesignName>,
     },
     AssignVariantToUnit {
         design: DesignName,
@@ -454,6 +454,7 @@ impl Planner {
             Event::AddPcb {
                 name,
                 units,
+                unit_map,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
                     project,
@@ -464,7 +465,7 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                project::add_pcb(project, name, units).map_err(|cause| AppError::PcbError(cause.into()))?;
+                project::add_pcb(project, name, units, unit_map).map_err(|cause| AppError::PcbError(cause.into()))?;
 
                 *modified |= true;
 

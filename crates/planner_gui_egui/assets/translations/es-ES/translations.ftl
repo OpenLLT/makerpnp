@@ -94,6 +94,7 @@ project-explorer-node-phase = { $reference } ({ $process})
 project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Asignaciones de unidad
 project-explorer-node-unit-assignment = { $name } ({$design_name} - {$variant_name})
+project-explorer-node-unit-assignment-none = { $name } (No asignado)
 project-explorer-node-pcbs = PCBs
 project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Procesos
@@ -105,8 +106,16 @@ form-button-close = Cerrar
 form-button-add = Añadir
 form-button-remove = Quitar
 
-form-add-pcb-input-name = Nombre
-form-add-pcb-input-name-placeholder = Nombre de PCB (por ejemplo, 'predeterminado')
+form-add-pcb-input-name = Nombre PCB
+form-add-pcb-input-name-placeholder = (por ejemplo, el número de referencia del pedido de la fábrica de PCB)
+form-add-pcb-input-units = Unidades
+form-add-pcb-input-design-name = Nombre del diseño
+form-add-pcb-input-design-name-placeholder = (p.ej. 'mi_eda_proyecto', para asignaciones de unidades)
+form-add-pcb-unit-map = Mapa de unidades
+form-add-pcb-assign-selection = Asignar a selección
+form-add-pcb-assign-all = Asignar todo
+form-add-pcb-unassign-selection = Desasignar selección
+form-add-pcb-unassign-all = Desasignar todo
 
 form-create-unit-assignment-input-design-name = Nombre del diseño
 form-create-unit-assignment-input-design-name-placeholder = Nombre del diseño (por ejemplo, 'mi diseño')
@@ -140,11 +149,18 @@ form-option-error-required = * Obligatorio
 
 form-input-error-empty = No puede estar vacío
 form-input-error-length = Longitud mínima { $min }
+form-input-error-range = Fuera de rango, rango requerido: { $min } - { $max } (inclusive)
 form-choice-empty = Elija una opción
 
 form-input-number-require-greater-than-zero = Requiere un número mayor que cero
 form-input-number-require-positive-number = Requiere un número
 form-file-not-found = Archivo no encontrado
+
+form-input-error-map-incorrect-entry-count = Número de entradas incorrecto.  Requerido: { $required }, Actual: { $actual }
+form-input-error-map-unassigned-entries = El mapa contiene entradas sin asignar.
+
+assignment-assigned = Asignado
+assignment-unassigned = No asignado
 
 placement-placed = Colocado
 placement-pending = Pendiente

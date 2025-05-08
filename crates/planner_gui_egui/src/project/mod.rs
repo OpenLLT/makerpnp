@@ -1272,6 +1272,7 @@ impl UiComponent for Project {
                                 .update(key, Event::AddPcb {
                                     name: args.name,
                                     units: args.units,
+                                    unit_map: args.unit_map,
                                 })
                                 .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
                         }
