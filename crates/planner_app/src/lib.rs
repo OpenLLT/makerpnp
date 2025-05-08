@@ -28,8 +28,8 @@ pub use planning::variant::VariantName;
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
-pub use pnp::pcb::PcbUnitNumber;
 pub use pnp::pcb::{PcbKind, PcbSide};
+pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
 pub use pnp::reference::Reference;
@@ -83,7 +83,7 @@ pub struct PcbGerberItem {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PcbOverview {
-    pub index: usize,
+    pub index: u16,
     pub name: String,
     pub units: u16,
     /// A list of unique designs, a panel can have multiple designs.
@@ -250,7 +250,7 @@ pub enum ProjectViewRequest {
     PhasePlacements { phase: PhaseReference },
     Placements,
     ProjectTree,
-    PcbOverview { pcb: usize },
+    PcbOverview { pcb: u16 },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -282,9 +282,8 @@ pub enum Event {
         unit_map: BTreeMap<PcbUnitNumber, DesignName>,
     },
     AssignVariantToUnit {
-        design: DesignName,
-        variant: VariantName,
         unit: ObjectPath,
+        variant: VariantName,
     },
     RefreshFromDesignVariants,
     AssignProcessToParts {
@@ -381,7 +380,7 @@ pub enum Event {
     },
     RequestPcbOverviewView {
         /// index
-        pcb: usize,
+        pcb: u16,
     },
 }
 
@@ -472,8 +471,7 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::AssignVariantToUnit {
-                design,
-                variant,
+                variant: variant_name,
                 unit,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -486,11 +484,8 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
                 project
-                    .update_assignment(unit.clone(), DesignVariant {
-                        design_name: design.clone(),
-                        variant_name: variant.clone(),
-                    })
-                    .map_err(|cause| AppError::OperationError(cause.into()))?;
+                    .update_assignment(unit.clone(), variant_name)
+                    .map_err(AppError::OperationError)?;
                 *modified |= true;
 
                 let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
@@ -899,7 +894,7 @@ impl Planner {
 
                 let project_pcb = project
                     .pcbs
-                    .get(pcb_index)
+                    .get(pcb_index as usize)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
                 let designs = project_pcb

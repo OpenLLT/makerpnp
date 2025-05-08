@@ -4,7 +4,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use egui::{Ui, WidgetText};
+use egui::{Ui, Widget, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
@@ -20,8 +20,7 @@ use crate::planner_app_core::PlannerCoreService;
 use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::dialogs::create_unit_assignment::{
-    CreateUnitAssignmentModal, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
-    UnitAssignmentPcbKind,
+    CreateUnitAssignmentArgs, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
 };
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
@@ -121,7 +120,6 @@ pub struct Project {
 
     add_pcb_modal: Option<AddPcbModal>,
     add_phase_modal: Option<AddPhaseModal>,
-    create_unit_assignment_modal: Option<CreateUnitAssignmentModal>,
 }
 
 impl Project {
@@ -183,7 +181,6 @@ impl Project {
             component,
             add_pcb_modal: None,
             add_phase_modal: None,
-            create_unit_assignment_modal: None,
         }
     }
 
@@ -259,7 +256,7 @@ impl Project {
             .ok();
     }
 
-    pub fn show_pcb(&mut self, key: ProjectKey, pcb_index: usize) {
+    pub fn show_pcb(&mut self, key: ProjectKey, pcb_index: u16) {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PcbTab::new(pcb_index);
         project_tabs
@@ -328,14 +325,14 @@ impl Project {
             });
     }
 
-    fn ensure_pcb(&self, key: ProjectKey, pcb_index: usize) {
+    fn ensure_pcb(&self, key: ProjectKey, pcb_index: u16) {
         let mut state = self.project_ui_state.lock().unwrap();
         let _pcb_ui = state
             .pcbs
-            .entry(pcb_index)
+            .entry(pcb_index as usize)
             .or_insert_with(|| {
                 debug!("ensuring pcb ui. pcb_index: {:?}", pcb_index);
-                let mut pcb_ui = PcbUi::new();
+                let mut pcb_ui = PcbUi::new(self.path.clone());
                 pcb_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -480,7 +477,7 @@ impl Project {
                     .name("pcb")
                     .unwrap()
                     .as_str()
-                    .parse::<usize>()
+                    .parse::<u16>()
                     .unwrap();
                 debug!("pcb: {}", pcb_index);
 
@@ -737,13 +734,13 @@ impl UiComponent for Project {
             dialogs::errors::show_errors_modal(ui, *key, &self.path, &self.errors, &self.component);
         }
 
+        //
+        // Modals
+        //
         if let Some(dialog) = &self.add_pcb_modal {
             dialog.ui(ui, &mut ());
         }
         if let Some(dialog) = &self.add_phase_modal {
-            dialog.ui(ui, &mut ());
-        }
-        if let Some(dialog) = &self.create_unit_assignment_modal {
             dialog.ui(ui, &mut ());
         }
     }
@@ -882,7 +879,7 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         let pcb_ui = state
                             .pcbs
-                            .get_mut(&pcb_overview.index)
+                            .get_mut(&(pcb_overview.index as usize))
                             .unwrap();
 
                         pcb_ui.update_overview(pcb_overview);
@@ -1230,18 +1227,6 @@ impl UiComponent for Project {
                         self.add_phase_modal = Some(modal);
                         None
                     }
-                    Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog) => {
-                        let mut modal = CreateUnitAssignmentModal::new(self.path.clone());
-                        modal
-                            .component
-                            .configure_mapper(self.component.sender.clone(), move |command| {
-                                trace!("create unit assignment modal mapper. command: {:?}", command);
-                                (key, ProjectUiCommand::CreateUnitAssignmentModalCommand(command))
-                            });
-
-                        self.create_unit_assignment_modal = Some(modal);
-                        None
-                    }
                     None => None,
                 }
             }
@@ -1333,87 +1318,6 @@ impl UiComponent for Project {
                     None
                 }
             }
-            ProjectUiCommand::CreateUnitAssignmentModalCommand(command) => {
-                if let Some(modal) = &mut self.create_unit_assignment_modal {
-                    let action = modal.update(command, &mut ());
-                    match action {
-                        None => None,
-                        Some(CreateUnitAssignmentModalAction::Submit(args)) => {
-                            self.create_unit_assignment_modal.take();
-
-                            let mut events = vec![];
-
-                            match args.kind {
-                                UnitAssignmentPcbKind::Single {
-                                    instance,
-                                } => {
-                                    let mut object_path = ObjectPath::default();
-                                    object_path.set_pcb_instance(instance);
-                                    object_path.set_pcb_unit(1);
-
-                                    events.push(Event::AssignVariantToUnit {
-                                        design: DesignName::from_str(&args.design_name).unwrap(),
-                                        variant: VariantName::from_str(&args.variant_name).unwrap(),
-                                        unit: object_path,
-                                    });
-                                }
-                                UnitAssignmentPcbKind::Panel {
-                                    instance,
-                                    unit_range,
-                                } => {
-                                    for unit in unit_range {
-                                        let mut object_path = ObjectPath::default();
-                                        object_path.set_pcb_instance(instance);
-                                        object_path.set_pcb_unit(unit);
-
-                                        events.push(Event::AssignVariantToUnit {
-                                            design: DesignName::from_str(&args.design_name).unwrap(),
-                                            variant: VariantName::from_str(&args.variant_name).unwrap(),
-                                            unit: object_path,
-                                        });
-                                    }
-                                }
-                            }
-
-                            let mut tasks = vec![];
-                            for event in events {
-                                match self
-                                    .planner_core_service
-                                    .update(key, event)
-                                    .into_actions()
-                                {
-                                    Ok(actions) => {
-                                        let effect_tasks: Vec<Task<ProjectAction>> = actions
-                                            .into_iter()
-                                            .map(Task::done)
-                                            .collect();
-                                        tasks.extend(effect_tasks);
-                                    }
-                                    Err(service_error) => {
-                                        tasks.push(Task::done(service_error));
-                                        break;
-                                    }
-                                }
-                            }
-
-                            let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                ProjectViewRequest::ProjectTree,
-                            )));
-                            tasks.push(final_task);
-
-                            let action = ProjectAction::Task(key, Task::batch(tasks));
-
-                            Some(action)
-                        }
-                        Some(CreateUnitAssignmentModalAction::CloseDialog) => {
-                            self.create_unit_assignment_modal.take();
-                            None
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
             ProjectUiCommand::ShowPhaseLoadout {
                 phase,
             } => {
@@ -1464,7 +1368,10 @@ impl UiComponent for Project {
                 command,
             } => {
                 let mut state = self.project_ui_state.lock().unwrap();
-                let pcb_ui = state.pcbs.get_mut(&pcb_index).unwrap();
+                let pcb_ui = state
+                    .pcbs
+                    .get_mut(&(pcb_index as usize))
+                    .unwrap();
 
                 let context = &mut PcbUiContext::default();
                 let pcb_ui_action = pcb_ui.update(command, context);
@@ -1532,6 +1439,55 @@ impl UiComponent for Project {
                             }
                             Err(error_action) => Some(error_action),
                         }
+                    }
+                    Some(PcbUiAction::CreateUnitAssignment(CreateUnitAssignmentArgs {
+                        pcb_index,
+                        variant_map,
+                    })) => {
+                        let mut events = vec![];
+
+                        for (variant_name, pcb_unit_number_range) in variant_map {
+                            for pcb_unit_number in pcb_unit_number_range {
+                                let mut object_path = ObjectPath::default();
+                                object_path.set_pcb_instance(pcb_index + 1);
+                                object_path.set_pcb_unit(pcb_unit_number);
+
+                                events.push(Event::AssignVariantToUnit {
+                                    variant: variant_name.clone(),
+                                    unit: object_path,
+                                });
+                            }
+                        }
+
+                        let mut tasks = vec![];
+                        for event in events {
+                            match self
+                                .planner_core_service
+                                .update(key, event)
+                                .into_actions()
+                            {
+                                Ok(actions) => {
+                                    let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                        .into_iter()
+                                        .map(Task::done)
+                                        .collect();
+                                    tasks.extend(effect_tasks);
+                                }
+                                Err(service_error) => {
+                                    tasks.push(Task::done(service_error));
+                                    break;
+                                }
+                            }
+                        }
+
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::ProjectTree,
+                        )));
+                        tasks.push(final_task);
+
+                        let action = ProjectAction::Task(key, Task::batch(tasks));
+
+                        Some(action)
                     }
                 }
             }
@@ -1678,7 +1634,6 @@ pub enum ProjectUiCommand {
     AddPhaseModalCommand(AddPhaseModalUiCommand),
     Create,
     Created,
-    CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
     ProjectRefreshed,
     ExplorerUiCommand(ExplorerUiCommand),
     PartsUiCommand(PartsUiCommand),
@@ -1696,7 +1651,7 @@ pub enum ProjectUiCommand {
         command: LoadOutUiCommand,
     },
     PcbUiCommand {
-        pcb_index: usize,
+        pcb_index: u16,
         command: PcbUiCommand,
     },
     RefreshPhase(Reference),

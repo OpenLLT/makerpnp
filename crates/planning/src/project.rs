@@ -138,11 +138,7 @@ impl Project {
     /// makes the assignment if possible.
     ///
     /// returns if the assignment was modified (added or changed) or an error.
-    pub fn update_assignment(
-        &mut self,
-        object_path: ObjectPath,
-        design_variant: DesignVariant,
-    ) -> anyhow::Result<bool> {
+    pub fn update_assignment(&mut self, object_path: ObjectPath, variant_name: VariantName) -> anyhow::Result<bool> {
         // reminder: instance and pcb_unit are 1-based in the object path
 
         let Ok((pcb_instance, pcb_unit)) = object_path.pcb_instance_and_unit() else {
@@ -162,28 +158,18 @@ impl Project {
             return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
         };
 
-        if !project_pcb.has_design(&design_variant.design_name) {
-            return Err(anyhow::anyhow!(
-                "PCB does not have requested design. requested: {}, applicable: {:?}",
-                design_variant.design_name,
-                project_pcb
-                    .unique_designs_iter()
-                    .collect::<Vec<_>>()
-            ));
-        }
-
-        let modified = match project_pcb.assign_unit(pcb_unit_index, design_variant.clone()) {
+        let modified = match project_pcb.assign_unit(pcb_unit_index, variant_name.clone()) {
             Ok(None) => {
                 info!(
-                    "Unit assignment added. unit: '{}', design_variant: {}",
-                    object_path, design_variant
+                    "Unit assignment added. unit: '{}', variant_name: {}",
+                    object_path, variant_name
                 );
                 true
             }
             Ok(Some(old_design_variant)) => {
                 info!(
                     "Unit assignment updated. unit: '{}', old: {}, new: {}",
-                    object_path, old_design_variant, design_variant
+                    object_path, old_design_variant, variant_name
                 );
                 true
             }
@@ -402,8 +388,8 @@ impl ProjectPcb {
     pub fn assign_unit(
         &mut self,
         unit: u16,
-        design_variant: DesignVariant,
-    ) -> Result<Option<DesignVariant>, ProjectPcbError> {
+        variant_name: VariantName,
+    ) -> Result<Option<VariantName>, ProjectPcbError> {
         if unit >= self.pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
                 unit,
@@ -412,38 +398,24 @@ impl ProjectPcb {
             });
         }
 
-        let design_index = self
-            .pcb
-            .design_names
-            .iter()
-            .position(|design_name| design_name.eq(&design_variant.design_name))
-            .ok_or(ProjectPcbError::UnknownDesign(design_variant.design_name))?;
+        let design_index: DesignIndex = *self.pcb.unit_map.get(&unit).unwrap();
 
         match self.unit_assignments.entry(unit) {
             Entry::Vacant(entry) => {
-                entry.insert((design_index, design_variant.variant_name));
+                entry.insert((design_index, variant_name));
                 Ok(None)
             }
             Entry::Occupied(mut entry) => {
                 let (other_design_index, other_variant_name) = entry.get();
-                if other_design_index.eq(&design_index) && other_variant_name.eq(&design_variant.variant_name) {
+                if other_design_index.eq(&design_index) && other_variant_name.eq(&variant_name) {
                     return Err(ProjectPcbError::UnitAlreadyAssigned {
                         unit,
                     });
                 }
 
-                let old_assigment = entry.insert((design_index, design_variant.variant_name));
+                let old_assigment = entry.insert((design_index, variant_name));
 
-                Ok(Some(DesignVariant {
-                    design_name: self
-                        .pcb
-                        .design_names
-                        .iter()
-                        .nth(old_assigment.0)
-                        .unwrap()
-                        .clone(),
-                    variant_name: old_assigment.1,
-                }))
+                Ok(Some(old_assigment.1))
             }
         }
     }

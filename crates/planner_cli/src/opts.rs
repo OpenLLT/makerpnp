@@ -82,17 +82,13 @@ pub(crate) enum Command {
     },
     /// Assign a design variant to a PCB unit
     AssignVariantToUnit {
-        /// Name of the design
-        #[arg(long, value_parser = clap::value_parser!(DesignName), value_name = "DESIGN_NAME")]
-        design: DesignName,
+        /// PCB unit path
+        #[arg(long, value_parser = clap::value_parser!(ObjectPath), value_name = "OBJECT_PATH")]
+        unit: ObjectPath,
 
         /// Variant of the design
         #[arg(long, value_parser = clap::value_parser!(VariantName), value_name = "VARIANT_NAME")]
         variant: VariantName,
-
-        /// PCB unit path
-        #[arg(long, value_parser = clap::value_parser!(ObjectPath), value_name = "OBJECT_PATH")]
-        unit: ObjectPath,
     },
     /// Assign a process to parts
     AssignProcessToParts {
@@ -251,13 +247,11 @@ impl TryFrom<Opts> for Event {
                 })
             }
             Command::AssignVariantToUnit {
-                design,
-                variant,
                 unit,
+                variant,
             } => Ok(Event::AssignVariantToUnit {
-                design,
-                variant,
                 unit,
+                variant,
             }),
             Command::AssignProcessToParts {
                 process,

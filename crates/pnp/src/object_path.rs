@@ -108,6 +108,7 @@ pub struct ObjectPath {
 }
 
 impl ObjectPath {
+    // TODO rename to set_pcb_number?
     /// pcb_instance is a 1-based index.
     pub fn set_pcb_instance(&mut self, instance: u16) {
         assert!(instance > 0);
@@ -120,6 +121,7 @@ impl ObjectPath {
         }
     }
 
+    // TODO rename to set_pcb_unit_number?
     /// pcb_unit is a 1-based index.
     pub fn set_pcb_unit(&mut self, unit: u16) {
         assert!(unit > 0);

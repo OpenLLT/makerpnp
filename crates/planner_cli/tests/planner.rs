@@ -402,7 +402,6 @@ mod operation_sequence_1 {
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "assign-variant-to-unit",
-            "--design design_a",
             "--variant variant_a",
             "--unit pcb=1::unit=1",
         ]);
@@ -420,7 +419,7 @@ mod operation_sequence_1 {
         println!("{}", trace_content);
 
         assert_contains_inorder!(trace_content, [
-            "Unit assignment added. unit: 'pcb=1::unit=1', design_variant: design_a-variant_a\n",
+            "Unit assignment added. unit: 'pcb=1::unit=1', variant_name: variant_a\n",
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
             "New part. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }\n",
@@ -2958,12 +2957,11 @@ mod help {
         let expected_output = indoc! {"
             Assign a design variant to a PCB unit
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-variant-to-unit [OPTIONS] --design <DESIGN_NAME> --variant <VARIANT_NAME> --unit <OBJECT_PATH>
+            Usage: planner_cli <--project <PROJECT_NAME>> assign-variant-to-unit [OPTIONS] --unit <OBJECT_PATH> --variant <VARIANT_NAME>
 
             Options:
-                  --design <DESIGN_NAME>    Name of the design
-                  --variant <VARIANT_NAME>  Variant of the design
                   --unit <OBJECT_PATH>      PCB unit path
+                  --variant <VARIANT_NAME>  Variant of the design
               -v, --verbose...              Increase logging verbosity
               -q, --quiet...                Decrease logging verbosity
               -h, --help                    Print help
