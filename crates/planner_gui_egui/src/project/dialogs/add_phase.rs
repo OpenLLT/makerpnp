@@ -64,7 +64,7 @@ impl AddPhaseModal {
                 ..default_style()
             })
             .show(|tui| {
-                form.show_fields(tui, |form, tui| {
+                form.show_fields_vertical(tui, |form, tui| {
                     form.add_field_ui("reference", tr!("form-common-input-phase-reference"), tui, {
                         // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
                         //      as a workaround we use `ui_add_manual` for now, with `no_transform`.

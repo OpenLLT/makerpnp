@@ -8,7 +8,6 @@ pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
     AddPhaseClicked,
-    CreateUnitAssignmentClicked,
     RefreshFromDesignVariantsClicked,
     GenerateArtifactsClicked,
     RemoveUnusedPlacements,
@@ -18,7 +17,6 @@ pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     ShowAddPcbDialog,
     ShowAddPhaseDialog,
-    ShowCreateUnitAssignmentDialog,
     RefreshFromDesignVariants,
     GenerateArtifacts,
     RemoveUnusedPlacements,
@@ -80,13 +78,6 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::AddPhaseClicked)
             }
-            if ui
-                .button(tr!("project-toolbar-button-create-unit-assignment"))
-                .clicked()
-            {
-                self.component
-                    .send(ProjectToolbarUiCommand::CreateUnitAssignmentClicked)
-            }
         });
     }
 
@@ -102,9 +93,6 @@ impl UiComponent for ProjectToolbar {
             }
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
             ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
-            ProjectToolbarUiCommand::CreateUnitAssignmentClicked => {
-                Some(ProjectToolbarAction::ShowCreateUnitAssignmentDialog)
-            }
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
             ProjectToolbarUiCommand::RemoveUnusedPlacements => Some(ProjectToolbarAction::RemoveUnusedPlacements),
         }

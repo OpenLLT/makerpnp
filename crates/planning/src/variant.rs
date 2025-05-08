@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use std::str::FromStr;
 
 use thiserror::Error;
@@ -33,6 +34,14 @@ impl Display for VariantName {
 impl From<&str> for VariantName {
     fn from(s: &str) -> Self {
         Self(s.to_string())
+    }
+}
+
+impl Deref for VariantName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

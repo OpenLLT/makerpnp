@@ -57,7 +57,7 @@ impl AddPcbModal {
                 ..default_style()
             })
             .show(|tui| {
-                form.show_fields(tui, |form, tui| {
+                form.show_fields_vertical(tui, |form, tui| {
                     form.add_field_ui("name", tr!("form-add-pcb-input-name"), tui, {
                         // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
                         //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
@@ -290,7 +290,7 @@ impl Default for AddPcbFields {
             name: "".to_string(),
             units: DEFAULT_UNITS,
 
-            // See [`Self::grow_map`]
+            // See [`Self::grow_unit_map`]
             unit_map: vec![None; DEFAULT_UNITS as usize],
             design_name: "".to_string(),
         }

@@ -39,7 +39,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         self.validation_errors.is_ok()
     }
 
-    pub fn show_fields(&self, tui: &mut Tui, fields: impl FnOnce(&Self, &mut Tui)) {
+    pub fn show_fields_vertical(&self, tui: &mut Tui, fields: impl FnOnce(&Self, &mut Tui)) {
         let default_style = Self::form_default_style();
 
         //
@@ -64,7 +64,41 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                 align_items: Some(AlignItems::Center),
                 ..default_style()
             })
-            .add(|tui| {
+            .add_with_border(|tui| {
+                fields(&self, tui);
+                // end of grid container content
+            });
+
+            // end of form fields container content
+        });
+    }
+
+    pub fn show_fields_horizontal(&self, tui: &mut Tui, fields: impl FnOnce(&Self, &mut Tui)) {
+        let default_style = Self::form_default_style();
+
+        //
+        // form fields container
+        //
+        tui.style(Style {
+            flex_direction: FlexDirection::Column,
+            align_self: Some(AlignSelf::Stretch),
+            ..default_style()
+        })
+        .add(|tui| {
+            //
+            // grid container
+            //
+            tui.style(Style {
+                flex_grow: 1.0,
+                display: Display::Grid,
+                grid_template_columns: vec![fr(1.), fr(1.)],
+                grid_template_rows: vec![fit_content(percent(1.)), fr(1.)],
+
+                // ensure items are centered vertically on rows
+                align_items: Some(AlignItems::Center),
+                ..default_style()
+            })
+            .add_with_border(|tui| {
                 fields(&self, tui);
                 // end of grid container content
             });
@@ -95,7 +129,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.label(label);
         });
 
@@ -103,7 +137,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             flex_grow: 1.0,
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.style(Style {
                 flex_grow: 1.0,
                 ..default_style()
@@ -114,7 +148,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             );
         });
 
-        Self::field_error(&self.validation_errors, default_style, tui, field_name);
+        Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
     }
 
     pub fn add_field_tui(
@@ -129,7 +163,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.label(label);
         });
 
@@ -137,14 +171,87 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             flex_grow: 1.0,
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             ui_builder(tui, self.fields.lock().unwrap(), self.sender.clone());
         });
 
-        Self::field_error(&self.validation_errors, default_style, tui, field_name);
+        Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
     }
 
-    fn field_error(
+    /// Add a named section, and the field errors for the section
+    ///
+    /// This is useful when nesting forms
+    ///
+    /// ```plaintext
+    /// +--------+---------------------+
+    /// | label  | +-----------------+ |
+    /// |        | | < nested form > | |
+    /// |        | | <             > | |
+    /// |        | +-----------------+ |
+    /// +--------+---------------------+
+    /// | errors |
+    /// ```
+    ///
+    pub fn add_section_tui(
+        &self,
+        field_name: &str,
+        label: String,
+        tui: &mut Tui,
+        mut ui_builder: impl FnMut(&mut Tui),
+    ) {
+        let default_style = Self::form_default_style();
+
+        tui.style(Style {
+            ..default_style()
+        })
+        .add_with_border(|tui| {
+            tui.label(label);
+        });
+
+        //
+        // form fields container
+        //
+        tui.style(Style {
+            flex_direction: FlexDirection::Row,
+            align_self: Some(AlignSelf::Stretch),
+            ..default_style()
+        })
+        .add_with_border(|tui| {
+            //
+            // grid container
+            //
+            tui.style(Style {
+                flex_grow: 1.0,
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                //display: Display::Grid,
+                //grid_template_columns: vec![fit_content(percent(1.))],
+                //grid_template_rows: vec![fr(1.)],
+
+                //align_self: Some(AlignSelf::Stretch),
+
+                // ensure items are centered vertically on rows
+                //align_items: Some(AlignItems::Center),
+                ..default_style()
+            })
+            .add_with_border(|tui| {
+                ui_builder(tui);
+                // end of grid container content
+            });
+
+            // end of form fields container content
+        });
+
+        Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
+    }
+
+    pub fn field_error(&self, tui: &mut Tui, field_name: &str) {
+        let default_style = Self::form_default_style();
+
+        Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
+    }
+
+    fn field_error_inner(
         validation_errors: &Result<(), ValidationErrors>,
         default_style: fn() -> Style,
         tui: &mut Tui,
@@ -157,7 +264,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                     grid_column: span(2),
                     ..default_style()
                 })
-                .add(|tui| {
+                .add_with_border(|tui| {
                     for field_error in field_errors.iter() {
                         let code = &field_error.code;
                         let params = &field_error.params;

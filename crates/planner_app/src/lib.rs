@@ -9,7 +9,7 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
-pub use planning::design::{DesignName, DesignVariant};
+pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::gerber::GerberPurpose;
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
@@ -28,8 +28,8 @@ pub use planning::variant::VariantName;
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
-pub use pnp::pcb::PcbUnitNumber;
 pub use pnp::pcb::{PcbKind, PcbSide};
+pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
 pub use pnp::reference::Reference;
@@ -83,15 +83,27 @@ pub struct PcbGerberItem {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PcbOverview {
-    pub index: usize,
+    pub index: u16,
     pub name: String,
     pub units: u16,
     /// A list of unique designs, a panel can have multiple designs.
     pub designs: Vec<DesignName>,
 
+    /// A map of design to units, some units may be un-assigned
+    /// The name of the design can be obtained by looking indexing into `designs` with the `DesignIndex`
+    pub unit_map: HashMap<PcbUnitIndex, DesignIndex>,
+
     /// each design can have multiple gerbers
     pub gerbers: Vec<Vec<PcbGerberItem>>,
     // FUTURE add dimensions (per design)
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PcbUnitAssignments {
+    /// the design name for the pcb unit index can be obtained via the PCB overview
+    /// not all pcb units may be assigned
+    pub unit_assignments: HashMap<PcbUnitIndex, VariantName>,
+    pub index: u16,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -238,6 +250,7 @@ pub enum ProjectView {
     ProjectTree(ProjectTreeView),
     Process(ProcessDefinition),
     PcbOverview(PcbOverview),
+    PcbUnitAssignments(PcbUnitAssignments),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -250,7 +263,8 @@ pub enum ProjectViewRequest {
     PhasePlacements { phase: PhaseReference },
     Placements,
     ProjectTree,
-    PcbOverview { pcb: usize },
+    PcbOverview { pcb: u16 },
+    PcbUnitAssignments { pcb: u16 },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -282,9 +296,8 @@ pub enum Event {
         unit_map: BTreeMap<PcbUnitNumber, DesignName>,
     },
     AssignVariantToUnit {
-        design: DesignName,
-        variant: VariantName,
         unit: ObjectPath,
+        variant: VariantName,
     },
     RefreshFromDesignVariants,
     AssignProcessToParts {
@@ -380,8 +393,12 @@ pub enum Event {
         phase_reference: PhaseReference,
     },
     RequestPcbOverviewView {
-        /// index
-        pcb: usize,
+        /// index, 0-based
+        pcb: u16,
+    },
+    RequestPcbUnitAssignmentsView {
+        /// index, 0-based
+        pcb: u16,
     },
 }
 
@@ -472,8 +489,7 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::AssignVariantToUnit {
-                design,
-                variant,
+                variant: variant_name,
                 unit,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -486,11 +502,8 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
                 project
-                    .update_assignment(unit.clone(), DesignVariant {
-                        design_name: design.clone(),
-                        variant_name: variant.clone(),
-                    })
-                    .map_err(|cause| AppError::OperationError(cause.into()))?;
+                    .update_assignment(unit.clone(), variant_name)
+                    .map_err(AppError::OperationError)?;
                 *modified |= true;
 
                 let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
@@ -899,7 +912,7 @@ impl Planner {
 
                 let project_pcb = project
                     .pcbs
-                    .get(pcb_index)
+                    .get(pcb_index as usize)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
                 let designs = project_pcb
@@ -930,14 +943,51 @@ impl Planner {
                     })
                     .collect::<Vec<_>>();
 
+                let unit_map = project_pcb
+                    .pcb
+                    .unit_map
+                    .iter()
+                    .map(|(a, b)| (*a, *b))
+                    .collect::<HashMap<PcbUnitIndex, DesignIndex>>();
+
                 let pcb_overview = PcbOverview {
                     index: pcb_index,
                     name: project_pcb.pcb.name.clone(),
                     units: project_pcb.pcb.units,
                     designs,
+                    unit_map,
                     gerbers,
                 };
                 Ok(view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
+            }),
+            Event::RequestPcbUnitAssignmentsView {
+                pcb: pcb_index,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let project_pcb = project
+                    .pcbs
+                    .get(pcb_index as usize)
+                    .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
+
+                let unit_assignments = project_pcb
+                    .unit_assignments
+                    .iter()
+                    .map(|(pcb_unit_index, (design_index, variant_name))| (*pcb_unit_index, variant_name.clone()))
+                    .collect::<HashMap<_, _>>();
+
+                let pcb_unit_assignments = PcbUnitAssignments {
+                    index: pcb_index,
+                    unit_assignments,
+                };
+                Ok(view_renderer::view(ProjectView::PcbUnitAssignments(
+                    pcb_unit_assignments,
+                )))
             }),
             Event::RequestPlacementsView {} => Box::new(|model: &mut Model| {
                 let ModelProject {
