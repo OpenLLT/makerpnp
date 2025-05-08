@@ -59,6 +59,9 @@ tracing-subscriber = { version = "0.3.18" }
 # only for `as_trace`
 tracing-log = { version = "0.2.0" }
 
+# iteration
+itertools = { version = "0.14.0" }
+
 # serialization
 serde = { version = "1.0.203" }
 serde_json = { version = "1.0.127" }

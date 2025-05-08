@@ -106,9 +106,16 @@ form-button-close = Close
 form-button-add = Add
 form-button-remove = Remove
 
-form-add-pcb-input-name = Name
-form-add-pcb-input-name-placeholder = PCB name (e.g. 'default')
+form-add-pcb-input-name = PCB Name
+form-add-pcb-input-name-placeholder = (e.g. the PCB factory's order reference number)
 form-add-pcb-input-units = Units
+form-add-pcb-input-design-name = Design name
+form-add-pcb-input-design-name-placeholder = (e.g. 'my_eda_project', for unit assignments)
+form-add-pcb-unit-map = Unit map
+form-add-pcb-assign-selection = Assign to selection
+form-add-pcb-assign-all = Assign all
+form-add-pcb-unassign-selection = Unasign selection
+form-add-pcb-unassign-all = Unasign all
 
 form-create-unit-assignment-input-design-name = Design name
 form-create-unit-assignment-input-design-name-placeholder = Design name (e.g. 'my design')
@@ -148,6 +155,12 @@ form-choice-empty = Choose an option
 form-input-number-require-greater-than-zero = Require a number greater than zero
 form-input-number-require-positive-number = Require a number
 form-file-not-found = File not found
+
+form-input-error-map-incorrect-entry-count = Incorrect entry count.  Required: { $required }, Actual: { $actual }
+form-input-error-map-unassigned-entries = Mapping contains unassigned entries.
+
+assignment-assigned = Assigned
+assignment-unassigned = Unassigned
 
 placement-placed = Placed
 placement-pending = Pending

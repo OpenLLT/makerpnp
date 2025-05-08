@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use clap::{ArgGroup, Parser, Subcommand};
@@ -9,6 +10,7 @@ use planning::placement::PlacementSortingItem;
 use planning::process::ProcessReference;
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
+use pnp::pcb::PcbUnitNumber;
 use pnp::reference::Reference;
 use regex::Regex;
 use stores::load_out::LoadOutSource;
@@ -43,6 +45,22 @@ pub(crate) struct Opts {
     pub(crate) verbose: Verbosity<InfoLevel>,
 }
 
+fn parse_design_kv(s: &str) -> Result<(u16, DesignName), String> {
+    let mut split = s.splitn(2, '=');
+    let key = split
+        .next()
+        .ok_or_else(|| format!("Missing key in '{}'", s))?;
+    let value = split
+        .next()
+        .ok_or_else(|| format!("Missing value in '{}'", s))?;
+
+    let key_parsed = key
+        .parse::<u16>()
+        .map_err(|e| format!("Invalid number '{}': {}", key, e))?;
+
+    Ok((key_parsed, value.into()))
+}
+
 #[derive(Subcommand, Debug)]
 #[command(arg_required_else_help(true))]
 pub(crate) enum Command {
@@ -54,9 +72,13 @@ pub(crate) enum Command {
         #[arg(long)]
         name: String,
 
-        /// Units
+        /// The number of individual PCB units. 1 = single, >1 = panel
         #[arg(long)]
         units: u16,
+
+        /// The mapping of designs to units e.g. '1=design_a,2=design_b,3=design_a,4=design_b'. unit is 1-based.
+        #[arg(long, required = true, value_parser = parse_design_kv, num_args = 0.., value_delimiter = ',')]
+        design: Vec<(PcbUnitNumber, DesignName)>,
     },
     /// Assign a design variant to a PCB unit
     AssignVariantToUnit {
@@ -216,10 +238,18 @@ impl TryFrom<Opts> for Event {
             Command::AddPcb {
                 name,
                 units,
-            } => Ok(Event::AddPcb {
-                name: name.to_string(),
-                units,
-            }),
+                design,
+            } => {
+                let unit_map = design
+                    .into_iter()
+                    .collect::<BTreeMap<_, _>>();
+
+                Ok(Event::AddPcb {
+                    name: name.to_string(),
+                    units,
+                    unit_map,
+                })
+            }
             Command::AssignVariantToUnit {
                 design,
                 variant,

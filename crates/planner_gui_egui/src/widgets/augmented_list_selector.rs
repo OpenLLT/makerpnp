@@ -9,6 +9,9 @@ use indexmap::IndexMap;
 use crate::forms::transforms::no_transform;
 use crate::widgets::list_box::list_box_with_id_tui;
 
+// This is tightly-coupled with `list_box_with_id_tui`, changes to the ids and types used by this, and `list_box_with_id_tui`
+// for the egui memory access need to be syncronized.
+// FUTURE To fix this, one solution would be to give a closure, that accesses egui memory, to `list_box_with_id_tui`
 pub struct AugmentedListSelector {}
 
 impl AugmentedListSelector {

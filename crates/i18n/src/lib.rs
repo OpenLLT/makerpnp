@@ -83,7 +83,13 @@ pub mod fluent_argument_helpers {
                         let value = FluentValue::String(string.into());
                         args.set(key.to_string(), value);
                     }
-                    Value::Array(_) => todo!(),
+                    Value::Array(array) => {
+                        // FIXME for now, just convert to a string, probably needs better handling but need the use-case first!
+                        let string = format!("{:?}", array);
+
+                        let value = FluentValue::String(string.into());
+                        args.set(key.to_string(), value);
+                    }
                     Value::Object(_) => todo!(),
                 }
             }

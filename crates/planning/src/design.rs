@@ -5,6 +5,11 @@ use thiserror::Error;
 
 use crate::variant::VariantName;
 
+/// 0-based
+pub type DesignIndex = usize;
+/// 1-based
+pub type DesignNumber = usize;
+
 #[derive(
     Debug,
     serde::Serialize,
