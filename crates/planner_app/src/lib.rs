@@ -1040,26 +1040,28 @@ impl Planner {
                         .tree
                         .add_edge(pcb_node, unit_assignments_node, ());
 
-                    for (unit_index, unit_assignment) in project_pcb
-                        .unit_assignments()
-                        .iter()
-                        .enumerate()
-                    {
+                    for (pcb_unit_index, design_index) in project_pcb.pcb.unit_map.iter() {
                         let mut object_path = ObjectPath::default();
                         object_path.set_pcb_instance((pcb_index + 1) as u16);
-                        object_path.set_pcb_unit((unit_index + 1) as u16);
+                        object_path.set_pcb_unit(pcb_unit_index + 1);
 
                         let mut args = HashMap::from([("name".to_string(), Arg::String(object_path.to_string()))]);
 
-                        if let Some(design_variant) = unit_assignment {
-                            args.insert(
-                                "design_name".to_string(),
-                                Arg::String(design_variant.design_name.to_string()),
-                            );
-                            args.insert(
-                                "variant_name".to_string(),
-                                Arg::String(design_variant.variant_name.to_string()),
-                            );
+                        let design_name = project_pcb
+                            .pcb
+                            .design_names
+                            .iter()
+                            .nth(*design_index as usize)
+                            .unwrap();
+                        args.insert("design_name".to_string(), Arg::String(design_name.to_string()));
+
+                        if let Some((_design_index, variant_name)) = project_pcb
+                            .unit_assignments
+                            .get(pcb_unit_index)
+                        {
+                            // it's invalid for these to be mismatched
+                            debug_assert!(_design_index == design_index);
+                            args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
                         }
 
                         let unit_assignment_node = project_tree
@@ -1067,7 +1069,7 @@ impl Planner {
                             .add_node(ProjectTreeItem {
                                 key: "unit-assignment".to_string(),
                                 args,
-                                path: format!("/pcbs/{}/units/{}", pcb_index, unit_index).to_string(),
+                                path: format!("/pcbs/{}/units/{}", pcb_index, pcb_unit_index).to_string(),
                             });
 
                         project_tree
