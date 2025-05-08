@@ -93,8 +93,8 @@ project-explorer-node-phases = Fases
 project-explorer-node-phase = { $reference } ({ $process})
 project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Asignaciones de unidad
-project-explorer-node-unit-assignment = { $name } ({$design_name} - {$variant_name})
-project-explorer-node-unit-assignment-none = { $name } (No asignado)
+project-explorer-node-unit-assignment-assigned = { $name } {$design_name} = {$variant_name}
+project-explorer-node-unit-assignment-unassigned = { $name } {$design_name} = (No asignado)
 project-explorer-node-pcbs = PCBs
 project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Procesos

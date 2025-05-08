@@ -120,13 +120,13 @@ impl ExplorerUi {
                     .all(|item| values.iter().any(|s| s == item))
             }
 
-            let required_keys = ["design_name", "variant_name"];
+            let required_keys = ["variant_name"];
 
             let keys: Vec<&String> = item.args.keys().collect();
             let key = if contains_all(&keys, &required_keys) {
-                default_key
+                "project-explorer-node-unit-assignment-assigned".to_string()
             } else {
-                "project-explorer-node-unit-assignment-none".to_string()
+                "project-explorer-node-unit-assignment-unassigned".to_string()
             };
 
             Ok((key, Cow::Borrowed(item)))
