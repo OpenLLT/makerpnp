@@ -12,7 +12,7 @@ use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, VariantName};
+use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitIndex, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
@@ -563,7 +563,7 @@ impl UnitAssignmentsUi {
         });
     }
 
-    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>) -> Option<UnitAssignmentsUiAction> {
+    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>, pcb_index: PcbUnitIndex) -> Option<UnitAssignmentsUiAction> {
         let variant_map = fields
             .variant_map
             .iter()
@@ -572,8 +572,7 @@ impl UnitAssignmentsUi {
             .collect::<Vec<_>>();
 
         let args = UpdateUnitAssignmentsArgs {
-            // TODO get the PCB index from somewhere
-            pcb_index: 0,
+            pcb_index,
             variant_map,
         };
 
@@ -771,7 +770,6 @@ impl UiComponent for UnitAssignmentsUi {
             }
 
             UnitAssignmentsUiCommand::ApplyRangeClicked(design_variant_index) => {
-
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
@@ -781,14 +779,14 @@ impl UiComponent for UnitAssignmentsUi {
                     for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16)))
+                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
                         .filter(|(candiate_design_index, b)| {
                             *candiate_design_index != design_index
                         })
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
-                    Self::apply_variant_map(fields)
+                    Self::apply_variant_map(fields, pcb_overview.index)
                 } else {
                     None
                 }
@@ -804,14 +802,14 @@ impl UiComponent for UnitAssignmentsUi {
                     for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16)))
+                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
                         .filter(|(candiate_design_index, b)| {
                             *candiate_design_index != design_index
                         })
                     {
                         *assigned_variant_name = None;
                     }
-                    Self::apply_variant_map(fields)
+                    Self::apply_variant_map(fields, pcb_overview.index)
                 } else {
                     None
                 }
@@ -830,32 +828,41 @@ impl UiComponent for UnitAssignmentsUi {
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
-                    Self::apply_variant_map(fields)
+                    Self::apply_variant_map(fields, pcb_overview.index)
                 } else {
                     None
                 }
             }
             UnitAssignmentsUiCommand::UnassignAllClicked => {
-                let mut fields = self.fields.lock().unwrap();
-                for (_design_index, assigned_variant_name) in fields.variant_map
-                    .iter_mut() 
-                {
-                    *assigned_variant_name = None;
-                }
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+                    for (_design_index, assigned_variant_name) in fields.variant_map
+                        .iter_mut()
+                    {
+                        *assigned_variant_name = None;
+                    }
 
-                Self::apply_variant_map(fields)
+                    Self::apply_variant_map(fields, pcb_overview.index)
+                } else {
+                    None
+                }
             }
             UnitAssignmentsUiCommand::UnassignSelection(variant_map_selected_indexes) => {
-                let mut fields = self.fields.lock().unwrap();
-                for (_index, (_design_index, assigned_variant_name)) in fields.variant_map
-                    .iter_mut()
-                    .enumerate()
-                    .filter(|(index, _)|variant_map_selected_indexes.contains(index))
-                {
-                    *assigned_variant_name = None;
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+                    for (_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                        .iter_mut()
+                        .enumerate()
+                        .filter(|(index, _)|variant_map_selected_indexes.contains(index))
+                    {
+                        *assigned_variant_name = None;
+                    }
+    
+                    Self::apply_variant_map(fields, pcb_overview.index)
+                } else {
+                    None
                 }
 
-                Self::apply_variant_map(fields)
             }
         }
     }
