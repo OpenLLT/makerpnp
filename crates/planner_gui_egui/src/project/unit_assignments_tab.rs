@@ -24,7 +24,6 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 // TODO when changing the design variant selection, update the combo and text boxes
 
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct UnitAssignmentsUi {
@@ -553,12 +552,6 @@ impl UnitAssignmentsUi {
                                 ..default_style()
                             })
                             .add_with_border(|tui| {
-                                tui.style(Style {
-                                    flex_grow: 1.0,
-                                    ..default_style()
-                                })
-                                .label(tr!("form-create-unit-assignment-input-design-name"));
-
                                 tui.style(Style {
                                     flex_grow: 1.0,
                                     ..default_style()
