@@ -22,6 +22,9 @@ use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
+// TODO when changing the design variant selection, update the combo and text boxes
+
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct UnitAssignmentsUi {
@@ -506,7 +509,7 @@ impl UnitAssignmentsUi {
                                             row.set_selected(is_selected);
 
                                             row.col(|ui| {
-                                                ui.label(pcb_unit_index.to_string());
+                                                ui.label((pcb_unit_index + 1).to_string());
                                             });
 
                                             row.col(|ui| {
