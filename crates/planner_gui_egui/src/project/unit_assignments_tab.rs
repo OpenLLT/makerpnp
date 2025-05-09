@@ -119,76 +119,89 @@ impl UnitAssignmentsUi {
                         // variant controls row
                         //
 
-                        tui.style(Style {
-                            display: Display::Flex,
-                            align_content: Some(AlignContent::Stretch),
-                            flex_grow: 1.0,
-                            ..default_style()
-                        })
-                        .add(|tui| {
+                        form.show_fields_vertical(tui, |form, tui| {
                             tui.style(Style {
                                 flex_grow: 1.0,
+                                display: Display::Flex,
+                                align_content: Some(AlignContent::Stretch),
+                                flex_direction: FlexDirection::Row,
                                 ..default_style()
                             })
-                            .ui(|ui| {
-                                let fields = self.fields.lock().unwrap();
-                                let sender = self.component.sender.clone();
+                                .add_with_border(|tui| {
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        ..default_style()
+                                    }).label(tr!("form-create-unit-assignment-input-design-name"));
 
-                                let design_name = fields.design_name.as_ref();
-
-                                egui::ComboBox::from_id_salt(ui.id().with("design_name"))
-                                    // TODO do we need a row here?
-                                    .width(ui.available_width())
-                                    .selected_text(match design_name {
-                                        None => tr!("form-common-combo-select"),
-                                        Some(design_name) => design_name.to_string(),
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        ..default_style()
                                     })
-                                    .show_ui(ui, |ui| {
-                                        for available_design_name in &pcb_overview.designs {
-                                            if ui
-                                                .add(egui::SelectableLabel::new(
-                                                    matches!(design_name.as_ref(), Some(available_design_name)),
-                                                    available_design_name.to_string(),
-                                                ))
-                                                .clicked()
+                                        .ui(|ui| {
+                                            let fields = self.fields.lock().unwrap();
+                                            let sender = self.component.sender.clone();
+
+                                            let design_name = fields.design_name.as_ref();
+
+                                            egui::ComboBox::from_id_salt(ui.id().with("design_name"))
+                                                // TODO do we need a row here?
+                                                .width(ui.available_width())
+                                                .selected_text(match design_name {
+                                                    None => tr!("form-common-combo-select"),
+                                                    Some(design_name) => design_name.to_string(),
+                                                })
+                                                .show_ui(ui, |ui| {
+                                                    for available_design_name in &pcb_overview.designs {
+                                                        if ui
+                                                            .add(egui::SelectableLabel::new(
+                                                                matches!(design_name.as_ref(), Some(available_design_name)),
+                                                                available_design_name.to_string(),
+                                                            ))
+                                                            .clicked()
+                                                        {
+                                                            sender
+                                                                .send(UnitAssignmentsUiCommand::DesignNameChanged(
+                                                                    available_design_name.clone(),
+                                                                ))
+                                                                .expect("sent");
+                                                        }
+                                                    }
+                                                })
+                                                .response
+                                        });
+
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        ..default_style()
+                                    }).label(tr!("form-create-unit-assignment-input-variant-name"));
+
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        ..default_style()
+                                    })
+                                        .ui(|ui| {
+                                            let fields = self.fields.lock().unwrap();
+                                            let sender = self.component.sender.clone();
+
+                                            let mut variant_name_clone = fields.variant_name.clone();
+                                            let output = TextEdit::singleline(&mut variant_name_clone)
+                                                // TODO add placeholder hint
+                                                .desired_width(ui.available_width())
+                                                .show(ui);
+
+                                            if !fields
+                                                .variant_name
+                                                .eq(&variant_name_clone)
                                             {
                                                 sender
-                                                    .send(UnitAssignmentsUiCommand::DesignNameChanged(
-                                                        available_design_name.clone(),
-                                                    ))
-                                                    .expect("sent");
+                                                    .send(UnitAssignmentsUiCommand::VariantNameChanged(variant_name_clone))
+                                                    .expect("sent")
                                             }
-                                        }
-                                    })
-                                    .response
-                            });
-                            
-                            tui.style(Style {
-                                flex_grow: 1.0,
-                                ..default_style()
-                            })
-                            .ui(|ui| {
-                                let fields = self.fields.lock().unwrap();
-                                let sender = self.component.sender.clone();
+                                        })
+                                });
 
-                                let mut variant_name_clone = fields.variant_name.clone();
-                                let output = TextEdit::singleline(&mut variant_name_clone)
-                                    // TODO add placeholder hint
-                                    .desired_width(ui.available_width())
-                                    .show(ui);
-
-                                if !fields
-                                    .variant_name
-                                    .eq(&variant_name_clone)
-                                {
-                                    sender
-                                        .send(UnitAssignmentsUiCommand::VariantNameChanged(variant_name_clone))
-                                        .expect("sent")
-                                }
-                            })
+                            form.field_error(tui, "variant_name");
                         });
-                        
-                        form.field_error(tui, "variant_name");
    
                         form.show_fields_vertical(tui, |form, tui| {
                             form.add_field_ui(

@@ -204,7 +204,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.label(label);
         });
 
@@ -218,7 +218,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
 
         Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
     }
-    
+
     pub fn field_error(&self, tui: &mut Tui, field_name: &str) {
         let default_style = Self::form_default_style();
 
