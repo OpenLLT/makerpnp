@@ -129,7 +129,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.label(label);
         });
 
@@ -163,7 +163,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add(|tui| {
+        .add_with_border(|tui| {
             tui.label(label);
         });
 
@@ -204,17 +204,45 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add_with_border(|tui| {
-            tui.label(label);
-        });
+            .add_with_border(|tui| {
+                tui.label(label);
+            });
 
+        //
+        // form fields container
+        //
         tui.style(Style {
-            flex_grow: 1.0,
+            flex_direction: FlexDirection::Row,
+            align_self: Some(AlignSelf::Stretch),
             ..default_style()
         })
-        .add_with_border(|tui| {
-            ui_builder(tui);
-        });
+            .add_with_border(|tui| {
+                //
+                // grid container
+                //
+                tui.style(Style {
+                    flex_grow: 1.0,
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    //display: Display::Grid,
+                    //grid_template_columns: vec![fit_content(percent(1.))],
+                    //grid_template_rows: vec![fr(1.)],
+
+                    //align_self: Some(AlignSelf::Stretch),
+                    
+                    // ensure items are centered vertically on rows
+                    //align_items: Some(AlignItems::Center),
+                    ..default_style()
+                })
+                    .add_with_border(|tui| {
+                        
+                        
+                        ui_builder(tui);
+                        // end of grid container content
+                    });
+
+                // end of form fields container content
+            });
 
         Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
     }
