@@ -7,12 +7,12 @@ use egui::{TextEdit, Ui, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use egui_mobius::types::ValueGuard;
 use egui_mobius::Value;
+use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitIndex, VariantName};
+use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
@@ -28,6 +28,7 @@ pub struct UnitAssignmentsUi {
     path: PathBuf,
     placements_directory: PathBuf,
     pcb_overview: Option<PcbOverview>,
+    pcb_unit_assignments: Option<PcbUnitAssignments>,
 
     fields: Value<UnitAssignmentsFields>,
 
@@ -46,23 +47,52 @@ impl UnitAssignmentsUi {
             path,
             placements_directory,
             pcb_overview: None,
+            pcb_unit_assignments: None,
             fields: Default::default(),
             component: Default::default(),
         }
     }
 
     pub fn update_overview(&mut self, pcb_overview: PcbOverview) {
-        let mut fields = self.fields.lock().unwrap();
+        // block to limit the scope of the borrow
+        {
+            let mut fields = self.fields.lock().unwrap();
 
-        // TODO populate the map from the ACTUAL map, but it's not in the pcb_overview.
-
-        fields.variant_map = (0..pcb_overview.units)
-            .map(|pcb_unit_index| (0, None))
-            .collect::<Vec<_>>();
-
-        fields.pcb_unit_range = 1..=pcb_overview.units;
+            fields.pcb_unit_range = 1..=pcb_overview.units;
+        }
 
         self.pcb_overview = Some(pcb_overview);
+        self.update_map();
+    }
+
+    pub fn update_unit_assignments(&mut self, pcb_unit_assignments: PcbUnitAssignments) {
+        self.pcb_unit_assignments = Some(pcb_unit_assignments);
+        self.update_map();
+    }
+
+    /// we need both the pcb_overview and the pcb_unit_assignments, but the methods that provide them
+    /// could be called in any order, so they both need to call this
+    fn update_map(&mut self) {
+        let (Some(pcb_overview), Some(pcb_unit_assignments)) = (&self.pcb_overview, &self.pcb_unit_assignments) else {
+            return;
+        };
+
+        let mut fields = self.fields.lock().unwrap();
+
+        fields.variant_map = (0..pcb_overview.units)
+            .map(|pcb_unit_index| {
+                (
+                    pcb_overview
+                        .unit_map
+                        .get(&pcb_unit_index)
+                        .cloned(),
+                    pcb_unit_assignments
+                        .unit_assignments
+                        .get(&pcb_unit_index)
+                        .cloned(),
+                )
+            })
+            .collect::<Vec<_>>();
     }
 
     fn show_form(
@@ -480,7 +510,9 @@ impl UnitAssignmentsUi {
                                             });
 
                                             row.col(|ui| {
-                                                let label = &pcb_overview.designs[*design_index].to_string();
+                                                let label = design_index
+                                                    .map(|design_index|pcb_overview.designs[design_index].to_string())
+                                                    .unwrap_or("<unassigned>".to_string()); // TODO translate
                                                 ui.label(label);
                                             });
 
@@ -563,7 +595,10 @@ impl UnitAssignmentsUi {
         });
     }
 
-    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>, pcb_index: PcbUnitIndex) -> Option<UnitAssignmentsUiAction> {
+    fn apply_variant_map(
+        fields: ValueGuard<UnitAssignmentsFields>,
+        pcb_index: PcbUnitIndex,
+    ) -> Option<UnitAssignmentsUiAction> {
         let variant_map = fields
             .variant_map
             .iter()
@@ -599,8 +634,7 @@ pub struct UnitAssignmentsFields {
     design_variants: Vec<DesignVariant>,
 
     /// index of the vec is the pcb unit index (0-based)
-    #[validate(custom(function = "UnitAssignmentsFields::validate_variant_map"))]
-    variant_map: Vec<(DesignIndex, Option<VariantName>)>,
+    variant_map: Vec<(Option<DesignIndex>, Option<VariantName>)>,
 
     design_variant_selected_index: Option<usize>,
     variant_map_selected_indexes: Vec<usize>,
@@ -626,20 +660,6 @@ pub struct UnitAssignmentsValidationContext {
 }
 
 impl UnitAssignmentsFields {
-    fn validate_variant_map(variant_map: &Vec<(DesignIndex, Option<VariantName>)>) -> Result<(), ValidationError> {
-        if Self::is_variant_map_fully_populated_inner(variant_map) {
-            return Err(ValidationError::new("form-input-error-map-unassigned-entries"));
-        }
-
-        Ok(())
-    }
-
-    pub fn is_variant_map_fully_populated_inner(variant_map: &Vec<(DesignIndex, Option<VariantName>)>) -> bool {
-        variant_map
-            .iter()
-            .any(|(_design_index, assigned_variant)| assigned_variant.is_none())
-    }
-
     fn update_placements_filename(&mut self) {
         self.placements_filename = self
             .design_name
@@ -668,7 +688,6 @@ impl UnitAssignmentsFields {
 pub struct UpdateUnitAssignmentsArgs {
     pub pcb_index: u16,
     /// vector index = pcb unit index
-    /// value = (design index, variant name)
     pub variant_map: Vec<VariantName>,
 }
 
@@ -687,7 +706,7 @@ pub enum UnitAssignmentsUiCommand {
     ApplyRangeClicked(usize),
     UnassignRange(usize),
     ApplyAllClicked(usize),
-    
+
     UnassignAllClicked,
 
     UnassignSelection(Vec<usize>),
@@ -774,15 +793,18 @@ impl UiComponent for UnitAssignmentsUi {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
                     let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview.designs.iter().position(|meh| meh.eq(&design_variant.design_name)).unwrap_or(0);
+                    let design_index = pcb_overview
+                        .designs
+                        .iter()
+                        .position(|meh| meh.eq(&design_variant.design_name))
+                        .unwrap_or(0);
 
-                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
+                        .variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
-                        .filter(|(candiate_design_index, b)| {
-                            *candiate_design_index != design_index
-                        })
+                        .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                        .filter(|(candiate_design_index, b)| *candiate_design_index != design_index)
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
@@ -797,15 +819,18 @@ impl UiComponent for UnitAssignmentsUi {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
                     let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview.designs.iter().position(|meh| meh.eq(&design_variant.design_name)).unwrap_or(0);
+                    let design_index = pcb_overview
+                        .designs
+                        .iter()
+                        .position(|meh| meh.eq(&design_variant.design_name))
+                        .unwrap_or(0);
 
-                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
+                        .variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
-                        .filter(|(candiate_design_index, b)| {
-                            *candiate_design_index != design_index
-                        })
+                        .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                        .filter(|(candiate_design_index, b)| *candiate_design_index != design_index)
                     {
                         *assigned_variant_name = None;
                     }
@@ -818,13 +843,21 @@ impl UiComponent for UnitAssignmentsUi {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview.designs.iter().position(|meh|meh.eq(&design_variant.design_name)).unwrap_or(0);
-                    
-                    for (_design_index, assigned_variant_name) in fields.variant_map
-                        .iter_mut()
-                        .filter(|(candiate_design_index,b)|{
-                            *candiate_design_index != design_index
-                        })
+                    let design_index = pcb_overview
+                        .designs
+                        .iter()
+                        .position(|design_name| design_name.eq(&design_variant.design_name));
+
+                    for (_design_index, assigned_variant_name) in
+                        fields
+                            .variant_map
+                            .iter_mut()
+                            .filter(
+                                |(candiate_design_index, b)| match (design_index, candiate_design_index) {
+                                    (Some(di), Some(cdi)) if di == *cdi => false,
+                                    _ => true,
+                                },
+                            )
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
@@ -836,9 +869,7 @@ impl UiComponent for UnitAssignmentsUi {
             UnitAssignmentsUiCommand::UnassignAllClicked => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
-                    for (_design_index, assigned_variant_name) in fields.variant_map
-                        .iter_mut()
-                    {
+                    for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
                         *assigned_variant_name = None;
                     }
 
@@ -850,19 +881,19 @@ impl UiComponent for UnitAssignmentsUi {
             UnitAssignmentsUiCommand::UnassignSelection(variant_map_selected_indexes) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
-                    for (_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                    for (_index, (_design_index, assigned_variant_name)) in fields
+                        .variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(index, _)|variant_map_selected_indexes.contains(index))
+                        .filter(|(index, _)| variant_map_selected_indexes.contains(index))
                     {
                         *assigned_variant_name = None;
                     }
-    
+
                     Self::apply_variant_map(fields, pcb_overview.index)
                 } else {
                     None
                 }
-
             }
         }
     }

@@ -34,6 +34,7 @@ pub struct Pcb {
     pub design_names: BTreeSet<DesignName>,
 
     /// A hash map of pcb unit number to design index
+    /// It's possible that units are not assigned to designs
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]

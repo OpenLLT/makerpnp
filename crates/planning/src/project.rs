@@ -334,7 +334,7 @@ pub struct ProjectPcb {
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
-    // TODO remove `DesignIndex` from this tuple, and use `pcb.design_to_unit_mapping`
+    // TODO remove `DesignIndex` from this tuple, calling code should use `pcb.design_to_unit_mapping` to avoid data mismatch
     pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
 }
 

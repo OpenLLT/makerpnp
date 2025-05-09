@@ -565,11 +565,18 @@ impl Project {
 
                 project.show_unit_assignments(key.clone(), pcb_index);
 
-                let tasks: Vec<_> = vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::PcbOverview {
-                        pcb: pcb_index.clone(),
-                    },
-                )))];
+                let tasks: Vec<_> = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PcbOverview {
+                            pcb: pcb_index.clone(),
+                        },
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PcbUnitAssignments {
+                            pcb: pcb_index.clone(),
+                        },
+                    ))),
+                ];
 
                 Some(ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
@@ -928,6 +935,11 @@ impl UiComponent for Project {
                     } => Event::RequestPcbOverviewView {
                         pcb,
                     },
+                    ProjectViewRequest::PcbUnitAssignments {
+                        pcb,
+                    } => Event::RequestPcbUnitAssignmentsView {
+                        pcb,
+                    },
                 };
 
                 self.planner_core_service
@@ -976,6 +988,18 @@ impl UiComponent for Project {
                             .get_mut(&(pcb_overview.index as usize))
                         {
                             unit_assignments_ui.update_overview(pcb_overview);
+                        }
+                    }
+                    ProjectView::PcbUnitAssignments(pcb_unit_assignments) => {
+                        trace!("pcb_unit_assignments: {:?}", pcb_unit_assignments);
+
+                        let mut state = self.project_ui_state.lock().unwrap();
+
+                        if let Some(unit_assignments_ui) = state
+                            .unit_assignments
+                            .get_mut(&(pcb_unit_assignments.index as usize))
+                        {
+                            unit_assignments_ui.update_unit_assignments(pcb_unit_assignments);
                         }
                     }
                     ProjectView::Placements(placements) => {
