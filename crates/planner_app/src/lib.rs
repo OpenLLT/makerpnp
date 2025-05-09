@@ -9,7 +9,7 @@ pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
-pub use planning::design::{DesignName, DesignVariant};
+pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::gerber::GerberPurpose;
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};

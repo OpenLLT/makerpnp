@@ -61,6 +61,9 @@ project-placements-header = Project placements
 project-parts-tab-label = Parts
 project-parts-header = Project Parts
 
+project-pcb-tab-label = PCB ({ $pcb })
+project-unit-assignments-tab-label = Unit assignments ({ $pcb })
+
 phase-toolbar-add-parts-to-loadout = Add parts to load-out.
 phase-toolbar-placement-orderings = Placement orderings.
 

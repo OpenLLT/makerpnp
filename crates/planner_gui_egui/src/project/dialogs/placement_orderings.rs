@@ -65,7 +65,7 @@ impl PlacementOrderingsModal {
                 ..default_style()
             })
             .show(|tui| {
-                form.show_fields(tui, |form, tui| {
+                form.show_fields_vertical(tui, |form, tui| {
                     form.add_field_tui(
                         "orderings",
                         tr!("form-phase-placement-orderings-input-orderings"),

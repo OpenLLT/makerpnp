@@ -33,10 +33,17 @@ use crate::project::placements_tab::{
 };
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
+use crate::project::unit_assignments_tab::{
+    UnitAssignmentsTab, UnitAssignmentsUi, UnitAssignmentsUiAction, UnitAssignmentsUiCommand, UnitAssignmentsUiContext,
+    UpdateUnitAssignmentsArgs,
+};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
+//
+// tabs
+//
 mod explorer_tab;
 mod load_out_tab;
 mod overview_tab;
@@ -44,14 +51,16 @@ mod parts_tab;
 mod pcb_tab;
 mod phase_tab;
 mod placements_tab;
+mod unit_assignments_tab;
+
+//
+// other modules
+//
+mod dialogs;
+mod process;
+mod tables;
 mod tabs;
 mod toolbar;
-
-mod tables;
-
-mod dialogs;
-
-mod process;
 
 new_key_type! {
     /// A key for a project
@@ -275,6 +284,25 @@ impl Project {
             .ok();
     }
 
+    pub fn show_unit_assignments(&mut self, key: ProjectKey, pcb_index: u16) {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let tab = UnitAssignmentsTab::new(pcb_index);
+        project_tabs
+            .show_tab(|candidate_tab_kind| {
+                matches!(candidate_tab_kind, ProjectTabKind::UnitAssignments(candidate_tab) if candidate_tab.eq(&tab))
+            })
+            .inspect(|tab_key|{
+                debug!("showing existing unit assignments tab. pcb: {:?}, tab_key: {:?}", pcb_index, tab_key);
+            })
+            .inspect_err(|_|{
+                self.ensure_unit_assignments(key, pcb_index);
+
+                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::UnitAssignments(tab));
+                debug!("adding unit assignments tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
+            })
+            .ok();
+    }
+
     fn ensure_phase(&self, key: ProjectKey, phase: &Reference) {
         let phase = phase.clone();
         let mut state = self.project_ui_state.lock().unwrap();
@@ -346,6 +374,30 @@ impl Project {
                     });
 
                 pcb_ui
+            });
+    }
+
+    fn ensure_unit_assignments(&self, key: ProjectKey, pcb_index: u16) {
+        let mut state = self.project_ui_state.lock().unwrap();
+        let _unit_assignments_ui = state
+            .unit_assignments
+            .entry(pcb_index as usize)
+            .or_insert_with(|| {
+                debug!("ensuring unit assignments ui. pcb_index: {:?}", pcb_index);
+                let mut unit_assignments_ui = UnitAssignmentsUi::new(self.path.clone());
+                unit_assignments_ui
+                    .component
+                    .configure_mapper(self.component.sender.clone(), {
+                        move |command| {
+                            trace!("pcb ui mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::UnitAssignmentsUiCommand {
+                                pcb_index,
+                                command,
+                            })
+                        }
+                    });
+
+                unit_assignments_ui
             });
     }
 
@@ -495,6 +547,36 @@ impl Project {
             }
         }
 
+        #[must_use]
+        fn handle_unit_assignments(
+            project: &mut Project,
+            key: &ProjectKey,
+            path: &ProjectPath,
+        ) -> Option<ProjectAction> {
+            let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$").unwrap();
+            if let Some(captures) = phase_pattern.captures(&path) {
+                let pcb_index = captures
+                    .name("pcb")
+                    .unwrap()
+                    .as_str()
+                    .parse::<u16>()
+                    .unwrap();
+                debug!("pcb: {}", pcb_index);
+
+                project.show_unit_assignments(key.clone(), pcb_index);
+
+                let tasks: Vec<_> = vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::PcbOverview {
+                        pcb: pcb_index.clone(),
+                    },
+                )))];
+
+                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+            } else {
+                None
+            }
+        }
+
         let handlers = [
             handle_root,
             handle_parts,
@@ -503,6 +585,7 @@ impl Project {
             handle_placements,
             handle_phase,
             handle_pcb,
+            handle_unit_assignments,
         ];
 
         handlers
@@ -872,19 +955,28 @@ impl UiComponent for Project {
                     }
                     ProjectView::PcbOverview(pcb_overview) => {
                         trace!("pcb_overview: {:?}", pcb_overview);
+
+                        // TODO use the name to update the tab label of the pcb overview and unit_assignments tabs?
+                        //      would need multiple actions...
+                        //      A reactive 'Reactive<Option<PcbOverview>>' that's given to both tabs
+                        //      would be perfect here to avoid needing any actions.
                         let name = pcb_overview.name.clone();
 
-                        self.ensure_pcb(key, pcb_overview.index);
-
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let pcb_ui = state
+
+                        if let Some(pcb_ui) = state
                             .pcbs
                             .get_mut(&(pcb_overview.index as usize))
-                            .unwrap();
+                        {
+                            pcb_ui.update_overview(pcb_overview.clone());
+                        }
 
-                        pcb_ui.update_overview(pcb_overview);
-
-                        // TODO use the name to update the tab label
+                        if let Some(unit_assignments_ui) = state
+                            .unit_assignments
+                            .get_mut(&(pcb_overview.index as usize))
+                        {
+                            unit_assignments_ui.update_overview(pcb_overview);
+                        }
                     }
                     ProjectView::Placements(placements) => {
                         trace!("placements: {:?}", placements);
@@ -1491,6 +1583,70 @@ impl UiComponent for Project {
                     }
                 }
             }
+            ProjectUiCommand::UnitAssignmentsUiCommand {
+                pcb_index,
+                command,
+            } => {
+                let mut state = self.project_ui_state.lock().unwrap();
+                let unit_assignment_ui = state
+                    .unit_assignments
+                    .get_mut(&(pcb_index as usize))
+                    .unwrap();
+
+                let context = &mut UnitAssignmentsUiContext::default();
+                let unit_assignment_ui_action = unit_assignment_ui.update(command, context);
+                match unit_assignment_ui_action {
+                    None => None,
+                    Some(UnitAssignmentsUiAction::None) => None,
+                    Some(UnitAssignmentsUiAction::UpdateUnitAssignments(UpdateUnitAssignmentsArgs {
+                        pcb_index,
+                        variant_map,
+                    })) => {
+                        let mut events = vec![];
+
+                        for (pcb_unit_index, variant_name) in variant_map.iter().enumerate() {
+                            let mut object_path = ObjectPath::default();
+                            object_path.set_pcb_instance(pcb_index + 1);
+                            object_path.set_pcb_unit(pcb_unit_index as u16 + 1);
+
+                            events.push(Event::AssignVariantToUnit {
+                                variant: variant_name.clone(),
+                                unit: object_path,
+                            });
+                        }
+
+                        let mut tasks = vec![];
+                        for event in events {
+                            match self
+                                .planner_core_service
+                                .update(key, event)
+                                .into_actions()
+                            {
+                                Ok(actions) => {
+                                    let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                        .into_iter()
+                                        .map(Task::done)
+                                        .collect();
+                                    tasks.extend(effect_tasks);
+                                }
+                                Err(service_error) => {
+                                    tasks.push(Task::done(service_error));
+                                    break;
+                                }
+                            }
+                        }
+
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::ProjectTree,
+                        )));
+                        tasks.push(final_task);
+
+                        let action = ProjectAction::Task(key, Task::batch(tasks));
+
+                        Some(action)
+                    }
+                }
+            }
         }
     }
 }
@@ -1507,6 +1663,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Phase(tab) => tab.label(),
             ProjectTabKind::LoadOut(tab) => tab.label(),
             ProjectTabKind::Pcb(tab) => tab.label(),
+            ProjectTabKind::UnitAssignments(tab) => tab.label(),
         }
     }
 
@@ -1519,6 +1676,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::UnitAssignments(tab) => tab.ui(ui, tab_key, context),
         }
     }
 
@@ -1531,6 +1689,7 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::UnitAssignments(tab) => tab.on_close(tab_key, context),
         }
     }
 }
@@ -1541,13 +1700,14 @@ pub struct ProjectUiState {
     /// always known for newly created projects.
     name: Option<String>,
 
-    overview_ui: OverviewUi,
-    placements_ui: PlacementsUi,
-    parts_ui: PartsUi,
     explorer_ui: ExplorerUi,
-    phases: HashMap<Reference, PhaseUi>,
     load_outs: HashMap<LoadOutSource, LoadOutUi>,
+    parts_ui: PartsUi,
     pcbs: HashMap<usize, PcbUi>,
+    phases: HashMap<Reference, PhaseUi>,
+    placements_ui: PlacementsUi,
+    overview_ui: OverviewUi,
+    unit_assignments: HashMap<usize, UnitAssignmentsUi>,
 }
 
 impl ProjectUiState {
@@ -1559,13 +1719,14 @@ impl ProjectUiState {
     ) -> Self {
         let mut instance = Self {
             name,
-            phases: HashMap::default(),
-            load_outs: HashMap::default(),
-            pcbs: HashMap::default(),
-            overview_ui: OverviewUi::new(),
-            placements_ui: PlacementsUi::new(),
-            parts_ui: PartsUi::new(),
             explorer_ui: ExplorerUi::new(project_directory),
+            load_outs: HashMap::default(),
+            parts_ui: PartsUi::new(),
+            pcbs: HashMap::default(),
+            phases: HashMap::default(),
+            placements_ui: PlacementsUi::new(),
+            overview_ui: OverviewUi::new(),
+            unit_assignments: HashMap::default(),
         };
 
         instance
@@ -1614,6 +1775,7 @@ enum ProjectTabKind {
     Parts(PartsTab),
     LoadOut(LoadOutTab),
     Pcb(PcbTab),
+    UnitAssignments(UnitAssignmentsTab),
 }
 
 #[derive(Debug, Clone)]
@@ -1655,6 +1817,10 @@ pub enum ProjectUiCommand {
         command: PcbUiCommand,
     },
     RefreshPhase(Reference),
+    UnitAssignmentsUiCommand {
+        pcb_index: u16,
+        command: UnitAssignmentsUiCommand,
+    },
 }
 
 #[derive(Debug, Clone)]

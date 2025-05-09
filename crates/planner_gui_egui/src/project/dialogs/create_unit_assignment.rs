@@ -61,181 +61,185 @@ impl CreateUnitAssignmentModal {
             ..Default::default()
         };
 
-        tui(ui, ui.id().with("add_pcb_form"))
-            .reserve_available_width()
-            .style(Style {
-                align_items: Some(AlignItems::Center),
-                flex_direction: FlexDirection::Column,
-                size: Size {
-                    width: percent(1.),
-                    height: auto(),
-                },
-                padding: length(8.),
-                gap: length(8.),
-                ..default_style()
-            })
-            .show(|tui| {
-                form.show_fields(tui, |form, tui| {
-                    form.add_field_ui(
-                        "pcb_instance",
-                        tr!("form-create-unit-assignment-input-pcb-instance"),
-                        tui,
-                        {
-                            move |ui: &mut Ui, fields, sender| {
-                                let mut pcb_instance_clone = fields.pcb_instance.to_string();
-                                let output = TextEdit::singleline(&mut pcb_instance_clone)
-                                    .interactive(false)
-                                    .desired_width(ui.available_width())
-                                    .show(ui);
+        tui(
+            ui,
+            ui.id()
+                .with("create_unit_assignment_form"),
+        )
+        .reserve_available_width()
+        .style(Style {
+            align_items: Some(AlignItems::Center),
+            flex_direction: FlexDirection::Column,
+            size: Size {
+                width: percent(1.),
+                height: auto(),
+            },
+            padding: length(8.),
+            gap: length(8.),
+            ..default_style()
+        })
+        .show(|tui| {
+            form.show_fields_vertical(tui, |form, tui| {
+                form.add_field_ui(
+                    "pcb_instance",
+                    tr!("form-create-unit-assignment-input-pcb-instance"),
+                    tui,
+                    {
+                        move |ui: &mut Ui, fields, sender| {
+                            let mut pcb_instance_clone = fields.pcb_instance.to_string();
+                            let output = TextEdit::singleline(&mut pcb_instance_clone)
+                                .interactive(false)
+                                .desired_width(ui.available_width())
+                                .show(ui);
 
-                                output.response
+                            output.response
+                        }
+                    },
+                );
+
+                form.add_field_ui(
+                    "design_name",
+                    tr!("form-create-unit-assignment-input-design-name"),
+                    tui,
+                    {
+                        move |ui: &mut Ui, fields, sender| {
+                            let mut design_name_clone = fields.design_name.clone();
+                            let output = TextEdit::singleline(&mut design_name_clone)
+                                .interactive(false)
+                                .desired_width(ui.available_width())
+                                .show(ui);
+
+                            output.response
+                        }
+                    },
+                );
+                form.add_field_ui(
+                    "variant_name",
+                    tr!("form-create-unit-assignment-input-variant-name"),
+                    tui,
+                    {
+                        move |ui: &mut Ui, fields, sender| {
+                            let mut variant_name_clone = fields.variant_name.clone();
+                            let output = TextEdit::singleline(&mut variant_name_clone)
+                                // TODO add placeholder hint
+                                .desired_width(ui.available_width())
+                                .show(ui);
+
+                            if !fields
+                                .variant_name
+                                .eq(&variant_name_clone)
+                            {
+                                sender
+                                    .send(CreateUnitAssignmentModalUiCommand::VariantNameChanged(
+                                        variant_name_clone,
+                                    ))
+                                    .expect("sent")
                             }
-                        },
-                    );
 
-                    form.add_field_ui(
-                        "design_name",
-                        tr!("form-create-unit-assignment-input-design-name"),
-                        tui,
-                        {
-                            move |ui: &mut Ui, fields, sender| {
-                                let mut design_name_clone = fields.design_name.clone();
-                                let output = TextEdit::singleline(&mut design_name_clone)
-                                    .interactive(false)
-                                    .desired_width(ui.available_width())
-                                    .show(ui);
+                            output.response
+                        }
+                    },
+                );
 
-                                output.response
-                            }
-                        },
-                    );
-                    form.add_field_ui(
-                        "variant_name",
-                        tr!("form-create-unit-assignment-input-variant-name"),
-                        tui,
-                        {
-                            move |ui: &mut Ui, fields, sender| {
-                                let mut variant_name_clone = fields.variant_name.clone();
-                                let output = TextEdit::singleline(&mut variant_name_clone)
-                                    // TODO add placeholder hint
-                                    .desired_width(ui.available_width())
-                                    .show(ui);
+                form.add_field_ui(
+                    "placements_directory",
+                    tr!("form-create-unit-assignment-input-placements-directory"),
+                    tui,
+                    {
+                        move |ui: &mut Ui, _fields, _sender| {
+                            ui.label(
+                                self.placements_directory
+                                    .as_path()
+                                    .to_str()
+                                    .unwrap(),
+                            )
+                        }
+                    },
+                );
 
-                                if !fields
-                                    .variant_name
-                                    .eq(&variant_name_clone)
-                                {
-                                    sender
-                                        .send(CreateUnitAssignmentModalUiCommand::VariantNameChanged(
-                                            variant_name_clone,
-                                        ))
-                                        .expect("sent")
-                                }
+                form.add_field_ui(
+                    "placements_filename",
+                    tr!("form-create-unit-assignment-input-placements-filename"),
+                    tui,
+                    move |ui: &mut Ui, fields, _sender| ui.label(&fields.placements_filename),
+                );
 
-                                output.response
-                            }
-                        },
-                    );
+                form.add_field_tui(
+                    "pcb_unit_range",
+                    tr!("form-create-unit-assignment-input-pcb-unit-range"),
+                    tui,
+                    {
+                        move |tui: &mut Tui, fields, sender| {
+                            let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
+                            let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
+                            let enabled = matches!(fields.pcb_kind, Some(PcbKindChoice::Panel));
 
-                    form.add_field_ui(
-                        "placements_directory",
-                        tr!("form-create-unit-assignment-input-placements-directory"),
-                        tui,
-                        {
-                            move |ui: &mut Ui, _fields, _sender| {
-                                ui.label(
-                                    self.placements_directory
-                                        .as_path()
-                                        .to_str()
-                                        .unwrap(),
-                                )
-                            }
-                        },
-                    );
-
-                    form.add_field_ui(
-                        "placements_filename",
-                        tr!("form-create-unit-assignment-input-placements-filename"),
-                        tui,
-                        move |ui: &mut Ui, fields, _sender| ui.label(&fields.placements_filename),
-                    );
-
-                    form.add_field_tui(
-                        "pcb_unit_range",
-                        tr!("form-create-unit-assignment-input-pcb-unit-range"),
-                        tui,
-                        {
-                            move |tui: &mut Tui, fields, sender| {
-                                let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
-                                let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
-                                let enabled = matches!(fields.pcb_kind, Some(PcbKindChoice::Panel));
-
+                            tui.style(Style {
+                                display: Display::Flex,
+                                align_content: Some(AlignContent::Stretch),
+                                flex_grow: 1.0,
+                                ..default_style()
+                            })
+                            .add(|tui| {
                                 tui.style(Style {
-                                    display: Display::Flex,
-                                    align_content: Some(AlignContent::Stretch),
                                     flex_grow: 1.0,
                                     ..default_style()
                                 })
-                                .add(|tui| {
-                                    tui.style(Style {
-                                        flex_grow: 1.0,
-                                        ..default_style()
-                                    })
-                                    .ui_add_manual(
-                                        |ui| {
-                                            ui.horizontal_centered(|ui| {
-                                                // FIXME make the width auto-size
-                                                ui.add_enabled(
-                                                    enabled,
-                                                    DoubleSlider::new(
-                                                        &mut pcb_unit_start,
-                                                        &mut pcb_unit_end,
-                                                        1..=self.units,
-                                                    )
-                                                    .separation_distance(0)
-                                                    .width(400.0),
+                                .ui_add_manual(
+                                    |ui| {
+                                        ui.horizontal_centered(|ui| {
+                                            // FIXME make the width auto-size
+                                            ui.add_enabled(
+                                                enabled,
+                                                DoubleSlider::new(
+                                                    &mut pcb_unit_start,
+                                                    &mut pcb_unit_end,
+                                                    1..=self.units,
                                                 )
-                                            })
-                                            .response
-                                        },
-                                        no_transform,
+                                                .separation_distance(0)
+                                                .width(400.0),
+                                            )
+                                        })
+                                        .response
+                                    },
+                                    no_transform,
+                                );
+
+                                tui.style(Style {
+                                    flex_grow: 0.0,
+                                    ..default_style()
+                                })
+                                .ui(|ui| {
+                                    ui.add_enabled(
+                                        enabled,
+                                        egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end),
                                     );
-
-                                    tui.style(Style {
-                                        flex_grow: 0.0,
-                                        ..default_style()
-                                    })
-                                    .ui(|ui| {
-                                        ui.add_enabled(
-                                            enabled,
-                                            egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end),
-                                        );
-                                    });
-
-                                    tui.style(Style {
-                                        flex_grow: 0.0,
-                                        ..default_style()
-                                    })
-                                    .ui(|ui| {
-                                        ui.add_enabled(
-                                            enabled,
-                                            egui::DragValue::new(&mut pcb_unit_end).range(pcb_unit_start..=self.units),
-                                        );
-                                    });
                                 });
 
-                                let pcb_unit_range = RangeInclusive::new(pcb_unit_start, pcb_unit_end);
+                                tui.style(Style {
+                                    flex_grow: 0.0,
+                                    ..default_style()
+                                })
+                                .ui(|ui| {
+                                    ui.add_enabled(
+                                        enabled,
+                                        egui::DragValue::new(&mut pcb_unit_end).range(pcb_unit_start..=self.units),
+                                    );
+                                });
+                            });
 
-                                if fields.pcb_unit_range != pcb_unit_range {
-                                    sender
-                                        .send(CreateUnitAssignmentModalUiCommand::PcbUnitRangeChanged(pcb_unit_range))
-                                        .expect("sent")
-                                }
+                            let pcb_unit_range = RangeInclusive::new(pcb_unit_start, pcb_unit_end);
+
+                            if fields.pcb_unit_range != pcb_unit_range {
+                                sender
+                                    .send(CreateUnitAssignmentModalUiCommand::PcbUnitRangeChanged(pcb_unit_range))
+                                    .expect("sent")
                             }
-                        },
-                    );
-                });
+                        }
+                    },
+                );
             });
+        });
     }
 }
 

@@ -327,8 +327,8 @@ impl Tab for PcbTab {
     type Context = ProjectTabContext;
 
     fn label(&self) -> WidgetText {
-        let title = format!("{}", self.pcb_index).to_string();
-        egui::widget_text::WidgetText::from(title)
+        let pcb = format!("{}", self.pcb_index).to_string();
+        egui::widget_text::WidgetText::from(tr!("project-pcb-tab-label", {pcb: pcb}))
     }
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
