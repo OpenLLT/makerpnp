@@ -796,15 +796,17 @@ impl UiComponent for UnitAssignmentsUi {
                     let design_index = pcb_overview
                         .designs
                         .iter()
-                        .position(|meh| meh.eq(&design_variant.design_name))
-                        .unwrap_or(0);
+                        .position(|design_name| design_name.eq(&design_variant.design_name))
+                        .map(|index| index as DesignIndex);
 
                     for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
                         .variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
-                        .filter(|(candiate_design_index, b)| *candiate_design_index != design_index)
+                        .filter(|(pcb_unit_index, _)| !pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                        .filter(|(pcb_unit_index, (candidate_design_index, _))| {
+                            !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                        })
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
@@ -822,16 +824,16 @@ impl UiComponent for UnitAssignmentsUi {
                     let design_index = pcb_overview
                         .designs
                         .iter()
-                        .position(|meh| meh.eq(&design_variant.design_name))
-                        .unwrap_or(0);
+                        .position(|design_name| design_name.eq(&design_variant.design_name));
 
                     for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
                         .variant_map
                         .iter_mut()
                         .enumerate()
-                        .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
-                        .filter(|(candiate_design_index, b)| *candiate_design_index != design_index)
-                    {
+                        .filter(|(pcb_unit_index, _)| !pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                        .filter(|(pcb_unit_index, (candidate_design_index, _))| {
+                            !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                        })                    {
                         *assigned_variant_name = None;
                     }
                     Self::apply_variant_map(fields, pcb_overview.index)
@@ -853,9 +855,8 @@ impl UiComponent for UnitAssignmentsUi {
                             .variant_map
                             .iter_mut()
                             .filter(
-                                |(candiate_design_index, b)| match (design_index, candiate_design_index) {
-                                    (Some(di), Some(cdi)) if di == *cdi => false,
-                                    _ => true,
+                                |(candidate_design_index, b)| {
+                                    !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                                 },
                             )
                     {
