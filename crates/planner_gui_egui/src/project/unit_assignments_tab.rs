@@ -1,26 +1,23 @@
-use std::borrow::Cow;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use derivative::Derivative;
 use egui::{TextEdit, Ui, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
+use egui_mobius::types::ValueGuard;
 use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitIndex, VariantName};
+use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
 use crate::forms::transforms::no_transform;
-use crate::project::dialogs::PcbSideChoice;
-use crate::project::dialogs::add_pcb::AddPcbValidationContext;
-use crate::project::dialogs::add_phase::AddPhaseModalUiCommand;
-use crate::project::dialogs::create_unit_assignment::CreateUnitAssignmentModalUiCommand;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -160,7 +157,7 @@ impl UnitAssignmentsUi {
                                             for available_design_name in &pcb_overview.designs {
                                                 if ui
                                                     .add(egui::SelectableLabel::new(
-                                                        matches!(design_name.as_ref(), Some(available_design_name)),
+                                                        matches!(design_name.as_ref(), Some(design_name) if design_name.eq(&available_design_name)),
                                                         available_design_name.to_string(),
                                                     ))
                                                     .clicked()
@@ -206,6 +203,7 @@ impl UnitAssignmentsUi {
                                     }
                                 });
 
+                                // TODO don't enable the button unless design variant is Some and the placements filename is ok
                                 if tui
                                     .style(Style {
                                         flex_grow: 1.0,
@@ -215,7 +213,7 @@ impl UnitAssignmentsUi {
                                     .clicked()
                                 {
                                     self.component
-                                        .send(UnitAssignmentsUiCommand::ApplyRangeClicked);
+                                        .send(UnitAssignmentsUiCommand::AddDesignVariantClicked);
                                 }
                             });
 
@@ -246,7 +244,7 @@ impl UnitAssignmentsUi {
                             ..default_style()
                         })
                         .ui(|ui: &mut Ui| {
-                            let fields = self.fields.lock().unwrap();
+                            let mut fields = self.fields.lock().unwrap();
 
                             let text_height = egui::TextStyle::Body
                                 .resolve(ui.style())
@@ -268,8 +266,9 @@ impl UnitAssignmentsUi {
                                     });
                                 })
                                 .body(|mut body| {
+                                    let mut design_variant_selected_index = fields.design_variant_selected_index;
                                     for (
-                                        index,
+                                        row_index,
                                         DesignVariant {
                                             design_name,
                                             variant_name,
@@ -280,8 +279,9 @@ impl UnitAssignmentsUi {
                                         .enumerate()
                                     {
                                         body.row(text_height, |mut row| {
-                                            // TODO use selection
-                                            // row.set_selected(self.selection.contains(&row_index));
+                                            let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
+
+                                            row.set_selected(is_selected);
 
                                             row.col(|ui| {
                                                 ui.label(design_name.to_string());
@@ -292,10 +292,14 @@ impl UnitAssignmentsUi {
                                             });
 
                                             if row.response().clicked() {
-                                                // TODO /CHANGE/ to selection (single select)
+                                                match is_selected {
+                                                    true => design_variant_selected_index = None,
+                                                    false => design_variant_selected_index = Some(row_index),
+                                                }
                                             }
                                         });
                                     }
+                                    fields.design_variant_selected_index = design_variant_selected_index;
                                 });
                         });
 
@@ -376,6 +380,53 @@ impl UnitAssignmentsUi {
                                             .send(UnitAssignmentsUiCommand::PcbUnitRangeChanged(pcb_unit_range))
                                             .expect("sent")
                                     }
+
+                                    let is_design_selected = fields.design_variant_selected_index.is_some();
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .enabled_ui(is_design_selected)
+                                        .button(|tui| tui.label("Apply range"))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::ApplyRangeClicked(
+                                                fields.design_variant_selected_index.unwrap(),
+                                            ));
+                                    }
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .enabled_ui(is_design_selected)
+                                        .button(|tui| tui.label("Apply all"))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::ApplyAllClicked(
+                                                fields.design_variant_selected_index.unwrap(),
+                                            ));
+                                    }
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .enabled_ui(is_design_selected)
+                                        .button(|tui| tui.label("Unassign range"))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::UnassignRange(
+                                                fields.design_variant_selected_index.unwrap(),
+                                            ));
+                                    }
                                 }
                             },
                         );
@@ -389,7 +440,7 @@ impl UnitAssignmentsUi {
                             ..default_style()
                         })
                         .ui(|ui: &mut Ui| {
-                            let fields = self.fields.lock().unwrap();
+                            let mut fields = self.fields.lock().unwrap();
 
                             let text_height = egui::TextStyle::Body
                                 .resolve(ui.style())
@@ -416,19 +467,20 @@ impl UnitAssignmentsUi {
                                     });
                                 })
                                 .body(|mut body| {
+                                    let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
                                     for (pcb_unit_index, (design_index, assigned_variant_name)) in
                                         fields.variant_map.iter().enumerate()
                                     {
                                         body.row(text_height, |mut row| {
-                                            // TODO use selection
-                                            // row.set_selected(self.selection.contains(&row_index));
+                                            let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
+                                            row.set_selected(is_selected);
 
                                             row.col(|ui| {
                                                 ui.label(pcb_unit_index.to_string());
                                             });
 
                                             row.col(|ui| {
-                                                let label = &pcb_overview.designs[*design_index as usize].to_string();
+                                                let label = &pcb_overview.designs[*design_index].to_string();
                                                 ui.label(label);
                                             });
 
@@ -440,24 +492,93 @@ impl UnitAssignmentsUi {
                                             });
 
                                             if row.response().clicked() {
-                                                // TODO add to selection (multi-select)
+                                                match is_selected {
+                                                    true => {
+                                                        variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
+                                                    }
+                                                    false => variant_map_selected_indexes.push(pcb_unit_index),
+                                                }
                                             }
                                         });
                                     }
+                                    fields.variant_map_selected_indexes = variant_map_selected_indexes;
                                 });
                         });
 
-                        if tui
-                            .button(|tui| tui.label("Apply"))
-                            .clicked()
-                        {
-                            self.component
-                                .send(UnitAssignmentsUiCommand::ApplyUnitAssignmentsClicked);
-                        }
+                        //
+                        // button row
+                        //
+
+                        form.show_fields_vertical(tui, |form, tui| {
+                            tui.style(Style {
+                                flex_grow: 1.0,
+                                display: Display::Flex,
+                                align_content: Some(AlignContent::Stretch),
+                                flex_direction: FlexDirection::Row,
+                                ..default_style()
+                            })
+                            .add_with_border(|tui| {
+                                tui.style(Style {
+                                    flex_grow: 1.0,
+                                    ..default_style()
+                                })
+                                .label(tr!("form-create-unit-assignment-input-design-name"));
+
+                                tui.style(Style {
+                                    flex_grow: 1.0,
+                                    ..default_style()
+                                })
+                                .add(|tui| {
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .button(|tui| tui.label("Unassign all"))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::UnassignAllClicked);
+                                    }
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .button(|tui| tui.label("Unassign selected"))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::UnassignSelection(
+                                                self.fields.lock().unwrap().variant_map_selected_indexes.clone(),
+                                            ));
+                                    }
+                                });
+                            });
+                        });
                     },
                 );
             });
         });
+    }
+
+    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>) -> Option<UnitAssignmentsUiAction> {
+        let variant_map = fields
+            .variant_map
+            .iter()
+            .filter(|(_, variant_name)| variant_name.is_some())
+            .map(|(_design_index, variant_name)| variant_name.clone().unwrap())
+            .collect::<Vec<_>>();
+
+        let args = UpdateUnitAssignmentsArgs {
+            // TODO get the PCB index from somewhere
+            pcb_index: 0,
+            variant_map,
+        };
+
+        debug!("update unit assignments. args: {:?}", args);
+        Some(UnitAssignmentsUiAction::UpdateUnitAssignments(args))
     }
 }
 
@@ -475,11 +596,15 @@ pub struct UnitAssignmentsFields {
     /// drop-down box of all designs used by the PCB
     design_name: Option<DesignName>,
 
+    // TODO make this Vec<(DesignIndex, DesignVariant)> to avoid having to look-up the design index again
     design_variants: Vec<DesignVariant>,
 
     /// index of the vec is the pcb unit index (0-based)
     #[validate(custom(function = "UnitAssignmentsFields::validate_variant_map"))]
     variant_map: Vec<(DesignIndex, Option<VariantName>)>,
+
+    design_variant_selected_index: Option<usize>,
+    variant_map_selected_indexes: Vec<usize>,
 }
 
 impl Default for UnitAssignmentsFields {
@@ -491,6 +616,8 @@ impl Default for UnitAssignmentsFields {
             design_name: None,
             design_variants: Vec::new(),
             variant_map: Vec::new(),
+            design_variant_selected_index: None,
+            variant_map_selected_indexes: vec![],
         }
     }
 }
@@ -549,11 +676,22 @@ pub struct UpdateUnitAssignmentsArgs {
 #[derive(Debug, Clone)]
 pub enum UnitAssignmentsUiCommand {
     None,
-    ApplyUnitAssignmentsClicked,
-    VariantNameChanged(String),
+
     DesignNameChanged(DesignName),
+    VariantNameChanged(String),
+
+    AddDesignVariantClicked,
+
     PcbUnitRangeChanged(RangeInclusive<u16>),
-    ApplyRangeClicked,
+
+    /// apply the selected design variant, specified by the index, and the pcb unit range to the variant map
+    ApplyRangeClicked(usize),
+    UnassignRange(usize),
+    ApplyAllClicked(usize),
+    
+    UnassignAllClicked,
+
+    UnassignSelection(Vec<usize>),
 }
 
 #[derive(Debug, Clone)]
@@ -593,26 +731,23 @@ impl UiComponent for UnitAssignmentsUi {
     ) -> Option<Self::UiAction> {
         match command {
             UnitAssignmentsUiCommand::None => Some(UnitAssignmentsUiAction::None),
+            UnitAssignmentsUiCommand::AddDesignVariantClicked => {
+                let mut fields = self.fields.lock().unwrap();
+                let variant_name = VariantName::from_str(&fields.variant_name).unwrap();
 
-            UnitAssignmentsUiCommand::ApplyRangeClicked => None,
-            // TODO remove the apply button, combine with ApplyRangeClicked
-            UnitAssignmentsUiCommand::ApplyUnitAssignmentsClicked => {
-                let fields = self.fields.lock().unwrap();
+                if let Some(design_name) = fields.design_name.clone() {
+                    fields
+                        .design_variants
+                        .push(DesignVariant {
+                            design_name,
+                            variant_name,
+                        });
 
-                let variant_map = fields
-                    .variant_map
-                    .iter()
-                    .filter(|(_, variant_name)| variant_name.is_some())
-                    .map(|(_design_index, variant_name)| variant_name.clone().unwrap())
-                    .collect::<Vec<_>>();
+                    // de-duplicate in case the user pressed the button multiple times.
+                    fields.design_variants.dedup();
+                }
 
-                let args = UpdateUnitAssignmentsArgs {
-                    pcb_index: 0,
-                    variant_map,
-                };
-
-                debug!("update unit assignments. args: {:?}", args);
-                Some(UnitAssignmentsUiAction::UpdateUnitAssignments(args))
+                None
             }
             UnitAssignmentsUiCommand::VariantNameChanged(value) => {
                 let mut fields = self.fields.lock().unwrap();
@@ -633,6 +768,94 @@ impl UiComponent for UnitAssignmentsUi {
                 fields.design_name = Some(design_name);
                 fields.update_placements_filename();
                 None
+            }
+
+            UnitAssignmentsUiCommand::ApplyRangeClicked(design_variant_index) => {
+
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+                    let pcb_unit_range = fields.pcb_unit_range.clone();
+                    let design_variant = fields.design_variants[design_variant_index].clone();
+                    let design_index = pcb_overview.designs.iter().position(|meh| meh.eq(&design_variant.design_name)).unwrap_or(0);
+
+                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                        .iter_mut()
+                        .enumerate()
+                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16)))
+                        .filter(|(candiate_design_index, b)| {
+                            *candiate_design_index != design_index
+                        })
+                    {
+                        *assigned_variant_name = Some(design_variant.variant_name.clone());
+                    }
+                    Self::apply_variant_map(fields)
+                } else {
+                    None
+                }
+            }
+
+            UnitAssignmentsUiCommand::UnassignRange(design_variant_index) => {
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+                    let pcb_unit_range = fields.pcb_unit_range.clone();
+                    let design_variant = fields.design_variants[design_variant_index].clone();
+                    let design_index = pcb_overview.designs.iter().position(|meh| meh.eq(&design_variant.design_name)).unwrap_or(0);
+
+                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                        .iter_mut()
+                        .enumerate()
+                        .filter(|(pcb_unit_index, _)|pcb_unit_range.contains(&(*pcb_unit_index as u16)))
+                        .filter(|(candiate_design_index, b)| {
+                            *candiate_design_index != design_index
+                        })
+                    {
+                        *assigned_variant_name = None;
+                    }
+                    Self::apply_variant_map(fields)
+                } else {
+                    None
+                }
+            }
+            UnitAssignmentsUiCommand::ApplyAllClicked(design_variant_index) => {
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+                    let design_variant = fields.design_variants[design_variant_index].clone();
+                    let design_index = pcb_overview.designs.iter().position(|meh|meh.eq(&design_variant.design_name)).unwrap_or(0);
+                    
+                    for (_design_index, assigned_variant_name) in fields.variant_map
+                        .iter_mut()
+                        .filter(|(candiate_design_index,b)|{
+                            *candiate_design_index != design_index
+                        })
+                    {
+                        *assigned_variant_name = Some(design_variant.variant_name.clone());
+                    }
+                    Self::apply_variant_map(fields)
+                } else {
+                    None
+                }
+            }
+            UnitAssignmentsUiCommand::UnassignAllClicked => {
+                let mut fields = self.fields.lock().unwrap();
+                for (_design_index, assigned_variant_name) in fields.variant_map
+                    .iter_mut() 
+                {
+                    *assigned_variant_name = None;
+                }
+
+                Self::apply_variant_map(fields)
+            }
+            UnitAssignmentsUiCommand::UnassignSelection(variant_map_selected_indexes) => {
+                let mut fields = self.fields.lock().unwrap();
+                for (_index, (_design_index, assigned_variant_name)) in fields.variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(index, _)|variant_map_selected_indexes.contains(index))
+                {
+                    *assigned_variant_name = None;
+                }
+
+                Self::apply_variant_map(fields)
             }
         }
     }
