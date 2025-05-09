@@ -807,7 +807,7 @@ impl UiComponent for UnitAssignmentsUi {
                             pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
                         })
                         .filter(|(pcb_unit_index, (candidate_design_index, _))| {
-                            !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                         })
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
@@ -836,7 +836,7 @@ impl UiComponent for UnitAssignmentsUi {
                             pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
                         })
                         .filter(|(pcb_unit_index, (candidate_design_index, _))| {
-                            !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                         })                    {
                         *assigned_variant_name = None;
                     }
@@ -859,7 +859,7 @@ impl UiComponent for UnitAssignmentsUi {
                             .variant_map
                             .iter_mut()
                             .filter(|(candidate_design_index, b)| {
-                                !matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                                matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                             },
                             )
                     {
