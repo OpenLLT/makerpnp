@@ -7,7 +7,7 @@ use egui_taffy::taffy::prelude::{fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignItems, AlignSelf, Display, FlexDirection, Style};
 use egui_taffy::{Tui, TuiBuilderLogic};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
-use validator::{ValidateArgs, ValidationErrors};
+use validator::{ValidateArgs, ValidationError, ValidationErrors};
 
 use crate::forms::transforms::no_transform;
 
@@ -209,7 +209,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         });
 
         //
-        // form fields container
+        // section container
         //
         tui.style(Style {
             flex_direction: FlexDirection::Row,
@@ -217,29 +217,15 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             ..default_style()
         })
         .add_with_border(|tui| {
-            //
-            // grid container
-            //
             tui.style(Style {
                 flex_grow: 1.0,
                 display: Display::Flex,
                 flex_direction: FlexDirection::Column,
-                //display: Display::Grid,
-                //grid_template_columns: vec![fit_content(percent(1.))],
-                //grid_template_rows: vec![fr(1.)],
-
-                //align_self: Some(AlignSelf::Stretch),
-
-                // ensure items are centered vertically on rows
-                //align_items: Some(AlignItems::Center),
                 ..default_style()
             })
             .add_with_border(|tui| {
                 ui_builder(tui);
-                // end of grid container content
             });
-
-            // end of form fields container content
         });
 
         Self::field_error_inner(&self.validation_errors, default_style, tui, field_name);
@@ -280,6 +266,17 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                 });
             }
         }
+    }
+
+    pub fn field_validation_errors(&self, field_name: &str) -> Option<&Vec<ValidationError>> {
+        if let Err(errors) = &self.validation_errors {
+            let errs = errors.field_errors();
+            if let Some(&field_errors) = errs.get(field_name) {
+                return Some(field_errors);
+            }
+        }
+
+        None
     }
 }
 
