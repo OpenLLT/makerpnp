@@ -233,8 +233,8 @@ impl UnitAssignmentsUi {
                                     let sender = self.component.sender.clone();
 
                                     let mut variant_name_clone = fields.variant_name.clone();
-                                    let output = TextEdit::singleline(&mut variant_name_clone)
-                                        // TODO add placeholder hint
+                                    TextEdit::singleline(&mut variant_name_clone)
+                                        .hint_text("e.g. 'Production'") // TODO translate
                                         .desired_width(ui.available_width())
                                         .show(ui);
 
