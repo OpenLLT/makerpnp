@@ -25,6 +25,9 @@ use crate::ui_component::{ComponentState, UiComponent};
 // TODO when changing the design variant selection, update the combo and text boxes with the details from the selection.
 // TODO Add an 'unassign selected' button.
 
+// FIXME fix various 'indentation' issues (aka padding/margin/gap/etc.)  Some of the controls are not aligned with the
+//      table borders.
+
 // FIXME this tab highlights issues with egui_dock + egui_taffy where elements grow but do not shrink, see https://github.com/Adanos020/egui_dock/pull/269
 
 // FIXME there are rendering errors with the vertical height of the tables, however after numerous attempts at fixing
