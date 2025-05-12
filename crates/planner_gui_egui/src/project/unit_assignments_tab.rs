@@ -501,7 +501,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Apply range"))// TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-apply-range")))
                                         .clicked()
                                     {
                                         self.component
@@ -516,7 +516,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Apply all"))// TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-apply-all")))
                                         .clicked()
                                     {
                                         self.component
@@ -531,7 +531,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Unassign range"))// TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-unassign-range")))
                                         .clicked()
                                     {
                                         self.component
@@ -659,7 +659,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_selection_ok && is_design_variant_ok)
-                                        .button(|tui| tui.label("Assign selected")) // TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-assign-selected")))
                                         .clicked()
                                     {
                                         self.component
@@ -675,7 +675,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_selection_ok)
-                                        .button(|tui| tui.label("Unassign selected"))// TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-unassign-selected")))
                                         .clicked()
                                     {
                                         self.component
@@ -683,7 +683,7 @@ impl UnitAssignmentsUi {
                                                 fields.variant_map_selected_indexes.clone(),
                                             ));
                                     }
-                                    
+
                                     let have_assigned_items = fields.variant_map.iter().any(|(_, assigned_variant_name)| assigned_variant_name.is_some());
                                     if tui
                                         .style(Style {
@@ -691,7 +691,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(have_assigned_items)
-                                        .button(|tui| tui.label("Unassign all"))// TODO translate
+                                        .button(|tui| tui.label(tr!("form-common-button-unassign-all")))
                                         .clicked()
                                     {
                                         self.component

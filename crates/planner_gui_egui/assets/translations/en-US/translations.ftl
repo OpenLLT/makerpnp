@@ -152,6 +152,14 @@ form-common-input-load-out-source = Loadout source
 form-common-input-phase-reference = Phase reference
 form-common-choice-process = Process
 
+form-common-button-assign-selected = Assign selected
+form-common-button-unassign-selected = Unassign selected
+form-common-button-unassign-all = Assign all
+form-common-button-unassign-range = Unassign range
+
+form-common-button-apply-range = Apply range
+form-common-button-apply-all = Apply all
+
 form-option-error-required = * Required
 
 form-input-error-empty = Cannot be empty
