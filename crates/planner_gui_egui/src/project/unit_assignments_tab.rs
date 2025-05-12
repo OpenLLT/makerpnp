@@ -29,6 +29,8 @@ use crate::ui_component::{ComponentState, UiComponent};
 // TODO make the *content* of the table rows non-selectable. (the rows should still be selectable)
 // TODO remove form debugging borders
 
+// FIXME this tab highlights issues with egui_dock + egui_taffy where elements grow but do not shrink, see https://github.com/Adanos020/egui_dock/pull/269
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct UnitAssignmentsUi {
