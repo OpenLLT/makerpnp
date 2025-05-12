@@ -160,7 +160,7 @@ impl UnitAssignmentsUi {
 
                 form.add_section_tui(
                     "variant_map",
-                    "Variant Map".to_string(), // TODO translate
+                    tr!("form-create-unit-assignment-group-variant-map"),
                     tui,
                     move |tui: &mut Tui| {
                         //
@@ -243,7 +243,7 @@ impl UnitAssignmentsUi {
 
                                     let mut variant_name_clone = fields.variant_name.clone();
                                     TextEdit::singleline(&mut variant_name_clone)
-                                        .hint_text("e.g. 'Production'") // TODO translate
+                                        .hint_text(tr!("form-create-unit-assignment-input-variant-name-placeholder"))
                                         .desired_width(ui.available_width())
                                         .show(ui);
 
@@ -287,8 +287,8 @@ impl UnitAssignmentsUi {
                                 move |ui: &mut Ui, fields, _sender| {
                                     let label = fields
                                         .placements_filename
-                                        .as_deref()
-                                        .unwrap_or("<enter variant name>"); // TODO translate
+                                        .clone()
+                                        .unwrap_or(tr!("form-create-unit-assignment-input-placements-filename-placeholder"));
                                     ui.label(label)
                                 },
                             );
@@ -329,10 +329,10 @@ impl UnitAssignmentsUi {
                                     .column(Column::remainder())
                                     .header(20.0, |mut header| {
                                         header.col(|ui| {
-                                            ui.strong("Design Name"); // TODO translate
+                                            ui.strong(tr!("table-design-variants-column-design"));
                                         });
                                         header.col(|ui| {
-                                            ui.strong("Variant Name"); // TODO translate
+                                            ui.strong(tr!("table-design-variants-column-variant"));
                                         });
                                     })
                                     .body(|mut body| {
@@ -538,13 +538,13 @@ impl UnitAssignmentsUi {
                                     .column(Column::remainder())
                                     .header(20.0, |mut header| {
                                         header.col(|ui| {
-                                            ui.strong("PCB Unit"); // TODO translate
+                                            ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
                                         });
                                         header.col(|ui| {
-                                            ui.strong("Design Name"); // TODO translate
+                                            ui.strong(tr!("table-unit-assignments-column-pcb-design"));
                                         });
                                         header.col(|ui| {
-                                            ui.strong("Variant Name"); // TODO translate
+                                            ui.strong(tr!("table-unit-assignments-column-variant"));
                                         });
                                     })
                                     .body(|mut body| {
@@ -563,14 +563,15 @@ impl UnitAssignmentsUi {
                                                 row.col(|ui| {
                                                     let label = design_index
                                                         .map(|design_index|pcb_overview.designs[design_index].to_string())
-                                                        .unwrap_or("<unassigned>".to_string()); // TODO translate
+                                                        .unwrap_or(tr!("assignment-unassigned"));
                                                     ui.label(label);
                                                 });
 
                                                 row.col(|ui| {
                                                     let label = assigned_variant_name
-                                                        .as_deref()
-                                                        .unwrap_or("<unassigned>"); // TODO translate
+                                                        .clone()
+                                                        .map(|variant_name| variant_name.to_string())
+                                                        .unwrap_or(tr!("assignment-unassigned"));
                                                     ui.label(label);
                                                 });
 

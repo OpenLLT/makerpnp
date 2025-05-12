@@ -62,7 +62,9 @@ project-parts-tab-label = Parts
 project-parts-header = Project Parts
 
 project-pcb-tab-label = PCB ({ $pcb })
+
 project-unit-assignments-tab-label = Unit assignments ({ $pcb })
+project-unit-assignments-header = Unit assignments
 
 phase-toolbar-add-parts-to-loadout = Add parts to load-out.
 phase-toolbar-placement-orderings = Placement orderings.
@@ -120,6 +122,7 @@ form-add-pcb-assign-all = Assign all
 form-add-pcb-unassign-selection = Unasign selection
 form-add-pcb-unassign-all = Unasign all
 
+form-create-unit-assignment-group-variant-map = Variant map
 form-create-unit-assignment-input-design-name = Design name
 form-create-unit-assignment-input-design-name-placeholder = Design name (e.g. 'my design')
 form-create-unit-assignment-input-variant-name = Variant name
@@ -129,6 +132,7 @@ form-create-unit-assignment-input-pcb-instance-placeholder = A number > 0
 form-create-unit-assignment-input-pcb-unit-range = PCB units
 form-create-unit-assignment-input-pcb-unit-placeholder = A number > 0
 form-create-unit-assignment-input-placements-filename = Placements filename
+form-create-unit-assignment-input-placements-filename-placeholder = '<design>_<variant>_placements.csv'
 form-create-unit-assignment-input-placements-directory = Placements directory
 
 form-phase-placement-orderings-input-orderings = Orderings
@@ -225,6 +229,13 @@ table-gerbers-column-file = File
 table-gerbers-column-pcb-side = PCB Side
 table-gerbers-column-gerber-purpose = Purpose
 table-gerbers-column-actions = Actions
+
+table-design-variants-column-design = Design name
+table-design-variants-column-variant = Variant name
+
+table-unit-assignments-column-pcb-unit = PCB Unit
+table-unit-assignments-column-design = Design name
+table-unit-assignments-column-variant = Variant name
 
 filter-expression = Search...
 
