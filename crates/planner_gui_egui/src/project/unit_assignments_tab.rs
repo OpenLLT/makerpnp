@@ -650,16 +650,23 @@ impl UnitAssignmentsUi {
                                     ..container_style()
                                 })
                                 .add(|tui| {
+                                    let fields = self.fields.lock().unwrap();
+                                    let is_selection_ok = !fields.variant_map_selected_indexes.is_empty();
+                                    let is_design_variant_ok = fields.design_variant_selected_index.is_some();
                                     if tui
                                         .style(Style {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
-                                        .button(|tui| tui.label("Unassign all"))// TODO translate
+                                        .enabled_ui(is_selection_ok && is_design_variant_ok)
+                                        .button(|tui| tui.label("Assign selected")) // TODO translate
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignAllClicked);
+                                            .send(UnitAssignmentsUiCommand::AssignSelection(
+                                                fields.design_variant_selected_index.unwrap(),
+                                                fields.variant_map_selected_indexes.clone(),
+                                            ));
                                     }
 
                                     if tui
@@ -667,14 +674,30 @@ impl UnitAssignmentsUi {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
+                                        .enabled_ui(is_selection_ok)
                                         .button(|tui| tui.label("Unassign selected"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
                                             .send(UnitAssignmentsUiCommand::UnassignSelection(
-                                                self.fields.lock().unwrap().variant_map_selected_indexes.clone(),
+                                                fields.variant_map_selected_indexes.clone(),
                                             ));
                                     }
+                                    
+                                    let have_assigned_items = fields.variant_map.iter().any(|(_, assigned_variant_name)| assigned_variant_name.is_some());
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 1.0,
+                                            ..default_style()
+                                        })
+                                        .enabled_ui(have_assigned_items)
+                                        .button(|tui| tui.label("Unassign all"))// TODO translate
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::UnassignAllClicked);
+                                    }
+
                                 });
                             });
                         });
@@ -799,6 +822,7 @@ pub enum UnitAssignmentsUiCommand {
     UnassignAllClicked,
 
     UnassignSelection(Vec<usize>),
+    AssignSelection(usize, Vec<usize>),
 }
 
 #[derive(Debug, Clone)]
@@ -964,6 +988,33 @@ impl UiComponent for UnitAssignmentsUi {
                     let mut fields = self.fields.lock().unwrap();
                     for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
                         *assigned_variant_name = None;
+                    }
+
+                    Self::apply_variant_map(fields, pcb_overview.index)
+                } else {
+                    None
+                }
+            }
+            UnitAssignmentsUiCommand::AssignSelection(design_variant_index, variant_map_selected_indexes) => {
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let mut fields = self.fields.lock().unwrap();
+
+                    let design_variant = fields.design_variants[design_variant_index].clone();
+                    let design_index = pcb_overview
+                        .designs
+                        .iter()
+                        .position(|design_name| design_name.eq(&design_variant.design_name));
+
+                    for (_index, (_design_index, assigned_variant_name)) in fields
+                        .variant_map
+                        .iter_mut()
+                        .enumerate()
+                        .filter(|(index, _)| variant_map_selected_indexes.contains(index))
+                        .filter(|(_index, (candidate_design_index, _variant_name))| {
+                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
+                        })
+                    {
+                        *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
 
                     Self::apply_variant_map(fields, pcb_overview.index)
