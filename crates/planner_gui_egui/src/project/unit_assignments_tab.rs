@@ -312,7 +312,7 @@ impl UnitAssignmentsUi {
                         })
                         .add_with_border(|tui: &mut Tui| {
 
-                            tui.ui(|ui: &mut Ui| {
+                            tui.ui_infinite(|ui: &mut Ui| {
                                 let mut fields = self.fields.lock().unwrap();
 
                                 let text_height = egui::TextStyle::Body
@@ -524,7 +524,7 @@ impl UnitAssignmentsUi {
                             ..container_style()
                         })
                         .add_with_border(|tui|{
-                            tui.ui(|ui: &mut Ui| {
+                            tui.ui_infinite(|ui: &mut Ui| {
                                 let mut fields = self.fields.lock().unwrap();
 
                                 let text_height = egui::TextStyle::Body
@@ -535,7 +535,7 @@ impl UnitAssignmentsUi {
                                 let available_height = ui.available_height();
 
                                 TableBuilder::new(ui)
-                                    .auto_shrink([false, true])
+                                    .auto_shrink([false, false])
                                     .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                                     .striped(true)
                                     .resizable(true)
