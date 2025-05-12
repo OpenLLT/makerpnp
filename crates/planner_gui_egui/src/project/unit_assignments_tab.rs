@@ -366,14 +366,6 @@ impl UnitAssignmentsUi {
                                     let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
                                     let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
 
-                                    pub fn transform_fail(mut value: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
-                                        // The code below has no effect, the control resized to fill available space, but never shrinks.
-                                        // value.min_size.x = 200.0;
-                                        // value.intrinsic_size = Some(Vec2::new(value.min_size.x, value.min_size.y));
-                                        // value.infinite = egui::Vec2b { x: true, y: false };
-                                        value
-                                    }
-
                                     tui.style(Style {
                                         display: Display::Flex,
                                         align_content: Some(AlignContent::Stretch),
@@ -385,11 +377,10 @@ impl UnitAssignmentsUi {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
-                                        .ui_add_manual(
-                                            |ui| {
+                                        .ui(|ui|{
                                                 // always 0 the first sizing pass
                                                 let available_width = ui.available_width();
-                                                let width = if available_width == 0.0 {
+                                                let width = if ui.is_sizing_pass() {
                                                     200.0
                                                 } else {
                                                     available_width
@@ -402,11 +393,9 @@ impl UnitAssignmentsUi {
                                                 )
                                                     .separation_distance(0)
                                                     .width(width);
-                                                    //.width(200.0);
 
-                                                ui.add(double_slider)
-                                            },
-                                            transform_fail,
+                                                ui.add(double_slider);
+                                            }
                                         );
 
                                         tui.style(Style {
