@@ -116,7 +116,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
 
         style
     }
-    
+
     fn form_inner_style() -> fn() -> Style {
         let style = || Style {
             padding: length(0.),
@@ -213,7 +213,6 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         let default_style = Self::form_default_style();
         let inner_style = Self::form_default_style();
 
-
         tui.style(Style {
             ..default_style()
         })
@@ -285,7 +284,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         if let Err(errors) = &self.validation_errors {
             let errs = errors.field_errors();
             if let Some(&field_errors) = errs.get(field_name) {
-                return Some(field_errors)
+                return Some(field_errors);
             }
         }
 

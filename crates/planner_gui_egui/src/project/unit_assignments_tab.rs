@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
-use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
 use egui::scroll_area::ScrollBarVisibility;
+use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -14,7 +14,7 @@ use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, tui, TuiContainerResponse};
+use egui_taffy::{Tui, TuiBuilderLogic, TuiContainerResponse, tui};
 use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};

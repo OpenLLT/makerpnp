@@ -241,7 +241,7 @@ impl Project {
     pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
-        
+
         let mut tasks = None;
         project_tabs
             .show_tab(
@@ -252,7 +252,7 @@ impl Project {
             })
             .inspect_err(|_| {
                 self.ensure_phase(key, &phase);
-                
+
                 tasks = Some(vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
                         ProjectViewRequest::PhaseOverview {
@@ -270,18 +270,23 @@ impl Project {
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .ok();
-        
+
         tasks
     }
 
-    pub fn show_loadout(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) -> Option<Task<ProjectAction>> {
+    pub fn show_loadout(
+        &self,
+        key: ProjectKey,
+        phase: Reference,
+        load_out_source: &LoadOutSource,
+    ) -> Option<Task<ProjectAction>> {
         let project_directory = self.path.parent().unwrap();
 
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = LoadOutTab::new(project_directory.into(), load_out_source.clone());
-        
+
         let mut task = None;
-        
+
         project_tabs
             .show_tab(|candidate_tab_kind| {
                 matches!(candidate_tab_kind, ProjectTabKind::LoadOut(candidate_tab) if candidate_tab.eq(&tab))
@@ -302,7 +307,7 @@ impl Project {
                 debug!("adding load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .ok();
-        
+
         task
     }
 
@@ -334,16 +339,16 @@ impl Project {
                 debug!("adding pcb tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
-        
+
         tasks
     }
 
     pub fn show_unit_assignments(&mut self, key: ProjectKey, pcb_index: u16) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = UnitAssignmentsTab::new(pcb_index);
-        
+
         let mut tasks = None;
-        
+
         project_tabs
             .show_tab(|candidate_tab_kind| {
                 matches!(candidate_tab_kind, ProjectTabKind::UnitAssignments(candidate_tab) if candidate_tab.eq(&tab))
@@ -370,7 +375,7 @@ impl Project {
                 debug!("adding unit assignments tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
-        
+
         tasks
     }
 
@@ -537,7 +542,7 @@ impl Project {
 
                 let tasks = project.show_phase(key.clone(), reference.clone());
 
-                tasks.map(|tasks|ProjectAction::Task(*key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -583,7 +588,7 @@ impl Project {
 
                 let tasks = project.show_pcb(key.clone(), pcb_index);
 
-                tasks.map(|tasks|ProjectAction::Task(*key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -606,8 +611,8 @@ impl Project {
                 debug!("pcb: {}", pcb_index);
 
                 let tasks = project.show_unit_assignments(*key, pcb_index);
-                
-                tasks.map(|tasks|ProjectAction::Task(*key, Task::batch(tasks)))
+
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -893,7 +898,7 @@ impl UiComponent for Project {
                             .into_iter()
                             .map(Task::done)
                             .collect::<Vec<Task<ProjectAction>>>();
-                        
+
                         let task1 = self.show_explorer();
                         let task2 = self.show_overview();
 
@@ -1478,14 +1483,14 @@ impl UiComponent for Project {
                         &phase_overview.load_out_source,
                     );
 
-                    task.map(|task|ProjectAction::Task(key, task))
+                    task.map(|task| ProjectAction::Task(key, task))
                 } else {
                     None
                 }
             }
             ProjectUiCommand::ShowPcbUnitAssignments(pcb_index) => {
                 let tasks = self.show_unit_assignments(key, pcb_index);
-                tasks.map(|tasks|ProjectAction::Task(key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::RefreshPhase(phase) => {
                 let tasks = vec![
@@ -1579,9 +1584,12 @@ impl UiComponent for Project {
                             Err(error_action) => Some(error_action),
                         }
                     }
-                    Some(PcbUiAction::ShowUnitAssignments(pcb_index)) => {
-                        Some(ProjectAction::Task(key, Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(pcb_index)))))
-                    }
+                    Some(PcbUiAction::ShowUnitAssignments(pcb_index)) => Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(
+                            pcb_index,
+                        ))),
+                    )),
                 }
             }
             ProjectUiCommand::UnitAssignmentsUiCommand {
