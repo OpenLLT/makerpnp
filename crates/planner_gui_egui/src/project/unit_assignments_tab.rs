@@ -188,7 +188,6 @@ impl UnitAssignmentsUi {
                                     let design_name = fields.design_name.as_ref();
 
                                     egui::ComboBox::from_id_salt(ui.id().with("design_name"))
-                                        // TODO do we need a row here?
                                         .width(ui.available_width())
                                         .selected_text(match design_name {
                                             None => tr!("form-common-combo-select"),
