@@ -10,8 +10,8 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
-use egui_taffy::taffy::prelude::{auto, length, percent};
-use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
+use egui_taffy::taffy::prelude::{auto, length, percent, span};
+use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
 use tracing::debug;
@@ -162,7 +162,8 @@ impl UnitAssignmentsUi {
                                 flex_grow: 1.0,
                                 display: Display::Flex,
                                 align_content: Some(AlignContent::Stretch),
-                                flex_direction: FlexDirection::Row,
+                                // FIXME This `span` is only required because the `field_error` call also uses `grid_column: span(2)`, without it the width is ~50% of the horizontal space.
+                                grid_column: span(2),
                                 ..default_style()
                             })
                             .add_with_border(|tui| {
