@@ -306,7 +306,7 @@ impl UnitAssignmentsUi {
                                         ..default_style()
                                     })
                                     .enabled_ui(is_design_variant_ok)
-                                    .button(|tui| tui.label("Add"))
+                                    .button(|tui| tui.label("Add"))// TODO translate
                                     .clicked()
                                 {
                                     self.component
@@ -501,7 +501,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Apply range"))
+                                        .button(|tui| tui.label("Apply range"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
@@ -516,7 +516,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Apply all"))
+                                        .button(|tui| tui.label("Apply all"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
@@ -531,7 +531,7 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
-                                        .button(|tui| tui.label("Unassign range"))
+                                        .button(|tui| tui.label("Unassign range"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
@@ -655,7 +655,7 @@ impl UnitAssignmentsUi {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
-                                        .button(|tui| tui.label("Unassign all"))
+                                        .button(|tui| tui.label("Unassign all"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
@@ -667,7 +667,7 @@ impl UnitAssignmentsUi {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
-                                        .button(|tui| tui.label("Unassign selected"))
+                                        .button(|tui| tui.label("Unassign selected"))// TODO translate
                                         .clicked()
                                     {
                                         self.component
