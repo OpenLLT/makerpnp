@@ -74,11 +74,47 @@ impl UnitAssignmentsUi {
 
         self.pcb_overview = Some(pcb_overview);
         self.update_map();
+        self.update_design_variants()
     }
 
     pub fn update_unit_assignments(&mut self, pcb_unit_assignments: PcbUnitAssignments) {
         self.pcb_unit_assignments = Some(pcb_unit_assignments);
+
         self.update_map();
+        self.update_design_variants()
+    }
+
+    fn build_design_variants(
+        pcb_unit_assignments: &PcbUnitAssignments,
+        pcb_overview: &PcbOverview,
+    ) -> Vec<DesignVariant> {
+        let mut design_variants = pcb_overview
+            .unit_map
+            .iter()
+            .filter_map(|(pcb_unit_index, pcb_design_index)| {
+                pcb_unit_assignments
+                    .unit_assignments
+                    .get(pcb_unit_index)
+                    .map(|variant_name| DesignVariant {
+                        design_name: pcb_overview.designs[*pcb_design_index].clone(),
+                        variant_name: variant_name.clone(),
+                    })
+            })
+            .collect::<Vec<_>>();
+
+        design_variants.dedup();
+        design_variants
+    }
+
+    /// we need both the pcb_overview and the design_variants, but the methods that provide them
+    /// could be called in any order, so they both need to call this
+    fn update_design_variants(&mut self) {
+        let (Some(pcb_overview), Some(pcb_unit_assignments)) = (&self.pcb_overview, &self.pcb_unit_assignments) else {
+            return;
+        };
+
+        let mut fields = self.fields.lock().unwrap();
+        fields.design_variants = Self::build_design_variants(pcb_unit_assignments, pcb_overview)
     }
 
     /// we need both the pcb_overview and the pcb_unit_assignments, but the methods that provide them
