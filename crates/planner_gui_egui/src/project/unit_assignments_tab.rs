@@ -248,12 +248,17 @@ impl UnitAssignmentsUi {
                                     }
                                 });
 
-                                // TODO don't enable the button unless design variant is Some and the placements filename is ok
+                                let is_design_variant_ok = {
+                                    let fields = self.fields.lock().unwrap();
+                                    // enable the button if the design is Some and the `placements_filename` field is ok
+                                    matches!((&fields.design_name, form.field_validation_errors("placements_filename")), (Some(_), None))
+                                };
                                 if tui
                                     .style(Style {
                                         flex_grow: 1.0,
                                         ..default_style()
                                     })
+                                    .enabled_ui(is_design_variant_ok)
                                     .button(|tui| tui.label("Add"))
                                     .clicked()
                                 {
