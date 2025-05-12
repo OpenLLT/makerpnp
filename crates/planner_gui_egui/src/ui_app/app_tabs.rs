@@ -3,7 +3,7 @@ use egui_dock::{DockArea, DockState, Style};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
-use tracing::trace;
+use tracing::{error, trace};
 
 use crate::config::Config;
 use crate::project::{Project, ProjectKey};
@@ -505,12 +505,16 @@ impl UiComponent for AppTabs {
         match command {
             TabUiCommand::TabKindCommand(tab_kind_command) => {
                 let mut tabs = self.tabs.lock().unwrap();
-                let tab = tabs.get_mut(&tab_key).unwrap();
-                let tab_action = tab.update((tab_key, tab_kind_command), &mut (tab_key, context));
+                if let Some(tab_kind) = tabs.get_mut(&tab_key) {
+                    let tab_action = tab_kind.update((tab_key, tab_kind_command), &mut (tab_key, context));
 
-                tab_action.map(|action| TabAction::TabKindAction {
-                    action,
-                })
+                    tab_action.map(|action| TabAction::TabKindAction {
+                        action,
+                    })
+                } else {
+                    error!("tab not found: {:?}", tab_key);
+                    None
+                }
             }
         }
     }

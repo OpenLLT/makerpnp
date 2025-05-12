@@ -128,14 +128,19 @@ pub fn handle_command(
                                     }),
                                 },
                                 ProjectAction::Task(_, _) => {
-                                    // unsupported here, no corresponding TabCommands
+                                    // unsupported here, there is no corresponding TabCommand
                                     // should have already been handled by the project
                                     // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::Task
+
+                                    // Also can occur as follows:
+                                    // BAD  = Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(pcb_index))))
+                                    // GOOD = Some(ProjectAction::Task(key, Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(pcb_index)))))
+
                                     panic!("unsupported")
                                 }
 
                                 ProjectAction::SetModifiedState(_) => {
-                                    // unsupported here, no corresponding TabCommands
+                                    // unsupported here, no corresponding TabCommand
                                     // should have already been handled by the project
                                     // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::SetModifiedState
                                     panic!("unsupported")

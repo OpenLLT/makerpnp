@@ -1,6 +1,5 @@
 pub mod add_pcb;
 pub mod add_phase;
-pub mod create_unit_assignment;
 pub mod errors;
 pub mod manage_gerbers;
 pub mod placement_orderings;

@@ -19,9 +19,6 @@ use tracing::{debug, error, info, trace};
 use crate::planner_app_core::PlannerCoreService;
 use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
-use crate::project::dialogs::create_unit_assignment::{
-    CreateUnitAssignmentArgs, CreateUnitAssignmentModalAction, CreateUnitAssignmentModalUiCommand,
-};
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
 use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
@@ -193,41 +190,59 @@ impl Project {
         }
     }
 
-    pub fn show_explorer(&mut self) {
+    pub fn show_explorer(&mut self) -> Task<ProjectAction> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Explorer(_)));
         if result.is_err() {
             project_tabs.add_tab(ProjectTabKind::Explorer(ExplorerTab::default()));
         }
+
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::ProjectTree,
+        )))
     }
 
-    pub fn show_overview(&mut self) {
+    pub fn show_overview(&mut self) -> Task<ProjectAction> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
         if result.is_err() {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Overview(OverviewTab::default()));
         }
+
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::Overview,
+        )))
     }
 
-    pub fn show_parts(&mut self) {
+    pub fn show_parts(&mut self) -> Task<ProjectAction> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Parts(_)));
         if result.is_err() {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Parts(PartsTab::default()));
         }
+
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::Parts,
+        )))
     }
 
-    pub fn show_placements(&mut self) {
+    pub fn show_placements(&mut self) -> Task<ProjectAction> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Placements(_)));
         if result.is_err() {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Placements(PlacementsTab::default()));
         }
+
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::Placements,
+        )))
     }
 
-    pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) {
+    pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
+
+        let mut tasks = None;
         project_tabs
             .show_tab(
                 |candidate_tab_kind| matches!(candidate_tab_kind, ProjectTabKind::Phase(candidate_tab) if candidate_tab.eq(&tab)),
@@ -238,17 +253,40 @@ impl Project {
             .inspect_err(|_| {
                 self.ensure_phase(key, &phase);
 
+                tasks = Some(vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhaseOverview {
+                            phase: phase.clone(),
+                        },
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PhasePlacements {
+                            phase: phase.clone(),
+                        },
+                    ))),
+                ]);
+
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Phase(tab));
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .ok();
+
+        tasks
     }
 
-    pub fn show_loadout(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) {
+    pub fn show_loadout(
+        &self,
+        key: ProjectKey,
+        phase: Reference,
+        load_out_source: &LoadOutSource,
+    ) -> Option<Task<ProjectAction>> {
         let project_directory = self.path.parent().unwrap();
 
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = LoadOutTab::new(project_directory.into(), load_out_source.clone());
+
+        let mut task = None;
+
         project_tabs
             .show_tab(|candidate_tab_kind| {
                 matches!(candidate_tab_kind, ProjectTabKind::LoadOut(candidate_tab) if candidate_tab.eq(&tab))
@@ -257,17 +295,28 @@ impl Project {
                 debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .inspect_err(|_| {
-                self.ensure_load_out(key, phase, load_out_source);
+                self.ensure_load_out(key, phase.clone(), load_out_source);
+
+                task = Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::PhaseLoadOut {
+                        phase,
+                    },
+                ))));
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
-                debug!("adding load-out tab. phase: {:?}, tab_key: {:?}", load_out_source, tab_key);
+                debug!("adding load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .ok();
+
+        task
     }
 
-    pub fn show_pcb(&mut self, key: ProjectKey, pcb_index: u16) {
+    pub fn show_pcb(&mut self, key: ProjectKey, pcb_index: u16) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PcbTab::new(pcb_index);
+
+        let mut tasks = None;
+
         project_tabs
             .show_tab(|candidate_tab_kind| {
                 matches!(candidate_tab_kind, ProjectTabKind::Pcb(candidate_tab) if candidate_tab.eq(&tab))
@@ -278,15 +327,28 @@ impl Project {
             .inspect_err(|_|{
                 self.ensure_pcb(key, pcb_index);
 
+                tasks = Some(vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    ProjectViewRequest::PcbOverview {
+                        pcb: pcb_index.clone(),
+                    },
+                )))]);
+
+
+
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Pcb(tab));
                 debug!("adding pcb tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
+
+        tasks
     }
 
-    pub fn show_unit_assignments(&mut self, key: ProjectKey, pcb_index: u16) {
+    pub fn show_unit_assignments(&mut self, key: ProjectKey, pcb_index: u16) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = UnitAssignmentsTab::new(pcb_index);
+
+        let mut tasks = None;
+
         project_tabs
             .show_tab(|candidate_tab_kind| {
                 matches!(candidate_tab_kind, ProjectTabKind::UnitAssignments(candidate_tab) if candidate_tab.eq(&tab))
@@ -296,11 +358,25 @@ impl Project {
             })
             .inspect_err(|_|{
                 self.ensure_unit_assignments(key, pcb_index);
+                tasks = Some(vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PcbOverview {
+                            pcb: pcb_index,
+                        },
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        ProjectViewRequest::PcbUnitAssignments {
+                            pcb: pcb_index,
+                        },
+                    ))),
+                ]);
 
                 let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::UnitAssignments(tab));
                 debug!("adding unit assignments tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
+
+        tasks
     }
 
     fn ensure_phase(&self, key: ProjectKey, phase: &Reference) {
@@ -409,11 +485,7 @@ impl Project {
         #[must_use]
         fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             if path.eq(&"/project/".into()) {
-                project.show_overview();
-                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::Overview,
-                )));
-
+                let task = project.show_overview();
                 Some(ProjectAction::Task(*key, task))
             } else {
                 None
@@ -423,10 +495,7 @@ impl Project {
         #[must_use]
         fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             if path.eq(&"/project/placements".into()) {
-                project.show_placements();
-                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::Placements,
-                )));
+                let task = project.show_placements();
 
                 Some(ProjectAction::Task(*key, task))
             } else {
@@ -437,10 +506,7 @@ impl Project {
         #[must_use]
         fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             if path.eq(&"/project/parts".into()) {
-                project.show_parts();
-                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::Parts,
-                )));
+                let task = project.show_parts();
 
                 Some(ProjectAction::Task(*key, task))
             } else {
@@ -474,22 +540,9 @@ impl Project {
 
                 let reference = Reference::from_raw(phase_reference);
 
-                project.show_phase(key.clone(), reference.clone());
+                let tasks = project.show_phase(key.clone(), reference.clone());
 
-                let tasks: Vec<_> = vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::PhaseOverview {
-                            phase: reference.clone(),
-                        },
-                    ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::PhasePlacements {
-                            phase: reference.clone(),
-                        },
-                    ))),
-                ];
-
-                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -533,15 +586,9 @@ impl Project {
                     .unwrap();
                 debug!("pcb: {}", pcb_index);
 
-                project.show_pcb(key.clone(), pcb_index);
+                let tasks = project.show_pcb(key.clone(), pcb_index);
 
-                let tasks: Vec<_> = vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::PcbOverview {
-                        pcb: pcb_index.clone(),
-                    },
-                )))];
-
-                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -563,22 +610,9 @@ impl Project {
                     .unwrap();
                 debug!("pcb: {}", pcb_index);
 
-                project.show_unit_assignments(key.clone(), pcb_index);
+                let tasks = project.show_unit_assignments(*key, pcb_index);
 
-                let tasks: Vec<_> = vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::PcbOverview {
-                            pcb: pcb_index.clone(),
-                        },
-                    ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::PcbUnitAssignments {
-                            pcb: pcb_index.clone(),
-                        },
-                    ))),
-                ];
-
-                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
@@ -865,14 +899,10 @@ impl UiComponent for Project {
                             .map(Task::done)
                             .collect::<Vec<Task<ProjectAction>>>();
 
-                        let additional_tasks = vec![
-                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                ProjectViewRequest::ProjectTree,
-                            ))),
-                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                ProjectViewRequest::Phases,
-                            ))),
-                        ];
+                        let task1 = self.show_explorer();
+                        let task2 = self.show_overview();
+
+                        let additional_tasks = vec![task1, task2];
                         tasks.extend(additional_tasks);
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
@@ -1302,8 +1332,8 @@ impl UiComponent for Project {
                     .update(toolbar_command, &mut ());
                 match action {
                     Some(ProjectToolbarAction::ShowProjectExplorer) => {
-                        self.show_explorer();
-                        None
+                        let task = self.show_explorer();
+                        Some(ProjectAction::Task(key, task))
                     }
                     Some(ProjectToolbarAction::GenerateArtifacts) => self
                         .planner_core_service
@@ -1447,22 +1477,20 @@ impl UiComponent for Project {
                     });
 
                 if let Some(phase_overview) = phase_overview {
-                    self.show_loadout(
+                    let task = self.show_loadout(
                         key,
                         phase_overview.phase_reference.clone(),
                         &phase_overview.load_out_source,
                     );
 
-                    let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                        ProjectViewRequest::PhaseLoadOut {
-                            phase: phase_overview.phase_reference.clone(),
-                        },
-                    )));
-
-                    Some(ProjectAction::Task(key, task))
+                    task.map(|task| ProjectAction::Task(key, task))
                 } else {
                     None
                 }
+            }
+            ProjectUiCommand::ShowPcbUnitAssignments(pcb_index) => {
+                let tasks = self.show_unit_assignments(key, pcb_index);
+                tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::RefreshPhase(phase) => {
                 let tasks = vec![
@@ -1556,55 +1584,12 @@ impl UiComponent for Project {
                             Err(error_action) => Some(error_action),
                         }
                     }
-                    Some(PcbUiAction::CreateUnitAssignment(CreateUnitAssignmentArgs {
-                        pcb_index,
-                        variant_map,
-                    })) => {
-                        let mut events = vec![];
-
-                        for (variant_name, pcb_unit_number_range) in variant_map {
-                            for pcb_unit_number in pcb_unit_number_range {
-                                let mut object_path = ObjectPath::default();
-                                object_path.set_pcb_instance(pcb_index + 1);
-                                object_path.set_pcb_unit(pcb_unit_number);
-
-                                events.push(Event::AssignVariantToUnit {
-                                    variant: variant_name.clone(),
-                                    unit: object_path,
-                                });
-                            }
-                        }
-
-                        let mut tasks = vec![];
-                        for event in events {
-                            match self
-                                .planner_core_service
-                                .update(key, event)
-                                .into_actions()
-                            {
-                                Ok(actions) => {
-                                    let effect_tasks: Vec<Task<ProjectAction>> = actions
-                                        .into_iter()
-                                        .map(Task::done)
-                                        .collect();
-                                    tasks.extend(effect_tasks);
-                                }
-                                Err(service_error) => {
-                                    tasks.push(Task::done(service_error));
-                                    break;
-                                }
-                            }
-                        }
-
-                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::ProjectTree,
-                        )));
-                        tasks.push(final_task);
-
-                        let action = ProjectAction::Task(key, Task::batch(tasks));
-
-                        Some(action)
-                    }
+                    Some(PcbUiAction::ShowUnitAssignments(pcb_index)) => Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(
+                            pcb_index,
+                        ))),
+                    )),
                 }
             }
             ProjectUiCommand::UnitAssignmentsUiCommand {
@@ -1845,6 +1830,7 @@ pub enum ProjectUiCommand {
         pcb_index: u16,
         command: UnitAssignmentsUiCommand,
     },
+    ShowPcbUnitAssignments(u16),
 }
 
 #[derive(Debug, Clone)]
