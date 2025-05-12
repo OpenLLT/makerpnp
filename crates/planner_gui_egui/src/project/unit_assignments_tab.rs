@@ -175,6 +175,10 @@ impl UnitAssignmentsUi {
 
                                 tui.style(Style {
                                     flex_grow: 1.0,
+                                    min_size: Size {
+                                        width: length(100.0),
+                                        height: auto(),
+                                    },
                                     ..default_style()
                                 })
                                 .ui(|ui| {
@@ -218,6 +222,10 @@ impl UnitAssignmentsUi {
 
                                 tui.style(Style {
                                     flex_grow: 1.0,
+                                    min_size: Size {
+                                        width: length(100.0),
+                                        height: auto(),
+                                    },
                                     ..default_style()
                                 })
                                 .ui(|ui| {
