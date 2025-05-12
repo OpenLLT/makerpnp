@@ -1,26 +1,23 @@
-use std::cmp::max;
-use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
+use egui::{TextEdit, Ui, Vec2, WidgetText};
 use egui_double_slider::DoubleSlider;
-use egui_extras::{Column, StripBuilder, TableBuilder};
+use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
-use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, TuiContainerResponse, tui};
+use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
+use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
-use crate::forms::transforms::no_transform;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
