@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
+use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{TextEdit, Ui, WidgetText};
 use egui_double_slider::DoubleSlider;
@@ -550,12 +551,12 @@ impl UnitAssignmentsUi {
                             flex_grow: 1.0,
                             size: Size {
                                 width: percent(1.0),
-                                height: length(150.0)
+                                height: auto(),
                             },
                             ..container_style()
                         })
                         .add_with_border(|tui|{
-                            tui.ui_infinite(|ui: &mut Ui| {
+                            tui.ui_add_manual(|ui: &mut Ui| {
                                 ui.style_mut().interaction.selectable_labels = false;
 
                                 let mut fields = self.fields.lock().unwrap();
@@ -567,11 +568,12 @@ impl UnitAssignmentsUi {
 
                                 let available_height = ui.available_height();
 
-                                TableBuilder::new(ui)
-                                    .auto_shrink([false, true])
+                                let table_response = TableBuilder::new(ui)
+                                    .auto_shrink([false, false])
                                     .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                                     .striped(true)
                                     .resizable(true)
+                                    .min_scrolled_height(available_height)
                                     .max_scroll_height(available_height)
                                     .sense(egui::Sense::click())
                                     .column(Column::auto())
@@ -628,6 +630,23 @@ impl UnitAssignmentsUi {
                                         }
                                         fields.variant_map_selected_indexes = variant_map_selected_indexes;
                                     });
+
+                                ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::BLUE), StrokeKind::Inside);
+                                ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
+
+                                ui.response()
+                            },
+                            |mut response, ui|{
+                                response.infinite = [true, false].into();
+
+                                response.min_size = egui::Vec2::new(ui.available_width(), ui.available_height());
+                                response.max_size = response.min_size;
+
+                                ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::PURPLE), StrokeKind::Inside);
+
+                                let clip_rect = ui.painter().clip_rect();
+                                ui.painter().rect_stroke(clip_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                response
                             });
                         });
 
