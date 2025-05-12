@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
+use egui::scroll_area::ScrollBarVisibility;
 use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
@@ -27,7 +28,6 @@ use crate::ui_component::{ComponentState, UiComponent};
 // TODO when changing the design variant selection, update the combo and text boxes with the details from the selection.
 // TODO Add an 'unassign selected' button.
 // TODO make the *content* of the table rows non-selectable. (the rows should still be selectable)
-// TODO remove form debugging borders
 
 // FIXME this tab highlights issues with egui_dock + egui_taffy where elements grow but do not shrink, see https://github.com/Adanos020/egui_dock/pull/269
 
@@ -116,6 +116,13 @@ impl UnitAssignmentsUi {
             ..Default::default()
         };
 
+        let container_style = || Style {
+            padding: length(0.),
+            margin: length(0.),
+            gap: length(5.),
+            ..Default::default()
+        };
+
         tui(
             ui,
             ui.id()
@@ -167,9 +174,9 @@ impl UnitAssignmentsUi {
                                 align_content: Some(AlignContent::Stretch),
                                 // FIXME This `span` is only required because the `field_error` call also uses `grid_column: span(2)`, without it the width is ~50% of the horizontal space.
                                 grid_column: span(2),
-                                ..default_style()
+                                ..container_style()
                             })
-                            .add_with_border(|tui| {
+                            .add(|tui| {
                                 tui.style(Style {
                                     flex_grow: 0.0,
                                     ..default_style()
@@ -293,66 +300,82 @@ impl UnitAssignmentsUi {
 
                         tui.style(Style {
                             flex_grow: 1.0,
+                            min_size: Size {
+                                width: percent(1.0),
+                                height: length(75.0)
+                            },
+                            max_size: Size {
+                                width: percent(1.0),
+                                height: length( 150.0)
+                            },
                             ..default_style()
                         })
-                        .ui(|ui: &mut Ui| {
-                            let mut fields = self.fields.lock().unwrap();
+                        .add_with_border(|tui: &mut Tui| {
 
-                            let text_height = egui::TextStyle::Body
-                                .resolve(ui.style())
-                                .size
-                                .max(ui.spacing().interact_size.y);
+                            tui.ui(|ui: &mut Ui| {
+                                let mut fields = self.fields.lock().unwrap();
 
-                            TableBuilder::new(ui)
-                                .striped(true)
-                                .resizable(true)
-                                .sense(egui::Sense::click())
-                                .column(Column::auto())
-                                .column(Column::remainder())
-                                .header(20.0, |mut header| {
-                                    header.col(|ui| {
-                                        ui.strong("Design Name"); // TODO translate
-                                    });
-                                    header.col(|ui| {
-                                        ui.strong("Variant Name"); // TODO translate
-                                    });
-                                })
-                                .body(|mut body| {
-                                    let mut design_variant_selected_index = fields.design_variant_selected_index;
-                                    for (
-                                        row_index,
-                                        DesignVariant {
-                                            design_name,
-                                            variant_name,
-                                        },
-                                    ) in fields
-                                        .design_variants
-                                        .iter()
-                                        .enumerate()
-                                    {
-                                        body.row(text_height, |mut row| {
-                                            let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
+                                let text_height = egui::TextStyle::Body
+                                    .resolve(ui.style())
+                                    .size
+                                    .max(ui.spacing().interact_size.y);
 
-                                            row.set_selected(is_selected);
+                                let available_height = ui.available_height();
 
-                                            row.col(|ui| {
-                                                ui.label(design_name.to_string());
-                                            });
-
-                                            row.col(|ui| {
-                                                ui.label(variant_name.to_string());
-                                            });
-
-                                            if row.response().clicked() {
-                                                match is_selected {
-                                                    true => design_variant_selected_index = None,
-                                                    false => design_variant_selected_index = Some(row_index),
-                                                }
-                                            }
+                                TableBuilder::new(ui)
+                                    .striped(true)
+                                    .resizable(true)
+                                    .auto_shrink([false, true])
+                                    .max_scroll_height(available_height)
+                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                    .sense(egui::Sense::click())
+                                    .column(Column::auto())
+                                    .column(Column::remainder())
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("Design Name"); // TODO translate
                                         });
-                                    }
-                                    fields.design_variant_selected_index = design_variant_selected_index;
-                                });
+                                        header.col(|ui| {
+                                            ui.strong("Variant Name"); // TODO translate
+                                        });
+                                    })
+                                    .body(|mut body| {
+                                        let mut design_variant_selected_index = fields.design_variant_selected_index;
+                                        for (
+                                            row_index,
+                                            DesignVariant {
+                                                design_name,
+                                                variant_name,
+                                            },
+                                        ) in fields
+                                            .design_variants
+                                            .iter()
+                                            .enumerate()
+                                        {
+                                            body.row(text_height, |mut row| {
+                                                let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
+
+                                                row.set_selected(is_selected);
+
+                                                row.col(|ui| {
+                                                    ui.label(design_name.to_string());
+                                                });
+
+                                                row.col(|ui| {
+                                                    ui.label(variant_name.to_string());
+                                                });
+
+                                                if row.response().clicked() {
+                                                    match is_selected {
+                                                        true => design_variant_selected_index = None,
+                                                        false => design_variant_selected_index = Some(row_index),
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        fields.design_variant_selected_index = design_variant_selected_index;
+                                    });
+                            });
                         });
 
                         //
@@ -372,7 +395,7 @@ impl UnitAssignmentsUi {
                                         display: Display::Flex,
                                         align_content: Some(AlignContent::Stretch),
                                         flex_grow: 1.0,
-                                        ..default_style()
+                                        ..container_style()
                                     })
                                     .add(|tui| {
                                         tui.style(Style {
@@ -490,73 +513,88 @@ impl UnitAssignmentsUi {
 
                         tui.style(Style {
                             flex_grow: 1.0,
-                            ..default_style()
+                            min_size: Size {
+                                width: percent(1.0),
+                                height: length(50.0)
+                            },
+                            max_size: Size {
+                                width: percent(1.0),
+                                height: length(250.0)
+                            },
+                            ..container_style()
                         })
-                        .ui(|ui: &mut Ui| {
-                            let mut fields = self.fields.lock().unwrap();
+                        .add_with_border(|tui|{
+                            tui.ui(|ui: &mut Ui| {
+                                let mut fields = self.fields.lock().unwrap();
 
-                            let text_height = egui::TextStyle::Body
-                                .resolve(ui.style())
-                                .size
-                                .max(ui.spacing().interact_size.y);
+                                let text_height = egui::TextStyle::Body
+                                    .resolve(ui.style())
+                                    .size
+                                    .max(ui.spacing().interact_size.y);
 
-                            TableBuilder::new(ui)
-                                .striped(true)
-                                .resizable(true)
-                                .sense(egui::Sense::click())
-                                .column(Column::auto())
-                                .column(Column::auto())
-                                .column(Column::remainder())
-                                .header(20.0, |mut header| {
-                                    header.col(|ui| {
-                                        ui.strong("PCB Unit"); // TODO translate
-                                    });
-                                    header.col(|ui| {
-                                        ui.strong("Design Name"); // TODO translate
-                                    });
-                                    header.col(|ui| {
-                                        ui.strong("Variant Name"); // TODO translate
-                                    });
-                                })
-                                .body(|mut body| {
-                                    let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
-                                    for (pcb_unit_index, (design_index, assigned_variant_name)) in
-                                        fields.variant_map.iter().enumerate()
-                                    {
-                                        body.row(text_height, |mut row| {
-                                            let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
-                                            row.set_selected(is_selected);
+                                let available_height = ui.available_height();
 
-                                            row.col(|ui| {
-                                                ui.label((pcb_unit_index + 1).to_string());
-                                            });
-
-                                            row.col(|ui| {
-                                                let label = design_index
-                                                    .map(|design_index|pcb_overview.designs[design_index].to_string())
-                                                    .unwrap_or("<unassigned>".to_string()); // TODO translate
-                                                ui.label(label);
-                                            });
-
-                                            row.col(|ui| {
-                                                let label = assigned_variant_name
-                                                    .as_deref()
-                                                    .unwrap_or("<unassigned>"); // TODO translate
-                                                ui.label(label);
-                                            });
-
-                                            if row.response().clicked() {
-                                                match is_selected {
-                                                    true => {
-                                                        variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
-                                                    }
-                                                    false => variant_map_selected_indexes.push(pcb_unit_index),
-                                                }
-                                            }
+                                TableBuilder::new(ui)
+                                    .auto_shrink([false, true])
+                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                    .striped(true)
+                                    .resizable(true)
+                                    .max_scroll_height(available_height)
+                                    .sense(egui::Sense::click())
+                                    .column(Column::auto())
+                                    .column(Column::auto())
+                                    .column(Column::remainder())
+                                    .header(20.0, |mut header| {
+                                        header.col(|ui| {
+                                            ui.strong("PCB Unit"); // TODO translate
                                         });
-                                    }
-                                    fields.variant_map_selected_indexes = variant_map_selected_indexes;
-                                });
+                                        header.col(|ui| {
+                                            ui.strong("Design Name"); // TODO translate
+                                        });
+                                        header.col(|ui| {
+                                            ui.strong("Variant Name"); // TODO translate
+                                        });
+                                    })
+                                    .body(|mut body| {
+                                        let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
+                                        for (pcb_unit_index, (design_index, assigned_variant_name)) in
+                                            fields.variant_map.iter().enumerate()
+                                        {
+                                            body.row(text_height, |mut row| {
+                                                let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
+                                                row.set_selected(is_selected);
+
+                                                row.col(|ui| {
+                                                    ui.label((pcb_unit_index + 1).to_string());
+                                                });
+
+                                                row.col(|ui| {
+                                                    let label = design_index
+                                                        .map(|design_index|pcb_overview.designs[design_index].to_string())
+                                                        .unwrap_or("<unassigned>".to_string()); // TODO translate
+                                                    ui.label(label);
+                                                });
+
+                                                row.col(|ui| {
+                                                    let label = assigned_variant_name
+                                                        .as_deref()
+                                                        .unwrap_or("<unassigned>"); // TODO translate
+                                                    ui.label(label);
+                                                });
+
+                                                if row.response().clicked() {
+                                                    match is_selected {
+                                                        true => {
+                                                            variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
+                                                        }
+                                                        false => variant_map_selected_indexes.push(pcb_unit_index),
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        fields.variant_map_selected_indexes = variant_map_selected_indexes;
+                                    });
+                            });
                         });
 
                         //
@@ -569,12 +607,12 @@ impl UnitAssignmentsUi {
                                 display: Display::Flex,
                                 align_content: Some(AlignContent::Stretch),
                                 flex_direction: FlexDirection::Row,
-                                ..default_style()
+                                ..container_style()
                             })
-                            .add_with_border(|tui| {
+                            .add(|tui| {
                                 tui.style(Style {
                                     flex_grow: 1.0,
-                                    ..default_style()
+                                    ..container_style()
                                 })
                                 .add(|tui| {
                                     if tui

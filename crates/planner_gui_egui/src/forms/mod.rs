@@ -64,7 +64,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                 align_items: Some(AlignItems::Center),
                 ..default_style()
             })
-            .add_with_border(|tui| {
+            .add(|tui| {
                 fields(&self, tui);
                 // end of grid container content
             });
@@ -98,7 +98,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                 align_items: Some(AlignItems::Center),
                 ..default_style()
             })
-            .add_with_border(|tui| {
+            .add(|tui| {
                 fields(&self, tui);
                 // end of grid container content
             });
@@ -108,13 +108,24 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
     }
 
     fn form_default_style() -> fn() -> Style {
-        let default_style = || Style {
+        let style = || Style {
             padding: length(2.),
             gap: length(2.),
             ..Default::default()
         };
 
-        default_style
+        style
+    }
+
+    fn form_inner_style() -> fn() -> Style {
+        let style = || Style {
+            padding: length(0.),
+            margin: length(0.),
+            gap: length(2.),
+            ..Default::default()
+        };
+
+        style
     }
 
     pub fn add_field_ui(
@@ -129,7 +140,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             tui.label(label);
         });
 
@@ -137,7 +148,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             flex_grow: 1.0,
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             tui.style(Style {
                 flex_grow: 1.0,
                 ..default_style()
@@ -163,7 +174,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         tui.style(Style {
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             tui.label(label);
         });
 
@@ -171,7 +182,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             flex_grow: 1.0,
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             ui_builder(tui, self.fields.lock().unwrap(), self.sender.clone());
         });
 
@@ -200,11 +211,12 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         mut ui_builder: impl FnMut(&mut Tui),
     ) {
         let default_style = Self::form_default_style();
+        let inner_style = Self::form_default_style();
 
         tui.style(Style {
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             tui.label(label);
         });
 
@@ -216,14 +228,14 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             align_self: Some(AlignSelf::Stretch),
             ..default_style()
         })
-        .add_with_border(|tui| {
+        .add(|tui| {
             tui.style(Style {
                 flex_grow: 1.0,
                 display: Display::Flex,
                 flex_direction: FlexDirection::Column,
-                ..default_style()
+                ..inner_style()
             })
-            .add_with_border(|tui| {
+            .add(|tui| {
                 ui_builder(tui);
             });
         });
@@ -250,7 +262,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
                     grid_column: span(2),
                     ..default_style()
                 })
-                .add_with_border(|tui| {
+                .add(|tui| {
                     for field_error in field_errors.iter() {
                         let code = &field_error.code;
                         let params = &field_error.params;
