@@ -168,13 +168,13 @@ impl UnitAssignmentsUi {
                             })
                             .add_with_border(|tui| {
                                 tui.style(Style {
-                                    flex_grow: 1.0,
+                                    flex_grow: 0.0,
                                     ..default_style()
                                 })
                                 .label(tr!("form-create-unit-assignment-input-design-name"));
 
                                 tui.style(Style {
-                                    flex_grow: 1.0,
+                                    flex_grow: 0.4,
                                     min_size: Size {
                                         width: length(100.0),
                                         height: auto(),
@@ -214,13 +214,13 @@ impl UnitAssignmentsUi {
                                 });
 
                                 tui.style(Style {
-                                    flex_grow: 1.0,
+                                    flex_grow: 0.0,
                                     ..default_style()
                                 })
                                 .label(tr!("form-create-unit-assignment-input-variant-name"));
 
                                 tui.style(Style {
-                                    flex_grow: 1.0,
+                                    flex_grow: 0.6,
                                     min_size: Size {
                                         width: length(100.0),
                                         height: auto(),
@@ -254,7 +254,7 @@ impl UnitAssignmentsUi {
                                 };
                                 if tui
                                     .style(Style {
-                                        flex_grow: 1.0,
+                                        flex_grow: 0.0,
                                         ..default_style()
                                     })
                                     .enabled_ui(is_design_variant_ok)
@@ -503,7 +503,6 @@ impl UnitAssignmentsUi {
                                 .column(Column::auto())
                                 .column(Column::auto())
                                 .column(Column::remainder())
-                                .column(Column::auto())
                                 .header(20.0, |mut header| {
                                     header.col(|ui| {
                                         ui.strong("PCB Unit"); // TODO translate
