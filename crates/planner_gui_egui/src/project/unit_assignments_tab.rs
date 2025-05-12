@@ -8,7 +8,7 @@ use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
 use egui_double_slider::DoubleSlider;
-use egui_extras::{Column, TableBuilder};
+use egui_extras::{Column, StripBuilder, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
@@ -30,6 +30,9 @@ use crate::ui_component::{ComponentState, UiComponent};
 // TODO make the *content* of the table rows non-selectable. (the rows should still be selectable)
 
 // FIXME this tab highlights issues with egui_dock + egui_taffy where elements grow but do not shrink, see https://github.com/Adanos020/egui_dock/pull/269
+
+// FIXME there are rendering errors with the vertical height of the tables, however after numerous attempts at fixing
+//       them no solution has been found. PLEASE HELP!
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -300,13 +303,9 @@ impl UnitAssignmentsUi {
 
                         tui.style(Style {
                             flex_grow: 1.0,
-                            min_size: Size {
+                            size: Size {
                                 width: percent(1.0),
-                                height: length(75.0)
-                            },
-                            max_size: Size {
-                                width: percent(1.0),
-                                height: length( 150.0)
+                                height: length(100.0)
                             },
                             ..default_style()
                         })
@@ -513,13 +512,9 @@ impl UnitAssignmentsUi {
 
                         tui.style(Style {
                             flex_grow: 1.0,
-                            min_size: Size {
+                            size: Size {
                                 width: percent(1.0),
-                                height: length(50.0)
-                            },
-                            max_size: Size {
-                                width: percent(1.0),
-                                height: length(250.0)
+                                height: length(150.0)
                             },
                             ..container_style()
                         })
@@ -535,7 +530,7 @@ impl UnitAssignmentsUi {
                                 let available_height = ui.available_height();
 
                                 TableBuilder::new(ui)
-                                    .auto_shrink([false, false])
+                                    .auto_shrink([false, true])
                                     .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                                     .striped(true)
                                     .resizable(true)
