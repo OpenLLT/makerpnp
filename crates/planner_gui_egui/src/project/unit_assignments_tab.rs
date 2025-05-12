@@ -5,7 +5,7 @@ use std::str::FromStr;
 use derivative::Derivative;
 use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{TextEdit, Ui, WidgetText};
+use egui::{Resize, TextEdit, Ui, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -557,95 +557,93 @@ impl UnitAssignmentsUi {
                         })
                         .add_with_border(|tui|{
                             tui.ui_add_manual(|ui: &mut Ui| {
-                                ui.style_mut().interaction.selectable_labels = false;
+                                Resize::default()
+                                    .default_size(ui.available_size())
+                                    .show(ui, |ui| {
+                                        ui.style_mut().interaction.selectable_labels = false;
 
-                                let mut fields = self.fields.lock().unwrap();
+                                        let mut fields = self.fields.lock().unwrap();
 
-                                let text_height = egui::TextStyle::Body
-                                    .resolve(ui.style())
-                                    .size
-                                    .max(ui.spacing().interact_size.y);
+                                        let text_height = egui::TextStyle::Body
+                                            .resolve(ui.style())
+                                            .size
+                                            .max(ui.spacing().interact_size.y);
 
-                                let available_height = ui.available_height();
+                                        let available_height = ui.available_height();
 
-                                let table_response = TableBuilder::new(ui)
-                                    .auto_shrink([false, false])
-                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                    .striped(true)
-                                    .resizable(true)
-                                    .min_scrolled_height(available_height)
-                                    .max_scroll_height(available_height)
-                                    .sense(egui::Sense::click())
-                                    .column(Column::auto())
-                                    .column(Column::auto())
-                                    .column(Column::remainder())
-                                    .header(20.0, |mut header| {
-                                        header.col(|ui| {
-                                            ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
-                                        });
-                                        header.col(|ui| {
-                                            ui.strong(tr!("table-unit-assignments-column-pcb-design"));
-                                        });
-                                        header.col(|ui| {
-                                            ui.strong(tr!("table-unit-assignments-column-variant"));
-                                        });
-                                    })
-                                    .body(|mut body| {
-                                        let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
-                                        for (pcb_unit_index, (design_index, assigned_variant_name)) in
-                                            fields.variant_map.iter().enumerate()
-                                        {
-                                            body.row(text_height, |mut row| {
-                                                let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
-                                                row.set_selected(is_selected);
-
-                                                row.col(|ui| {
-                                                    ui.label((pcb_unit_index + 1).to_string());
+                                        let table_response = TableBuilder::new(ui)
+                                            .auto_shrink([false, false])
+                                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                            .striped(true)
+                                            .resizable(true)
+                                            // .min_scrolled_height(available_height)
+                                            // .max_scroll_height(available_height)
+                                            .sense(egui::Sense::click())
+                                            .column(Column::auto())
+                                            .column(Column::auto())
+                                            .column(Column::remainder())
+                                            .header(20.0, |mut header| {
+                                                header.col(|ui| {
+                                                    ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
                                                 });
-
-                                                row.col(|ui| {
-                                                    let label = design_index
-                                                        .map(|design_index|pcb_overview.designs[design_index].to_string())
-                                                        .unwrap_or(tr!("assignment-unassigned"));
-                                                    ui.label(label);
+                                                header.col(|ui| {
+                                                    ui.strong(tr!("table-unit-assignments-column-pcb-design"));
                                                 });
-
-                                                row.col(|ui| {
-                                                    let label = assigned_variant_name
-                                                        .clone()
-                                                        .map(|variant_name| variant_name.to_string())
-                                                        .unwrap_or(tr!("assignment-unassigned"));
-                                                    ui.label(label);
+                                                header.col(|ui| {
+                                                    ui.strong(tr!("table-unit-assignments-column-variant"));
                                                 });
+                                            })
+                                            .body(|mut body| {
+                                                let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
+                                                for (pcb_unit_index, (design_index, assigned_variant_name)) in
+                                                    fields.variant_map.iter().enumerate()
+                                                {
+                                                    body.row(text_height, |mut row| {
+                                                        let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
+                                                        row.set_selected(is_selected);
 
-                                                if row.response().clicked() {
-                                                    match is_selected {
-                                                        true => {
-                                                            variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
+                                                        row.col(|ui| {
+                                                            ui.label((pcb_unit_index + 1).to_string());
+                                                        });
+
+                                                        row.col(|ui| {
+                                                            let label = design_index
+                                                                .map(|design_index| pcb_overview.designs[design_index].to_string())
+                                                                .unwrap_or(tr!("assignment-unassigned"));
+                                                            ui.label(label);
+                                                        });
+
+                                                        row.col(|ui| {
+                                                            let label = assigned_variant_name
+                                                                .clone()
+                                                                .map(|variant_name| variant_name.to_string())
+                                                                .unwrap_or(tr!("assignment-unassigned"));
+                                                            ui.label(label);
+                                                        });
+
+                                                        if row.response().clicked() {
+                                                            match is_selected {
+                                                                true => {
+                                                                    variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
+                                                                }
+                                                                false => variant_map_selected_indexes.push(pcb_unit_index),
+                                                            }
                                                         }
-                                                        false => variant_map_selected_indexes.push(pcb_unit_index),
-                                                    }
+                                                    });
                                                 }
+                                                fields.variant_map_selected_indexes = variant_map_selected_indexes;
                                             });
-                                        }
-                                        fields.variant_map_selected_indexes = variant_map_selected_indexes;
+                                        ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::LIGHT_GREEN), StrokeKind::Inside);
+                                        ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
                                     });
-
-                                ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::BLUE), StrokeKind::Inside);
-                                ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
 
                                 ui.response()
                             },
                             |mut response, ui|{
-                                response.infinite = [true, false].into();
-
-                                response.min_size = egui::Vec2::new(ui.available_width(), ui.available_height());
-                                response.max_size = response.min_size;
-
-                                ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::PURPLE), StrokeKind::Inside);
+                                response.infinite = [true, true].into();
 
                                 let clip_rect = ui.painter().clip_rect();
-                                ui.painter().rect_stroke(clip_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                ui.painter().rect_stroke(clip_rect, 0.0, (1.0, Color32::BLUE), StrokeKind::Inside);
                                 response
                             });
                         });
