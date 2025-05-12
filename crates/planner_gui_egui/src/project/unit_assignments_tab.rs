@@ -22,8 +22,6 @@ use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
-// TODO when changing the design variant selection, update the combo and text boxes with the details from the selection.
-
 // FIXME fix various 'indentation' issues (aka padding/margin/gap/etc.)  Some of the controls are not aligned with the
 //      table borders.
 
@@ -408,7 +406,9 @@ impl UnitAssignmentsUi {
                                                 }
                                             });
                                         }
-                                        fields.design_variant_selected_index = design_variant_selected_index;
+                                        if fields.design_variant_selected_index != design_variant_selected_index {
+                                            self.component.send(UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
+                                        }
                                     });
                             });
                         });
@@ -822,6 +822,7 @@ pub enum UnitAssignmentsUiCommand {
 
     UnassignSelection(Vec<usize>),
     AssignSelection(usize, Vec<usize>),
+    DesignVariantSelectionChanged(Option<usize>),
 }
 
 #[derive(Debug, Clone)]
@@ -897,6 +898,21 @@ impl UiComponent for UnitAssignmentsUi {
                 let mut fields = self.fields.lock().unwrap();
                 fields.design_name = Some(design_name);
                 fields.update_placements_filename();
+                None
+            }
+
+            UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index) => {
+                let mut fields = self.fields.lock().unwrap();
+                fields.design_variant_selected_index = design_variant_selected_index;
+
+                if let Some(design_variant_selected_index) = design_variant_selected_index {
+                    let design_variant = &fields.design_variants[design_variant_selected_index].clone();
+
+                    fields.design_name = Some(design_variant.design_name.clone());
+                    fields.variant_name = design_variant.variant_name.to_string();
+                    fields.update_placements_filename();
+                }
+
                 None
             }
 
