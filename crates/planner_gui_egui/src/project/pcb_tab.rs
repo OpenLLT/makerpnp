@@ -8,10 +8,6 @@ use planner_app::{DesignName, GerberPurpose, ObjectPath, PcbOverview, PcbSide};
 use tracing::{debug, trace};
 
 use crate::project::ProjectUiCommand;
-use crate::project::dialogs::create_unit_assignment::{
-    CreateUnitAssignmentArgs, CreateUnitAssignmentModal, CreateUnitAssignmentModalAction,
-    CreateUnitAssignmentModalUiCommand,
-};
 use crate::project::dialogs::manage_gerbers::{
     ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand,
 };
@@ -27,7 +23,6 @@ pub struct PcbUi {
     pcb_overview: Option<PcbOverview>,
 
     manage_gerbers_modal: Option<ManageGerbersModal>,
-    create_unit_assignment_modal: Option<CreateUnitAssignmentModal>,
 
     pub component: ComponentState<PcbUiCommand>,
 }
@@ -38,7 +33,6 @@ impl PcbUi {
             path,
             pcb_overview: None,
             manage_gerbers_modal: None,
-            create_unit_assignment_modal: None,
             component: Default::default(),
         }
     }
@@ -73,22 +67,6 @@ impl PcbUi {
 
         self.manage_gerbers_modal = Some(modal);
     }
-
-    fn show_create_unit_assignments_modal(&mut self) {
-        let Some(pcb_overview) = &self.pcb_overview else {
-            return;
-        };
-
-        let mut modal = CreateUnitAssignmentModal::new(self.path.clone(), pcb_overview.index, pcb_overview.units);
-        modal
-            .component
-            .configure_mapper(self.component.sender.clone(), move |command| {
-                trace!("create unit assignment modal mapper. command: {:?}", command);
-                PcbUiCommand::CreateUnitAssignmentModalCommand(command)
-            });
-
-        self.create_unit_assignment_modal = Some(modal);
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +75,6 @@ pub enum PcbUiCommand {
     ManageGerbersClicked { design_index: usize },
     ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
     CreateUnitAssignmentClicked,
-    CreateUnitAssignmentModalCommand(CreateUnitAssignmentModalUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -113,7 +90,7 @@ pub enum PcbUiAction {
         design: DesignName,
         files: Vec<PathBuf>,
     },
-    CreateUnitAssignment(CreateUnitAssignmentArgs),
+    ShowUnitAssignments(u16),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -210,9 +187,6 @@ impl UiComponent for PcbUi {
         if let Some(dialog) = &self.manage_gerbers_modal {
             dialog.ui(ui, &mut ());
         }
-        if let Some(dialog) = &self.create_unit_assignment_modal {
-            dialog.ui(ui, &mut ());
-        }
     }
 
     fn update<'context>(
@@ -284,24 +258,8 @@ impl UiComponent for PcbUi {
                 }
             }
             PcbUiCommand::CreateUnitAssignmentClicked => {
-                self.show_create_unit_assignments_modal();
-                None
-            }
-            PcbUiCommand::CreateUnitAssignmentModalCommand(command) => {
-                if let (Some(pcb_overview), Some(modal)) = (&self.pcb_overview, &mut self.create_unit_assignment_modal)
-                {
-                    let action = modal.update(command, &mut ());
-                    match action {
-                        None => None,
-                        Some(CreateUnitAssignmentModalAction::Submit(args)) => {
-                            self.create_unit_assignment_modal.take();
-                            Some(PcbUiAction::CreateUnitAssignment(args))
-                        }
-                        Some(CreateUnitAssignmentModalAction::CloseDialog) => {
-                            self.create_unit_assignment_modal.take();
-                            None
-                        }
-                    }
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    Some(PcbUiAction::ShowUnitAssignments(pcb_overview.index))
                 } else {
                     None
                 }

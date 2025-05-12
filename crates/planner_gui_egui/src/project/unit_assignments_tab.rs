@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -22,7 +23,10 @@ use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
-// TODO when changing the design variant selection, update the combo and text boxes
+// TODO when changing the design variant selection, update the combo and text boxes with the details from the selection.
+// TODO Add an 'unassign selected' button.
+// TODO make the *content* of the table rows non-selectable. (the rows should still be selectable)
+// TODO remove form debugging borders
 
 #[derive(Derivative)]
 #[derivative(Debug)]
