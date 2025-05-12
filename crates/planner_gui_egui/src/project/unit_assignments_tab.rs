@@ -1,10 +1,11 @@
+use std::cmp::max;
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
-use egui::{TextEdit, Ui, WidgetText};
+use egui::{Response, TextEdit, Ui, Vec2, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -12,7 +13,7 @@ use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, AlignSelf, Display, FlexDirection, Size, Style};
-use egui_taffy::{Tui, TuiBuilderLogic, tui};
+use egui_taffy::{Tui, TuiBuilderLogic, TuiContainerResponse, tui};
 use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
 use tracing::debug;
 use validator::{Validate, ValidationError};
@@ -365,7 +366,13 @@ impl UnitAssignmentsUi {
                                     let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
                                     let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
 
-                                    let enabled = true;
+                                    pub fn transform_fail(mut value: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
+                                        // The code below has no effect, the control resized to fill available space, but never shrinks.
+                                        // value.min_size.x = 200.0;
+                                        // value.intrinsic_size = Some(Vec2::new(value.min_size.x, value.min_size.y));
+                                        // value.infinite = egui::Vec2b { x: true, y: false };
+                                        value
+                                    }
 
                                     tui.style(Style {
                                         display: Display::Flex,
@@ -380,22 +387,26 @@ impl UnitAssignmentsUi {
                                         })
                                         .ui_add_manual(
                                             |ui| {
-                                                ui.horizontal_centered(|ui| {
-                                                    // FIXME make the width auto-size
-                                                    ui.add_enabled(
-                                                        enabled,
-                                                        DoubleSlider::new(
-                                                            &mut pcb_unit_start,
-                                                            &mut pcb_unit_end,
-                                                            1..=pcb_overview.units,
-                                                        )
-                                                        .separation_distance(0)
-                                                        .width(400.0),
-                                                    )
-                                                })
-                                                .response
+                                                // always 0 the first sizing pass
+                                                let available_width = ui.available_width();
+                                                let width = if available_width == 0.0 {
+                                                    200.0
+                                                } else {
+                                                    available_width
+                                                };
+                                                // FIXME make the width auto-size
+                                                let double_slider = DoubleSlider::new(
+                                                    &mut pcb_unit_start,
+                                                    &mut pcb_unit_end,
+                                                    1..=pcb_overview.units,
+                                                )
+                                                    .separation_distance(0)
+                                                    .width(width);
+                                                    //.width(200.0);
+
+                                                ui.add(double_slider)
                                             },
-                                            no_transform,
+                                            transform_fail,
                                         );
 
                                         tui.style(Style {
@@ -436,7 +447,7 @@ impl UnitAssignmentsUi {
 
                                     if tui
                                         .style(Style {
-                                            flex_grow: 1.0,
+                                            flex_grow: 0.0,
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
@@ -451,7 +462,7 @@ impl UnitAssignmentsUi {
 
                                     if tui
                                         .style(Style {
-                                            flex_grow: 1.0,
+                                            flex_grow: 0.0,
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
@@ -466,7 +477,7 @@ impl UnitAssignmentsUi {
 
                                     if tui
                                         .style(Style {
-                                            flex_grow: 1.0,
+                                            flex_grow: 0.0,
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
