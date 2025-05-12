@@ -215,7 +215,7 @@ fn build_phase_specification(
             let task_specifications = operation_state
                 .task_states
                 .iter()
-                .filter_map(|(task_reference, task_state)| {
+                .filter_map(|(task_reference, _task_state)| {
                     let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
                         let pcbs = build_operation_load_pcbs(project);
                         Some(Box::new(LoadPcbsTaskSpecification {

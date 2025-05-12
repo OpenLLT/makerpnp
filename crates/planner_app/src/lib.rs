@@ -28,7 +28,7 @@ pub use planning::variant::VariantName;
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::part::Part;
-pub use pnp::pcb::{PcbKind, PcbSide};
+pub use pnp::pcb::PcbSide;
 pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
@@ -978,7 +978,7 @@ impl Planner {
                 let unit_assignments = project_pcb
                     .unit_assignments
                     .iter()
-                    .map(|(pcb_unit_index, (design_index, variant_name))| (*pcb_unit_index, variant_name.clone()))
+                    .map(|(pcb_unit_index, (_design_index, variant_name))| (*pcb_unit_index, variant_name.clone()))
                     .collect::<HashMap<_, _>>();
 
                 let pcb_unit_assignments = PcbUnitAssignments {

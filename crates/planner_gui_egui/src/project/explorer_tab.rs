@@ -106,7 +106,7 @@ impl ExplorerUi {
         }
 
         fn handle_unit_assignment<'p>(
-            default_key: String,
+            _default_key: String,
             item: &'p ProjectTreeItem,
             _project_directory: &'_ PathBuf,
         ) -> Result<(String, Cow<'p, ProjectTreeItem>), ()> {

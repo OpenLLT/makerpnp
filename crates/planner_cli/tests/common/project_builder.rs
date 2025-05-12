@@ -3,7 +3,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
-use planning::design::{DesignIndex, DesignName, DesignVariant};
+use planning::design::{DesignIndex, DesignName};
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;

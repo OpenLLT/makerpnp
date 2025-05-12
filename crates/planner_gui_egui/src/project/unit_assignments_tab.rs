@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{TextEdit, Ui, Vec2, WidgetText};
+use egui::{TextEdit, Ui, WidgetText};
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -597,7 +597,7 @@ impl UnitAssignmentsUi {
                         // button row
                         //
 
-                        form.show_fields_vertical(tui, |form, tui| {
+                        form.show_fields_vertical(tui, |_form, tui| {
                             tui.style(Style {
                                 flex_grow: 1.0,
                                 display: Display::Flex,
@@ -856,7 +856,7 @@ impl UiComponent for UnitAssignmentsUi {
                         .filter(|(pcb_unit_index, _)| {
                             pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
                         })
-                        .filter(|(pcb_unit_index, (candidate_design_index, _))| {
+                        .filter(|(_pcb_unit_index, (candidate_design_index, _))| {
                             matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                         })
                     {
@@ -885,7 +885,7 @@ impl UiComponent for UnitAssignmentsUi {
                         .filter(|(pcb_unit_index, _)| {
                             pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
                         })
-                        .filter(|(pcb_unit_index, (candidate_design_index, _))| {
+                        .filter(|(_pcb_unit_index, (candidate_design_index, _))| {
                             matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                         })                    {
                         *assigned_variant_name = None;
@@ -908,7 +908,7 @@ impl UiComponent for UnitAssignmentsUi {
                         fields
                             .variant_map
                             .iter_mut()
-                            .filter(|(candidate_design_index, b)| {
+                            .filter(|(candidate_design_index, _variant_name)| {
                                 matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
                             },
                             )

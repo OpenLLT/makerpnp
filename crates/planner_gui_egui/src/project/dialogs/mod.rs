@@ -5,21 +5,6 @@ pub mod manage_gerbers;
 pub mod placement_orderings;
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum PcbKindChoice {
-    Single,
-    Panel,
-}
-
-impl From<PcbKindChoice> for planner_app::PcbKind {
-    fn from(value: PcbKindChoice) -> Self {
-        match value {
-            PcbKindChoice::Single => planner_app::PcbKind::Single,
-            PcbKindChoice::Panel => planner_app::PcbKind::Panel,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum PcbSideChoice {
     Top,
     Bottom,

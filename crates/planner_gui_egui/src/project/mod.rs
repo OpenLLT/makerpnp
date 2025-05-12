@@ -2,15 +2,14 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::str::FromStr;
 
-use egui::{Ui, Widget, WidgetText};
+use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, DesignName, Event, LoadOutSource, ObjectPath, PhaseOverview, PhaseReference, PlacementOperation,
+    AddOrRemoveAction, Event, LoadOutSource, ObjectPath, PhaseOverview, PhaseReference, PlacementOperation,
     PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
-    SetOrClearAction, VariantName,
+    SetOrClearAction,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -998,11 +997,11 @@ impl UiComponent for Project {
                     ProjectView::PcbOverview(pcb_overview) => {
                         trace!("pcb_overview: {:?}", pcb_overview);
 
-                        // TODO use the name to update the tab label of the pcb overview and unit_assignments tabs?
-                        //      would need multiple actions...
-                        //      A reactive 'Reactive<Option<PcbOverview>>' that's given to both tabs
-                        //      would be perfect here to avoid needing any actions.
-                        let name = pcb_overview.name.clone();
+                        // FUTURE use the name to update the tab label of the pcb overview and unit_assignments tabs?
+                        //        would need multiple actions...
+                        //        A reactive 'Reactive<Option<PcbOverview>>' that's given to both tabs
+                        //        would be perfect here to avoid needing any actions.
+                        let _name = pcb_overview.name.clone();
 
                         let mut state = self.project_ui_state.lock().unwrap();
 

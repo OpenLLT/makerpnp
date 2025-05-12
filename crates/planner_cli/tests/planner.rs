@@ -12,7 +12,6 @@ mod operation_sequence_1 {
 
     use assert_cmd::Command;
     use indoc::indoc;
-    use planning::design::DesignVariant;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
     use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;

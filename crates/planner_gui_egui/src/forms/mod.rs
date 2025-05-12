@@ -117,17 +117,6 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         style
     }
 
-    fn form_inner_style() -> fn() -> Style {
-        let style = || Style {
-            padding: length(0.),
-            margin: length(0.),
-            gap: length(2.),
-            ..Default::default()
-        };
-
-        style
-    }
-
     pub fn add_field_ui(
         &self,
         field_name: &str,

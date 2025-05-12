@@ -324,18 +324,14 @@ impl AddPcbFields {
         Ok(())
     }
 
-    pub fn is_unit_map_fully_populated_inner(unit_map: &Vec<Option<String>>, units: usize) -> bool {
+    fn is_unit_map_fully_populated_inner(unit_map: &Vec<Option<String>>, units: usize) -> bool {
         unit_map
             .iter()
             .take(units)
             .any(|design| design.is_none())
     }
 
-    pub fn is_unit_map_fully_populated(&self) -> bool {
-        Self::is_unit_map_fully_populated_inner(&self.unit_map, self.units as usize)
-    }
-
-    pub fn is_unit_map_empty_inner(unit_map: &Vec<Option<String>>, units: usize) -> bool {
+    fn is_unit_map_empty_inner(unit_map: &Vec<Option<String>>, units: usize) -> bool {
         unit_map
             .iter()
             .take(units)
