@@ -400,26 +400,28 @@ impl UnitAssignmentsUi {
 
                                         tui.style(Style {
                                             flex_grow: 0.0,
+                                            min_size: Size {
+                                                width: length(50.0),
+                                                height: auto(),
+                                            },
                                             ..default_style()
                                         })
-                                        .ui(|ui| {
-                                            ui.add_enabled(
-                                                enabled,
-                                                egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end),
-                                            );
-                                        });
+                                        .ui_add(
+                                            egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end)
+                                        );
 
                                         tui.style(Style {
                                             flex_grow: 0.0,
+                                            min_size: Size {
+                                                width: length(50.0),
+                                                height: auto(),
+                                            },
                                             ..default_style()
                                         })
-                                        .ui(|ui| {
-                                            ui.add_enabled(
-                                                enabled,
-                                                egui::DragValue::new(&mut pcb_unit_end)
-                                                    .range(pcb_unit_start..=pcb_overview.units),
-                                            );
-                                        });
+                                        .ui_add(
+                                            egui::DragValue::new(&mut pcb_unit_end)
+                                                .range(pcb_unit_start..=pcb_overview.units)
+                                        );
                                     });
 
                                     let pcb_unit_range = RangeInclusive::new(pcb_unit_start, pcb_unit_end);
