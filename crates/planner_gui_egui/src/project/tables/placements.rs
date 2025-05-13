@@ -607,7 +607,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn filter_row(&mut self, row: &PlacementsRow) -> bool {
         let haystack = format!(
-            "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, phase: '{}', status: '{}'",
+            "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",
             &row.object_path,
             &row.placement_state.placement.ref_des,
             &row.placement_state
@@ -615,14 +615,19 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .part
                 .manufacturer,
             &row.placement_state.placement.part.mpn,
-            &row.placement_state.placement.place,
-            &row.placement_state.operation_status,
+            &tr!(placement_place_to_i18n_key(row.placement_state.placement.place)),
+            &tr!(placement_operation_status_to_i18n_key(
+                &row.placement_state.operation_status
+            )),
+            &tr!(pcb_side_to_i18n_key(&row.placement_state.placement.pcb_side)),
             &row.placement_state
                 .phase
                 .as_ref()
                 .map(|phase| phase.to_string())
                 .unwrap_or_default(),
-            &row.placement_state.project_status,
+            &tr!(placement_project_status_to_i18n_key(
+                &row.placement_state.project_status
+            )),
         );
 
         // "Filter single row. If this returns false, the row will be hidden."
