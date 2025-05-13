@@ -5,21 +5,21 @@ edition = "2024"
 
 [dependencies]
 # Logging
-log = "0.4.27"
-env_logger = "0.11"
+log = { workspace = true }
+env_logger = { workspace = true }
 
 # GUI Framework
-egui = "0.31.1"
-eframe = { version = "0.31.1", features = ["default"] }
-epaint = "0.31.1"
-egui_extras = "0.31.1"
-egui_taffy = "0.7.0"
+egui = { workspace = true }
+eframe = { workspace = true, features = ["default"] }
+epaint = { workspace = true }
+egui_extras = { workspace = true }
+egui_taffy = { workspace = true }
 
 # File Dialog
-rfd = "0.15.2"
+rfd = { workspace = true }
 
 # Gerber rendering, types and parser
-gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "37349dc2a344d3e4f03ef081b6a7b695d4aa1652" }
+gerber_viewer = { workspace = true }
 
 # Errors
-thiserror = "2.0.12"
+thiserror = { workspace = true }

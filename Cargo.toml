@@ -54,6 +54,10 @@ clap-verbosity-flag = { version = "3.0.2" }
 argfile = { version = "0.2.1" }
 
 # logging
+log = { version = "0.4.27" }
+env_logger = { version = "0.11.8" }
+
+# tracing
 tracing = { version = "0.1.40"}
 tracing-subscriber = { version = "0.3.18" }
 # only for `as_trace`
@@ -78,6 +82,7 @@ crux_core = { version = "0.12.0" }
 
 # gui (egui)
 egui = { version = "0.31.1", features = ["serde"]}
+epaint = { version = "0.31.1"}
 egui_extras = { version = "0.31.1", default-features = false }
 eframe = { version = "0.31.1", default-features = false }
 egui_taffy = "0.7.0"
@@ -114,7 +119,12 @@ predicates-tree = { version = "1.0.11" }
 tokio = { version = "1.43.0", features = ["full"]}
 crossbeam-channel = { version = "0.5.13" }
 
+# Gerber rendering, types and parser
+gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "37349dc2a344d3e4f03ef081b6a7b695d4aa1652" }
+
 [patch.crates-io]
 # fork of egui 0.31.1 with the following fixes:
 # https://github.com/emilk/egui/pull/7047 - Allow resize on one both or no axis
 egui = { git = "https://github.com/MakerPnP/egui.git", rev = "2937d7d6d3a31a5a7c65511df7ac24c93df6f665"}
+# and since epaint and other crates come from the same repo, we have to patch them too if they are used as dependencies
+epaint = { git = "https://github.com/MakerPnP/egui.git", rev = "2937d7d6d3a31a5a7c65511df7ac24c93df6f665"}
