@@ -1498,7 +1498,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc4feb366740ded31a004a0e4452fbf84e80ef432ecf8314c485210229672fd1"
 dependencies = [
  "bytemuck",
- "emath",
+ "emath 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "ecolor"
+version = "0.31.1"
+source = "git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665#2937d7d6d3a31a5a7c65511df7ac24c93df6f665"
+dependencies = [
+ "bytemuck",
+ "emath 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
  "serde",
 ]
 
@@ -1558,14 +1567,13 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.31.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25dd34cec49ab55d85ebf70139cb1ccd29c977ef6b6ba4fe85489d6877ee9ef3"
+source = "git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665#2937d7d6d3a31a5a7c65511df7ac24c93df6f665"
 dependencies = [
  "accesskit",
  "ahash 0.8.11",
  "bitflags 2.8.0",
- "emath",
- "epaint",
+ "emath 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
+ "epaint 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
  "log",
  "nohash-hasher",
  "profiling",
@@ -1608,7 +1616,7 @@ dependencies = [
  "bytemuck",
  "document-features",
  "egui",
- "epaint",
+ "epaint 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
  "profiling",
  "thiserror 1.0.69",
@@ -1754,6 +1762,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e4cadcff7a5353ba72b7fea76bf2122b5ebdbc68e8155aa56dfdea90083fe1b"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "emath"
+version = "0.31.1"
+source = "git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665#2937d7d6d3a31a5a7c65511df7ac24c93df6f665"
+dependencies = [
+ "bytemuck",
  "serde",
 ]
 
@@ -1848,9 +1864,25 @@ dependencies = [
  "ab_glyph",
  "ahash 0.8.11",
  "bytemuck",
- "ecolor",
- "emath",
- "epaint_default_fonts",
+ "ecolor 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "emath 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "epaint_default_fonts 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "nohash-hasher",
+ "parking_lot",
+ "profiling",
+]
+
+[[package]]
+name = "epaint"
+version = "0.31.1"
+source = "git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665#2937d7d6d3a31a5a7c65511df7ac24c93df6f665"
+dependencies = [
+ "ab_glyph",
+ "ahash 0.8.11",
+ "bytemuck",
+ "ecolor 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
+ "emath 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
+ "epaint_default_fonts 0.31.1 (git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665)",
  "log",
  "nohash-hasher",
  "parking_lot",
@@ -1863,6 +1895,11 @@ name = "epaint_default_fonts"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7e7a64c02cf7a5b51e745a9e45f60660a286f151c238b9d397b3e923f5082f"
+
+[[package]]
+name = "epaint_default_fonts"
+version = "0.31.1"
+source = "git+https://github.com/MakerPnP/egui.git?rev=2937d7d6d3a31a5a7c65511df7ac24c93df6f665#2937d7d6d3a31a5a7c65511df7ac24c93df6f665"
 
 [[package]]
 name = "equivalent"
@@ -2315,7 +2352,7 @@ dependencies = [
  "egui_extras",
  "egui_taffy",
  "env_logger",
- "epaint",
+ "epaint 0.31.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gerber_viewer 0.1.0 (git+https://github.com/makerpnp/gerber_viewer.git?rev=37349dc2a344d3e4f03ef081b6a7b695d4aa1652)",
  "log",
  "rfd",

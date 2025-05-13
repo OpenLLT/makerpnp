@@ -113,3 +113,8 @@ predicates-tree = { version = "1.0.11" }
 # tasks/async
 tokio = { version = "1.43.0", features = ["full"]}
 crossbeam-channel = { version = "0.5.13" }
+
+[patch.crates-io]
+# fork of egui 0.31.1 with the following fixes:
+# https://github.com/emilk/egui/pull/7047 - Allow resize on one both or no axis
+egui = { git = "https://github.com/MakerPnP/egui.git", rev = "2937d7d6d3a31a5a7c65511df7ac24c93df6f665"}
