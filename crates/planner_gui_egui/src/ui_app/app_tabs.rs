@@ -6,22 +6,26 @@ use slotmap::SlotMap;
 use tracing::{error, trace};
 
 use crate::config::Config;
+use crate::pcb::{Pcb, PcbKey};
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::{HomeTab, HomeTabAction, HomeTabContext, HomeTabUiCommand};
 use crate::ui_app::app_tabs::new_project::{
     NewProjectTab, NewProjectTabAction, NewProjectTabContext, NewProjectTabUiCommand,
 };
+use crate::ui_app::app_tabs::pcb::{PcbTab, PcbTabAction, PcbTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_component::{ComponentState, UiComponent};
 
 pub mod home;
 pub mod new_project;
+pub mod pcb;
 pub mod project;
 
 pub struct TabKindContext {
     pub config: Value<Config>,
     pub projects: Value<SlotMap<ProjectKey, Project>>,
+    pub pcbs: Value<SlotMap<PcbKey, Pcb>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -29,6 +33,7 @@ pub enum TabKind {
     Home(HomeTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     NewProject(NewProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     Project(ProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
+    Pcb(PcbTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +41,7 @@ pub enum TabKindUiCommand {
     HomeTabCommand { command: HomeTabUiCommand },
     NewProjectTabCommand { command: NewProjectTabUiCommand },
     ProjectTabCommand { command: ProjectTabUiCommand },
+    PcbTabCommand { command: PcbTabUiCommand },
 }
 
 #[derive(Debug)]
@@ -44,6 +50,7 @@ pub enum TabKindAction {
     HomeTabAction { action: HomeTabAction },
     NewProjectTabAction { action: NewProjectTabAction },
     ProjectTabAction { action: ProjectTabAction },
+    PcbTabAction { action: PcbTabAction },
 }
 
 impl Tab for TabKind {
@@ -54,6 +61,7 @@ impl Tab for TabKind {
             TabKind::Home(tab, _) => tab.label(),
             TabKind::NewProject(tab, _) => tab.label(),
             TabKind::Project(tab, _) => tab.label(),
+            TabKind::Pcb(tab, _) => tab.label(),
         }
     }
 
@@ -82,6 +90,13 @@ impl Tab for TabKind {
                     projects: context.projects.clone(),
                 };
                 tab.on_close(tab_key, &mut project_tab_context)
+            }
+            TabKind::Pcb(tab, _) => {
+                let mut pcb_tab_context = pcb::PcbTabContext {
+                    tab_key: tab_key.clone(),
+                    pcbs: context.pcbs.clone(),
+                };
+                tab.on_close(tab_key, &mut pcb_tab_context)
             }
         }
     }
@@ -116,6 +131,13 @@ impl UiComponent for TabKind {
                     projects: context.projects.clone(),
                 };
                 tab.ui(ui, &mut project_tab_context)
+            }
+            TabKind::Pcb(tab, _) => {
+                let mut pcb_tab_context = pcb::PcbTabContext {
+                    tab_key,
+                    pcbs: context.pcbs.clone(),
+                };
+                tab.ui(ui, &mut pcb_tab_context)
             }
         }
     }
@@ -173,7 +195,25 @@ impl UiComponent for TabKind {
                         action,
                     })
             }
-            _ => unreachable!(),
+            (
+                TabKind::Pcb(tab, _),
+                TabKindUiCommand::PcbTabCommand {
+                    command,
+                },
+            ) => {
+                let mut project_tab_context = pcb::PcbTabContext {
+                    tab_key,
+                    pcbs: context.pcbs.clone(),
+                };
+                tab.update(command, &mut project_tab_context)
+                    .map(|action| TabKindAction::PcbTabAction {
+                        action,
+                    })
+            }
+            _ => {
+                // this can occur when adding new tab kinds or when the types are mismatched
+                unreachable!()
+            }
         }
     }
 }

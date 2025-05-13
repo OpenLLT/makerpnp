@@ -8,15 +8,17 @@ use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use futures::StreamExt;
 use slotmap::SlotMap;
-use tracing::{debug, info, trace};
+use tracing::{debug, error, info, trace};
 
 use crate::config::Config;
 use crate::file_picker::Picker;
+use crate::pcb::{Pcb, PcbKey, PcbUiCommand};
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::tokio_runtime::TokioRuntime;
 use crate::tabs::TabKey;
 use crate::toolbar::{Toolbar, ToolbarContext, ToolbarUiCommand};
 use crate::ui_app::app_tabs::new_project::NewProjectArgs;
+use crate::ui_app::app_tabs::pcb::{PcbTab, PcbTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{AppTabs, TabKind, TabKindContext, TabKindUiCommand, TabUiCommand};
 use crate::ui_commands::{UiCommand, handle_command};
@@ -42,16 +44,32 @@ pub struct UiApp {
     slot: Slot<UiCommand>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PickReason {
+    PcbFile,
+    ProjectFile,
+}
+
+impl PickReason {
+    pub fn file_filter(self) -> &'static str {
+        match self {
+            PickReason::ProjectFile => "*.project.json",
+            PickReason::PcbFile => "*.pcb.json",
+        }
+    }
+}
+
 pub struct AppState {
     // TODO find a better way of doing this that doesn't require this boolean
     startup_done: bool,
-    file_picker: Picker,
+    file_picker: Option<(PickReason, Picker)>,
 
     command_sender: Enqueue<UiCommand>,
 
     pub projects: Value<SlotMap<ProjectKey, Project>>,
 
     pub toolbar: Toolbar,
+    pub pcbs: Value<SlotMap<PcbKey, Pcb>>,
 }
 
 impl AppState {
@@ -66,18 +84,42 @@ impl AppState {
 
         Self {
             startup_done: false,
-            file_picker: Picker::default(),
+            file_picker: None,
 
             command_sender: sender,
             projects: Value::new(SlotMap::default()),
+            pcbs: Value::new(SlotMap::default()),
             toolbar,
         }
     }
 
-    pub fn pick_file(&mut self) {
-        if !self.file_picker.is_picking() {
-            self.file_picker.pick_file();
+    fn pick_file(&mut self, reason: PickReason) {
+        // TODO use the filter, picker API needs updating
+        let _filter = reason.file_filter();
+
+        match &mut self.file_picker {
+            Some((existing_reason, picker)) if *existing_reason == reason => {
+                if !picker.is_picking() {
+                    picker.pick_file();
+                }
+            }
+            Some(_) => {
+                error!("file picker busy, not picking a {:?}", reason);
+            }
+            None => {
+                let mut picker = Picker::default();
+                picker.pick_file();
+                self.file_picker = Some((reason, picker));
+            }
         }
+    }
+
+    pub fn pick_project_file(&mut self) {
+        self.pick_file(PickReason::ProjectFile);
+    }
+
+    pub fn pick_pcb_file(&mut self) {
+        self.pick_file(PickReason::PcbFile);
     }
 
     pub fn make_project_tab(&mut self, path: PathBuf, project_key: ProjectKey) -> (TabKind, ProjectKey) {
@@ -141,7 +183,7 @@ impl AppState {
         Self::send_project_command(&mut self.command_sender, project_command, project_key, tab_key);
     }
 
-    pub fn open_file(&mut self, path: PathBuf, app_tabs: Value<AppTabs>) {
+    pub fn open_project_file(&mut self, path: PathBuf, app_tabs: Value<AppTabs>) {
         let (project_command, project_key) = {
             let mut projects = self.projects.lock().unwrap();
             project_from_path(path.clone(), &mut projects)
@@ -157,6 +199,7 @@ impl AppState {
         self.configure_project_tab(project_key, tab_key, project_command);
     }
 
+    /// `tab_key` - the tab key of the tab to replace, e.g. the 'NewProjectTab' instance's key.
     pub fn create_project(&mut self, tab_key: TabKey, args: NewProjectArgs, app_tabs: Value<AppTabs>) {
         debug!("creating project. tab_key: {:?}, args: {:?}", tab_key, args);
 
@@ -174,6 +217,103 @@ impl AppState {
             .expect("replaced");
 
         self.configure_project_tab(project_key, tab_key, project_command);
+    }
+
+    //
+    // pcb tab
+    //
+
+    pub fn send_pcb_command(
+        command_sender: &mut Enqueue<UiCommand>,
+        pcb_command: PcbUiCommand,
+        pcb_key: PcbKey,
+        tab_key: TabKey,
+    ) {
+        command_sender
+            .send(UiCommand::TabCommand {
+                tab_key,
+                command: TabUiCommand::TabKindCommand(TabKindUiCommand::PcbTabCommand {
+                    command: PcbTabUiCommand::PcbCommand {
+                        key: pcb_key,
+                        command: pcb_command,
+                    },
+                }),
+            })
+            .expect("sent");
+    }
+
+    pub fn make_pcb_tab(&mut self, path: Option<PathBuf>, pcb_key: PcbKey) -> (TabKind, PcbKey) {
+        info!("open file. path: {:?}", path);
+
+        let label = path
+            .as_ref()
+            .map_or(tr!("pcb-tab-new-label"), |path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string()
+            });
+
+        let tab_kind_component = ComponentState::default();
+        let tab_kind_sender = tab_kind_component.sender.clone();
+
+        let mut pcb_tab = PcbTab::new(label, path, pcb_key);
+        pcb_tab
+            .component
+            .configure_mapper(tab_kind_sender, |command| {
+                trace!("pcb tab mapper. command: {:?}", command);
+                TabKindUiCommand::PcbTabCommand {
+                    command,
+                }
+            });
+
+        let tab_kind = TabKind::Pcb(pcb_tab, tab_kind_component);
+
+        (tab_kind, pcb_key)
+    }
+
+    pub fn configure_pcb_tab(&mut self, pcb_key: PcbKey, tab_key: TabKey, pcb_command: PcbUiCommand) {
+        let mut pcbs = self.pcbs.lock().unwrap();
+        let mut pcb = pcbs.get_mut(pcb_key).unwrap();
+
+        let app_command_sender = self.command_sender.clone();
+        configure_pcb_component(app_command_sender, tab_key.clone(), &mut pcb);
+
+        Self::send_pcb_command(&mut self.command_sender, pcb_command, pcb_key, tab_key);
+    }
+
+    pub fn open_pcb_file(&mut self, path: PathBuf, app_tabs: Value<AppTabs>) {
+        let (pcb_command, pcb_key) = {
+            let mut pcbs = self.pcbs.lock().unwrap();
+            pcb_from_path(path.clone(), &mut pcbs)
+        };
+
+        let (tab_kind, pcb_key) = self.make_pcb_tab(Some(path), pcb_key);
+
+        let tab_key = app_tabs
+            .lock()
+            .unwrap()
+            .add_tab(tab_kind);
+
+        self.configure_pcb_tab(pcb_key, tab_key, pcb_command);
+    }
+
+    pub fn create_pcb(&mut self, app_tabs: Value<AppTabs>) {
+        debug!("creating pcb.");
+
+        let (pcb_command, pcb_key) = {
+            let mut pcbs = self.pcbs.lock().unwrap();
+            pcb_new(&mut pcbs)
+        };
+
+        let (tab_kind, pcb_key) = self.make_pcb_tab(None, pcb_key);
+
+        let tab_key = app_tabs
+            .lock()
+            .unwrap()
+            .add_tab(tab_kind);
+
+        self.configure_pcb_tab(pcb_key, tab_key, pcb_command);
     }
 }
 
@@ -294,75 +434,148 @@ impl UiApp {
         }
     }
 
-    /// When the app starts up, the new project tab components won't be wired up, so we just
-    /// remove them for now until we have a component restoration system.
+    /// When the app starts up, the new project tab components won't be wired up
+    /// so we just remove them for now until we have a component restoration system.
     fn remove_new_project_tabs_on_startup(&mut self) {
         let mut ui_state = self.app_tabs.lock().unwrap();
 
-        ui_state.retain(|_tab_key, tab_kind| !matches!(tab_kind, TabKind::NewProject(_, _)));
+        ui_state.retain(|tab_key, tab_kind| {
+            let should_retain = !matches!(tab_kind, TabKind::NewProject(_, _));
+            if !should_retain {
+                debug!("removing 'new project' tab, tab_key: {:?}", tab_key);
+            }
+            should_retain
+        });
     }
 
-    /// when the app starts up, the projects will be empty, and the document tabs will have keys that don't exist
-    /// in the projects list (because it's empty now).
-    /// we have to find these tabs, create projects, store them in the map and replace the tab's project key
-    /// with the new key generated when adding the key to the map
+    /// When the app starts up, the pcb tabs won't be wired up, and we cannot restore pcb tabs without a path
+    /// so we just remove them for now until we have a component restoration system.
+    fn remove_new_pcb_tabs_on_startup(&mut self) {
+        let mut ui_state = self.app_tabs.lock().unwrap();
+
+        ui_state.retain(|tab_key, tab_kind| {
+            let should_retain = !matches!(tab_kind, TabKind::Pcb(pcb_tab, _) if pcb_tab.path.is_none());
+            if !should_retain {
+                debug!("removing 'new pcb' tab, tab_key: {:?}", tab_key);
+            }
+            should_retain
+        });
+    }
+
+    /// when the app starts up, the projects and pcbs will be empty, and the project and pcbs tabs will have keys that
+    /// don't exist in the projects and pcbs lists (because they are empty now).
+    /// we have to find these tabs, create projects/pcbs instances, store them in the maps and replace the corresponding
+    /// tab's map key with the new key generated when adding the key to the map
     ///
     /// Safety: call only once on startup, before the tabs are shown.
     fn restore_documents_on_startup(&mut self) {
         // we have to do this as a two-step process to above borrow-checker issues
         // we also have to limit the scope of the access to ui_state and app_state
 
+        #[derive(Debug)]
+        enum Kind {
+            Project,
+            Pcb,
+        }
+
         // step 1 - find the document tabs, return the tab keys and paths.
         let tab_keys_and_paths = {
             let ui_state = self.app_tabs.lock().unwrap();
 
             ui_state.filter_map(|(tab_key, tab_kind)| match tab_kind {
-                TabKind::Project(project_tab, _) => Some((tab_key.clone(), project_tab.path.clone())),
+                TabKind::Project(project_tab, _) => Some((Kind::Project, *tab_key, project_tab.path.clone())),
+                TabKind::Pcb(pcb_tab, _) if pcb_tab.path.is_some() => {
+                    Some((Kind::Pcb, *tab_key, pcb_tab.path.clone().unwrap()))
+                }
                 _ => None,
             })
         };
 
         // step 2 - store the documents and update the document key for the tab.
-        for (tab_key, path) in tab_keys_and_paths {
-            let (project_key, project_command) = {
-                let app_state = self.app_state();
-                let app_command_sender = app_state.command_sender.clone();
-                let mut projects = app_state.projects.lock().unwrap();
+        for (kind, tab_key, path) in tab_keys_and_paths {
+            debug!(
+                "restoring document. kind: {:?}, tab_key: {:?}, path: {:?}",
+                kind, tab_key, path
+            );
+            let app_command_sender = self.app_state().command_sender.clone();
 
-                let (project_command, project_key) = project_from_path(path, &mut projects);
+            match kind {
+                Kind::Project => {
+                    let (project_key, project_command) = {
+                        let app_state = self.app_state();
+                        let mut projects = app_state.projects.lock().unwrap();
 
-                let mut project = projects.get_mut(project_key).unwrap();
-                configure_project_component(app_command_sender, tab_key.clone(), &mut project);
+                        let (project_command, project_key) = project_from_path(path, &mut projects);
 
-                (project_key, project_command)
-            };
+                        let project = projects.get_mut(project_key).unwrap();
+                        configure_project_component(app_command_sender.clone(), tab_key, project);
 
-            {
-                let ui_state = self.app_tabs.lock().unwrap();
-                ui_state.with_tab_mut(&tab_key, |tab| {
-                    if let TabKind::Project(project_tab, _) = tab {
-                        project_tab.project_key = project_key;
-                    } else {
-                        unreachable!()
+                        (project_key, project_command)
+                    };
+
+                    {
+                        let ui_state = self.app_tabs.lock().unwrap();
+                        ui_state.with_tab_mut(&tab_key, |tab| {
+                            if let TabKind::Project(project_tab, _) = tab {
+                                project_tab.project_key = project_key;
+                            } else {
+                                unreachable!()
+                            }
+                        });
                     }
-                });
-            }
 
-            {
-                let app_state = self.app_state();
+                    {
+                        app_command_sender
+                            .send(UiCommand::TabCommand {
+                                tab_key,
+                                command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
+                                    command: ProjectTabUiCommand::ProjectCommand {
+                                        key: project_key,
+                                        command: project_command,
+                                    },
+                                }),
+                            })
+                            .expect("sent");
+                    }
+                }
+                Kind::Pcb => {
+                    let (pcb_key, pcb_command) = {
+                        let app_state = self.app_state();
+                        let mut pcbs = app_state.pcbs.lock().unwrap();
 
-                app_state
-                    .command_sender
-                    .send(UiCommand::TabCommand {
-                        tab_key,
-                        command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
-                            command: ProjectTabUiCommand::ProjectCommand {
-                                key: project_key,
-                                command: project_command,
-                            },
-                        }),
-                    })
-                    .expect("sent");
+                        let (pcb_command, pcb_key) = pcb_from_path(path, &mut pcbs);
+
+                        let pcb = pcbs.get_mut(pcb_key).unwrap();
+                        configure_pcb_component(app_command_sender.clone(), tab_key, pcb);
+
+                        (pcb_key, pcb_command)
+                    };
+
+                    {
+                        let ui_state = self.app_tabs.lock().unwrap();
+                        ui_state.with_tab_mut(&tab_key, |tab| {
+                            if let TabKind::Pcb(pcb_tab, _) = tab {
+                                pcb_tab.pcb_key = pcb_key;
+                            } else {
+                                unreachable!()
+                            }
+                        });
+                    }
+
+                    {
+                        app_command_sender
+                            .send(UiCommand::TabCommand {
+                                tab_key,
+                                command: TabUiCommand::TabKindCommand(TabKindUiCommand::PcbTabCommand {
+                                    command: PcbTabUiCommand::PcbCommand {
+                                        key: pcb_key,
+                                        command: pcb_command,
+                                    },
+                                }),
+                            })
+                            .expect("sent");
+                    }
+                }
             }
         }
     }
@@ -493,16 +706,27 @@ impl eframe::App for UiApp {
                 );
             }
             self.remove_new_project_tabs_on_startup();
+            self.remove_new_pcb_tabs_on_startup();
             self.restore_documents_on_startup();
         }
 
         // in a block to limit the scope of the `ui_state` borrow/guard
         {
-            let projects = self.app_state().projects.clone();
+            // block required limit the scope of the `app_state` guard
+            let (projects, pcbs) = {
+                let app_state = self.app_state();
+                let projects = app_state.projects.clone();
+                let pcbs = app_state.pcbs.clone();
+                drop(app_state);
+                (projects, pcbs)
+            };
+
+            let config = self.config.clone();
 
             let mut tab_context = TabKindContext {
-                config: self.config.clone(),
+                config,
                 projects,
+                pcbs,
             };
 
             let mut ui_state = self.app_tabs.lock().unwrap();
@@ -517,17 +741,35 @@ impl eframe::App for UiApp {
 
         let mut app_state = self.app_state();
 
-        if let Ok(picked_file) = app_state.file_picker.picked() {
+        if let Some((reason, Ok(picked_file))) = app_state
+            .file_picker
+            .as_mut()
+            .map(|(reason, picker)| (reason, picker.picked()))
+        {
             // FIXME this `update` method does not get called immediately after picking a file, instead update gets
             //       called when the user moves the mouse or interacts with the window again.
-            app_state
-                .command_sender
-                .send(UiCommand::OpenFile(picked_file))
-                .ok();
+
+            match reason {
+                PickReason::PcbFile => {
+                    app_state
+                        .command_sender
+                        .send(UiCommand::OpenPcbFile(picked_file))
+                        .ok();
+                }
+                PickReason::ProjectFile => {
+                    app_state
+                        .command_sender
+                        .send(UiCommand::OpenProjectFile(picked_file))
+                        .ok();
+                }
+            }
         }
     }
 }
 
+//
+// project
+//
 fn project_from_path(
     path: PathBuf,
     projects: &mut ValueGuard<SlotMap<ProjectKey, Project>>,
@@ -575,6 +817,52 @@ fn configure_project_component(app_command_sender: Sender<UiCommand>, tab_key: T
         });
 }
 
+//
+// pcb
+//
+
+fn pcb_from_path(path: PathBuf, pcbs: &mut ValueGuard<SlotMap<PcbKey, Pcb>>) -> (PcbUiCommand, PcbKey) {
+    let mut pcb_command = None;
+    let pcb_key = pcbs.insert_with_key(|key| {
+        let (pcb, pcb_command_to_issue) = Pcb::from_path(path.clone(), key);
+        pcb_command.replace(pcb_command_to_issue);
+
+        pcb
+    });
+    (pcb_command.unwrap(), pcb_key)
+}
+
+fn pcb_new(pcbs: &mut ValueGuard<SlotMap<PcbKey, Pcb>>) -> (PcbUiCommand, PcbKey) {
+    let mut pcb_command = None;
+    let pcb_key = pcbs.insert_with_key(|key| {
+        let (pcb, pcb_command_to_issue) = Pcb::new(key);
+        pcb_command.replace(pcb_command_to_issue);
+
+        pcb
+    });
+    (pcb_command.unwrap(), pcb_key)
+}
+
+fn configure_pcb_component(app_command_sender: Sender<UiCommand>, tab_key: TabKey, pcb: &mut Pcb) {
+    pcb.component
+        .configure_mapper(app_command_sender, move |(key, command)| {
+            trace!("pcb mapper. command: {:?}", command);
+            UiCommand::TabCommand {
+                tab_key,
+                command: TabUiCommand::TabKindCommand(TabKindUiCommand::PcbTabCommand {
+                    command: PcbTabUiCommand::PcbCommand {
+                        key,
+                        command,
+                    },
+                }),
+            }
+        });
+}
+
+//
+// toolbar
+//
+
 pub fn build_toolbar_context(app_tabs: &Value<AppTabs>) -> ToolbarContext {
     let app_tabs = app_tabs.lock().unwrap();
     let active_tab = app_tabs.active_tab();
@@ -584,6 +872,7 @@ pub fn build_toolbar_context(app_tabs: &Value<AppTabs>) -> ToolbarContext {
             TabKind::Home(_, _) => false,
             TabKind::NewProject(_, _) => false,
             TabKind::Project(project_tab, _) => project_tab.modified,
+            TabKind::Pcb(pcb_tab, _) => pcb_tab.modified,
         })
     });
 

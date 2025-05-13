@@ -17,8 +17,10 @@ modal-phase-placement-orderings-title = Phase placement orderings - { $phase }
 modal-manager-gerbers-title = Manage gerbers - { $design }
 
 toolbar-button-home = Home
-toolbar-button-new = New
-toolbar-button-open = Open
+toolbar-button-new-project = New project
+toolbar-button-open-project = Open project
+toolbar-button-new-pcb = New PCB
+toolbar-button-open-pcb = Open PCB
 toolbar-button-save = Save
 toolbar-button-close-all = Close all
 
@@ -36,6 +38,7 @@ project-toolbar-button-create-unit-assignment = Create unit assignment
 
 tab-label-home = Home
 tab-label-new-project = New project
+tab-label-new-pcb = New PCB
 
 home-banner = MakerPnP - Planner
 home-checkbox-label-show-on-startup = Show on startup

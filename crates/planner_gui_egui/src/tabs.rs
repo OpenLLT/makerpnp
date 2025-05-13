@@ -69,7 +69,10 @@ impl<'b, Context, TabKind: Tab<Context = Context>> Tabs<TabKind, Context> {
                 let can_close = tab.on_close(tab_key, tab_context);
 
                 if can_close {
-                    info!("Removing orphaned tab. key: {:?}", tab_key);
+                    info!(
+                        "Removing orphaned tab, not in retain list. tab_keys: {:?}, key: {:?}",
+                        tab_keys, tab_key
+                    );
                 }
             }
             retain
@@ -98,6 +101,8 @@ pub trait Tab {
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
         true
     }
+
+    // FUTURE consider adding 'is_modified' method?
 }
 
 pub struct AppTabViewer<'a, TabContext, TabKind: Tab> {

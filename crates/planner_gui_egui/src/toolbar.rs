@@ -8,17 +8,24 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub enum ToolbarUiCommand {
     ShowHomeTabClicked,
     CloseAllTabsClicked,
-    OpenClicked,
+    OpenProjectClicked,
     SaveClicked(TabKey),
-    NewClicked,
+    NewProjectClicked,
+    NewPcbClicked,
+    OpenPcbClicked,
 }
 
 pub enum ToolbarAction {
     ShowHomeTab,
     CloseAllTabs,
-    PickFile,
-    SaveTab(TabKey),
+
+    PickProjectFile,
     AddNewProjectTab,
+
+    PickPcbFile,
+    AddNewPcbTab,
+
+    SaveTab(TabKey),
 }
 
 pub struct ToolbarContext {
@@ -54,21 +61,43 @@ impl UiComponent for Toolbar {
                         .send(ToolbarUiCommand::ShowHomeTabClicked);
                 }
 
+                ui.separator();
+
                 if ui
-                    .button(tr!("toolbar-button-new"))
+                    .button(tr!("toolbar-button-new-project"))
                     .clicked()
                 {
                     self.component
-                        .send(ToolbarUiCommand::NewClicked);
+                        .send(ToolbarUiCommand::NewProjectClicked);
                 }
 
                 if ui
-                    .button(tr!("toolbar-button-open"))
+                    .button(tr!("toolbar-button-open-project"))
                     .clicked()
                 {
                     self.component
-                        .send(ToolbarUiCommand::OpenClicked);
+                        .send(ToolbarUiCommand::OpenProjectClicked);
                 }
+
+                ui.separator();
+
+                if ui
+                    .button(tr!("toolbar-button-new-pcb"))
+                    .clicked()
+                {
+                    self.component
+                        .send(ToolbarUiCommand::NewPcbClicked);
+                }
+
+                if ui
+                    .button(tr!("toolbar-button-open-pcb"))
+                    .clicked()
+                {
+                    self.component
+                        .send(ToolbarUiCommand::OpenPcbClicked);
+                }
+
+                ui.separator();
 
                 ui.add_enabled_ui(context.can_save, |ui| {
                     if ui
@@ -99,8 +128,10 @@ impl UiComponent for Toolbar {
         match command {
             ToolbarUiCommand::ShowHomeTabClicked => Some(ToolbarAction::ShowHomeTab),
             ToolbarUiCommand::CloseAllTabsClicked => Some(ToolbarAction::CloseAllTabs),
-            ToolbarUiCommand::OpenClicked => Some(ToolbarAction::PickFile),
-            ToolbarUiCommand::NewClicked => Some(ToolbarAction::AddNewProjectTab),
+            ToolbarUiCommand::NewProjectClicked => Some(ToolbarAction::AddNewProjectTab),
+            ToolbarUiCommand::OpenProjectClicked => Some(ToolbarAction::PickProjectFile),
+            ToolbarUiCommand::NewPcbClicked => Some(ToolbarAction::AddNewPcbTab),
+            ToolbarUiCommand::OpenPcbClicked => Some(ToolbarAction::PickPcbFile),
             ToolbarUiCommand::SaveClicked(tab_key) => Some(ToolbarAction::SaveTab(tab_key)),
         }
     }

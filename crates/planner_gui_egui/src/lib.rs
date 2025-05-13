@@ -4,6 +4,7 @@ pub mod filter;
 pub mod fonts;
 pub mod forms;
 pub mod i18n;
+pub mod pcb;
 pub mod planner_app_core;
 pub mod project;
 pub mod runtime;

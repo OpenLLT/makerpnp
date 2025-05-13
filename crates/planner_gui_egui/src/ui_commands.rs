@@ -5,12 +5,14 @@ use egui_mobius::types::Value;
 use tracing::{debug, trace};
 
 use crate::config::Config;
+use crate::pcb::{PcbAction, PcbUiCommand};
 use crate::project::{ProjectAction, ProjectUiCommand};
 use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::app_tabs::home::HomeTabAction;
 use crate::ui_app::app_tabs::new_project::NewProjectTabAction;
+use crate::ui_app::app_tabs::pcb::{PcbTabAction, PcbTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
 use crate::ui_app::app_tabs::{
     AppTabs, TabAction, TabKind, TabKindAction, TabKindContext, TabKindUiCommand, TabUiCommand,
@@ -23,7 +25,8 @@ pub enum UiCommand {
     #[allow(dead_code)]
     None,
     ToolbarCommand(ToolbarUiCommand),
-    OpenFile(PathBuf),
+    OpenProjectFile(PathBuf),
+    OpenPcbFile(PathBuf),
     TabCommand {
         tab_key: TabKey,
         command: TabUiCommand,
@@ -68,27 +71,38 @@ pub fn handle_command(
             let task = handle_toolbar_action(toolbar_action, &app_state, &app_tabs);
             task
         }
-        UiCommand::OpenFile(picked_file) => {
+        UiCommand::OpenProjectFile(picked_file) => {
             let mut app_state = app_state.lock().unwrap();
-            app_state.open_file(picked_file, app_tabs);
+            app_state.open_project_file(picked_file, app_tabs);
+            Task::none()
+        }
+        UiCommand::OpenPcbFile(picked_file) => {
+            let mut app_state = app_state.lock().unwrap();
+            app_state.open_pcb_file(picked_file, app_tabs);
             Task::none()
         }
         UiCommand::TabCommand {
             tab_key,
             command,
         } => {
-            let mut context = TabKindContext {
-                config: config.clone(),
-                projects: app_state
-                    .lock()
-                    .unwrap()
-                    .projects
-                    .clone(),
+            // block required limit the scope of the `app_state` guard
+            let (projects, pcbs) = {
+                let app_state = app_state.lock().unwrap();
+                let projects = app_state.projects.clone();
+                let pcbs = app_state.pcbs.clone();
+                drop(app_state);
+                (projects, pcbs)
+            };
+
+            let mut tab_context = TabKindContext {
+                config,
+                projects,
+                pcbs,
             };
 
             let action = {
                 let mut app_tabs = app_tabs.lock().unwrap();
-                app_tabs.update((tab_key, command), &mut context)
+                app_tabs.update((tab_key, command), &mut tab_context)
             };
             debug!("handling tab command action: {:?}", action);
             match action {
@@ -112,12 +126,49 @@ pub fn handle_command(
                             Task::none()
                         }
                     },
+                    TabKindAction::PcbTabAction {
+                        action,
+                    } => match action {
+                        PcbTabAction::PcbTask(key, task) => task.map(move |action| {
+                            debug!("handling project action: {:?}", action);
+                            match action {
+                                // map it to the corresponding UiCommand::TabCommand
+                                PcbAction::UiCommand(command) => UiCommand::TabCommand {
+                                    tab_key,
+                                    command: TabUiCommand::TabKindCommand(TabKindUiCommand::PcbTabCommand {
+                                        command: PcbTabUiCommand::PcbCommand {
+                                            key,
+                                            command,
+                                        },
+                                    }),
+                                },
+                                PcbAction::Task(_, _) => panic!("unsupported"),
+                                PcbAction::SetModifiedState(_) => panic!("unsupported"),
+                                PcbAction::RequestRepaint => panic!("unsupported"),
+                            }
+                        }),
+                        PcbTabAction::SetModifiedState(modified_state) => {
+                            let app_tabs = app_tabs.lock().unwrap();
+                            app_tabs.with_tab_mut(&tab_key, |tab| match tab {
+                                TabKind::Pcb(pcb_tab, _) => {
+                                    pcb_tab.modified = modified_state;
+                                }
+                                _ => unreachable!(),
+                            });
+                            Task::none()
+                        }
+                        PcbTabAction::RequestRepaint => {
+                            ui_context.request_repaint();
+                            Task::none()
+                        }
+                    },
                     TabKindAction::ProjectTabAction {
                         action,
                     } => match action {
                         ProjectTabAction::ProjectTask(key, task) => task.map(move |action| {
                             debug!("handling project action: {:?}", action);
                             match action {
+                                // map it to the corresponding UiCommand::TabCommand
                                 ProjectAction::UiCommand(command) => UiCommand::TabCommand {
                                     tab_key,
                                     command: TabUiCommand::TabKindCommand(TabKindUiCommand::ProjectTabCommand {
@@ -174,7 +225,7 @@ pub fn handle_command(
 fn handle_toolbar_action(
     toolbar_action: Option<ToolbarAction>,
     app_state: &Value<AppState>,
-    ui_state: &Value<AppTabs>,
+    app_tabs: &Value<AppTabs>,
 ) -> Task<UiCommand> {
     let Some(toolbar_action) = toolbar_action else {
         return Task::none();
@@ -182,28 +233,38 @@ fn handle_toolbar_action(
 
     match toolbar_action {
         ToolbarAction::ShowHomeTab => {
-            let mut ui_state = ui_state.lock().unwrap();
+            let mut ui_state = app_tabs.lock().unwrap();
             ui_state.show_home_tab();
             Task::none()
         }
         ToolbarAction::AddNewProjectTab => {
-            let mut ui_state = ui_state.lock().unwrap();
+            let mut ui_state = app_tabs.lock().unwrap();
             ui_state.add_new_project_tab();
             Task::none()
         }
+        ToolbarAction::AddNewPcbTab => {
+            let mut app_state = app_state.lock().unwrap();
+            app_state.create_pcb(app_tabs.clone());
+            Task::none()
+        }
         ToolbarAction::CloseAllTabs => {
-            let mut ui_state = ui_state.lock().unwrap();
+            let mut ui_state = app_tabs.lock().unwrap();
             ui_state.close_all_tabs();
             Task::none()
         }
-        ToolbarAction::PickFile => {
+        ToolbarAction::PickProjectFile => {
             let mut app_state = app_state.lock().unwrap();
-            app_state.pick_file();
+            app_state.pick_project_file();
+            Task::none()
+        }
+        ToolbarAction::PickPcbFile => {
+            let mut app_state = app_state.lock().unwrap();
+            app_state.pick_pcb_file();
             Task::none()
         }
         ToolbarAction::SaveTab(tab_key) => {
-            let ui_state = ui_state.lock().unwrap();
-            ui_state.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
+            let app_tabs = app_tabs.lock().unwrap();
+            app_tabs.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
                 TabKind::Project(project_tab, _) => {
                     let command = UiCommand::TabCommand {
                         tab_key,
@@ -211,6 +272,18 @@ fn handle_toolbar_action(
                             command: ProjectTabUiCommand::ProjectCommand {
                                 key: project_tab.project_key,
                                 command: ProjectUiCommand::Save,
+                            },
+                        }),
+                    };
+                    Task::done(command)
+                }
+                TabKind::Pcb(pcb_tab, _) => {
+                    let command = UiCommand::TabCommand {
+                        tab_key,
+                        command: TabUiCommand::TabKindCommand(TabKindUiCommand::PcbTabCommand {
+                            command: PcbTabUiCommand::PcbCommand {
+                                key: pcb_tab.pcb_key,
+                                command: PcbUiCommand::Save,
                             },
                         }),
                     };
