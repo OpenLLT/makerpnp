@@ -28,8 +28,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 // FIXME this tab highlights issues with egui_dock + egui_taffy where elements grow but do not shrink, see https://github.com/Adanos020/egui_dock/pull/269
 
-// FIXME there are rendering errors with the vertical height of the tables, however after numerous attempts at fixing
-//       them no solution has been found. PLEASE HELP!
+// NOTE this UI requires egui PR https://github.com/emilk/egui/pull/7047
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -45,6 +44,12 @@ pub struct UnitAssignmentsUi {
 }
 
 impl UnitAssignmentsUi {
+    // TODO turn this debug flag into a cargo feature
+    const TABLE_DEBUG_MODE: bool = false;
+
+    const TABLE_HEIGHT_MAX: f32 = 200.0;
+    const TABLE_SCROLL_HEIGHT_MIN: f32 = 40.0;
+
     pub fn new(path: PathBuf) -> Self {
         let placements_directory = path
             .clone()
@@ -338,77 +343,90 @@ impl UnitAssignmentsUi {
                             flex_grow: 1.0,
                             size: Size {
                                 width: percent(1.0),
-                                height: length(100.0)
+                                height: auto(),
                             },
                             ..default_style()
                         })
                         .add_with_border(|tui: &mut Tui| {
 
                             tui.ui_infinite(|ui: &mut Ui| {
-                                ui.style_mut().interaction.selectable_labels = false;
+                                Resize::default()
+                                    .resizable([false, true])
+                                    .default_size(ui.available_size())
+                                    .min_width(ui.available_width())
+                                    .max_width(ui.available_width())
+                                    .max_height(Self::TABLE_HEIGHT_MAX)
+                                    .show(ui, |ui| {
 
-                                let mut fields = self.fields.lock().unwrap();
+                                        ui.style_mut().interaction.selectable_labels = false;
 
-                                let text_height = egui::TextStyle::Body
-                                    .resolve(ui.style())
-                                    .size
-                                    .max(ui.spacing().interact_size.y);
+                                        let fields = self.fields.lock().unwrap();
 
-                                let available_height = ui.available_height();
+                                        let text_height = egui::TextStyle::Body
+                                            .resolve(ui.style())
+                                            .size
+                                            .max(ui.spacing().interact_size.y);
 
-                                TableBuilder::new(ui)
-                                    .striped(true)
-                                    .resizable(true)
-                                    .auto_shrink([false, true])
-                                    .max_scroll_height(available_height)
-                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                    .sense(egui::Sense::click())
-                                    .column(Column::auto())
-                                    .column(Column::remainder())
-                                    .header(20.0, |mut header| {
-                                        header.col(|ui| {
-                                            ui.strong(tr!("table-design-variants-column-design"));
-                                        });
-                                        header.col(|ui| {
-                                            ui.strong(tr!("table-design-variants-column-variant"));
-                                        });
-                                    })
-                                    .body(|mut body| {
-                                        let mut design_variant_selected_index = fields.design_variant_selected_index;
-                                        for (
-                                            row_index,
-                                            DesignVariant {
-                                                design_name,
-                                                variant_name,
-                                            },
-                                        ) in fields
-                                            .design_variants
-                                            .iter()
-                                            .enumerate()
-                                        {
-                                            body.row(text_height, |mut row| {
-                                                let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
-
-                                                row.set_selected(is_selected);
-
-                                                row.col(|ui| {
-                                                    ui.label(design_name.to_string());
+                                        let table_response = TableBuilder::new(ui)
+                                            .striped(true)
+                                            .resizable(true)
+                                            .auto_shrink([false, false])
+                                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                            // .max_scroll_height(available_height)
+                                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                            .sense(egui::Sense::click())
+                                            .column(Column::auto())
+                                            .column(Column::remainder())
+                                            .header(20.0, |mut header| {
+                                                header.col(|ui| {
+                                                    ui.strong(tr!("table-design-variants-column-design"));
                                                 });
-
-                                                row.col(|ui| {
-                                                    ui.label(variant_name.to_string());
+                                                header.col(|ui| {
+                                                    ui.strong(tr!("table-design-variants-column-variant"));
                                                 });
+                                            })
+                                            .body(|mut body| {
+                                                let mut design_variant_selected_index = fields.design_variant_selected_index;
+                                                for (
+                                                    row_index,
+                                                    DesignVariant {
+                                                        design_name,
+                                                        variant_name,
+                                                    },
+                                                ) in fields
+                                                    .design_variants
+                                                    .iter()
+                                                    .enumerate()
+                                                {
+                                                    body.row(text_height, |mut row| {
+                                                        let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
 
-                                                if row.response().clicked() {
-                                                    match is_selected {
-                                                        true => design_variant_selected_index = None,
-                                                        false => design_variant_selected_index = Some(row_index),
-                                                    }
+                                                        row.set_selected(is_selected);
+
+                                                        row.col(|ui| {
+                                                            ui.label(design_name.to_string());
+                                                        });
+
+                                                        row.col(|ui| {
+                                                            ui.label(variant_name.to_string());
+                                                        });
+
+                                                        if row.response().clicked() {
+                                                            match is_selected {
+                                                                true => design_variant_selected_index = None,
+                                                                false => design_variant_selected_index = Some(row_index),
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                                if fields.design_variant_selected_index != design_variant_selected_index {
+                                                    self.component.send(UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
                                                 }
                                             });
-                                        }
-                                        if fields.design_variant_selected_index != design_variant_selected_index {
-                                            self.component.send(UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
+
+                                        if Self::TABLE_DEBUG_MODE {
+                                            ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                            ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
                                         }
                                     });
                             });
@@ -556,9 +574,13 @@ impl UnitAssignmentsUi {
                             ..container_style()
                         })
                         .add_with_border(|tui|{
-                            tui.ui_add_manual(|ui: &mut Ui| {
+                            tui.ui_infinite(|ui: &mut Ui| {
                                 Resize::default()
+                                    .resizable([false, true])
                                     .default_size(ui.available_size())
+                                    .min_width(ui.available_width())
+                                    .max_height(Self::TABLE_HEIGHT_MAX)
+                                    .max_width(ui.available_width())
                                     .show(ui, |ui| {
                                         ui.style_mut().interaction.selectable_labels = false;
 
@@ -569,15 +591,12 @@ impl UnitAssignmentsUi {
                                             .size
                                             .max(ui.spacing().interact_size.y);
 
-                                        let available_height = ui.available_height();
-
                                         let table_response = TableBuilder::new(ui)
                                             .auto_shrink([false, false])
                                             .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
                                             .striped(true)
                                             .resizable(true)
-                                            // .min_scrolled_height(available_height)
-                                            // .max_scroll_height(available_height)
+                                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
                                             .sense(egui::Sense::click())
                                             .column(Column::auto())
                                             .column(Column::auto())
@@ -633,18 +652,14 @@ impl UnitAssignmentsUi {
                                                 }
                                                 fields.variant_map_selected_indexes = variant_map_selected_indexes;
                                             });
-                                        ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::LIGHT_GREEN), StrokeKind::Inside);
-                                        ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
+
+                                        if Self::TABLE_DEBUG_MODE {
+                                            ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                            ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
+                                        }
                                     });
 
                                 ui.response()
-                            },
-                            |mut response, ui|{
-                                response.infinite = [true, true].into();
-
-                                let clip_rect = ui.painter().clip_rect();
-                                ui.painter().rect_stroke(clip_rect, 0.0, (1.0, Color32::BLUE), StrokeKind::Inside);
-                                response
                             });
                         });
 
