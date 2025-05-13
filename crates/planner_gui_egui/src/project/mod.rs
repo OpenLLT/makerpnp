@@ -225,16 +225,23 @@ impl Project {
         )))
     }
 
-    pub fn show_placements(&mut self) -> Task<ProjectAction> {
+    pub fn show_placements(&mut self) -> Vec<Task<ProjectAction>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Placements(_)));
         if result.is_err() {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Placements(PlacementsTab::default()));
         }
 
-        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-            ProjectViewRequest::Placements,
-        )))
+        let tasks = vec![
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                ProjectViewRequest::Phases,
+            ))),
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                ProjectViewRequest::Placements,
+            ))),
+        ];
+
+        tasks
     }
 
     pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) -> Option<Vec<Task<ProjectAction>>> {
@@ -494,9 +501,9 @@ impl Project {
         #[must_use]
         fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             if path.eq(&"/project/placements".into()) {
-                let task = project.show_placements();
+                let tasks = project.show_placements();
 
-                Some(ProjectAction::Task(*key, task))
+                Some(ProjectAction::Task(*key, Task::batch(tasks)))
             } else {
                 None
             }
