@@ -37,30 +37,33 @@ impl PartsUi {
 
     pub fn update_part_states(&mut self, mut part_states: PartStates, processes: Vec<ProcessReference>) {
         let mut part_states_table = self.part_states_table.lock().unwrap();
-        let table: DataTable<PartStatesRow> = {
-            part_states
-                .parts
-                .drain(0..)
-                .map(|part_state| {
-                    let enabled_processes = processes
-                        .iter()
-                        .map(|process| (process.clone(), part_state.processes.contains(process)))
-                        .collect::<Vec<(ProcessReference, bool)>>();
 
-                    PartStatesRow {
-                        part: part_state.part,
-                        enabled_processes,
-                        ref_des_set: part_state.ref_des_set,
-                        quantity: part_state.quantity,
-                    }
-                })
-        }
-        .collect();
+        let rows = part_states
+            .parts
+            .drain(0..)
+            .map(|part_state| {
+                let enabled_processes = processes
+                    .iter()
+                    .map(|process| (process.clone(), part_state.processes.contains(process)))
+                    .collect::<Vec<(ProcessReference, bool)>>();
 
-        part_states_table.replace((
-            PartStatesRowViewer::new(self.component.sender.clone(), processes),
-            table,
-        ));
+                PartStatesRow {
+                    part: part_state.part,
+                    enabled_processes,
+                    ref_des_set: part_state.ref_des_set,
+                    quantity: part_state.quantity,
+                }
+            })
+            .collect();
+
+        let (_viewer, table) = part_states_table.get_or_insert_with(|| {
+            let viewer = PartStatesRowViewer::new(self.component.sender.clone(), processes);
+            let table = DataTable::new();
+
+            (viewer, table)
+        });
+
+        table.replace(rows);
     }
 }
 

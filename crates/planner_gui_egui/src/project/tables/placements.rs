@@ -42,8 +42,10 @@ impl PlacementsTableUi {
 
     pub fn update_placements(&mut self, placements: Vec<PlacementsItem>, phases: Vec<PhaseOverview>) {
         let mut part_states_table = self.placements_table.lock().unwrap();
-        let table: DataTable<PlacementsRow> = {
-            placements.into_iter().map(
+
+        let rows = placements
+            .into_iter()
+            .map(
                 |PlacementsItem {
                      path: object_path,
                      state: placement_state,
@@ -54,10 +56,16 @@ impl PlacementsTableUi {
                     ordering,
                 },
             )
-        }
-        .collect();
+            .collect::<Vec<_>>();
 
-        part_states_table.replace((PlacementsRowViewer::new(self.component.sender.clone(), phases), table));
+        let (_viewer, table) = part_states_table.get_or_insert_with(|| {
+            let viewer = PlacementsRowViewer::new(self.component.sender.clone(), phases);
+            let table = DataTable::new();
+
+            (viewer, table)
+        });
+
+        table.replace(rows);
     }
 }
 

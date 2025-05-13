@@ -40,20 +40,26 @@ impl LoadOutUi {
 
     pub fn update_load_out(&mut self, mut load_out: LoadOut) {
         let mut load_out_table = self.load_out_table.lock().unwrap();
-        let table: DataTable<LoadOutRow> = {
-            load_out
-                .items
-                .drain(0..)
-                .map(|item| LoadOutRow {
-                    part: Part::new(item.manufacturer, item.mpn),
-                    feeder: item
-                        .reference
-                        .map_or_else(|| "".to_string(), |reference| reference.to_string()),
-                })
-        }
-        .collect();
 
-        load_out_table.replace((LoadOutRowViewer::new(self.component.sender.clone()), table));
+        let rows = load_out
+            .items
+            .drain(0..)
+            .map(|item| LoadOutRow {
+                part: Part::new(item.manufacturer, item.mpn),
+                feeder: item
+                    .reference
+                    .map_or_else(|| "".to_string(), |reference| reference.to_string()),
+            })
+            .collect();
+
+        let (_viewer, table) = load_out_table.get_or_insert_with(|| {
+            let viewer = LoadOutRowViewer::new(self.component.sender.clone());
+            let table = DataTable::new();
+
+            (viewer, table)
+        });
+
+        table.replace(rows);
     }
 }
 

@@ -785,17 +785,17 @@ impl Project {
             }
         }
 
-        // FIXME some of the phases applied to placements may not have been accepted, but the UI will show they were
-        //       accepted, e.g. when pasting a 'Top' phase onto a placement with a side of 'Bottom'.
-        //       We can blindly just request all the placements again, but this currently has the effect of resetting
-        //       the placements table, including loosing the sort order.
-        //       Disabling until a proper solution is developed since it's currently annoying to make assignments when
-        //       the table keeps being reset.
+        // We need to refresh the placements, it's possible some of the phases applied to placements may not have
+        // been accepted, but the UI will show they were accepted, e.g. when pasting a 'Top' phase onto a
+        // placement with a side of 'Bottom'.
         //
-        // let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-        //     ProjectViewRequest::Placements,
-        // )));
-        // tasks.push(final_task);
+        // FUTURE  Ideally, prevent pasting invalid values into the cells in the first place.
+        //         This is a limitation of the design of egui_data_tables and the architecture of this app and
+        //         would require a large refactoring.
+        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            ProjectViewRequest::Placements,
+        )));
+        tasks.push(final_task);
 
         update_placement_actions.dedup();
 
@@ -819,7 +819,6 @@ impl Project {
                         phase,
                     },
                 )))),
-                _ => None,
             } {
                 tasks.push(task);
             }
