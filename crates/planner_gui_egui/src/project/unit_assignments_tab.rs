@@ -309,7 +309,7 @@ impl UnitAssignmentsUi {
                                         ..default_style()
                                     })
                                     .enabled_ui(is_design_variant_ok)
-                                    .button(|tui| tui.label("Add"))// TODO translate
+                                    .button(|tui| tui.label(tr!("form-common-button-add")))
                                     .clicked()
                                 {
                                     self.component

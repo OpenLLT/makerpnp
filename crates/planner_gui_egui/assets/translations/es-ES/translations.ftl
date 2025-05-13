@@ -160,6 +160,10 @@ form-common-button-unassign-range = Desasignar rango
 form-common-button-apply-range = Aplicar rango
 form-common-button-apply-all = Aplicar todo
 
+form-common-button-add = Añadir
+form-common-button-remove = Quitar
+form-common-button-delete = Borrar
+
 form-option-error-required = * Obligatorio
 
 form-input-error-empty = No puede estar vacío
