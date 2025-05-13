@@ -785,10 +785,17 @@ impl Project {
             }
         }
 
-        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-            ProjectViewRequest::Placements,
-        )));
-        tasks.push(final_task);
+        // FIXME some of the phases applied to placements may not have been accepted, but the UI will show they were
+        //       accepted, e.g. when pasting a 'Top' phase onto a placement with a side of 'Bottom'.
+        //       We can blindly just request all the placements again, but this currently has the effect of resetting
+        //       the placements table, including loosing the sort order.
+        //       Disabling until a proper solution is developed since it's currently annoying to make assignments when
+        //       the table keeps being reset.
+        //
+        // let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+        //     ProjectViewRequest::Placements,
+        // )));
+        // tasks.push(final_task);
 
         update_placement_actions.dedup();
 
@@ -812,6 +819,7 @@ impl Project {
                         phase,
                     },
                 )))),
+                _ => None,
             } {
                 tasks.push(task);
             }
