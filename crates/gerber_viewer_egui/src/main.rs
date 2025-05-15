@@ -12,12 +12,12 @@ use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, length, percent};
 use egui_taffy::taffy::{Size, Style};
 use egui_taffy::{TuiBuilderLogic, taffy, tui};
-use epaint::{FontFamily, Stroke};
+use epaint::{FontFamily, Shape, Stroke};
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
-use gerber_viewer::position::{Position, ZERO};
-use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, ViewState, generate_pastel_color};
-use log::{error, info, trace};
+use gerber_viewer::position::{Position, Vector};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Transform2D, ViewState, generate_pastel_color};
+use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use rfd::FileDialog;
 use thiserror::Error;
@@ -25,6 +25,9 @@ use thiserror::Error;
 mod logging;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
+const DEFAULT_STEP: f64 = 0.05;
+const STEP_SPEED: f64 = 0.05;
+const STEP_SCALE: f64 = 0.5;
 
 fn main() -> eframe::Result<()> {
     env_logger::init(); // Log to stderr (optional).
@@ -42,8 +45,10 @@ struct GerberViewer {
 
     use_unique_shape_colors: bool,
     use_polygon_numbering: bool,
+    enable_bounding_box_outline: bool,
 
     is_about_modal_open: bool,
+    step: f64,
 }
 
 impl GerberViewer {
@@ -59,6 +64,14 @@ impl GerberViewer {
 struct LayerViewState {
     enabled: bool,
     color: Color32,
+    // in radians, positive = clockwise
+    rotation: f32,
+    mirror_x: bool,
+    mirror_y: bool,
+    // the center for rotation/mirroring in gerber units
+    design_origin: Vector,
+    // in gerber units
+    design_offset: Vector,
 }
 
 impl LayerViewState {
@@ -66,35 +79,69 @@ impl LayerViewState {
         Self {
             enabled: true,
             color,
+            mirror_x: false,
+            mirror_y: false,
+            rotation: 0.0_f32.to_radians(),
+            design_origin: Vector::ZERO,
+            design_offset: Vector::ZERO,
         }
     }
 }
 
 struct GerberViewState {
     view: ViewState,
-    needs_initial_view: bool,
+    needs_view_centering: bool,
+    needs_bbox_update: bool,
     bounding_box: BoundingBox,
+    bounding_box_vertices: Vec<Position>,
     cursor_gerber_coords: Option<Position>,
     layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
-    center_screen_pos: Option<Vec2>,
-    origin_screen_pos: Option<Vec2>,
+    center_screen_pos: Option<Pos2>,
+    origin_screen_pos: Option<Pos2>,
+
+    // used for mirroring and rotation, in gerber coordinates
+    design_origin: Vector,
+
+    // used for offsetting the design, in gerber coordinates
+    design_offset: Vector,
 }
 
 impl Default for GerberViewState {
     fn default() -> Self {
         Self {
             view: Default::default(),
-            needs_initial_view: true,
+            needs_view_centering: true,
+            needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
+            bounding_box_vertices: vec![],
             cursor_gerber_coords: None,
             center_screen_pos: None,
             origin_screen_pos: None,
             layers: vec![],
+            //design_origin: Vector::new(14.75, 6.0),
+            //design_offset: Vector::new(-10.0, -10.0),
+            design_origin: Vector::ZERO,
+            design_offset: Vector::ZERO,
         }
     }
 }
 
 impl GerberViewState {
+    pub fn reset(&mut self) {
+        self.design_origin = Vector::ZERO;
+        self.design_offset = Vector::ZERO;
+        self.needs_bbox_update = true;
+        self.needs_view_centering = true;
+        for (_, layer_view_state, _, _) in self.layers.iter_mut() {
+            layer_view_state.design_origin = Vector::ZERO;
+            layer_view_state.design_offset = Vector::ZERO;
+            layer_view_state.enabled = true;
+            layer_view_state.rotation = 0.0_f32.to_radians();
+            layer_view_state.mirror_x = false;
+            layer_view_state.mirror_y = false;
+        }
+    }
+
     pub fn add_layer(
         &mut self,
         path: PathBuf,
@@ -105,30 +152,52 @@ impl GerberViewState {
         self.layers
             .push((path, layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
-        self.request_reset();
+        self.request_center_view();
     }
 
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (_, _, layer, _) in self
+        for (layer_index, (_, layer_view_state, layer, _)) in self
             .layers
             .iter()
-            .filter(|(_path, state, _, _)| state.enabled)
+            .enumerate()
+            .filter(|(_index, (_path, view_state, _, _))| view_state.enabled)
         {
             let layer_bbox = &layer.bounding_box();
-            bbox.min_x = f64::min(bbox.min_x, layer_bbox.min_x);
-            bbox.min_y = f64::min(bbox.min_y, layer_bbox.min_y);
-            bbox.max_x = f64::max(bbox.max_x, layer_bbox.max_x);
-            bbox.max_y = f64::max(bbox.max_y, layer_bbox.max_y);
+
+            let origin = self.design_origin - self.design_offset;
+
+            let transform = Transform2D {
+                rotation_radians: layer_view_state.rotation,
+                mirroring: [layer_view_state.mirror_x, layer_view_state.mirror_y].into(),
+                origin,
+                offset: self.design_offset,
+            };
+
+            let layer_bbox = layer_bbox.apply_transform(transform);
+
+            debug!("layer bbox: {:?}", layer_bbox);
+            bbox.min.x = f64::min(bbox.min.x, layer_bbox.min.x);
+            bbox.min.y = f64::min(bbox.min.y, layer_bbox.min.y);
+            bbox.max.x = f64::max(bbox.max.x, layer_bbox.max.x);
+            bbox.max.y = f64::max(bbox.max.y, layer_bbox.max.y);
+            debug!("view bbox after layer. layer: {}, bbox: {:?}", layer_index, bbox);
         }
-        trace!("view bbox: {:?}", bbox);
+
+        self.bounding_box_vertices = bbox.vertices();
+        debug!("view vertices: {:?}", self.bounding_box_vertices);
 
         self.bounding_box = bbox;
+        self.needs_bbox_update = false;
     }
 
-    pub fn request_reset(&mut self) {
-        self.needs_initial_view = true;
+    pub fn request_bbox_reset(&mut self) {
+        self.needs_bbox_update = true;
+    }
+
+    pub fn request_center_view(&mut self) {
+        self.needs_view_centering = true;
     }
 
     fn reset_view(&mut self, viewport: Rect) {
@@ -136,8 +205,8 @@ impl GerberViewState {
 
         let bbox = &self.bounding_box;
 
-        let content_width = bbox.max_x - bbox.min_x;
-        let content_height = bbox.max_y - bbox.min_y;
+        let content_width = bbox.max.x - bbox.min.x;
+        let content_height = bbox.max.y - bbox.min.y;
 
         // Calculate scale to fit the content
         let scale = f32::min(
@@ -146,8 +215,8 @@ impl GerberViewState {
         ) * INITIAL_GERBER_AREA_PERCENT;
 
         // Calculate the content center in mm
-        let content_center_x = (bbox.min_x + bbox.max_x) / 2.0;
-        let content_center_y = (bbox.min_y + bbox.max_y) / 2.0;
+        let content_center_x = (bbox.min.x + bbox.max.x) / 2.0;
+        let content_center_y = (bbox.min.y + bbox.max.y) / 2.0;
 
         // Offset from viewport center to place content center
         self.view.translation = Vec2::new(
@@ -156,7 +225,7 @@ impl GerberViewState {
         );
 
         self.view.scale = scale;
-        self.needs_initial_view = false;
+        self.needs_view_centering = false;
     }
 
     pub fn update_cursor_position(&mut self, response: &Response, ui: &Ui) {
@@ -165,7 +234,7 @@ impl GerberViewState {
         }
 
         if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
-            self.cursor_gerber_coords = Some(self.screen_to_gerber_coords(pointer_pos.to_vec2()));
+            self.cursor_gerber_coords = Some(self.screen_to_gerber_coords(pointer_pos));
         }
     }
 
@@ -208,15 +277,15 @@ impl GerberViewState {
     }
 
     /// Convert to gerber coordinates using view transformation
-    pub fn screen_to_gerber_coords(&self, screen_pos: Vec2) -> Position {
+    pub fn screen_to_gerber_coords(&self, screen_pos: Pos2) -> Position {
         let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
         Position::new(gerber_pos.x as f64, gerber_pos.y as f64).invert_y()
     }
 
     /// Convert from gerber coordinates using view transformation
-    pub fn gerber_to_screen_coords(&self, gerber_pos: Position) -> Vec2 {
-        let gerber_pos = gerber_pos.invert_y().to_vec2();
-        self.view.translation + (gerber_pos * self.view.scale)
+    pub fn gerber_to_screen_coords(&self, gerber_pos: Position) -> Pos2 {
+        let gerber_pos = gerber_pos.invert_y();
+        ((gerber_pos * self.view.scale as f64) + self.view.translation).to_pos2()
     }
 
     /// X and Y are in GERBER units.
@@ -224,7 +293,7 @@ impl GerberViewState {
         trace!("move view. x: {}, y: {}", position.x, position.y);
         trace!("view translation (before): {:?}", self.view.translation);
 
-        let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation);
+        let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation.to_pos2());
         gerber_coords += position;
         trace!("gerber_coords: {:?}", self.view.translation);
         let screen_coords = self.gerber_to_screen_coords(gerber_coords);
@@ -234,7 +303,7 @@ impl GerberViewState {
         let delta = screen_coords - self.view.translation;
         trace!("delta: {:?}", delta);
 
-        self.view.translation -= delta;
+        self.view.translation -= delta.to_vec2();
         trace!("view translation (after): {:?}", self.view.translation);
     }
 
@@ -295,7 +364,10 @@ impl GerberViewer {
         let color = generate_pastel_color(layer_count as u64);
 
         let layer = GerberLayer::new(commands);
-        let layer_view_state = LayerViewState::new(color);
+        let mut layer_view_state = LayerViewState::new(color);
+
+        layer_view_state.design_offset = state.design_offset;
+        layer_view_state.design_origin = state.design_origin;
 
         state.add_layer(path, layer_view_state, layer, gerber_doc);
 
@@ -378,8 +450,10 @@ impl GerberViewer {
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             use_unique_shape_colors: false,
             use_polygon_numbering: false,
+            enable_bounding_box_outline: true,
 
             is_about_modal_open: false,
+            step: DEFAULT_STEP,
         }
     }
 
@@ -387,15 +461,15 @@ impl GerberViewer {
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
-    fn draw_crosshair(painter: &Painter, origin_screen_pos: Vec2, color: Color32) {
+    fn draw_crosshair(painter: &Painter, position: Pos2, color: Color32) {
         // Calculate viewport bounds to extend lines across entire view
         let viewport = painter.clip_rect();
 
         // Draw a horizontal line (extending across viewport)
         painter.line_segment(
             [
-                Pos2::new(viewport.min.x, origin_screen_pos.y),
-                Pos2::new(viewport.max.x, origin_screen_pos.y),
+                Pos2::new(viewport.min.x, position.y),
+                Pos2::new(viewport.max.x, position.y),
             ],
             Stroke::new(1.0, color),
         );
@@ -403,11 +477,15 @@ impl GerberViewer {
         // Draw a vertical line (extending across viewport)
         painter.line_segment(
             [
-                Pos2::new(origin_screen_pos.x, viewport.min.y),
-                Pos2::new(origin_screen_pos.x, viewport.max.y),
+                Pos2::new(position.x, viewport.min.y),
+                Pos2::new(position.x, viewport.max.y),
             ],
             Stroke::new(1.0, color),
         );
+    }
+
+    fn draw_bounding_box(painter: &Painter, vertices: Vec<Pos2>, color: Color32) {
+        painter.add(Shape::closed_line(vertices, Stroke::new(1.0, color)));
     }
 }
 
@@ -448,6 +526,7 @@ impl eframe::App for GerberViewer {
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.use_unique_shape_colors, "🎉 Unique shape colors");
                     ui.checkbox(&mut self.use_polygon_numbering, "＃ Polygon numbering");
+                    ui.checkbox(&mut self.enable_bounding_box_outline, "☐ Draw bounding box");
                 });
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
@@ -471,6 +550,7 @@ impl eframe::App for GerberViewer {
 
                 ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
                 ui.toggle_value(&mut self.use_polygon_numbering, "＃");
+                ui.toggle_value(&mut self.enable_bounding_box_outline, "☐");
 
                 ui.separator();
 
@@ -527,11 +607,116 @@ impl eframe::App for GerberViewer {
 
                     ui.separator();
 
+                    let mut changed = false;
+
+                    ui.label("Scale:");
+                    let mut scale = self
+                        .state
+                        .as_ref()
+                        .map_or(0.0, |state| state.view.scale);
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut scale))
+                        .changed();
+
+                    let mut translation = self
+                        .state
+                        .as_ref()
+                        .map_or(Vec2::ZERO, |state| state.view.translation);
+                    ui.label("X:");
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut translation.x))
+                        .changed();
+
+                    ui.label("Y:");
+                    changed |= ui
+                        .add(egui::DragValue::new(&mut translation.y))
+                        .changed();
+
+                    ui.separator();
+
+                    ui.label("Step:");
+                    ui.add(
+                        egui::DragValue::new(&mut self.step)
+                            .fixed_decimals(2)
+                            .speed(STEP_SPEED * STEP_SCALE),
+                    );
+
+                    let mut design_origin = self
+                        .state
+                        .as_ref()
+                        .map_or(Vector::ZERO, |state| state.design_origin);
+                    ui.label("Rotation/Mirror Origin X:");
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut design_origin.x)
+                                .fixed_decimals(2)
+                                .speed(self.step * STEP_SCALE),
+                        )
+                        .changed();
+
+                    ui.label("Y:");
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut design_origin.y)
+                                .fixed_decimals(2)
+                                .speed(self.step * STEP_SCALE),
+                        )
+                        .changed();
+
+                    let mut design_offset = self
+                        .state
+                        .as_ref()
+                        .map_or(Vector::ZERO, |state| state.design_offset);
+                    ui.label("Design Offset X:");
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut design_offset.x)
+                                .fixed_decimals(2)
+                                .speed(self.step * STEP_SCALE),
+                        )
+                        .changed();
+
+                    ui.label("Y:");
+                    changed |= ui
+                        .add(
+                            egui::DragValue::new(&mut design_offset.y)
+                                .fixed_decimals(2)
+                                .speed(self.step * STEP_SCALE),
+                        )
+                        .changed();
+
+                    if changed {
+                        if let Some(state) = &mut self.state {
+                            state.view.scale = scale;
+                            state.view.translation = translation;
+                            state.design_offset = design_offset;
+                            state.design_origin = design_origin;
+
+                            for (_path, layer_state, _layer, _doc) in state.layers.iter_mut() {
+                                layer_state.design_origin = design_origin;
+                                layer_state.design_offset = design_offset;
+                            }
+
+                            state.request_bbox_reset();
+                        }
+
+                        ctx.request_repaint();
+                    }
+
                     if ui.button("Reset").clicked() {
+                        self.state.as_mut().unwrap().reset();
+                        self.step = DEFAULT_STEP;
+                        ctx.request_repaint();
+                    }
+
+                    ui.separator();
+
+                    if ui.button("Center view").clicked() {
                         self.state
                             .as_mut()
                             .unwrap()
-                            .request_reset();
+                            .request_center_view();
+                        ctx.request_repaint();
                     }
                 });
                 ui.separator();
@@ -695,17 +880,48 @@ impl eframe::App for GerberViewer {
             .resizable(true)
             .show(ctx, |ui| {
                 if let Some(state) = &mut self.state {
+                    let mut request_bbox_reset = false;
                     for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
                         ui.horizontal(|ui| {
                             ui.color_edit_button_srgba(&mut layer_view_state.color);
-                            ui.checkbox(
-                                &mut layer_view_state.enabled,
-                                path.file_stem()
-                                    .unwrap()
-                                    .to_string_lossy()
-                                    .to_string(),
-                            );
+                            if ui
+                                .add_sized([50.0, 10.0], |ui: &mut Ui| {
+                                    ui.drag_angle(&mut layer_view_state.rotation)
+                                })
+                                .changed()
+                            {
+                                request_bbox_reset = true;
+                            };
+                            if ui
+                                .checkbox(&mut layer_view_state.mirror_x, "X")
+                                .clicked()
+                            {
+                                request_bbox_reset = true;
+                            }
+                            if ui
+                                .checkbox(&mut layer_view_state.mirror_y, "Y")
+                                .clicked()
+                            {
+                                request_bbox_reset = true;
+                            };
+                            if ui
+                                .checkbox(
+                                    &mut layer_view_state.enabled,
+                                    path.file_stem()
+                                        .unwrap()
+                                        .to_string_lossy()
+                                        .to_string(),
+                                )
+                                .clicked()
+                            {
+                                request_bbox_reset = true;
+                            }
                         });
+                    }
+
+                    if request_bbox_reset {
+                        state.request_bbox_reset();
+                        ctx.request_repaint();
                     }
                 } else {
                     ui.centered_and_justified(|ui| {
@@ -721,12 +937,28 @@ impl eframe::App for GerberViewer {
                 let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
                 let viewport = response.rect;
 
-                if state.needs_initial_view {
+                if state.needs_bbox_update {
+                    state.update_bbox_from_layers();
+                }
+
+                if state.needs_view_centering {
                     state.reset_view(viewport);
                 }
 
-                state.center_screen_pos = Some(viewport.center().to_vec2());
-                state.origin_screen_pos = Some(state.gerber_to_screen_coords(ZERO));
+                state.center_screen_pos = Some(viewport.center());
+                state.origin_screen_pos = Some(state.gerber_to_screen_coords(Position::ZERO));
+
+                let bbox_screen_vertices = state
+                    .bounding_box
+                    .vertices()
+                    .into_iter()
+                    .map(|position| state.gerber_to_screen_coords(position))
+                    .collect::<Vec<_>>();
+
+                trace!(
+                    "view bbox screen vertices: {:?}, offset: {:?}, scale: {:?}, translation: {:?}",
+                    bbox_screen_vertices, state.design_origin, state.view.scale, state.view.translation
+                );
 
                 state.update_cursor_position(&response, ui);
                 state.handle_panning(&response, ui);
@@ -750,6 +982,10 @@ impl eframe::App for GerberViewer {
                             layer_state.color,
                             self.use_unique_shape_colors,
                             self.use_polygon_numbering,
+                            layer_state.rotation,
+                            [layer_state.mirror_x, layer_state.mirror_y].into(),
+                            layer_state.design_origin,
+                            layer_state.design_offset,
                         );
                     }
                 }
@@ -760,6 +996,10 @@ impl eframe::App for GerberViewer {
                 }
                 if let Some(position) = state.center_screen_pos {
                     Self::draw_crosshair(&painter, position, Color32::LIGHT_GRAY);
+                }
+
+                if self.enable_bounding_box_outline && bbox_screen_vertices.len() > 0 {
+                    Self::draw_bounding_box(&painter, bbox_screen_vertices, Color32::RED);
                 }
             } else {
                 let default_style = || Style {
