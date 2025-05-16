@@ -105,6 +105,9 @@ struct GerberViewState {
     // used for offsetting the design, in gerber coordinates
     design_offset: Vector,
 
+    // global rotation, each layer can be offset from the global rotation
+    rotation: f32,
+
     ui_state: UiState,
 }
 
@@ -121,6 +124,7 @@ impl Default for GerberViewState {
             //design_offset: Vector::new(-10.0, -10.0),
             design_origin: Vector::ZERO,
             design_offset: Vector::ZERO,
+            rotation: 0.0_f32.to_radians(),
             ui_state: Default::default(),
         }
     }
@@ -169,7 +173,7 @@ impl GerberViewState {
             let origin = self.design_origin - self.design_offset;
 
             let transform = Transform2D {
-                rotation_radians: layer_view_state.rotation,
+                rotation_radians: self.rotation + layer_view_state.rotation,
                 mirroring: [layer_view_state.mirror_x, layer_view_state.mirror_y].into(),
                 origin,
                 offset: self.design_offset,
@@ -565,7 +569,7 @@ impl eframe::App for GerberViewer {
                             .fixed_decimals(2)
                             .speed(STEP_SPEED * STEP_SCALE),
                     );
-
+                    
                     let mut design_origin = self
                         .state
                         .as_ref()
@@ -587,6 +591,15 @@ impl eframe::App for GerberViewer {
                                 .speed(self.step * STEP_SCALE),
                         )
                         .changed();
+
+                    let mut rotation = self
+                        .state
+                        .as_ref()
+                        .map_or(0.0, |state| state.rotation);
+                    changed |= ui.drag_angle(&mut rotation)
+                        .changed();
+                    
+                    ui.separator();
 
                     let mut design_offset = self
                         .state
@@ -616,6 +629,7 @@ impl eframe::App for GerberViewer {
                             state.view.translation = translation;
                             state.design_offset = design_offset;
                             state.design_origin = design_origin;
+                            state.rotation = rotation;
 
                             for (_path, layer_state, _layer, _doc) in state.layers.iter_mut() {
                                 layer_state.design_origin = design_origin;
@@ -905,7 +919,7 @@ impl eframe::App for GerberViewer {
                             layer_state.color,
                             self.use_unique_shape_colors,
                             self.use_polygon_numbering,
-                            layer_state.rotation,
+                            state.rotation + layer_state.rotation,
                             [layer_state.mirror_x, layer_state.mirror_y].into(),
                             layer_state.design_origin,
                             layer_state.design_offset,
