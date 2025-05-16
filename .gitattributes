@@ -1,0 +1,12 @@
+[attr]rust text eol=lf whitespace=tab-in-indent,trailing-space,tabwidth=4
+
+*.md text=crlf
+*.json text=crlf
+*.toml text=crlf
+*.rs rust diff=rust
+Cargo.lock linguist-generated=false
+.gitattributes text=crlf
+.gitignore text=crlf
+
+*.png binary
+*.ico binary
