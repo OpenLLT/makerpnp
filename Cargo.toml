@@ -120,8 +120,10 @@ tokio = { version = "1.43.0", features = ["full"]}
 crossbeam-channel = { version = "0.5.13" }
 
 # Gerber rendering, types and parser
-gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "76794c01fcf607f988244d58d52653716cbba63a" }
+gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "7274c482a2090f37d3ebf5549424f795aea2381f" }
 #gerber_viewer = { path = "../gerber_viewer" }
+
+
 
 [patch.crates-io]
 # fork of egui 0.31.1 with the following fixes:
