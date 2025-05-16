@@ -42,6 +42,10 @@ impl PlacementsUi {
         self.placements_table_ui
             .update_placements(placements.placements, phases);
     }
+    pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
+        self.placements_table_ui
+            .update_phases(phases);
+    }
 }
 
 #[derive(Debug, Clone)]

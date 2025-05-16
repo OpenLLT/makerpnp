@@ -58,14 +58,28 @@ impl PlacementsTableUi {
             )
             .collect::<Vec<_>>();
 
-        let (_viewer, table) = part_states_table.get_or_insert_with(|| {
-            let viewer = PlacementsRowViewer::new(self.component.sender.clone(), phases);
-            let table = DataTable::new();
+        match &mut *part_states_table {
+            None => {
+                let viewer = PlacementsRowViewer::new(self.component.sender.clone(), phases);
+                let table = DataTable::from_iter(rows);
+                *part_states_table = Some((viewer, table));
+            }
+            Some((viewer, table)) => {
+                viewer.phases = phases;
+                table.replace(rows);
+            }
+        }
+    }
 
-            (viewer, table)
-        });
-
-        table.replace(rows);
+    pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
+        if let Some((viewer, _table)) = self
+            .placements_table
+            .lock()
+            .unwrap()
+            .as_mut()
+        {
+            viewer.phases = phases;
+        }
     }
 }
 

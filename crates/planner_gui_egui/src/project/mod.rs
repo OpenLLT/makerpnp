@@ -1055,6 +1055,10 @@ impl UiComponent for Project {
                     ProjectView::Phases(phases) => {
                         trace!("phases: {:?}", phases);
                         self.phases = phases.phases;
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        state
+                            .placements_ui
+                            .update_phases(self.phases.clone())
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         trace!("phase overview: {:?}", phase_overview);
