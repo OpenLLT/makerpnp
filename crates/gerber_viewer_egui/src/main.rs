@@ -16,7 +16,10 @@ use epaint::{FontFamily, Shape, Stroke};
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
 use gerber_viewer::position::{Position, Vector};
-use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Transform2D, ViewState, generate_pastel_color};
+use gerber_viewer::{
+    BoundingBox, GerberLayer, GerberRenderer, Transform2D, UiState, ViewState, draw_crosshair, draw_outline,
+    generate_pastel_color,
+};
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use rfd::FileDialog;
@@ -94,16 +97,15 @@ struct GerberViewState {
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
     bounding_box_vertices: Vec<Position>,
-    cursor_gerber_coords: Option<Position>,
     layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
-    center_screen_pos: Option<Pos2>,
-    origin_screen_pos: Option<Pos2>,
 
     // used for mirroring and rotation, in gerber coordinates
     design_origin: Vector,
 
     // used for offsetting the design, in gerber coordinates
     design_offset: Vector,
+
+    ui_state: UiState,
 }
 
 impl Default for GerberViewState {
@@ -114,14 +116,12 @@ impl Default for GerberViewState {
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
             bounding_box_vertices: vec![],
-            cursor_gerber_coords: None,
-            center_screen_pos: None,
-            origin_screen_pos: None,
             layers: vec![],
             //design_origin: Vector::new(14.75, 6.0),
             //design_offset: Vector::new(-10.0, -10.0),
             design_origin: Vector::ZERO,
             design_offset: Vector::ZERO,
+            ui_state: Default::default(),
         }
     }
 }
@@ -228,54 +228,6 @@ impl GerberViewState {
         self.needs_view_centering = false;
     }
 
-    pub fn update_cursor_position(&mut self, response: &Response, ui: &Ui) {
-        if !response.hovered() {
-            return;
-        }
-
-        if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
-            self.cursor_gerber_coords = Some(self.screen_to_gerber_coords(pointer_pos));
-        }
-    }
-
-    pub fn handle_panning(&mut self, response: &Response, ui: &mut Ui) {
-        if response.dragged_by(egui::PointerButton::Primary) {
-            let delta = response.drag_delta();
-            self.view.translation += delta;
-            ui.ctx().clear_animations();
-        }
-    }
-
-    pub fn handle_zooming(&mut self, response: &Response, viewport: Rect, ui: &mut Ui) {
-        // Only process zoom if mouse is actually over the viewport
-        if !response.hovered() {
-            return;
-        }
-
-        let zoom_factor = 1.1;
-        let mut scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
-        if ui.input(|i| i.modifiers.ctrl) {
-            scroll_delta *= 0.0; // Disable zoom when Ctrl is held (for text scaling)
-        }
-
-        if scroll_delta != 0.0 {
-            let old_scale = self.view.scale;
-            let new_scale = if scroll_delta > 0.0 {
-                old_scale * zoom_factor
-            } else {
-                old_scale / zoom_factor
-            };
-
-            if let Some(mouse_pos) = response.hover_pos() {
-                let mouse_pos = mouse_pos - viewport.min.to_vec2();
-                let mouse_world = (mouse_pos - self.view.translation) / old_scale;
-                self.view.translation = mouse_pos - mouse_world * new_scale;
-            }
-
-            self.view.scale = new_scale;
-        }
-    }
-
     /// Convert to gerber coordinates using view transformation
     pub fn screen_to_gerber_coords(&self, screen_pos: Pos2) -> Position {
         let gerber_pos = (screen_pos - self.view.translation) / self.view.scale;
@@ -311,8 +263,8 @@ impl GerberViewState {
     pub fn locate_view(&mut self, x: f64, y: f64) {
         trace!("locate view. x: {}, y: {}", x, y);
         self.view.translation = Vec2::new(
-            self.center_screen_pos.unwrap().x - (x as f32 * self.view.scale),
-            self.center_screen_pos.unwrap().y + (y as f32 * self.view.scale),
+            self.ui_state.center_screen_pos.x - (x as f32 * self.view.scale),
+            self.ui_state.center_screen_pos.y + (y as f32 * self.view.scale),
         );
         trace!("view translation (after): {:?}", self.view.translation);
     }
@@ -459,33 +411,6 @@ impl GerberViewer {
 
     fn handle_quit(&self, ctx: &egui::Context) {
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-    }
-
-    fn draw_crosshair(painter: &Painter, position: Pos2, color: Color32) {
-        // Calculate viewport bounds to extend lines across entire view
-        let viewport = painter.clip_rect();
-
-        // Draw a horizontal line (extending across viewport)
-        painter.line_segment(
-            [
-                Pos2::new(viewport.min.x, position.y),
-                Pos2::new(viewport.max.x, position.y),
-            ],
-            Stroke::new(1.0, color),
-        );
-
-        // Draw a vertical line (extending across viewport)
-        painter.line_segment(
-            [
-                Pos2::new(position.x, viewport.min.y),
-                Pos2::new(position.x, viewport.max.y),
-            ],
-            Stroke::new(1.0, color),
-        );
-    }
-
-    fn draw_bounding_box(painter: &Painter, vertices: Vec<Pos2>, color: Color32) {
-        painter.add(Shape::closed_line(vertices, Stroke::new(1.0, color)));
     }
 }
 
@@ -852,6 +777,7 @@ impl eframe::App for GerberViewer {
                                         ui.separator();
 
                                         let (x, y) = state
+                                            .ui_state
                                             .cursor_gerber_coords
                                             .map(
                                                 |Position {
@@ -945,8 +871,9 @@ impl eframe::App for GerberViewer {
                     state.reset_view(viewport);
                 }
 
-                state.center_screen_pos = Some(viewport.center());
-                state.origin_screen_pos = Some(state.gerber_to_screen_coords(Position::ZERO));
+                state
+                    .ui_state
+                    .update(ui, &viewport, &response, &mut state.view);
 
                 let bbox_screen_vertices = state
                     .bounding_box
@@ -960,16 +887,12 @@ impl eframe::App for GerberViewer {
                     bbox_screen_vertices, state.design_origin, state.view.scale, state.view.translation
                 );
 
-                state.update_cursor_position(&response, ui);
-                state.handle_panning(&response, ui);
-                state.handle_zooming(&response, viewport, ui);
-
                 trace!(
                     "view: {:?}, view bbox scale: {}, viewport_center: {}, origin_screen_pos: {}",
                     state.view,
                     INITIAL_GERBER_AREA_PERCENT,
-                    state.center_screen_pos.unwrap(),
-                    state.origin_screen_pos.unwrap()
+                    state.ui_state.center_screen_pos,
+                    state.ui_state.origin_screen_pos
                 );
 
                 let painter = ui.painter().with_clip_rect(viewport);
@@ -978,7 +901,7 @@ impl eframe::App for GerberViewer {
                         GerberRenderer::default().paint_layer(
                             &painter,
                             state.view,
-                            &layer,
+                            layer,
                             layer_state.color,
                             self.use_unique_shape_colors,
                             self.use_polygon_numbering,
@@ -991,15 +914,11 @@ impl eframe::App for GerberViewer {
                 }
 
                 // Draw origin crosshair
-                if let Some(position) = state.origin_screen_pos {
-                    Self::draw_crosshair(&painter, position, Color32::BLUE);
-                }
-                if let Some(position) = state.center_screen_pos {
-                    Self::draw_crosshair(&painter, position, Color32::LIGHT_GRAY);
-                }
+                draw_crosshair(&painter, state.ui_state.origin_screen_pos, Color32::BLUE);
+                draw_crosshair(&painter, state.ui_state.center_screen_pos, Color32::LIGHT_GRAY);
 
-                if self.enable_bounding_box_outline && bbox_screen_vertices.len() > 0 {
-                    Self::draw_bounding_box(&painter, bbox_screen_vertices, Color32::RED);
+                if self.enable_bounding_box_outline && !bbox_screen_vertices.is_empty() {
+                    draw_outline(&painter, bbox_screen_vertices, Color32::RED);
                 }
             } else {
                 let default_style = || Style {

@@ -2289,7 +2289,7 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=a87a49c6fe625fa587ef79fe1e1ffeaa0362ec72#a87a49c6fe625fa587ef79fe1e1ffeaa0362ec72"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=76794c01fcf607f988244d58d52653716cbba63a#76794c01fcf607f988244d58d52653716cbba63a"
 dependencies = [
  "egui",
  "gerber-types 0.4.0 (git+https://github.com/makerpnp/gerber-types-rs.git?rev=41b8ab178fb6ee646dfba3f000db1b1b8a9ae167)",
@@ -2311,7 +2311,7 @@ dependencies = [
  "egui_taffy",
  "env_logger",
  "epaint",
- "gerber_viewer 0.1.0 (git+https://github.com/makerpnp/gerber_viewer.git?rev=a87a49c6fe625fa587ef79fe1e1ffeaa0362ec72)",
+ "gerber_viewer 0.1.0 (git+https://github.com/makerpnp/gerber_viewer.git?rev=76794c01fcf607f988244d58d52653716cbba63a)",
  "log",
  "rfd",
  "thiserror 2.0.12",
