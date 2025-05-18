@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -20,7 +18,6 @@ use pnp::placement::Placement;
 use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use thiserror::Error;
@@ -30,6 +27,7 @@ use util::sorting::SortOrder;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::{DesignIndex, DesignName, DesignVariant};
+use crate::file::FileReference;
 use crate::gerber::{GerberFile, GerberPurpose};
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
@@ -51,7 +49,7 @@ use crate::process::{
 use crate::report::project_report_json_to_markdown;
 use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::variant::VariantName;
-use crate::{operation_history, placement, report};
+use crate::{file, operation_history, placement, report};
 
 #[serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -105,6 +103,9 @@ impl Project {
         }
     }
 
+    /// Safety: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
+    ///
+    /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.
     pub fn all_unit_assignments(&self) -> Vec<(ObjectPath, DesignVariant)> {
         self.pcbs
             .iter()
@@ -112,6 +113,7 @@ impl Project {
             .flat_map(|(pcb_index, project_pcb)| {
                 project_pcb
                     .unit_assignments()
+                    .unwrap_or_default()
                     .into_iter()
                     .enumerate()
                     .filter_map(move |(unit_index, unit_assignment)| {
@@ -239,10 +241,14 @@ impl Project {
             })
     }
 
+    /// Warning: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
+    ///
+    /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.
     pub fn unique_design_variants(&self) -> HashSet<DesignVariant> {
         self.pcbs
             .iter()
-            .flat_map(|pcb| pcb.unit_assignments())
+            .filter_map(|pcb| pcb.unit_assignments().ok())
+            .flat_map(|unit_assignments| unit_assignments)
             .flatten()
             .collect()
     }
@@ -328,7 +334,11 @@ impl Project {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct ProjectPcb {
-    pub pcb: Pcb,
+    pub pcb_file: FileReference,
+
+    /// Loaded from the path specified by `pcb_file`
+    #[serde(skip)]
+    pub pcb: Option<Pcb>,
 
     /// Individual units can have a design variant assigned.
     #[serde_as(as = "Vec<(_, _)>")]
@@ -339,31 +349,45 @@ pub struct ProjectPcb {
 }
 
 impl ProjectPcb {
-    pub fn new(pcb: Pcb) -> Self {
+    pub fn new(pcb_file: FileReference, pcb: Pcb) -> Self {
         Self {
-            pcb,
+            pcb_file,
+            pcb: Some(pcb),
             unit_assignments: BTreeMap::default(),
         }
     }
 
-    pub fn has_design(&mut self, design_name: &DesignName) -> bool {
-        self.pcb
-            .design_names
-            .iter()
-            .any(|candidate| candidate.eq(design_name))
+    pub fn load(&mut self, project_directory: &Path) -> Result<(), std::io::Error> {
+        let pcb = file::load(
+            &self
+                .pcb_file
+                .build_path(&project_directory),
+        )?;
+        self.pcb = Some(pcb);
+        Ok(())
     }
 
-    pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
-        self.pcb.design_names.iter()
+    pub fn save(&mut self, project_path: &PathBuf) -> Result<(), std::io::Error> {
+        if let Some(pcb) = &self.pcb {
+            file::save(pcb, &self.pcb_file.build_path(project_path))?;
+        }
+        Ok(())
     }
 
-    pub fn unit_assignments(&self) -> Vec<Option<DesignVariant>> {
-        let mut unit_assignments = vec![None; self.pcb.units as usize];
+    pub fn pcb(&self) -> Option<&Pcb> {
+        self.pcb.as_ref()
+    }
+
+    pub fn unit_assignments(&self) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {
+        let Some(pcb) = &self.pcb else {
+            return Err(ProjectPcbError::NotLoaded);
+        };
+
+        let mut unit_assignments = vec![None; pcb.units as usize];
 
         for (unit_index, (design_index, variant_name)) in self.unit_assignments.iter() {
             unit_assignments[*unit_index as usize] = Some(DesignVariant {
-                design_name: self
-                    .pcb
+                design_name: pcb
                     .design_names
                     .iter()
                     .nth(*design_index as usize)
@@ -373,7 +397,7 @@ impl ProjectPcb {
             });
         }
 
-        unit_assignments
+        Ok(unit_assignments)
     }
 
     /// Makes an assignment
@@ -390,15 +414,19 @@ impl ProjectPcb {
         unit: u16,
         variant_name: VariantName,
     ) -> Result<Option<VariantName>, ProjectPcbError> {
-        if unit >= self.pcb.units {
+        let Some(pcb) = &self.pcb else {
+            return Err(ProjectPcbError::NotLoaded);
+        };
+
+        if unit >= pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
                 unit,
                 min: 0,
-                max: self.pcb.units - 1,
+                max: pcb.units - 1,
             });
         }
 
-        let design_index: DesignIndex = *self.pcb.unit_map.get(&unit).unwrap();
+        let design_index: DesignIndex = *pcb.unit_map.get(&unit).unwrap();
 
         match self.unit_assignments.entry(unit) {
             Entry::Vacant(entry) => {
@@ -430,6 +458,9 @@ pub enum ProjectPcbError {
 
     #[error("Unknown design. design: {0}.  Assign the design to the PCB.")]
     UnknownDesign(DesignName),
+
+    #[error("Project PCB not loaded")]
+    NotLoaded,
 }
 
 #[derive(Error, Debug)]
@@ -517,9 +548,12 @@ impl Default for Project {
 pub enum PcbOperationError {
     #[error("Unknown error")]
     Unknown,
+    #[error("PCB not loaded")]
+    PcbNotLoaded,
 }
 
 pub fn add_pcb(
+    path: &PathBuf,
     project: &mut Project,
     name: String,
     units: u16,
@@ -553,14 +587,18 @@ pub fn add_pcb(
     info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
     trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
 
+    let pcb_file_name = format!("{}_.pcb.json", name);
+
+    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
+
+    let mut pcb_path = path.clone();
+    pcb_path.push(pcb_file_name.clone());
+
+    let pcb_file = FileReference::Relative(PathBuf::from(pcb_file_name));
+
     project
         .pcbs
-        .push(ProjectPcb::new(Pcb::new(
-            name,
-            units,
-            design_names,
-            unit_to_design_index_mapping,
-        )));
+        .push(ProjectPcb::new(pcb_file, pcb));
     Ok(())
 }
 
@@ -1159,25 +1197,6 @@ pub fn remove_process_from_part(part_state: &mut PartState, part: &Part, process
     }
 
     removed
-}
-
-pub fn load(project_file_path: &PathBuf) -> Result<Project, std::io::Error> {
-    let project_file = File::open(project_file_path.clone())?;
-    let mut de = serde_json::Deserializer::from_reader(project_file);
-    let project = Project::deserialize(&mut de)?;
-    Ok(project)
-}
-
-pub fn save(project: &Project, project_file_path: &PathBuf) -> Result<(), std::io::Error> {
-    let project_file = File::create(project_file_path)?;
-    let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-    let mut ser = serde_json::Serializer::with_formatter(project_file, formatter);
-    project.serialize(&mut ser)?;
-
-    let mut project_file = ser.into_inner();
-    let _written = project_file.write(b"\n")?;
-
-    Ok(())
 }
 
 pub fn update_placements_operation(

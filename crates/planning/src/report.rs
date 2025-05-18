@@ -264,10 +264,13 @@ fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
 
                 let project_pcb = project.pcbs.get(pcb_index).unwrap();
 
-                Some(PcbReportItem {
-                    name: project_pcb.pcb.name.clone(),
-                    unit_assignments,
-                })
+                project_pcb
+                    .pcb
+                    .as_ref()
+                    .map(|pcb| PcbReportItem {
+                        name: pcb.name.clone(),
+                        unit_assignments,
+                    })
             } else {
                 None
             }

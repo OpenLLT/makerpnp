@@ -14,3 +14,5 @@ pub mod project;
 
 pub mod report;
 pub mod variant;
+
+pub mod file;

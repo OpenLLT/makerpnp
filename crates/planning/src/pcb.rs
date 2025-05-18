@@ -80,4 +80,14 @@ impl Pcb {
             design_gerbers: Default::default(),
         }
     }
+
+    pub fn has_design(&mut self, design_name: &DesignName) -> bool {
+        self.design_names
+            .iter()
+            .any(|candidate| candidate.eq(design_name))
+    }
+
+    pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
+        self.design_names.iter()
+    }
 }
