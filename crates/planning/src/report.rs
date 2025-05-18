@@ -265,8 +265,7 @@ fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
                 let project_pcb = project.pcbs.get(pcb_index).unwrap();
 
                 project_pcb
-                    .pcb
-                    .as_ref()
+                    .pcb()
                     .map(|pcb| PcbReportItem {
                         name: pcb.name.clone(),
                         unit_assignments,

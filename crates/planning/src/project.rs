@@ -336,9 +336,9 @@ impl Project {
 pub struct ProjectPcb {
     pub pcb_file: FileReference,
 
-    /// Loaded from the path specified by `pcb_file`
+    /// Loaded from the path specified by `pcb_file`, see [`ProjectPcb::pcb`] and [`ProjectPcb::pcb_mut`]
     #[serde(skip)]
-    pub pcb: Option<Pcb>,
+    pcb: Option<Pcb>,
 
     /// Individual units can have a design variant assigned.
     #[serde_as(as = "Vec<(_, _)>")]
@@ -376,6 +376,10 @@ impl ProjectPcb {
 
     pub fn pcb(&self) -> Option<&Pcb> {
         self.pcb.as_ref()
+    }
+
+    pub fn pcb_mut(&mut self) -> Option<&mut Pcb> {
+        self.pcb.as_mut()
     }
 
     pub fn unit_assignments(&self) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {

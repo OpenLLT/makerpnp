@@ -923,7 +923,7 @@ impl Planner {
                     .get(pcb_index as usize)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
-                let Some(pcb) = &project_pcb.pcb else {
+                let Some(pcb) = project_pcb.pcb() else {
                     return Err(AppError::PcbError(PcbOperationError::PcbNotLoaded));
                 };
 
@@ -1079,7 +1079,7 @@ impl Planner {
                     .add_edge(root_node, pcbs_node, ());
 
                 for (pcb_index, project_pcb) in project.pcbs.iter().enumerate() {
-                    if let Some(pcb) = project_pcb.pcb.as_ref() {
+                    if let Some(pcb) = project_pcb.pcb() {
                         let pcb_node = project_tree
                             .tree
                             .add_node(ProjectTreeItem {
