@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::SystemTime;
 
+use anyhow::anyhow;
 use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
@@ -10,7 +11,7 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
-use planning::file::FileReference;
+pub use planning::file::{FileReference, FileReferenceError};
 pub use planning::gerber::GerberPurpose;
 use planning::pcb::Pcb;
 pub use planning::phase::PhaseReference;
@@ -42,8 +43,9 @@ use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{debug, info, trace};
 
-use crate::effects::view_renderer;
-use crate::effects::view_renderer::ProjectViewRendererOperation;
+use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
+use crate::effects::project_view_renderer::ProjectViewRendererOperation;
+use crate::effects::{pcb_view_renderer, project_view_renderer};
 
 pub mod effects;
 
@@ -59,24 +61,156 @@ pub struct ModelProject {
     modified: bool,
 }
 
+impl ModelProject {
+    fn pcbs<'a, 'b>(&'a self, model_pcbs: &'b ModelPcbs) -> impl Iterator<Item = Option<&'b ModelPcb>> + use<'a, 'b> {
+        self.project
+            .pcbs
+            .iter()
+            .map(|project_pcb| model_pcbs.get(&project_pcb.pcb_file))
+    }
+}
+
 pub struct ModelPcb {
-    file_reference: FileReference,
+    path: PathBuf,
     pcb: Pcb,
     modified: bool,
 }
 
+type ModelPcbs = BTreeMap<FileReference, ModelPcb>;
+
 #[derive(Default)]
 pub struct Model {
     model_project: Option<ModelProject>,
-    model_pcbs: Vec<ModelPcb>,
+    /// PCBs that have been created/loaded.
+    ///
+    /// Important: Can contain instances of [`ModelPcb`] that have been created or loaded, but not assigned to a project yet.
+    model_pcbs: ModelPcbs,
 
     error: Option<(chrono::DateTime<chrono::Utc>, String)>,
+}
+
+impl Model {
+    /// an iterator over the pcbs for the project
+    ///
+    /// will return Some(None) for any PCB that hasn't been loaded.
+    #[allow(dead_code)]
+    fn project_model_pcbs(&self) -> impl Iterator<Item = Option<&ModelPcb>> + '_ {
+        Self::project_model_pcbs_maybe(&self.model_project, &self.model_pcbs)
+    }
+
+    fn project_model_pcbs_maybe<'a, 'b>(
+        model_project: &'a Option<ModelProject>,
+        model_pcbs: &'b ModelPcbs,
+    ) -> impl Iterator<Item = Option<&'b ModelPcb>> + use<'a, 'b> {
+        model_project
+            .as_ref()
+            .into_iter()
+            .flat_map(|model_project| model_project.pcbs(model_pcbs))
+    }
+
+    // FUTURE consider adding a 'refresh_project_pcbs' that re-loads them.
+
+    /// Load PCBs for the project that are not already loaded.
+    ///
+    /// * Requires a project to be loaded.
+    /// * Stops and returns on the first error.
+    fn load_unloaded_project_pcbs(&mut self, root: &PathBuf) -> Result<(), AppError> {
+        let Some(model_project) = &mut self.model_project else {
+            return Err(AppError::OperationRequiresProject);
+        };
+
+        Self::load_project_pcbs_inner(&mut model_project.project, &mut self.model_pcbs, root)
+    }
+
+    fn load_project_pcbs_inner(
+        project: &mut Project,
+        model_pcbs: &mut ModelPcbs,
+        root: &PathBuf,
+    ) -> Result<(), AppError> {
+        let pcbs_to_load = project
+            .pcbs
+            .iter_mut()
+            .filter(|pcb| !model_pcbs.contains_key(&pcb.pcb_file))
+            .collect::<Vec<_>>();
+
+        // Then, process one-by-one: load and insert
+        for pcb in pcbs_to_load {
+            let (pcb_file, pcb_data, path) = pcb
+                .load_pcb(root)
+                .map_err(AppError::IoError)?;
+            model_pcbs.insert(pcb_file, ModelPcb {
+                path,
+                pcb: pcb_data,
+                modified: false,
+            });
+        }
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn project_pcbs(&self) -> Vec<&Pcb> {
+        let iter = self.project_model_pcbs();
+        Self::project_pcbs_inner(iter)
+    }
+
+    /// Return the loaded PCBs for the project.
+    ///
+    /// The iterator here should be an iterator that returns `Some(None)` for any PCB that hasn't been loaded.
+    /// See [`project_pcbs`], [`project_model_pcbs`]
+    fn project_pcbs_inner<'a>(iter: impl Iterator<Item = Option<&'a ModelPcb>>) -> Vec<&'a Pcb> {
+        iter.filter_map(|model_pcb| {
+            model_pcb
+                .as_ref()
+                .map(|model_pcb| &model_pcb.pcb)
+        })
+        .collect::<Vec<_>>()
+    }
+
+    /// Load a PCB, no project required.
+    fn load_pcb(&mut self, pcb_file: FileReference, root: &Option<PathBuf>) -> Result<(), AppError> {
+        let path = pcb_file
+            .try_build_path(root.as_ref())
+            .map_err(AppError::FileReferenceError)?;
+
+        let pcb = file::load::<Pcb>(&path).map_err(AppError::IoError)?;
+
+        self.model_pcbs
+            .insert(pcb_file, ModelPcb {
+                path,
+                pcb,
+                modified: false,
+            });
+
+        Ok(())
+    }
+
+    /// Save a PCB, no project required.
+    ///
+    /// PCB is saved using the path build from the file reference when it was loaded.
+    fn save_pcb(&mut self, pcb_file: &FileReference) -> Result<(), AppError> {
+        info!("Saving PCB. pcb_file: {}", pcb_file);
+        let model_pcb = self
+            .model_pcbs
+            .get_mut(pcb_file)
+            .ok_or(AppError::OperationError(anyhow!(
+                "PCB not loaded. pcb_file: {:?}",
+                pcb_file
+            )))?;
+
+        file::save::<Pcb>(&model_pcb.pcb, &model_pcb.path).map_err(AppError::IoError)?;
+
+        model_pcb.modified = false;
+
+        Ok(())
+    }
 }
 
 #[effect]
 pub enum Effect {
     Render(RenderOperation),
     ProjectView(ProjectViewRendererOperation),
+    PcbView(PcbViewRendererOperation),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -273,6 +407,11 @@ pub enum ProjectViewRequest {
     PcbUnitAssignments { pcb: u16 },
 }
 
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub enum PcbView {
+    Pcb { file_reference: FileReference, pcb: Pcb },
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
 pub struct PlannerOperationViewModel {
     pub project_modified: bool,
@@ -297,7 +436,16 @@ pub enum Event {
         /// The name of the project file
         path: PathBuf,
     },
+    LoadPcb {
+        pcb_file: FileReference,
+        /// The directory, for relative paths. e.g. the project's directory
+        /// if this is None, only Absolute paths can be used.
+        root: Option<PathBuf>,
+    },
     AddPcb {
+        pcb_file: FileReference,
+    },
+    CreateProjectPcb {
         name: String,
         units: u16,
         unit_map: BTreeMap<PcbUnitNumber, DesignName>,
@@ -441,30 +589,21 @@ impl Planner {
             }),
             Event::Load {
                 path,
-            } => Box::new(|model: &mut Model| {
+            } => Box::new(move |model: &mut Model| {
                 info!("Load project. path: {:?}", &path);
 
-                let project_directory = path.parent().unwrap();
-                let mut project: Project = file::load(&path).map_err(AppError::IoError)?;
-                for project_pcb in project.pcbs.iter_mut() {
-                    let (file_reference, pcb) = project_pcb
-                        .load_pcb(&project_directory)
-                        .map_err(AppError::IoError)?;
-
-                    model.model_pcbs.push(ModelPcb {
-                        file_reference,
-                        pcb,
-                        modified: false,
-                    });
-                }
+                let project: Project = file::load(&path).map_err(AppError::IoError)?;
 
                 model
                     .model_project
                     .replace(ModelProject {
-                        path,
+                        path: path.clone(),
                         project,
                         modified: false,
                     });
+
+                let project_directory = path.parent().unwrap();
+                model.load_unloaded_project_pcbs(&project_directory.to_path_buf())?;
 
                 Ok(render::render())
             }),
@@ -488,35 +627,12 @@ impl Planner {
 
                 Ok(render::render())
             }),
-            Event::AddPcb {
+            Event::CreateProjectPcb {
                 name,
                 units,
                 unit_map,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    modified,
-                    path,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let (pcb, file_reference) =
-                    project::add_pcb(path, project, name, units, unit_map).map_err(AppError::PcbError)?;
-
-                model.model_pcbs.push(ModelPcb {
-                    file_reference,
-                    pcb,
-                    modified: true,
-                });
-
-                *modified |= true;
-
-                Ok(render::render())
-            }),
-            Event::SaveAllPcbs => Box::new(|model: &mut Model| {
+                // project required so that relative file references can be created.
                 let ModelProject {
                     path, ..
                 } = model
@@ -524,23 +640,85 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                for model_pcb in model.model_pcbs.iter_mut() {
+                let project_directory = path.parent().unwrap();
+
+                let (pcb, pcb_file, pcb_path) =
+                    planning::pcb::create_pcb(project_directory, name, units, unit_map).map_err(AppError::PcbError)?;
+
+                model
+                    .model_pcbs
+                    .insert(pcb_file.clone(), ModelPcb {
+                        path: pcb_path,
+                        pcb: pcb.clone(),
+                        // not saved, yet
+                        modified: true,
+                    });
+
+                model.save_pcb(&pcb_file)?;
+
+                Ok(pcb_view_renderer::view(PcbView::Pcb {
+                    file_reference: pcb_file,
+                    pcb,
+                }))
+            }),
+            Event::LoadPcb {
+                pcb_file,
+                root,
+            } => Box::new(move |model: &mut Model| {
+                // Note: doesn't require a project.
+                info!("Load pcb. pcb_file: {:?}", &pcb_file);
+
+                model.load_pcb(pcb_file, &root)?;
+
+                Ok(render::render())
+            }),
+            Event::SaveAllPcbs => Box::new(|model: &mut Model| {
+                for (_file_reference, model_pcb) in model.model_pcbs.iter_mut() {
                     let ModelPcb {
-                        file_reference,
+                        path,
                         pcb,
                         modified,
                     } = model_pcb;
 
-                    let project_directory = path.parent().unwrap();
-                    let pcb_path = file_reference.build_path(project_directory);
+                    info!("Save pcb. path: {:?}", path);
 
-                    info!("Save pcb. path: {:?}", pcb_path);
+                    file::save(pcb, &path).map_err(AppError::IoError)?;
 
-                    file::save(pcb, &pcb_path).map_err(AppError::IoError)?;
-
-                    info!("Saved. path: {:?}", pcb_path);
+                    info!("Saved. path: {:?}", path);
                     *modified = false;
                 }
+
+                Ok(render::render())
+            }),
+            Event::AddPcb {
+                pcb_file,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    path,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let project_directory = path.parent().unwrap();
+                let pcb_path = pcb_file.build_path(&project_directory.to_path_buf());
+
+                let pcb = file::load::<Pcb>(&pcb_path).map_err(AppError::IoError)?;
+
+                project::add_pcb(project, &pcb_file).map_err(AppError::PcbError)?;
+
+                model
+                    .model_pcbs
+                    .insert(pcb_file, ModelPcb {
+                        path: pcb_path,
+                        pcb,
+                        modified: false,
+                    });
+
+                *modified |= true;
 
                 Ok(render::render())
             }),
@@ -548,21 +726,16 @@ impl Planner {
                 variant: variant_name,
                 unit,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
+                let (
+                    ModelProject {
+                        project,
+                        path,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 project
                     .update_assignment(&pcbs, unit.clone(), variant_name)
@@ -575,22 +748,16 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::RefreshFromDesignVariants => Box::new(|model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
-
+                let (
+                    ModelProject {
+                        project,
+                        path,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
@@ -602,21 +769,16 @@ impl Planner {
                 manufacturer: manufacturer_pattern,
                 mpn: mpn_pattern,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
+                let (
+                    ModelProject {
+                        project,
+                        path,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 let process = project
                     .find_process(&process_name)
@@ -673,21 +835,16 @@ impl Planner {
                 operation,
                 placements: placements_pattern,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
+                let (
+                    ModelProject {
+                        project,
+                        path,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
@@ -814,21 +971,16 @@ impl Planner {
                 phase: reference,
                 placement_orderings,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
+                let (
+                    ModelProject {
+                        project,
+                        path,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
@@ -839,25 +991,17 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::GenerateArtifacts => Box::new(|model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    modified,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let pcbs = model
-                    .model_pcbs
-                    .iter()
-                    .map(|model_pcb| &model_pcb.pcb)
-                    .collect::<Vec<_>>();
+                let (
+                    ModelProject {
+                        project,
+                        modified,
+                        ..
+                    },
+                    pcbs,
+                    project_directory,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 *modified |= project::refresh_phase_operation_states(project);
-
-                let directory = path.parent().unwrap();
 
                 let phase_load_out_item_map = project
                     .phases
@@ -866,7 +1010,7 @@ impl Planner {
                         BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
                         |mut map, (reference, phase)| {
                             let load_out_items = stores::load_out::load_items(&LoadOutSource::try_from_path(
-                                directory.into(),
+                                &project_directory,
                                 PathBuf::from_str(&phase.load_out_source)?,
                             )?)?;
                             map.insert(reference.clone(), load_out_items);
@@ -875,7 +1019,7 @@ impl Planner {
                     )
                     .map_err(AppError::OperationError)?;
 
-                project::generate_artifacts(project, &pcbs, directory, phase_load_out_item_map)
+                project::generate_artifacts(project, &pcbs, &project_directory, phase_load_out_item_map)
                     .map_err(|cause| AppError::OperationError(cause.into()))?;
                 Ok(render::render())
             }),
@@ -994,17 +1138,18 @@ impl Planner {
                         .map(|process| process.reference.clone())
                         .collect(),
                 };
-                Ok(view_renderer::view(ProjectView::Overview(overview)))
+                Ok(project_view_renderer::view(ProjectView::Overview(overview)))
             }),
             Event::RequestPcbOverviewView {
                 pcb: pcb_index,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project, ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 // we need to make sure the index is valid before attempting to get the corresponding PCB from the model.
                 let _project_pcb = project
@@ -1012,11 +1157,7 @@ impl Planner {
                     .get(pcb_index as usize)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
-                let pcb = &model
-                    .model_pcbs
-                    .get(pcb_index as usize)
-                    .ok_or(AppError::PcbError(PcbOperationError::PcbNotLoaded))?
-                    .pcb;
+                let pcb = pcbs[pcb_index as usize];
 
                 let designs = pcb
                     .unique_designs_iter()
@@ -1060,7 +1201,7 @@ impl Planner {
                     unit_map,
                     gerbers,
                 };
-                Ok(view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
+                Ok(project_view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
             }),
             Event::RequestPcbUnitAssignmentsView {
                 pcb: pcb_index,
@@ -1087,7 +1228,7 @@ impl Planner {
                     index: pcb_index,
                     unit_assignments,
                 };
-                Ok(view_renderer::view(ProjectView::PcbUnitAssignments(
+                Ok(project_view_renderer::view(ProjectView::PcbUnitAssignments(
                     pcb_unit_assignments,
                 )))
             }),
@@ -1114,15 +1255,16 @@ impl Planner {
                     placements,
                 };
 
-                Ok(view_renderer::view(ProjectView::Placements(placements)))
+                Ok(project_view_renderer::view(ProjectView::Placements(placements)))
             }),
             Event::RequestProjectTreeView {} => Box::new(|model: &mut Model| {
-                let ModelProject {
-                    project, ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    pcbs,
+                    ..,
+                ) = { Self::model_project_and_pcbs(model) }?;
 
                 let add_test_nodes = false;
 
@@ -1172,12 +1314,7 @@ impl Planner {
                 for (pcb_index, (project_pcb, pcb)) in project
                     .pcbs
                     .iter()
-                    .zip(
-                        model
-                            .model_pcbs
-                            .iter()
-                            .map(|model_pcb| &model_pcb.pcb),
-                    )
+                    .zip(pcbs)
                     .enumerate()
                 {
                     let pcb_node = project_tree
@@ -1338,7 +1475,7 @@ impl Planner {
                         .add_edge(root_node, test_node, ());
                 }
 
-                Ok(view_renderer::view(ProjectView::ProjectTree(project_tree)))
+                Ok(project_view_renderer::view(ProjectView::ProjectTree(project_tree)))
             }),
             Event::RequestPhasesView {} => Box::new(|model: &mut Model| {
                 let ModelProject {
@@ -1368,7 +1505,7 @@ impl Planner {
                     phases,
                 };
 
-                Ok(view_renderer::view(ProjectView::Phases(phases)))
+                Ok(project_view_renderer::view(ProjectView::Phases(phases)))
             }),
 
             Event::RequestPhaseOverviewView {
@@ -1394,7 +1531,7 @@ impl Planner {
                 let phase_overview = try_build_phase_overview(path, phase_reference, phase, phase_state)
                     .map_err(AppError::LoadoutSourceError)?;
 
-                Ok(view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
+                Ok(project_view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
             Event::RequestPhasePlacementsView {
                 phase_reference,
@@ -1442,7 +1579,9 @@ impl Planner {
                     phase_reference,
                     placements,
                 };
-                Ok(view_renderer::view(ProjectView::PhasePlacements(phase_placements)))
+                Ok(project_view_renderer::view(ProjectView::PhasePlacements(
+                    phase_placements,
+                )))
             }),
             Event::RequestProcessView {
                 process_reference,
@@ -1461,7 +1600,7 @@ impl Planner {
                     .find_process(&process_reference)
                     .map_err(|err| AppError::ProcessError(err.into()))?;
 
-                Ok(view_renderer::view(ProjectView::Process(process.clone())))
+                Ok(project_view_renderer::view(ProjectView::Process(process.clone())))
             }),
             Event::RequestPartStatesView {} => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -1515,7 +1654,7 @@ impl Planner {
                     parts,
                 };
 
-                Ok(view_renderer::view(ProjectView::Parts(part_states_view)))
+                Ok(project_view_renderer::view(ProjectView::Parts(part_states_view)))
             }),
             Event::RequestPhaseLoadOutView {
                 phase_reference,
@@ -1544,9 +1683,28 @@ impl Planner {
                     items,
                 };
 
-                Ok(view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
+                Ok(project_view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
         }
+    }
+
+    fn model_project_and_pcbs(model: &mut Model) -> Result<(&mut ModelProject, Vec<&Pcb>, PathBuf), AppError> {
+        let Some(model_project) = model.model_project.as_mut() else {
+            return Err(AppError::OperationRequiresProject);
+        };
+
+        let project_directory = model_project
+            .path
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let model_pcbs = &mut model.model_pcbs;
+        Model::load_project_pcbs_inner(&mut model_project.project, model_pcbs, &project_directory)?;
+
+        let iter = model_project.pcbs(&model.model_pcbs);
+        let pcbs = Model::project_pcbs_inner(iter);
+
+        Ok((model_project, pcbs, project_directory))
     }
 }
 
@@ -1588,7 +1746,7 @@ impl App for Planner {
         let pcbs_modified = model
             .model_pcbs
             .iter()
-            .any(|pcb| pcb.modified);
+            .any(|(_file_reference, pcb)| pcb.modified);
 
         let view_model = PlannerOperationViewModel {
             project_modified,
@@ -1623,6 +1781,9 @@ enum AppError {
 
     #[error("Unknown phase reference. reference: {0}")]
     UnknownPhaseReference(Reference),
+
+    #[error("File reference error")]
+    FileReferenceError(FileReferenceError),
 }
 
 impl Planner {
@@ -1674,7 +1835,7 @@ fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Res
         .unwrap()
         .to_path_buf();
 
-    LoadOutSource::try_from_path(directory, PathBuf::from(&phase.load_out_source))
+    LoadOutSource::try_from_path(&directory, PathBuf::from(&phase.load_out_source))
 }
 
 fn try_build_phase_overview(

@@ -33,6 +33,7 @@ pub enum UiCommand {
     },
     LangageChanged(String),
     ThemeChanged(ThemePreference),
+    ShowPcb(PathBuf),
 }
 
 // TODO perhaps the return type of this method be `Task<Result<UiCommand, UiAppError>>`
@@ -81,6 +82,19 @@ pub fn handle_command(
             app_state.open_pcb_file(picked_file, app_tabs);
             Task::none()
         }
+        UiCommand::ShowPcb(path) => {
+            if let Ok(tab_key) = app_tabs
+                .lock()
+                .unwrap()
+                .show_pcb_tab(&path)
+            {
+                debug!("showing pcb tab, tab_key: {:?}", tab_key);
+                Task::none()
+            } else {
+                Task::done(UiCommand::OpenPcbFile(path))
+            }
+        }
+
         UiCommand::TabCommand {
             tab_key,
             command,
@@ -142,9 +156,7 @@ pub fn handle_command(
                                         },
                                     }),
                                 },
-                                PcbAction::Task(_, _) => panic!("unsupported"),
-                                PcbAction::SetModifiedState(_) => panic!("unsupported"),
-                                PcbAction::RequestRepaint => panic!("unsupported"),
+                                _ => panic!("unsupported"),
                             }
                         }),
                         PcbTabAction::SetModifiedState(modified_state) => {
@@ -178,7 +190,7 @@ pub fn handle_command(
                                         },
                                     }),
                                 },
-                                ProjectAction::Task(_, _) => {
+                                _ => {
                                     // unsupported here, there is no corresponding TabCommand
                                     // should have already been handled by the project
                                     // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::Task
@@ -187,17 +199,7 @@ pub fn handle_command(
                                     // BAD  = Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(pcb_index))))
                                     // GOOD = Some(ProjectAction::Task(key, Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(pcb_index)))))
 
-                                    panic!("unsupported")
-                                }
-
-                                ProjectAction::SetModifiedState(_) => {
-                                    // unsupported here, no corresponding TabCommand
-                                    // should have already been handled by the project
-                                    // HINT: when batching tasks, make sure the batch doesn't include ProjectAction::SetModifiedState
-                                    panic!("unsupported")
-                                }
-                                ProjectAction::RequestRepaint => {
-                                    panic!("unsupported")
+                                    panic!("unsupported");
                                 }
                             }
                         }),
@@ -215,6 +217,7 @@ pub fn handle_command(
                             ui_context.request_repaint();
                             Task::none()
                         }
+                        ProjectTabAction::ShowPcb(path) => Task::done(UiCommand::ShowPcb(path)),
                     },
                 },
             }

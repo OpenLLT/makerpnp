@@ -8,12 +8,11 @@ use anyhow::Error;
 use csv::QuoteStyle;
 use heck::ToShoutySnakeCase;
 use indexmap::IndexSet;
-use itertools::Itertools;
 use pnp;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::{PcbSide, PcbUnitIndex, PcbUnitNumber};
+use pnp::pcb::{PcbSide, PcbUnitIndex};
 use pnp::placement::Placement;
 use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
@@ -360,12 +359,14 @@ impl ProjectPcb {
         }
     }
 
-    pub fn load_pcb(&mut self, project_directory: &Path) -> Result<(FileReference, Pcb), std::io::Error> {
-        let path = &self
+    pub fn load_pcb(&mut self, project_directory: &PathBuf) -> Result<(FileReference, Pcb, PathBuf), std::io::Error> {
+        let path = self
             .pcb_file
-            .build_path(&project_directory);
-        let pcb = file::load(path)?;
-        Ok((self.pcb_file.clone(), pcb))
+            .build_path(project_directory);
+
+        let pcb = file::load(&path)?;
+
+        Ok((self.pcb_file.clone(), pcb, path))
     }
 
     pub fn save_pcb(&mut self, project_directory: &PathBuf, pcb: &Pcb) -> Result<(), std::io::Error> {
@@ -545,55 +546,14 @@ pub enum PcbOperationError {
     PcbNotLoaded,
 }
 
-pub fn add_pcb(
-    path: &PathBuf,
-    project: &mut Project,
-    name: String,
-    units: u16,
-    unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
-) -> Result<(Pcb, FileReference), PcbOperationError> {
-    info!("Added PCB. name: '{}'", name);
-    trace!("unit_to_design_name_map: {:?}", unit_to_design_name_map);
-
-    // 'Intern' the DesignNames
-    let mut unit_to_design_index_mapping: BTreeMap<PcbUnitIndex, DesignIndex> = BTreeMap::new();
-    let mut unique_strings: Vec<DesignName> = Vec::new();
-    let mut design_names: BTreeSet<DesignName> = BTreeSet::new();
-
-    for (pcb_unit_number, design) in unit_to_design_name_map {
-        // Insert into unique list if not seen
-        let design_index = if let Some(position) = unique_strings
-            .iter()
-            .position(|s| s == &design)
-        {
-            position
-        } else {
-            unique_strings.push(design.clone());
-            unique_strings.len() - 1
-        };
-
-        design_names.insert(design.clone());
-        let pcb_unit_index = pcb_unit_number - 1;
-        unit_to_design_index_mapping.insert(pcb_unit_index, design_index);
-    }
-
-    info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
-    trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
-
-    let pcb_file_name = format!("{}.pcb.json", name);
-
-    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
-
-    let mut pcb_path = path.clone();
-    pcb_path.push(pcb_file_name.clone());
-
-    let pcb_file = FileReference::Relative(PathBuf::from(pcb_file_name));
+pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {
+    info!("Added PCB to project. pcb_file: {}", pcb_file);
 
     project
         .pcbs
         .push(ProjectPcb::new(pcb_file.clone()));
 
-    Ok((pcb, pcb_file))
+    Ok(())
 }
 
 #[derive(Error, Debug)]

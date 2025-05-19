@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Style};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
@@ -450,6 +452,12 @@ impl AppTabs {
                 tree.push_to_focused_leaf(tab_key);
             })
             .ok();
+    }
+
+    pub fn show_pcb_tab(&mut self, path: &PathBuf) -> Result<TabKey, ()> {
+        self.show_tab(
+            |candidate_tab| matches!(candidate_tab, TabKind::Pcb(tab, _) if tab.path.as_ref().eq(&Some(path))),
+        )
     }
 
     fn configure_home_tab_mappers(

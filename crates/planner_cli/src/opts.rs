@@ -6,6 +6,7 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::{AddOrRemoveOperationArg, PcbSideArg, PlacementOperationArg, SetOrClearOperationArg, TaskActionArg};
 use planner_app::Event;
 use planning::design::DesignName;
+use planning::file::FileReference;
 use planning::placement::PlacementSortingItem;
 use planning::process::ProcessReference;
 use planning::variant::VariantName;
@@ -66,8 +67,8 @@ fn parse_design_kv(s: &str) -> Result<(u16, DesignName), String> {
 pub(crate) enum Command {
     /// Create a new job
     Create {},
-    /// Add a PCB
-    AddPcb {
+    /// Create a PCB file
+    CreatePcb {
         /// Name of the PCB, e.g. 'panel_1'
         #[arg(long)]
         name: String,
@@ -79,6 +80,13 @@ pub(crate) enum Command {
         /// The mapping of designs to units e.g. '1=design_a,2=design_b,3=design_a,4=design_b'. unit is 1-based.
         #[arg(long, required = true, value_parser = parse_design_kv, num_args = 0.., value_delimiter = ',')]
         design: Vec<(PcbUnitNumber, DesignName)>,
+    },
+    /// Add a PCB file to the project
+    AddPcb {
+        /// The path of the PCB, e.g. 'relative:<some_relative_path>' or '<some_absolute_path>'
+        /// paths can be prefixed with `relative:` to make them relative to the project path.
+        #[arg(long, value_parser = cli::parsers::FileReferenceParser::default(), value_name = "FILE_REFERENCE")]
+        file: FileReference,
     },
     /// Assign a design variant to a PCB unit
     AssignVariantToUnit {
@@ -231,7 +239,7 @@ impl TryFrom<Opts> for Event {
                     path,
                 })
             }
-            Command::AddPcb {
+            Command::CreatePcb {
                 name,
                 units,
                 design,
@@ -240,12 +248,17 @@ impl TryFrom<Opts> for Event {
                     .into_iter()
                     .collect::<BTreeMap<_, _>>();
 
-                Ok(Event::AddPcb {
+                Ok(Event::CreateProjectPcb {
                     name: name.to_string(),
                     units,
                     unit_map,
                 })
             }
+            Command::AddPcb {
+                file,
+            } => Ok(Event::AddPcb {
+                pcb_file: file,
+            }),
             Command::AssignVariantToUnit {
                 unit,
                 variant,

@@ -3,6 +3,7 @@ use std::ffi::{OsStr, OsString};
 use clap::builder::TypedValueParser;
 use clap::error::ErrorKind;
 use clap::{value_parser, Arg, Command, Error};
+use planning::file::FileReference;
 use planning::placement::PlacementSortingItem;
 
 use crate::args::{PlacementSortingModeArg, SortOrderArg};
@@ -47,5 +48,20 @@ impl TypedValueParser for PlacementSortingItemParser {
             mode: mode_arg.to_placement_sorting_mode(),
             sort_order: sort_order_arg.to_sort_order(),
         })
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct FileReferenceParser {}
+
+impl TypedValueParser for FileReferenceParser {
+    type Value = FileReference;
+
+    fn parse_ref(&self, _cmd: &Command, _arg: Option<&Arg>, value: &OsStr) -> Result<Self::Value, Error> {
+        let value = value
+            .to_str()
+            .ok_or_else(|| Error::raw(ErrorKind::InvalidValue, "Invalid argument encoding"))?;
+
+        FileReference::try_from(value).map_err(|error| Error::raw(ErrorKind::InvalidValue, error.to_string()))
     }
 }

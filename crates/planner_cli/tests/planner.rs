@@ -221,7 +221,7 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_02_add_pcb() -> Result<(), anyhow::Error> {
+    fn sequence_02_create_pcb() -> Result<(), anyhow::Error> {
         // given
         let mut ctx_guard = context::acquire(2);
         let ctx = ctx_guard.1.as_mut().unwrap();
@@ -229,16 +229,6 @@ mod operation_sequence_1 {
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_project_content = TestProject::new()
-            .with_name("job1")
-            .with_default_processes()
-            .with_pcbs(vec![project::TestProjectPcb {
-                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::default(),
-            }])
-            .content();
 
         // and
         let expected_pcb_1_content = project::TestPcb {
@@ -253,9 +243,10 @@ mod operation_sequence_1 {
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
             ctx.path_arg.as_str(),
+            // FUTURE consider making it so the project argument is not required to create a PCB since they're created as stand-alone files.
             ctx.project_arg.as_str(),
             "-vvv",
-            "add-pcb",
+            "create-pcb",
             "--name panel_a",
             "--units 4",
             "--design 1=design_a,2=design_b,3=design_a,4=design_b",
@@ -278,14 +269,10 @@ mod operation_sequence_1 {
 
         // and
         assert_contains_inorder!(trace_content, [
-            "Added PCB. name: 'panel_a'\n",
+            "Creating PCB. name: 'panel_a'\n",
             "Added designs to PCB. design: [design_a, design_b]\n",
+            "Saving PCB. pcb_file: relative='panel_a.pcb.json'\n",
         ]);
-
-        // and
-        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
-
-        assert_eq!(project_content, expected_project_content);
 
         // and
         let pcb_1_content: String = read_and_show_file(&ctx.test_pcb_1_path)?;
@@ -296,9 +283,67 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_03_assign_variant_to_unit() -> Result<(), anyhow::Error> {
+    fn sequence_03_add_pcb() -> Result<(), anyhow::Error> {
         // given
         let mut ctx_guard = context::acquire(3);
+        let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
+
+        // and
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+        // and
+        let expected_project_content = TestProject::new()
+            .with_name("job1")
+            .with_default_processes()
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
+                unit_assignments: BTreeMap::default(),
+            }])
+            .content();
+
+        // and
+        let args = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "-vvv",
+            "add-pcb",
+            "--file relative=panel_a.pcb.json",
+        ]);
+        println!("args: {:?}", args);
+
+        // when
+        let cmd_assert = cmd
+            .args(args)
+            // then
+            .assert()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+
+        // and
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
+
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
+        assert_contains_inorder!(trace_content, [
+            "Added PCB to project. pcb_file: relative='panel_a.pcb.json'\n",
+        ]);
+
+        // and
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
+
+        assert_eq!(project_content, expected_project_content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_04_assign_variant_to_unit() -> Result<(), anyhow::Error> {
+        // given
+        let mut ctx_guard = context::acquire(4);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -462,9 +507,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_04_assign_process_to_parts() -> Result<(), anyhow::Error> {
+    fn sequence_05_assign_process_to_parts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(4);
+        let mut ctx_guard = context::acquire(5);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -649,9 +694,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_05_create_phase_top() -> Result<(), anyhow::Error> {
+    fn sequence_06_create_phase_top() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(5);
+        let mut ctx_guard = context::acquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -855,9 +900,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_06_create_phase_bottom() -> Result<(), anyhow::Error> {
+    fn sequence_07_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(6);
+        let mut ctx_guard = context::acquire(7);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1093,9 +1138,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_07_assign_placements_to_phase() -> Result<(), anyhow::Error> {
+    fn sequence_08_assign_placements_to_phase() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(7);
+        let mut ctx_guard = context::acquire(8);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1376,9 +1421,9 @@ mod operation_sequence_1 {
 
     //noinspection MissingFeatures
     #[test]
-    fn sequence_08_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
+    fn sequence_09_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(8);
+        let mut ctx_guard = context::acquire(9);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1442,9 +1487,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_09_set_placement_ordering() -> Result<(), anyhow::Error> {
+    fn sequence_10_set_placement_ordering() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(9);
+        let mut ctx_guard = context::acquire(10);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1665,9 +1710,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_10_generate_artifacts() -> Result<(), anyhow::Error> {
+    fn sequence_11_generate_artifacts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(10);
+        let mut ctx_guard = context::acquire(11);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1989,9 +2034,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_11_record_phase_operations() -> Result<(), anyhow::Error> {
+    fn sequence_12_record_phase_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(11);
+        let mut ctx_guard = context::acquire(12);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2302,9 +2347,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_12_record_placements_operation() -> Result<(), anyhow::Error> {
+    fn sequence_13_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(12);
+        let mut ctx_guard = context::acquire(13);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2581,9 +2626,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_13_reset_operations() -> Result<(), anyhow::Error> {
+    fn sequence_14_reset_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(13);
+        let mut ctx_guard = context::acquire(14);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2797,6 +2842,14 @@ mod operation_sequence_1 {
 
         Ok(())
     }
+
+    #[test]
+    fn sequence_15_cleanup() {
+        let mut ctx_guard = context::acquire(15);
+        let ctx = ctx_guard.1.take().unwrap();
+        drop(ctx);
+    }
+
     fn assert_operation_history(
         mut operation_history: Vec<TestOperationHistoryItem>,
         operation_expectations: Vec<(&str, Option<(String, String, Box<dyn TestOperationHistoryKind>)>)>,
@@ -2837,13 +2890,6 @@ mod operation_sequence_1 {
             operation_history = Vec::from(remaining_operation_history);
         }
     }
-
-    #[test]
-    fn sequence_14_cleanup() {
-        let mut ctx_guard = context::acquire(14);
-        let ctx = ctx_guard.1.take().unwrap();
-        drop(ctx);
-    }
 }
 
 mod help {
@@ -2863,7 +2909,8 @@ mod help {
 
             Commands:
               create                          Create a new job
-              add-pcb                         Add a PCB
+              create-pcb                      Create a PCB file
+              add-pcb                         Add a PCB file to the project
               assign-variant-to-unit          Assign a design variant to a PCB unit
               assign-process-to-parts         Assign a process to parts
               create-phase                    Create a phase
@@ -2922,16 +2969,16 @@ mod help {
     }
 
     #[test]
-    fn help_for_add_pcb() {
+    fn help_for_create_pcb() {
         // given
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
         let expected_output = indoc! {"
-            Add a PCB
-
-            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --name <NAME> --units <UNITS> --design [<DESIGN>...]
-
+            Create a PCB file
+            
+            Usage: planner_cli <--project <PROJECT_NAME>> create-pcb [OPTIONS] --name <NAME> --units <UNITS> --design [<DESIGN>...]
+            
             Options:
                   --name <NAME>           Name of the PCB, e.g. 'panel_1'
                   --units <UNITS>         The number of individual PCB units. 1 = single, >1 = panel
@@ -2939,6 +2986,33 @@ mod help {
               -v, --verbose...            Increase logging verbosity
               -q, --quiet...              Decrease logging verbosity
               -h, --help                  Print help
+        "};
+
+        // when
+        cmd.args(["create-pcb", "--help"])
+            // then
+            .assert()
+            .success()
+            .stderr(print("stderr"))
+            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+    }
+
+    #[test]
+    fn help_for_add_pcb() {
+        // given
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+        // and
+        let expected_output = indoc! {"
+            Add a PCB file to the project
+
+            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --file <FILE_REFERENCE>
+            
+            Options:
+                  --file <FILE_REFERENCE>  The path of the PCB, e.g. 'relative:<some_relative_path>' or '<some_absolute_path>' paths can be prefixed with `relative:` to make them relative to the project path
+              -v, --verbose...             Increase logging verbosity
+              -q, --quiet...               Decrease logging verbosity
+              -h, --help                   Print help
         "};
 
         // when

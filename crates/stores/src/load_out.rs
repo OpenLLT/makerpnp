@@ -123,11 +123,11 @@ impl LoadOutSource {
         Self::try_from_path_inner(path)
     }
 
-    pub fn try_from_path(project_path: PathBuf, path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
+    pub fn try_from_path(project_path: &PathBuf, path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
         match path.is_absolute() {
             true => Self::from_absolute_path(path.clone()),
             false => {
-                let full_path = project_path.join(path);
+                let full_path = project_path.clone().join(path);
                 Self::try_from_path_inner(full_path)
             }
         }

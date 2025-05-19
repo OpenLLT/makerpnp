@@ -7,7 +7,7 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, Event, LoadOutSource, ObjectPath, PhaseOverview, PhaseReference, PlacementOperation,
+    AddOrRemoveAction, Event, LoadOutSource, ObjectPath, PcbView, PhaseOverview, PhaseReference, PlacementOperation,
     PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
     SetOrClearAction,
 };
@@ -97,6 +97,7 @@ pub enum ProjectAction {
     Task(ProjectKey, Task<ProjectAction>),
     SetModifiedState(bool),
     UiCommand(ProjectUiCommand),
+    ShowPcb(PathBuf),
     RequestRepaint,
 }
 
@@ -991,7 +992,7 @@ impl UiComponent for Project {
                     .update(key, event)
                     .when_ok(|_| None)
             }
-            ProjectUiCommand::UpdateView(view) => {
+            ProjectUiCommand::ProjectView(view) => {
                 match view {
                     ProjectView::Overview(project_overview) => {
                         trace!("project overview: {:?}", project_overview);
@@ -1432,7 +1433,7 @@ impl UiComponent for Project {
 
                             match self
                                 .planner_core_service
-                                .update(key, Event::AddPcb {
+                                .update(key, Event::CreateProjectPcb {
                                     name: args.name,
                                     units: args.units,
                                     unit_map: args.unit_map,
@@ -1721,6 +1722,22 @@ impl UiComponent for Project {
                     }
                 }
             }
+            ProjectUiCommand::PcbView(view) => match view {
+                PcbView::Pcb {
+                    file_reference,
+                    pcb,
+                } => {
+                    debug!("pcb view.  file_reference: {:?}, pcb: {:?}", file_reference, pcb);
+
+                    let project_directory = self
+                        .path
+                        .parent()
+                        .unwrap()
+                        .to_path_buf();
+                    let path = file_reference.build_path(&project_directory);
+                    Some(ProjectAction::ShowPcb(path))
+                }
+            },
         }
     }
 }
@@ -1859,7 +1876,8 @@ pub enum ProjectUiCommand {
     Loaded,
     Save,
     Saved,
-    UpdateView(ProjectView),
+    ProjectView(ProjectView),
+    PcbView(PcbView),
     Error(ProjectError),
     SetModifiedState {
         project_modified: bool,

@@ -1,10 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
-use pnp::pcb::PcbUnitIndex;
+use itertools::Itertools;
+use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 use serde_with::serde_as;
+use tracing::{info, trace};
 
 use crate::design::{DesignIndex, DesignName};
+use crate::file::FileReference;
 use crate::gerber::GerberFile;
+use crate::project::PcbOperationError;
 
 /// Defines a PCB
 ///
@@ -64,6 +69,15 @@ pub struct Pcb {
     // TODO consider adding fiducials here?  Creates a dependency on the gerber types and requires the gerber units (mil, mm) too.
 }
 
+impl PartialEq for Pcb {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.units == other.units
+            && self.design_names == other.design_names
+            && self.unit_map == other.unit_map
+    }
+}
+
 impl Pcb {
     pub fn new(
         name: String,
@@ -90,4 +104,50 @@ impl Pcb {
     pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
         self.design_names.iter()
     }
+}
+
+pub fn create_pcb(
+    path: &Path,
+    name: String,
+    units: u16,
+    unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
+) -> Result<(Pcb, FileReference, PathBuf), PcbOperationError> {
+    info!("Creating PCB. name: '{}'", name);
+    trace!("unit_to_design_name_map: {:?}", unit_to_design_name_map);
+
+    // 'Intern' the DesignNames
+    let mut unit_to_design_index_mapping: BTreeMap<PcbUnitIndex, DesignIndex> = BTreeMap::new();
+    let mut unique_strings: Vec<DesignName> = Vec::new();
+    let mut design_names: BTreeSet<DesignName> = BTreeSet::new();
+
+    for (pcb_unit_number, design) in unit_to_design_name_map {
+        // Insert into unique list if not seen
+        let design_index = if let Some(position) = unique_strings
+            .iter()
+            .position(|s| s == &design)
+        {
+            position
+        } else {
+            unique_strings.push(design.clone());
+            unique_strings.len() - 1
+        };
+
+        design_names.insert(design.clone());
+        let pcb_unit_index = pcb_unit_number - 1;
+        unit_to_design_index_mapping.insert(pcb_unit_index, design_index);
+    }
+
+    info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
+    trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
+
+    let pcb_file_name = format!("{}.pcb.json", name);
+
+    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
+
+    let mut pcb_path = path.to_path_buf();
+    pcb_path.push(pcb_file_name.clone());
+
+    let pcb_file = FileReference::Relative(PathBuf::from(pcb_file_name));
+
+    Ok((pcb, pcb_file, pcb_path))
 }

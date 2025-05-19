@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use planner_app::effects::view_renderer::ProjectViewRendererOperation;
+use planner_app::effects::pcb_view_renderer::PcbViewRendererOperation;
+use planner_app::effects::project_view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
 use tracing::{debug, error};
 
@@ -63,7 +64,14 @@ impl PlannerCoreService {
                     view,
                 } = request.operation;
 
-                Ok(ProjectAction::UiCommand(ProjectUiCommand::UpdateView(view)))
+                Ok(ProjectAction::UiCommand(ProjectUiCommand::ProjectView(view)))
+            }
+            Effect::PcbView(request) => {
+                let PcbViewRendererOperation::View {
+                    view,
+                } = request.operation;
+
+                Ok(ProjectAction::UiCommand(ProjectUiCommand::PcbView(view)))
             }
         }
     }
