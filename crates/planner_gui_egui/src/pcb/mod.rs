@@ -41,7 +41,7 @@ pub struct Pcb {
 }
 
 impl Pcb {
-    pub(crate) fn show_pcb_tree(&self, ui: &mut Ui, key: &mut PcbKey) {
+    fn show_pcb_tree(&self, ui: &mut Ui, key: &mut PcbKey) {
         let mut tree_view_state = self.tree_view_state.lock().unwrap();
 
         let (_response, actions) = TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(

@@ -7,11 +7,12 @@ mod operation_sequence_1 {
     use std::collections::BTreeMap;
     use std::fs::{read_to_string, File};
     use std::io::Write;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::str::FromStr;
 
     use assert_cmd::Command;
     use indoc::indoc;
+    use planning::file::FileReference;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
     use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;
@@ -30,7 +31,7 @@ mod operation_sequence_1 {
     use crate::common::project_builder::{
         TestAutomatedSolderingTaskState, TestLoadPcbsTaskState, TestManualSolderingTaskState, TestOperationState,
         TestPartState, TestPhase, TestPlacement, TestPlacementState, TestPlacementTaskState,
-        TestProcessOperationStatus, TestProjectBuilder, TestSerializableTaskState,
+        TestProcessOperationStatus, TestProject, TestSerializableTaskState,
     };
     use crate::common::project_report_builder as report;
     use crate::common::project_report_builder::{
@@ -61,6 +62,7 @@ mod operation_sequence_1 {
             pub project_arg: String,
             pub test_trace_log_path: PathBuf,
             pub test_project_path: PathBuf,
+            pub test_pcb_1_path: PathBuf,
             pub phase_1_load_out_path: PathBuf,
             pub phase_2_load_out_path: PathBuf,
             pub phase_1_log_path: PathBuf,
@@ -83,6 +85,8 @@ mod operation_sequence_1 {
                 let (test_project_path, _test_project_file_name) =
                     build_temp_file(&temp_dir, "project-job1", "mpnp.json");
 
+                let (test_pcb_1_path, _test_pcb_1_file_name) = build_temp_file(&temp_dir, "panel_a", "pcb.json");
+
                 let project_arg = "--project job1".to_string();
 
                 let mut phase_1_load_out_path = PathBuf::from(temp_dir.path());
@@ -101,6 +105,7 @@ mod operation_sequence_1 {
                     trace_log_arg,
                     test_trace_log_path,
                     test_project_path,
+                    test_pcb_1_path,
                     phase_1_load_out_path,
                     phase_1_log_path,
                     phase_2_load_out_path,
@@ -157,6 +162,14 @@ mod operation_sequence_1 {
         }
     }
 
+    pub fn read_and_show_file(path: &Path) -> std::io::Result<String> {
+        println!("File: {:?}", path);
+        let content: String = read_to_string(path)?;
+        println!("{}", content);
+
+        Ok(content)
+    }
+
     #[test]
     fn sequence_01_create_job() -> Result<(), anyhow::Error> {
         // given
@@ -167,7 +180,7 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .content();
@@ -183,22 +196,24 @@ mod operation_sequence_1 {
         println!("args: {:?}", args);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, ["Created project successfully",]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -216,25 +231,30 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::default(),
             }])
             .content();
+
+        // and
+        let expected_pcb_1_content = project::TestPcb {
+            name: "panel_a".to_string(),
+            units: 4,
+            design_names: vec!["design_a".into(), "design_b".into()],
+            unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+        }
+        .content();
 
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
+            "-vvv",
             "add-pcb",
             "--name panel_a",
             "--units 4",
@@ -243,27 +263,34 @@ mod operation_sequence_1 {
         println!("args: {:?}", args);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             "Added PCB. name: 'panel_a'\n",
             "Added designs to PCB. design: [design_a, design_b]\n",
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
+
+        // and
+        let pcb_1_content: String = read_and_show_file(&ctx.test_pcb_1_path)?;
+
+        assert_eq!(pcb_1_content, expected_pcb_1_content);
 
         Ok(())
     }
@@ -298,16 +325,11 @@ mod operation_sequence_1 {
         placements_file.flush()?;
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -406,17 +428,20 @@ mod operation_sequence_1 {
         ]);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             "Unit assignment added. unit: 'pcb=1::unit=1', variant_name: variant_a\n",
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
@@ -429,8 +454,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -464,16 +488,11 @@ mod operation_sequence_1 {
         placments_file.flush()?;
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -596,17 +615,20 @@ mod operation_sequence_1 {
         ]);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             "New part. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }\n",
             "Removing unused part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
@@ -619,8 +641,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -638,16 +659,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -803,17 +819,20 @@ mod operation_sequence_1 {
         ]);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         let load_out_creation_message = format!(
             "Created load-out. source: '{}'",
             ctx.phase_1_load_out_path
@@ -828,8 +847,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -847,16 +865,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -1044,17 +1057,20 @@ mod operation_sequence_1 {
         ]);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         let load_out_creation_message = format!(
             "Created load-out. source: '{}'",
             ctx.phase_2_load_out_path
@@ -1069,8 +1085,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -1088,16 +1103,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -1304,17 +1314,20 @@ mod operation_sequence_1 {
             .as_string();
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         let loading_load_out_message = format!(
             "Loading load-out. source: '{}'",
             ctx.phase_1_load_out_path
@@ -1347,8 +1360,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -1401,17 +1413,20 @@ mod operation_sequence_1 {
             .as_string();
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             r#"Assigned feeder to load-out item. feeder: FEEDER_1, part: Part { manufacturer: "RES_MFR1", mpn: "RES1" }"#,
         ]);
@@ -1437,16 +1452,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -1628,24 +1638,26 @@ mod operation_sequence_1 {
         ]);
 
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             "Phase placement orderings set. phase: 'top_1', orderings: [PCB_UNIT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -1884,17 +1896,20 @@ mod operation_sequence_1 {
             "-vv",
         ]);
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         let load_out_message_1 = format!(
             "Loading load-out. source: '{}'",
             ctx.phase_1_load_out_path
@@ -1986,16 +2001,11 @@ mod operation_sequence_1 {
         let mut cmd_3 = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -2278,8 +2288,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -2303,16 +2312,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -2535,17 +2539,20 @@ mod operation_sequence_1 {
             "--operation placed",
         ]);
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         let log_file_message = format!("Updated operation history file. path: {:?}\n", ctx.phase_1_log_path);
 
         assert_contains_inorder!(trace_content, [
@@ -2559,8 +2566,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 
@@ -2585,16 +2591,11 @@ mod operation_sequence_1 {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
-        let expected_project_content = TestProjectBuilder::new()
+        let expected_project_content = TestProject::new()
             .with_name("job1")
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
-                pcb: project::TestPcb {
-                    name: "panel_a".to_string(),
-                    units: 4,
-                    design_names: vec!["design_a".into(), "design_b".into()],
-                    unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
-                },
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
                 unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
             }])
             .with_part_states(vec![
@@ -2769,17 +2770,20 @@ mod operation_sequence_1 {
             "reset-operations",
         ]);
         // when
-        cmd.args(args)
+        let cmd_assert = cmd
+            .args(args)
             // then
             .assert()
-            .success()
             .stderr(print("stderr"))
             .stdout(print("stdout"));
 
         // and
-        let trace_content: String = read_to_string(ctx.test_trace_log_path.clone())?;
-        println!("{}", trace_content);
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
 
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
         assert_contains_inorder!(trace_content, [
             "Placement operations reset.\n",
             "Phase operations reset. phase: bottom_1\n",
@@ -2787,8 +2791,7 @@ mod operation_sequence_1 {
         ]);
 
         // and
-        let project_content: String = read_to_string(ctx.test_project_path.clone())?;
-        println!("{}", project_content);
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
 
         assert_eq!(project_content, expected_project_content);
 

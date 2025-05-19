@@ -50,9 +50,10 @@ impl PlannerCoreService {
                         error!("core error: {:?}", error);
                         Err(ProjectError::CoreError(error))
                     }
-                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState(
-                        view.modified,
-                    ))),
+                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState {
+                        project_modified: view.project_modified,
+                        pcbs_modified: view.pcbs_modified,
+                    })),
                 };
 
                 task

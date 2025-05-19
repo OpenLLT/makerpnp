@@ -63,8 +63,11 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
 
                 // Saving after any operation is implicit for the CLI.
                 // FUTURE: Maybe it would be useful to have a 'dry-run' flag that doesn't trigger a save.
-                if view.modified {
+                if view.project_modified {
                     run_loop(core, Event::Save)?
+                }
+                if view.pcbs_modified {
+                    run_loop(core, Event::SaveAllPcbs)?
                 }
             }
             Effect::ProjectViewRenderer(_) => {

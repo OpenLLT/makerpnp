@@ -106,13 +106,14 @@ impl Project {
     /// Safety: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
     ///
     /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.
-    pub fn all_unit_assignments(&self) -> Vec<(ObjectPath, DesignVariant)> {
+    pub fn all_unit_assignments(&self, pcbs: &[&Pcb]) -> Vec<(ObjectPath, DesignVariant)> {
         self.pcbs
             .iter()
+            .zip(pcbs)
             .enumerate()
-            .flat_map(|(pcb_index, project_pcb)| {
+            .flat_map(|(pcb_index, (project_pcb, pcb))| {
                 project_pcb
-                    .unit_assignments()
+                    .unit_assignments(pcb)
                     .unwrap_or_default()
                     .into_iter()
                     .enumerate()
@@ -140,7 +141,12 @@ impl Project {
     /// makes the assignment if possible.
     ///
     /// returns if the assignment was modified (added or changed) or an error.
-    pub fn update_assignment(&mut self, object_path: ObjectPath, variant_name: VariantName) -> anyhow::Result<bool> {
+    pub fn update_assignment(
+        &mut self,
+        pcbs: &[&Pcb],
+        object_path: ObjectPath,
+        variant_name: VariantName,
+    ) -> anyhow::Result<bool> {
         // reminder: instance and pcb_unit are 1-based in the object path
 
         let Ok((pcb_instance, pcb_unit)) = object_path.pcb_instance_and_unit() else {
@@ -153,14 +159,15 @@ impl Project {
         let pcb_instance_index: u16 = pcb_instance - 1;
         let pcb_unit_index: u16 = pcb_unit - 1;
 
-        let Some(project_pcb) = self
-            .pcbs
-            .get_mut(pcb_instance_index as usize)
-        else {
+        let (Some(project_pcb), Some(pcb)) = (
+            self.pcbs
+                .get_mut(pcb_instance_index as usize),
+            pcbs.get(pcb_instance_index as usize),
+        ) else {
             return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
         };
 
-        let modified = match project_pcb.assign_unit(pcb_unit_index, variant_name.clone()) {
+        let modified = match project_pcb.assign_unit(pcb, pcb_unit_index, variant_name.clone()) {
             Ok(None) => {
                 info!(
                     "Unit assignment added. unit: '{}', variant_name: {}",
@@ -244,10 +251,11 @@ impl Project {
     /// Warning: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
     ///
     /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.
-    pub fn unique_design_variants(&self) -> HashSet<DesignVariant> {
+    pub fn unique_design_variants(&self, pcbs: &[&Pcb]) -> HashSet<DesignVariant> {
         self.pcbs
             .iter()
-            .filter_map(|pcb| pcb.unit_assignments().ok())
+            .zip(pcbs)
+            .filter_map(|(project_pcb, pcb)| project_pcb.unit_assignments(pcb).ok())
             .flat_map(|unit_assignments| unit_assignments)
             .flatten()
             .collect()
@@ -336,57 +344,41 @@ impl Project {
 pub struct ProjectPcb {
     pub pcb_file: FileReference,
 
-    /// Loaded from the path specified by `pcb_file`, see [`ProjectPcb::pcb`] and [`ProjectPcb::pcb_mut`]
-    #[serde(skip)]
-    pcb: Option<Pcb>,
-
     /// Individual units can have a design variant assigned.
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
-    // TODO remove `DesignIndex` from this tuple, calling code should use `pcb.design_to_unit_mapping` to avoid data mismatch
+    // TODO remove `DesignIndex` from this tuple, calling code should use the corresponding `pcb.design_to_unit_mapping` to avoid data mismatch
     pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
 }
 
 impl ProjectPcb {
-    pub fn new(pcb_file: FileReference, pcb: Pcb) -> Self {
+    pub fn new(pcb_file: FileReference) -> Self {
         Self {
             pcb_file,
-            pcb: Some(pcb),
             unit_assignments: BTreeMap::default(),
         }
     }
 
-    pub fn load(&mut self, project_directory: &Path) -> Result<(), std::io::Error> {
-        let pcb = file::load(
+    pub fn load_pcb(&mut self, project_directory: &Path) -> Result<(FileReference, Pcb), std::io::Error> {
+        let path = &self
+            .pcb_file
+            .build_path(&project_directory);
+        let pcb = file::load(path)?;
+        Ok((self.pcb_file.clone(), pcb))
+    }
+
+    pub fn save_pcb(&mut self, project_directory: &PathBuf, pcb: &Pcb) -> Result<(), std::io::Error> {
+        file::save(
+            pcb,
             &self
                 .pcb_file
-                .build_path(&project_directory),
+                .build_path(project_directory),
         )?;
-        self.pcb = Some(pcb);
         Ok(())
     }
 
-    pub fn save(&mut self, project_path: &PathBuf) -> Result<(), std::io::Error> {
-        if let Some(pcb) = &self.pcb {
-            file::save(pcb, &self.pcb_file.build_path(project_path))?;
-        }
-        Ok(())
-    }
-
-    pub fn pcb(&self) -> Option<&Pcb> {
-        self.pcb.as_ref()
-    }
-
-    pub fn pcb_mut(&mut self) -> Option<&mut Pcb> {
-        self.pcb.as_mut()
-    }
-
-    pub fn unit_assignments(&self) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {
-        let Some(pcb) = &self.pcb else {
-            return Err(ProjectPcbError::NotLoaded);
-        };
-
+    pub fn unit_assignments(&self, pcb: &Pcb) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {
         let mut unit_assignments = vec![None; pcb.units as usize];
 
         for (unit_index, (design_index, variant_name)) in self.unit_assignments.iter() {
@@ -415,13 +407,10 @@ impl ProjectPcb {
     /// * if the unit is out of range
     pub fn assign_unit(
         &mut self,
+        pcb: &Pcb,
         unit: u16,
         variant_name: VariantName,
     ) -> Result<Option<VariantName>, ProjectPcbError> {
-        let Some(pcb) = &self.pcb else {
-            return Err(ProjectPcbError::NotLoaded);
-        };
-
         if unit >= pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
                 unit,
@@ -562,7 +551,7 @@ pub fn add_pcb(
     name: String,
     units: u16,
     unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
-) -> Result<(), PcbOperationError> {
+) -> Result<(Pcb, FileReference), PcbOperationError> {
     info!("Added PCB. name: '{}'", name);
     trace!("unit_to_design_name_map: {:?}", unit_to_design_name_map);
 
@@ -591,7 +580,7 @@ pub fn add_pcb(
     info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
     trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
 
-    let pcb_file_name = format!("{}_.pcb.json", name);
+    let pcb_file_name = format!("{}.pcb.json", name);
 
     let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
 
@@ -602,8 +591,9 @@ pub fn add_pcb(
 
     project
         .pcbs
-        .push(ProjectPcb::new(pcb_file, pcb));
-    Ok(())
+        .push(ProjectPcb::new(pcb_file.clone()));
+
+    Ok((pcb, pcb_file))
 }
 
 #[derive(Error, Debug)]
@@ -623,6 +613,7 @@ pub enum ArtifactGenerationError {
 
 pub fn generate_artifacts(
     project: &Project,
+    pcbs: &[&Pcb],
     directory: &Path,
     phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>,
 ) -> Result<(), ArtifactGenerationError> {
@@ -638,7 +629,7 @@ pub fn generate_artifacts(
         generate_phase_artifacts(project, phase, load_out_items.as_slice(), directory, &mut issues)?;
     }
 
-    let report = report::project_generate_report(project, &phase_load_out_items_map, &mut issues);
+    let report = report::project_generate_report(project, pcbs, &phase_load_out_items_map, &mut issues);
 
     let report_file_path = report::build_report_file_path(&project.name, directory);
 
@@ -919,13 +910,14 @@ pub struct ProjectRefreshResult {
 
 pub fn refresh_from_design_variants(
     project: &mut Project,
+    pcbs: &[&Pcb],
     design_variant_placement_map: BTreeMap<DesignVariant, Vec<Placement>>,
 ) -> ProjectRefreshResult {
     let unique_parts = placement::build_unique_parts(&design_variant_placement_map);
 
     let mut modified = refresh_parts(project, unique_parts.as_slice());
 
-    modified |= refresh_placements(project, &design_variant_placement_map);
+    modified |= refresh_placements(project, pcbs, &design_variant_placement_map);
 
     ProjectRefreshResult {
         modified,
@@ -936,9 +928,11 @@ pub fn refresh_from_design_variants(
 /// Returns 'true' if project is modified
 fn refresh_placements(
     project: &mut Project,
+    pcbs: &[&Pcb],
     design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
 ) -> bool {
-    let changes: Vec<(Change, ObjectPath, Placement)> = find_placement_changes(project, design_variant_placement_map);
+    let changes: Vec<(Change, ObjectPath, Placement)> =
+        find_placement_changes(project, pcbs, design_variant_placement_map);
 
     let mut modified = false;
 
@@ -988,12 +982,13 @@ fn refresh_placements(
 
 fn find_placement_changes(
     project: &mut Project,
+    pcbs: &[&Pcb],
     design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
 ) -> Vec<(Change, ObjectPath, Placement)> {
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
 
     let unit_assignments = project
-        .all_unit_assignments()
+        .all_unit_assignments(pcbs)
         .into_iter()
         .map(|(path, unit_assignment)| (path, unit_assignment.clone()))
         .collect::<Vec<_>>();

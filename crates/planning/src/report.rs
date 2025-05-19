@@ -19,6 +19,7 @@ use tracing::{error, info, trace};
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
+use crate::pcb::Pcb;
 use crate::phase::PhaseReference;
 use crate::placement::{PlacementState, ProjectPlacementStatus};
 use crate::process::{OperationReference, OperationStatus, TaskReference};
@@ -30,6 +31,7 @@ use crate::variant::VariantName;
 
 pub fn project_generate_report(
     project: &Project,
+    pcbs: &[&Pcb],
     phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
     issue_set: &mut BTreeSet<ProjectReportIssue>,
 ) -> ProjectReport {
@@ -149,7 +151,7 @@ pub fn project_generate_report(
     let phase_specifications: Vec<PhaseSpecification> = project
         .phase_orderings
         .iter()
-        .map(|reference| build_phase_specification(project, phase_load_out_items_map, reference))
+        .map(|reference| build_phase_specification(project, pcbs, phase_load_out_items_map, reference))
         .collect();
 
     report
@@ -175,6 +177,7 @@ pub fn project_generate_report(
 
 fn build_phase_specification(
     project: &Project,
+    pcbs: &[&Pcb],
     phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
     reference: &Reference,
 ) -> PhaseSpecification {
@@ -217,7 +220,7 @@ fn build_phase_specification(
                 .iter()
                 .filter_map(|(task_reference, _task_state)| {
                     let report = if task_reference.eq(&TaskReference::from_raw_str("core::load_pcbs")) {
-                        let pcbs = build_operation_load_pcbs(project);
+                        let pcbs = build_operation_load_pcbs(project, pcbs);
                         Some(Box::new(LoadPcbsTaskSpecification {
                             pcbs,
                         }) as Box<dyn TaskSpecification>)
@@ -250,7 +253,7 @@ fn build_phase_specification(
     }
 }
 
-fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
+fn build_operation_load_pcbs(project: &Project, pcbs: &[&Pcb]) -> Vec<PcbReportItem> {
     let unit_paths_with_placements = build_unit_paths_with_placements(&project.placements);
 
     let pcbs: Vec<PcbReportItem> = unit_paths_with_placements
@@ -260,16 +263,14 @@ fn build_operation_load_pcbs(project: &Project) -> Vec<PcbReportItem> {
                 let pcb_index = (pcb_instance - 1) as usize;
 
                 // Note: the user may not have made any unit assignments yet.
-                let unit_assignments = find_unit_assignments(project, unit_path);
+                let unit_assignments = find_unit_assignments(project, pcbs, unit_path);
 
-                let project_pcb = project.pcbs.get(pcb_index).unwrap();
+                let (_project_pcb, pcb) = (project.pcbs.get(pcb_index).unwrap(), pcbs.get(pcb_index).unwrap());
 
-                project_pcb
-                    .pcb()
-                    .map(|pcb| PcbReportItem {
-                        name: pcb.name.clone(),
-                        unit_assignments,
-                    })
+                Some(PcbReportItem {
+                    name: pcb.name.clone(),
+                    unit_assignments,
+                })
             } else {
                 None
             }
@@ -598,8 +599,8 @@ mod report_issue_sorting {
     }
 }
 
-fn find_unit_assignments(project: &Project, unit_path: &ObjectPath) -> Vec<PcbUnitAssignmentItem> {
-    let all_unit_assignments = project.all_unit_assignments();
+fn find_unit_assignments(project: &Project, pcbs: &[&Pcb], unit_path: &ObjectPath) -> Vec<PcbUnitAssignmentItem> {
+    let all_unit_assignments = project.all_unit_assignments(pcbs);
 
     let unit_assignments = all_unit_assignments
         .iter()

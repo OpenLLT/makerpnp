@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use planning::design::{DesignIndex, DesignName};
+use planning::file::FileReference;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;
@@ -12,16 +13,18 @@ use pnp::pcb::{PcbSide, PcbUnitIndex};
 use pnp::placement::RefDes;
 use pnp::reference::Reference;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
 
+use crate::common::serde::ToFormattedJson;
+
 #[serde_as]
 #[derive(Debug, serde::Serialize, Default)]
 #[serde(rename_all = "snake_case")]
-pub struct TestProjectBuilder {
+pub struct TestProject {
     pub name: String,
 
     /// The *definition* of the processes used by this project.
@@ -56,7 +59,7 @@ pub struct TestProjectBuilder {
     pub placements: BTreeMap<ObjectPath, TestPlacementState>,
 }
 
-impl TestProjectBuilder {
+impl TestProject {
     pub fn with_name(mut self, name: &str) -> Self {
         self.name = name.to_string();
 
@@ -188,7 +191,7 @@ pub struct TestPcb {
 #[serde_as]
 #[derive(Debug, serde::Serialize)]
 pub struct TestProjectPcb {
-    pub pcb: TestPcb,
+    pub pcb_file: FileReference,
 
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -438,23 +441,41 @@ impl TestPlacement {
     }
 }
 
-impl TestProjectBuilder {
+impl TestProject {
     pub fn content(&self) -> String {
-        let mut content: Vec<u8> = Vec::new();
-        let formatter = serde_json::ser::PrettyFormatter::with_indent(b"    ");
-        let mut ser = serde_json::Serializer::with_formatter(&mut content, formatter);
-        self.serialize(&mut ser).unwrap();
-        content.push(b'\n');
+        let content = self.to_formatted_json();
 
-        let content = String::from_utf8(content).unwrap();
-
-        println!("expected: {}", content);
+        println!("expected project: {}", content);
 
         content
     }
 
     pub fn new() -> Self {
         Default::default()
+    }
+}
+
+impl TestPcb {
+    pub fn content(&self) -> String {
+        let content = self.to_formatted_json();
+
+        println!("expected pcb: {}", content);
+
+        content
+    }
+}
+
+impl Display for TestProject {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let content = self.to_formatted_json();
+        write!(f, "{}", content)
+    }
+}
+
+impl Display for TestPcb {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let content = self.to_formatted_json();
+        write!(f, "{}", content)
     }
 }
 

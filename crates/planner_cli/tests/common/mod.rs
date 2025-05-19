@@ -3,3 +3,5 @@ pub mod project_builder;
 pub mod project_report_builder;
 
 pub mod operation_history;
+
+pub mod serde;

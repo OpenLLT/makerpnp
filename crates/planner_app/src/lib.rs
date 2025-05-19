@@ -10,7 +10,9 @@ use crux_core::{render, App, Command};
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
+use planning::file::FileReference;
 pub use planning::gerber::GerberPurpose;
+use planning::pcb::Pcb;
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementSortingItem;
@@ -57,9 +59,16 @@ pub struct ModelProject {
     modified: bool,
 }
 
+pub struct ModelPcb {
+    file_reference: FileReference,
+    pcb: Pcb,
+    modified: bool,
+}
+
 #[derive(Default)]
 pub struct Model {
     model_project: Option<ModelProject>,
+    model_pcbs: Vec<ModelPcb>,
 
     error: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
@@ -268,8 +277,9 @@ pub enum ProjectViewRequest {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
-pub struct ProjectOperationViewModel {
-    pub modified: bool,
+pub struct PlannerOperationViewModel {
+    pub project_modified: bool,
+    pub pcbs_modified: bool,
     pub error: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
@@ -295,6 +305,7 @@ pub enum Event {
         units: u16,
         unit_map: BTreeMap<PcbUnitNumber, DesignName>,
     },
+    SaveAllPcbs,
     AssignVariantToUnit {
         unit: ObjectPath,
         variant: VariantName,
@@ -439,9 +450,15 @@ impl Planner {
                 let project_directory = path.parent().unwrap();
                 let mut project: Project = file::load(&path).map_err(AppError::IoError)?;
                 for project_pcb in project.pcbs.iter_mut() {
-                    project_pcb
-                        .load(&project_directory)
-                        .map_err(AppError::IoError)?
+                    let (file_reference, pcb) = project_pcb
+                        .load_pcb(&project_directory)
+                        .map_err(AppError::IoError)?;
+
+                    model.model_pcbs.push(ModelPcb {
+                        file_reference,
+                        pcb,
+                        modified: false,
+                    });
                 }
 
                 model
@@ -489,10 +506,44 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                project::add_pcb(path, project, name, units, unit_map)
-                    .map_err(|cause| AppError::PcbError(cause.into()))?;
+                let (pcb, file_reference) =
+                    project::add_pcb(path, project, name, units, unit_map).map_err(AppError::PcbError)?;
+
+                model.model_pcbs.push(ModelPcb {
+                    file_reference,
+                    pcb,
+                    modified: true,
+                });
 
                 *modified |= true;
+
+                Ok(render::render())
+            }),
+            Event::SaveAllPcbs => Box::new(|model: &mut Model| {
+                let ModelProject {
+                    path, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                for model_pcb in model.model_pcbs.iter_mut() {
+                    let ModelPcb {
+                        file_reference,
+                        pcb,
+                        modified,
+                    } = model_pcb;
+
+                    let project_directory = path.parent().unwrap();
+                    let pcb_path = file_reference.build_path(project_directory);
+
+                    info!("Save pcb. path: {:?}", pcb_path);
+
+                    file::save(pcb, &pcb_path).map_err(AppError::IoError)?;
+
+                    info!("Saved. path: {:?}", pcb_path);
+                    *modified = false;
+                }
 
                 Ok(render::render())
             }),
@@ -509,12 +560,19 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
+
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
+
                 project
-                    .update_assignment(unit.clone(), variant_name)
+                    .update_assignment(&pcbs, unit.clone(), variant_name)
                     .map_err(AppError::OperationError)?;
                 *modified |= true;
 
-                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
                 Ok(render::render())
@@ -530,7 +588,13 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
+
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
                 Ok(render::render())
@@ -550,12 +614,19 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
+
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
+
                 let process = project
                     .find_process(&process_name)
                     .map_err(|cause| AppError::ProcessError(cause.into()))?
                     .clone();
 
-                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
                 *modified |= project::update_applicable_processes(
@@ -614,7 +685,14 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
+
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
                 let phase = project
@@ -748,7 +826,14 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let refresh_result = Self::refresh_project(project, path).map_err(AppError::OperationError)?;
+
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
+
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
                 *modified |= refresh_result.modified;
 
                 *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
@@ -766,6 +851,12 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
+
+                let pcbs = model
+                    .model_pcbs
+                    .iter()
+                    .map(|model_pcb| &model_pcb.pcb)
+                    .collect::<Vec<_>>();
 
                 *modified |= project::refresh_phase_operation_states(project);
 
@@ -787,7 +878,7 @@ impl Planner {
                     )
                     .map_err(AppError::OperationError)?;
 
-                project::generate_artifacts(project, directory, phase_load_out_item_map)
+                project::generate_artifacts(project, &pcbs, directory, phase_load_out_item_map)
                     .map_err(|cause| AppError::OperationError(cause.into()))?;
                 Ok(render::render())
             }),
@@ -918,14 +1009,17 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let project_pcb = project
+                // we need to make sure the index is valid before attempting to get the corresponding PCB from the model.
+                let _project_pcb = project
                     .pcbs
                     .get(pcb_index as usize)
                     .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
 
-                let Some(pcb) = project_pcb.pcb() else {
-                    return Err(AppError::PcbError(PcbOperationError::PcbNotLoaded));
-                };
+                let pcb = &model
+                    .model_pcbs
+                    .get(pcb_index as usize)
+                    .ok_or(AppError::PcbError(PcbOperationError::PcbNotLoaded))?
+                    .pcb;
 
                 let designs = pcb
                     .unique_designs_iter()
@@ -1078,67 +1172,73 @@ impl Planner {
                     .tree
                     .add_edge(root_node, pcbs_node, ());
 
-                for (pcb_index, project_pcb) in project.pcbs.iter().enumerate() {
-                    if let Some(pcb) = project_pcb.pcb() {
-                        let pcb_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "pcb".to_string(),
-                                args: HashMap::from([("name".to_string(), Arg::String(pcb.name.clone()))]),
-                                path: format!("/pcbs/{}", pcb_index).to_string(),
-                            });
-                        project_tree
-                            .tree
-                            .add_edge(pcbs_node, pcb_node, ());
+                for (pcb_index, (project_pcb, pcb)) in project
+                    .pcbs
+                    .iter()
+                    .zip(
+                        model
+                            .model_pcbs
+                            .iter()
+                            .map(|model_pcb| &model_pcb.pcb),
+                    )
+                    .enumerate()
+                {
+                    let pcb_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "pcb".to_string(),
+                            args: HashMap::from([("name".to_string(), Arg::String(pcb.name.clone()))]),
+                            path: format!("/pcbs/{}", pcb_index).to_string(),
+                        });
+                    project_tree
+                        .tree
+                        .add_edge(pcbs_node, pcb_node, ());
 
-                        let unit_assignments_node = project_tree
-                            .tree
-                            .add_node(ProjectTreeItem {
-                                key: "unit-assignments".to_string(),
-                                path: format!("/pcbs/{}/units", pcb_index).to_string(),
-                                ..ProjectTreeItem::default()
-                            });
-                        project_tree
-                            .tree
-                            .add_edge(pcb_node, unit_assignments_node, ());
+                    let unit_assignments_node = project_tree
+                        .tree
+                        .add_node(ProjectTreeItem {
+                            key: "unit-assignments".to_string(),
+                            path: format!("/pcbs/{}/units", pcb_index).to_string(),
+                            ..ProjectTreeItem::default()
+                        });
+                    project_tree
+                        .tree
+                        .add_edge(pcb_node, unit_assignments_node, ());
 
-                        for (pcb_unit_index, design_index) in pcb.unit_map.iter() {
-                            let mut object_path = ObjectPath::default();
-                            object_path.set_pcb_instance((pcb_index + 1) as u16);
-                            object_path.set_pcb_unit(pcb_unit_index + 1);
+                    for (pcb_unit_index, design_index) in pcb.unit_map.iter() {
+                        let mut object_path = ObjectPath::default();
+                        object_path.set_pcb_instance((pcb_index + 1) as u16);
+                        object_path.set_pcb_unit(pcb_unit_index + 1);
 
-                            let mut args = HashMap::from([("name".to_string(), Arg::String(object_path.to_string()))]);
+                        let mut args = HashMap::from([("name".to_string(), Arg::String(object_path.to_string()))]);
 
-                            let design_name = pcb
-                                .design_names
-                                .iter()
-                                .nth(*design_index as usize)
-                                .unwrap();
-                            args.insert("design_name".to_string(), Arg::String(design_name.to_string()));
+                        let design_name = pcb
+                            .design_names
+                            .iter()
+                            .nth(*design_index as usize)
+                            .unwrap();
+                        args.insert("design_name".to_string(), Arg::String(design_name.to_string()));
 
-                            if let Some((_design_index, variant_name)) = project_pcb
-                                .unit_assignments
-                                .get(pcb_unit_index)
-                            {
-                                // it's invalid for these to be mismatched
-                                debug_assert!(_design_index == design_index);
-                                args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
-                            }
-
-                            let unit_assignment_node = project_tree
-                                .tree
-                                .add_node(ProjectTreeItem {
-                                    key: "unit-assignment".to_string(),
-                                    args,
-                                    path: format!("/pcbs/{}/units/{}", pcb_index, pcb_unit_index).to_string(),
-                                });
-
-                            project_tree
-                                .tree
-                                .add_edge(unit_assignments_node, unit_assignment_node, ());
+                        if let Some((_design_index, variant_name)) = project_pcb
+                            .unit_assignments
+                            .get(pcb_unit_index)
+                        {
+                            // it's invalid for these to be mismatched
+                            debug_assert!(_design_index == design_index);
+                            args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
                         }
-                    } else {
-                        // FUTURE consider showing a node for PCBs that are not loaded.
+
+                        let unit_assignment_node = project_tree
+                            .tree
+                            .add_node(ProjectTreeItem {
+                                key: "unit-assignment".to_string(),
+                                args,
+                                path: format!("/pcbs/{}/units/{}", pcb_index, pcb_unit_index).to_string(),
+                            });
+
+                        project_tree
+                            .tree
+                            .add_edge(unit_assignments_node, unit_assignment_node, ());
                     }
                 }
 
@@ -1456,7 +1556,7 @@ impl Planner {
 impl App for Planner {
     type Event = Event;
     type Model = Model;
-    type ViewModel = ProjectOperationViewModel;
+    type ViewModel = PlannerOperationViewModel;
     type Capabilities = Capabilities;
     type Effect = Effect;
 
@@ -1483,15 +1583,25 @@ impl App for Planner {
     }
 
     fn view(&self, model: &Self::Model) -> Self::ViewModel {
-        let modified = model
+        let project_modified = model
             .model_project
             .as_ref()
             .map_or(false, |project| project.modified);
 
-        ProjectOperationViewModel {
-            modified,
+        let pcbs_modified = model
+            .model_pcbs
+            .iter()
+            .any(|pcb| pcb.modified);
+
+        let view_model = PlannerOperationViewModel {
+            project_modified,
+            pcbs_modified,
             error: model.error.clone(),
-        }
+        };
+
+        trace!("view model: {:?}", view_model);
+
+        view_model
     }
 }
 
@@ -1519,12 +1629,12 @@ enum AppError {
 }
 
 impl Planner {
-    fn refresh_project(project: &mut Project, path: &PathBuf) -> anyhow::Result<ProjectRefreshResult> {
+    fn refresh_project(project: &mut Project, pcbs: &[&Pcb], path: &PathBuf) -> anyhow::Result<ProjectRefreshResult> {
         let directory = path.parent().unwrap();
 
-        let unique_design_variants = project.unique_design_variants();
+        let unique_design_variants = project.unique_design_variants(pcbs);
         let design_variant_placement_map = stores::placements::load_all_placements(unique_design_variants, directory)?;
-        let refresh_result = project::refresh_from_design_variants(project, design_variant_placement_map);
+        let refresh_result = project::refresh_from_design_variants(project, pcbs, design_variant_placement_map);
 
         trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
 
@@ -1551,7 +1661,7 @@ mod app_tests {
 
         // Make sure the view matches our expectations
         let actual_view = &hello.view(&model);
-        let expected_view = ProjectOperationViewModel::default();
+        let expected_view = PlannerOperationViewModel::default();
         assert_eq!(actual_view, &expected_view);
     }
 }

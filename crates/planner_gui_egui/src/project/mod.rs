@@ -106,6 +106,7 @@ pub struct Project {
     project_ui_state: Value<ProjectUiState>,
 
     modified: bool,
+    pcbs_modified: bool,
 
     /// list of errors to show
     errors: Vec<(chrono::DateTime<chrono::Utc>, String)>,
@@ -178,6 +179,7 @@ impl Project {
             planner_core_service: core_service,
             project_ui_state,
             modified: false,
+            pcbs_modified: false,
             errors: Default::default(),
             processes: Default::default(),
             phases: Default::default(),
@@ -1122,9 +1124,14 @@ impl UiComponent for Project {
                 self.errors.clear();
                 None
             }
-            ProjectUiCommand::SetModifiedState(modified_state) => {
-                self.modified = modified_state;
-                Some(ProjectAction::SetModifiedState(modified_state))
+            ProjectUiCommand::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            } => {
+                self.modified = project_modified;
+                self.pcbs_modified = pcbs_modified;
+                // TODO remove the logical or here when AddPcbs has been reworked.
+                Some(ProjectAction::SetModifiedState(project_modified || pcbs_modified))
             }
             ProjectUiCommand::ExplorerUiCommand(command) => {
                 let context = &mut ExplorerUiContext::default();
@@ -1416,13 +1423,54 @@ impl UiComponent for Project {
                         None => None,
                         Some(AddPcbModalAction::Submit(args)) => {
                             self.add_pcb_modal.take();
-                            self.planner_core_service
+
+                            let mut tasks = vec![];
+
+                            // FIXME we need to update the AddPcb API so that it takes a FileReference to an
+                            //       already-existing PCB.
+                            //       until then, we need to use `Event::SaveAllPcbs` too
+
+                            match self
+                                .planner_core_service
                                 .update(key, Event::AddPcb {
                                     name: args.name,
                                     units: args.units,
                                     unit_map: args.unit_map,
                                 })
-                                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree)))
+                                .into_actions()
+                            {
+                                Ok(actions) => {
+                                    let event_tasks = actions
+                                        .into_iter()
+                                        .map(Task::done)
+                                        .collect::<Vec<Task<ProjectAction>>>();
+
+                                    tasks.extend(event_tasks);
+
+                                    tasks.push(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        ProjectViewRequest::ProjectTree,
+                                    ))));
+
+                                    match self
+                                        .planner_core_service
+                                        .update(key, Event::SaveAllPcbs)
+                                        .into_actions()
+                                    {
+                                        Ok(actions) => {
+                                            let event_tasks = actions
+                                                .into_iter()
+                                                .map(Task::done)
+                                                .collect::<Vec<Task<ProjectAction>>>();
+
+                                            tasks.extend(event_tasks);
+                                        }
+                                        Err(error_action) => tasks.push(Task::done(error_action)),
+                                    }
+
+                                    Some(ProjectAction::Task(key, Task::batch(tasks)))
+                                }
+                                Err(error_action) => Some(error_action),
+                            }
                         }
                         Some(AddPcbModalAction::CloseDialog) => {
                             self.add_pcb_modal.take();
@@ -1813,7 +1861,10 @@ pub enum ProjectUiCommand {
     Saved,
     UpdateView(ProjectView),
     Error(ProjectError),
-    SetModifiedState(bool),
+    SetModifiedState {
+        project_modified: bool,
+        pcbs_modified: bool,
+    },
     RequestView(ProjectViewRequest),
     ClearErrors,
     ToolbarCommand(ProjectToolbarUiCommand),
