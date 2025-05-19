@@ -29,7 +29,6 @@ pub enum PcbAction {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Pcb {
-    //pcb_ui_state: Value<PcbUiState>,
     path: Option<PathBuf>,
 
     #[derivative(Debug = "ignore")]
@@ -172,12 +171,8 @@ impl Pcb {
         debug!("Creating pcb instance from path. path: {:?}", path);
 
         let component: ComponentState<(PcbKey, PcbUiCommand)> = ComponentState::default();
-        let component_sender = component.sender.clone();
-
-        //let pcb_ui_state = Value::new(PcbUiState::new(key, name, component_sender.clone()));
 
         Self {
-            //pcb_ui_state,
             tree_view_state: Default::default(),
             path,
             modified: false,
