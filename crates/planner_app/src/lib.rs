@@ -1669,7 +1669,6 @@ mod app_tests {
 /// Build a load-out source, where the load-out source *may* be a relative or absolute path.
 ///
 /// 'project_path' is the project FILE (not directory).
-#[must_use]
 fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Result<LoadOutSource, LoadOutSourceError> {
     assert!(project_path.is_file());
 
@@ -1681,7 +1680,6 @@ fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Res
     LoadOutSource::try_from_path(directory, PathBuf::from(&phase.load_out_source))
 }
 
-#[must_use]
 fn try_build_phase_overview(
     project_path: &PathBuf,
     phase_reference: PhaseReference,
