@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use planner_app::capabilities::view_renderer::ProjectViewRendererOperation;
+use planner_app::effects::view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, Planner};
 use tracing::{debug, error};
 
@@ -58,7 +58,7 @@ impl PlannerCoreService {
 
                 task
             }
-            Effect::ProjectViewRenderer(request) => {
+            Effect::ProjectView(request) => {
                 let ProjectViewRendererOperation::View {
                     view,
                 } = request.operation;

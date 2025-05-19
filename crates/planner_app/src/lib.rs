@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-use crux_core::macros::Effect;
-use crux_core::render::Render;
+use crux_core::macros::effect;
+use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use petgraph::Graph;
@@ -42,10 +42,10 @@ use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{debug, info, trace};
 
-use crate::capabilities::view_renderer;
-use crate::capabilities::view_renderer::ProjectViewRenderer;
+use crate::effects::view_renderer;
+use crate::effects::view_renderer::ProjectViewRendererOperation;
 
-pub mod capabilities;
+pub mod effects;
 
 extern crate serde_regex;
 
@@ -73,13 +73,10 @@ pub struct Model {
     error: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
-#[derive(Effect)]
-#[allow(unused)]
-pub struct Capabilities {
-    /// the default render operation, see `ProjectOperationViewModel`
-    render: Render<Event>,
-    /// a custom capability for use with `ProjectView`
-    project_view: ProjectViewRenderer<Event>,
+#[effect]
+pub enum Effect {
+    Render(RenderOperation),
+    ProjectView(ProjectViewRendererOperation),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -1557,7 +1554,7 @@ impl App for Planner {
     type Event = Event;
     type Model = Model;
     type ViewModel = PlannerOperationViewModel;
-    type Capabilities = Capabilities;
+    type Capabilities = ();
     type Effect = Effect;
 
     fn update(

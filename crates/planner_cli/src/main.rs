@@ -70,7 +70,7 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                     run_loop(core, Event::SaveAllPcbs)?
                 }
             }
-            Effect::ProjectViewRenderer(_) => {
+            Effect::ProjectView(_) => {
                 // Currently, the CLI app should not cause these effects.
                 unreachable!()
             }
