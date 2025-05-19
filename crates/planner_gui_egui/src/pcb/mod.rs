@@ -194,7 +194,6 @@ impl PcbUiState {
     pub fn new(key: PcbKey, name: Option<String>, sender: Enqueue<(PcbKey, PcbUiCommand)>) -> Self {
         Self {
             name,
-            //tree_view_state: Default::default(),
             key,
             sender,
         }
