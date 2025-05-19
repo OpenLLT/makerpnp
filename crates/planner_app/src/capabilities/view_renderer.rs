@@ -1,4 +1,7 @@
+use std::future::Future;
+
 use crux_core::capability::{CapabilityContext, Operation};
+use crux_core::command::NotificationBuilder;
 use crux_core::macros::Capability;
 use crux_core::{Command, Request};
 
@@ -44,7 +47,7 @@ impl Operation for ProjectViewRendererOperation {
     type Output = ();
 }
 
-pub fn view<Effect, Event>(view: ProjectView) -> Command<Effect, Event>
+pub fn view_builder<Effect, Event>(view: ProjectView) -> NotificationBuilder<Effect, Event, impl Future<Output = ()>>
 where
     Effect: From<Request<ProjectViewRendererOperation>> + Send + 'static,
     Event: Send + 'static,
@@ -52,4 +55,12 @@ where
     Command::notify_shell(ProjectViewRendererOperation::View {
         view,
     })
+}
+
+pub fn view<Effect, Event>(view: ProjectView) -> Command<Effect, Event>
+where
+    Effect: From<Request<ProjectViewRendererOperation>> + Send + 'static,
+    Event: Send + 'static,
+{
+    view_builder(view).into()
 }
