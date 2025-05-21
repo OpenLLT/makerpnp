@@ -11,7 +11,7 @@ use slotmap::SlotMap;
 use tracing::{debug, error, info, trace};
 
 use crate::config::Config;
-use crate::file_picker::Picker;
+use crate::file_picker::{PickError, Picker};
 use crate::pcb::{Pcb, PcbKey, PcbUiCommand};
 use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::tokio_runtime::TokioRuntime;
@@ -62,7 +62,11 @@ impl PickReason {
 pub struct AppState {
     // TODO find a better way of doing this that doesn't require this boolean
     startup_done: bool,
-    file_picker: Option<(PickReason, Picker)>,
+    file_picker: Option<(
+        PickReason,
+        Picker,
+        Box<dyn Fn(PathBuf) -> UiCommand + Send + Sync + 'static>,
+    )>,
 
     command_sender: Enqueue<UiCommand>,
 
@@ -93,33 +97,32 @@ impl AppState {
         }
     }
 
-    fn pick_file(&mut self, reason: PickReason) {
+    // FUTURE consider returning a result to indicate if the picker was busy
+    fn pick_file(&mut self, reason: PickReason, command_fn: Box<dyn Fn(PathBuf) -> UiCommand + Send + Sync + 'static>) {
         // TODO use the filter, picker API needs updating
         let _filter = reason.file_filter();
 
         match &mut self.file_picker {
-            Some((existing_reason, picker)) if *existing_reason == reason => {
-                if !picker.is_picking() {
-                    picker.pick_file();
-                }
-            }
             Some(_) => {
                 error!("file picker busy, not picking a {:?}", reason);
             }
             None => {
                 let mut picker = Picker::default();
                 picker.pick_file();
-                self.file_picker = Some((reason, picker));
+                self.file_picker = Some((reason, picker, command_fn));
             }
         }
     }
 
     pub fn pick_project_file(&mut self) {
-        self.pick_file(PickReason::ProjectFile);
+        let open_project_file_command_fn = |path: PathBuf| UiCommand::OpenProjectFile(path);
+
+        self.pick_file(PickReason::ProjectFile, Box::new(open_project_file_command_fn));
     }
 
     pub fn pick_pcb_file(&mut self) {
-        self.pick_file(PickReason::PcbFile);
+        let open_pcb_file_command_fn = |path: PathBuf| UiCommand::OpenPcbFile(path);
+        self.pick_file(PickReason::PcbFile, Box::new(open_pcb_file_command_fn));
     }
 
     pub fn make_project_tab(&mut self, path: PathBuf, project_key: ProjectKey) -> (TabKind, ProjectKey) {
@@ -741,27 +744,23 @@ impl eframe::App for UiApp {
 
         let mut app_state = self.app_state();
 
-        if let Some((reason, Ok(picked_file))) = app_state
-            .file_picker
-            .as_mut()
-            .map(|(reason, picker)| (reason, picker.picked()))
-        {
+        if let Some((_reason, picker, command_fn)) = app_state.file_picker.as_mut() {
             // FIXME this `update` method does not get called immediately after picking a file, instead update gets
             //       called when the user moves the mouse or interacts with the window again.
+            match picker.picked() {
+                Ok(picked_file) => {
+                    let command = command_fn(picked_file);
+                    app_state
+                        .command_sender
+                        .send(command)
+                        .ok();
 
-            match reason {
-                PickReason::PcbFile => {
-                    app_state
-                        .command_sender
-                        .send(UiCommand::OpenPcbFile(picked_file))
-                        .ok();
+                    app_state.file_picker = None;
                 }
-                PickReason::ProjectFile => {
-                    app_state
-                        .command_sender
-                        .send(UiCommand::OpenProjectFile(picked_file))
-                        .ok();
+                Err(PickError::Cancelled) => {
+                    app_state.file_picker = None;
                 }
+                _ => {}
             }
         }
     }

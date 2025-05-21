@@ -15,7 +15,7 @@ pub enum ProjectToolbarUiCommand {
 
 pub enum ProjectToolbarAction {
     ShowProjectExplorer,
-    ShowAddPcbDialog,
+    PickPcbFile,
     ShowAddPhaseDialog,
     RefreshFromDesignVariants,
     GenerateArtifacts,
@@ -91,7 +91,7 @@ impl UiComponent for ProjectToolbar {
             ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked => {
                 Some(ProjectToolbarAction::RefreshFromDesignVariants)
             }
-            ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::ShowAddPcbDialog),
+            ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::PickPcbFile),
             ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
             ProjectToolbarUiCommand::RemoveUnusedPlacements => Some(ProjectToolbarAction::RemoveUnusedPlacements),

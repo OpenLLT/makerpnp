@@ -7,16 +7,16 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, Event, LoadOutSource, ObjectPath, PcbView, PhaseOverview, PhaseReference, PlacementOperation,
-    PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference,
-    SetOrClearAction,
+    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbView, PhaseOverview, PhaseReference,
+    PlacementOperation, PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView,
+    ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
+use crate::file_picker::Picker;
 use crate::planner_app_core::PlannerCoreService;
-use crate::project::dialogs::add_pcb::{AddPcbModal, AddPcbModalAction, AddPcbModalUiCommand};
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
@@ -125,8 +125,9 @@ pub struct Project {
 
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 
-    add_pcb_modal: Option<AddPcbModal>,
     add_phase_modal: Option<AddPhaseModal>,
+
+    file_picker: Value<Picker>,
 }
 
 impl Project {
@@ -187,8 +188,8 @@ impl Project {
             project_tabs,
             toolbar,
             component,
-            add_pcb_modal: None,
             add_phase_modal: None,
+            file_picker: Default::default(),
         }
     }
 
@@ -877,11 +878,25 @@ impl UiComponent for Project {
         //
         // Modals
         //
-        if let Some(dialog) = &self.add_pcb_modal {
-            dialog.ui(ui, &mut ());
-        }
         if let Some(dialog) = &self.add_phase_modal {
             dialog.ui(ui, &mut ());
+        }
+
+        //
+        // File Picker
+        //
+        {
+            // FUTURE consider having the caller of the picker specify a function to call to build the ProjectUiCommand
+            //        similar to how it's done in `ui_app.rs`, this keeps the command creation code close to the code
+            //        that needs to pick a file
+            let mut picker = self.file_picker.lock().unwrap();
+            match picker.picked() {
+                Ok(picked_file) => {
+                    self.component
+                        .send((*key, ProjectUiCommand::PcbFilePicked(picked_file)));
+                }
+                Err(_) => {}
+            }
         }
     }
 
@@ -1374,16 +1389,10 @@ impl UiComponent for Project {
                             phase: None,
                         })
                         .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
-                    Some(ProjectToolbarAction::ShowAddPcbDialog) => {
-                        let mut modal = AddPcbModal::new(self.path.clone());
-                        modal
-                            .component
-                            .configure_mapper(self.component.sender.clone(), move |command| {
-                                trace!("add pcb modal mapper. command: {:?}", command);
-                                (key, ProjectUiCommand::AddPcbModalCommand(command))
-                            });
+                    Some(ProjectToolbarAction::PickPcbFile) => {
+                        let mut picker = self.file_picker.lock().unwrap();
 
-                        self.add_pcb_modal = Some(modal);
+                        picker.pick_file();
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPhaseDialog) => {
@@ -1417,69 +1426,33 @@ impl UiComponent for Project {
                 }
                 None
             }
-            ProjectUiCommand::AddPcbModalCommand(command) => {
-                if let Some(modal) = &mut self.add_pcb_modal {
-                    let action = modal.update(command, &mut ());
-                    match action {
-                        None => None,
-                        Some(AddPcbModalAction::Submit(args)) => {
-                            self.add_pcb_modal.take();
+            ProjectUiCommand::PcbFilePicked(pcb_path) => {
+                // FUTURE consider storing a relative file if the pcb_path is in a subdirectory of the project path.
+                let pcb_file = FileReference::Absolute(pcb_path);
 
-                            let mut tasks = vec![];
+                let mut tasks = vec![];
 
-                            // FIXME we need to update the AddPcb API so that it takes a FileReference to an
-                            //       already-existing PCB.
-                            //       until then, we need to use `Event::SaveAllPcbs` too
+                match self
+                    .planner_core_service
+                    .update(key, Event::AddPcb {
+                        pcb_file,
+                    })
+                    .into_actions()
+                {
+                    Ok(actions) => {
+                        let event_tasks = actions
+                            .into_iter()
+                            .map(Task::done)
+                            .collect::<Vec<Task<ProjectAction>>>();
 
-                            match self
-                                .planner_core_service
-                                .update(key, Event::CreateProjectPcb {
-                                    name: args.name,
-                                    units: args.units,
-                                    unit_map: args.unit_map,
-                                })
-                                .into_actions()
-                            {
-                                Ok(actions) => {
-                                    let event_tasks = actions
-                                        .into_iter()
-                                        .map(Task::done)
-                                        .collect::<Vec<Task<ProjectAction>>>();
+                        tasks.extend(event_tasks);
 
-                                    tasks.extend(event_tasks);
-
-                                    tasks.push(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                                        ProjectViewRequest::ProjectTree,
-                                    ))));
-
-                                    match self
-                                        .planner_core_service
-                                        .update(key, Event::SaveAllPcbs)
-                                        .into_actions()
-                                    {
-                                        Ok(actions) => {
-                                            let event_tasks = actions
-                                                .into_iter()
-                                                .map(Task::done)
-                                                .collect::<Vec<Task<ProjectAction>>>();
-
-                                            tasks.extend(event_tasks);
-                                        }
-                                        Err(error_action) => tasks.push(Task::done(error_action)),
-                                    }
-
-                                    Some(ProjectAction::Task(key, Task::batch(tasks)))
-                                }
-                                Err(error_action) => Some(error_action),
-                            }
-                        }
-                        Some(AddPcbModalAction::CloseDialog) => {
-                            self.add_pcb_modal.take();
-                            None
-                        }
+                        tasks.push(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                            ProjectViewRequest::ProjectTree,
+                        ))));
+                        Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
-                } else {
-                    None
+                    Err(error_action) => Some(error_action),
                 }
             }
             ProjectUiCommand::AddPhaseModalCommand(command) => {
@@ -1889,7 +1862,6 @@ pub enum ProjectUiCommand {
     ClearErrors,
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
-    AddPcbModalCommand(AddPcbModalUiCommand),
     AddPhaseModalCommand(AddPhaseModalUiCommand),
     Create,
     Created,
@@ -1919,6 +1891,7 @@ pub enum ProjectUiCommand {
         command: UnitAssignmentsUiCommand,
     },
     ShowPcbUnitAssignments(u16),
+    PcbFilePicked(PathBuf),
 }
 
 #[derive(Debug, Clone)]
