@@ -5,6 +5,7 @@ pub mod common;
 
 mod operation_sequence_1 {
     use std::collections::BTreeMap;
+    use std::fmt::format;
     use std::fs::{read_to_string, File};
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -268,10 +269,13 @@ mod operation_sequence_1 {
         cmd_assert.success();
 
         // and
+
+        let saving_pcb_message = &format!("Saving PCB. path: {:?}\n", ctx.test_pcb_1_path);
+
         assert_contains_inorder!(trace_content, [
             "Creating PCB. name: 'panel_a'\n",
             "Added designs to PCB. design: [design_a, design_b]\n",
-            "Saving PCB. pcb_file: relative='panel_a.pcb.json'\n",
+            saving_pcb_message,
         ]);
 
         // and

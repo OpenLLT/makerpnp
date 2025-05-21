@@ -83,13 +83,13 @@ impl UnitAssignmentsUi {
     pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
         self.component
             .send(UnitAssignmentsUiCommand::RequestPcbOverview(
-                project_pcb_overview.pcb_file.clone(),
+                project_pcb_overview.pcb_path.clone(),
             ));
         self.project_pcb_overview = Some(project_pcb_overview);
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: &PcbOverview) {
-        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_file.eq(&pcb_overview.pcb_file))
+        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_path.eq(&pcb_overview.path))
         {
             // this pcb is not for this pcb tab instance
             return;
@@ -888,14 +888,14 @@ pub enum UnitAssignmentsUiCommand {
     AssignSelection(usize, Vec<usize>),
     DesignVariantSelectionChanged(Option<usize>),
 
-    RequestPcbOverview(FileReference),
+    RequestPcbOverview(PathBuf),
 }
 
 #[derive(Debug, Clone)]
 pub enum UnitAssignmentsUiAction {
     None,
     UpdateUnitAssignments(UpdateUnitAssignmentsArgs),
-    RequestPcbOverview(FileReference),
+    RequestPcbOverview(PathBuf),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1121,8 +1121,8 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-            UnitAssignmentsUiCommand::RequestPcbOverview(pcb_file) => {
-                Some(UnitAssignmentsUiAction::RequestPcbOverview(pcb_file))
+            UnitAssignmentsUiCommand::RequestPcbOverview(path) => {
+                Some(UnitAssignmentsUiAction::RequestPcbOverview(path))
             }
         }
     }

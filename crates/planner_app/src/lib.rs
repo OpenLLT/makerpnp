@@ -57,6 +57,7 @@ pub struct Planner;
 #[derive(Default)]
 pub struct ModelProject {
     path: PathBuf,
+    project_directory: PathBuf,
     project: Project,
     modified: bool,
 }
@@ -66,17 +67,21 @@ impl ModelProject {
         self.project
             .pcbs
             .iter()
-            .map(|project_pcb| model_pcbs.get(&project_pcb.pcb_file))
+            .map(|project_pcb| {
+                let pcb_path = project_pcb
+                    .pcb_file
+                    .build_path(&self.project_directory);
+                model_pcbs.get(&pcb_path)
+            })
     }
 }
 
 pub struct ModelPcb {
-    path: PathBuf,
     pcb: Pcb,
     modified: bool,
 }
 
-type ModelPcbs = BTreeMap<FileReference, ModelPcb>;
+type ModelPcbs = BTreeMap<PathBuf, ModelPcb>;
 
 #[derive(Default)]
 pub struct Model {
@@ -130,16 +135,19 @@ impl Model {
         let pcbs_to_load = project
             .pcbs
             .iter_mut()
-            .filter(|pcb| !model_pcbs.contains_key(&pcb.pcb_file))
+            .filter(|pcb| {
+                let pcb_path = pcb.pcb_file.build_path(root);
+                !model_pcbs.contains_key(&pcb_path)
+            })
             .collect::<Vec<_>>();
 
         // Then, process one-by-one: load and insert
         for pcb in pcbs_to_load {
-            let (pcb_file, pcb_data, path) = pcb
+            let (pcb_file, pcb_data, pcb_path) = pcb
                 .load_pcb(root)
                 .map_err(AppError::IoError)?;
-            model_pcbs.insert(pcb_file, ModelPcb {
-                path,
+
+            model_pcbs.insert(pcb_path.clone(), ModelPcb {
                 pcb: pcb_data,
                 modified: false,
             });
@@ -175,30 +183,23 @@ impl Model {
 
         let pcb = file::load::<Pcb>(&path).map_err(AppError::IoError)?;
 
-        self.model_pcbs
-            .insert(pcb_file, ModelPcb {
-                path,
-                pcb,
-                modified: false,
-            });
+        self.model_pcbs.insert(path, ModelPcb {
+            pcb,
+            modified: false,
+        });
 
         Ok(())
     }
 
     /// Save a PCB, no project required.
-    ///
-    /// PCB is saved using the path build from the file reference when it was loaded.
-    fn save_pcb(&mut self, pcb_file: &FileReference) -> Result<(), AppError> {
-        info!("Saving PCB. pcb_file: {}", pcb_file);
+    fn save_pcb(&mut self, path: &PathBuf) -> Result<(), AppError> {
+        info!("Saving PCB. path: {:?}", path);
         let model_pcb = self
             .model_pcbs
-            .get_mut(pcb_file)
-            .ok_or(AppError::OperationError(anyhow!(
-                "PCB not loaded. pcb_file: {:?}",
-                pcb_file
-            )))?;
+            .get_mut(path)
+            .ok_or(AppError::OperationError(anyhow!("PCB not loaded. path: {:?}", path)))?;
 
-        file::save::<Pcb>(&model_pcb.pcb, &model_pcb.path).map_err(AppError::IoError)?;
+        file::save::<Pcb>(&model_pcb.pcb, &path).map_err(AppError::IoError)?;
 
         model_pcb.modified = false;
 
@@ -225,12 +226,12 @@ pub struct PcbGerberItem {
 pub struct ProjectPcbOverview {
     pub index: u16,
     pub pcb_file: FileReference,
+    pub pcb_path: PathBuf,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PcbOverview {
     pub path: PathBuf,
-    pub pcb_file: FileReference,
 
     pub name: String,
     pub units: u16,
@@ -422,7 +423,7 @@ pub enum PcbView {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum PcbViewRequest {
-    Overview { pcb_file: FileReference },
+    Overview { path: PathBuf },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -563,13 +564,13 @@ pub enum Event {
     },
 
     AddGerberFiles {
-        pcb_file: FileReference,
+        path: PathBuf,
         design: DesignName,
         // TODO use FileReferences, not paths?
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
-        pcb_file: FileReference,
+        path: PathBuf,
         design: DesignName,
         files: Vec<PathBuf>,
     },
@@ -578,7 +579,7 @@ pub enum Event {
     // PCB views
     //
     RequestPcbOverviewView {
-        pcb_file: FileReference,
+        path: PathBuf,
     },
 }
 
@@ -599,11 +600,14 @@ impl Planner {
             } => Box::new(|model: &mut Model| {
                 info!("Creating project. path: {:?}", &path);
 
+                let project_directory = path.parent().unwrap().to_path_buf();
+
                 let project = Project::new(name);
                 model
                     .model_project
                     .replace(ModelProject {
                         path,
+                        project_directory,
                         project,
                         modified: true,
                     });
@@ -618,16 +622,18 @@ impl Planner {
 
                 let project: Project = file::load(&path).map_err(AppError::IoError)?;
 
+                let project_directory = path.parent().unwrap().to_path_buf();
+
                 model
                     .model_project
                     .replace(ModelProject {
                         path: path.clone(),
+                        project_directory: project_directory.clone(),
                         project,
                         modified: false,
                     });
 
-                let project_directory = path.parent().unwrap();
-                model.load_unloaded_project_pcbs(&project_directory.to_path_buf())?;
+                model.load_unloaded_project_pcbs(&project_directory)?;
 
                 Ok(render::render())
             }),
@@ -658,27 +664,26 @@ impl Planner {
             } => Box::new(move |model: &mut Model| {
                 // project required so that relative file references can be created.
                 let ModelProject {
-                    path, ..
+                    path,
+                    project_directory,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-
-                let project_directory = path.parent().unwrap();
 
                 let (pcb, pcb_file, pcb_path) = planning::pcb::create_pcb(project_directory, name, units, unit_map)
                     .map_err(AppError::PcbOperationError)?;
 
                 model
                     .model_pcbs
-                    .insert(pcb_file.clone(), ModelPcb {
-                        path: pcb_path,
+                    .insert(pcb_path.clone(), ModelPcb {
                         pcb: pcb.clone(),
                         // not saved, yet
                         modified: true,
                     });
 
-                model.save_pcb(&pcb_file)?;
+                model.save_pcb(&pcb_path)?;
 
                 // TODO tell to UI to navigate to the newly created file, don't use a view
                 Ok(render::render())
@@ -695,9 +700,8 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::SaveAllPcbs => Box::new(|model: &mut Model| {
-                for (_file_reference, model_pcb) in model.model_pcbs.iter_mut() {
+                for (path, model_pcb) in model.model_pcbs.iter_mut() {
                     let ModelPcb {
-                        path,
                         pcb,
                         modified,
                     } = model_pcb;
@@ -734,8 +738,7 @@ impl Planner {
 
                 model
                     .model_pcbs
-                    .insert(pcb_file, ModelPcb {
-                        path: pcb_path,
+                    .insert(pcb_path, ModelPcb {
                         pcb,
                         modified: false,
                     });
@@ -1104,7 +1107,7 @@ impl Planner {
             // Gerber file management
             //
             Event::AddGerberFiles {
-                pcb_file,
+                path: pcb_path,
                 design,
                 files,
             } => Box::new(move |model: &mut Model| {
@@ -1114,12 +1117,12 @@ impl Planner {
                     ..
                 } = model
                     .model_pcbs
-                    .get_mut(&pcb_file)
+                    .get_mut(&pcb_path)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 debug!(
-                    "Adding gerbers to pcb. pcb_file: {}, design: {} files: {:?}",
-                    pcb_file, design, files
+                    "Adding gerbers to pcb. pcb_file: {:?}, design: {} files: {:?}",
+                    pcb_path, design, files
                 );
 
                 *modified |= pcb
@@ -1129,7 +1132,7 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::RemoveGerberFiles {
-                pcb_file,
+                path: pcb_path,
                 design,
                 files,
             } => Box::new(move |model: &mut Model| {
@@ -1139,12 +1142,12 @@ impl Planner {
                     ..
                 } = model
                     .model_pcbs
-                    .get_mut(&pcb_file)
+                    .get_mut(&pcb_path)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 debug!(
-                    "Removing gerbers from pcb. pcb_file: {}, design: {} files: {:?}",
-                    pcb_file, design, files
+                    "Removing gerbers from pcb. pcb_file: {:?}, design: {} files: {:?}",
+                    pcb_path, design, files
                 );
                 let (was_modified, unremoved_files) = pcb
                     .remove_gerbers(design, files)
@@ -1183,7 +1186,9 @@ impl Planner {
                 pcb: pcb_index,
             } => Box::new(move |model: &mut Model| {
                 let ModelProject {
-                    project, ..
+                    project,
+                    project_directory,
+                    ..
                 } = model
                     .model_project
                     .as_mut()
@@ -1195,23 +1200,25 @@ impl Planner {
                     .get(pcb_index as usize)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::Unknown))?;
 
+                let pcb_path = project_pcb
+                    .pcb_file
+                    .build_path(project_directory);
                 let pcb_overview = ProjectPcbOverview {
                     index: pcb_index,
                     pcb_file: project_pcb.pcb_file.clone(),
+                    pcb_path,
                 };
 
                 Ok(project_view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
             }),
             Event::RequestPcbOverviewView {
-                pcb_file,
+                path: pcb_path,
             } => Box::new(move |model: &mut Model| {
                 let ModelPcb {
-                    pcb,
-                    path,
-                    ..
+                    pcb, ..
                 } = &model
                     .model_pcbs
-                    .get(&pcb_file)
+                    .get(&pcb_path)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 let designs = pcb
@@ -1252,8 +1259,7 @@ impl Planner {
                     .collect::<HashMap<PcbUnitIndex, DesignIndex>>();
 
                 let pcb_overview = PcbOverview {
-                    path: path.clone(),
-                    pcb_file: pcb_file.clone(),
+                    path: pcb_path.clone(),
                     name: pcb.name.clone(),
                     units: pcb.units,
                     designs,

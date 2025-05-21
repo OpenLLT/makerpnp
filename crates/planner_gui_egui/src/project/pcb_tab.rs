@@ -43,12 +43,12 @@ impl PcbUi {
 
     pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
         self.component
-            .send(PcbUiCommand::RequestPcbOverview(project_pcb_overview.pcb_file.clone()));
+            .send(PcbUiCommand::RequestPcbOverview(project_pcb_overview.pcb_path.clone()));
         self.project_pcb_overview = Some(project_pcb_overview);
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: &PcbOverview) {
-        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_file.eq(&pcb_overview.pcb_file))
+        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_path.eq(&pcb_overview.path))
         {
             // this pcb is not for this pcb tab instance
             return;
@@ -93,24 +93,24 @@ pub enum PcbUiCommand {
     ManageGerbersClicked { design_index: usize },
     ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
     CreateUnitAssignmentClicked,
-    RequestPcbOverview(FileReference),
+    RequestPcbOverview(PathBuf),
 }
 
 #[derive(Debug, Clone)]
 pub enum PcbUiAction {
     None,
     AddGerberFiles {
-        pcb_file: FileReference,
+        path: PathBuf,
         design: DesignName,
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
-        pcb_file: FileReference,
+        path: PathBuf,
         design: DesignName,
         files: Vec<PathBuf>,
     },
     ShowUnitAssignments(u16),
-    RequestPcbOverview(FileReference),
+    RequestPcbOverview(PathBuf),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -248,7 +248,7 @@ impl UiComponent for PcbUi {
                             {
                                 let design = pcb_overview.designs[design_index].clone();
                                 Some(PcbUiAction::RemoveGerberFiles {
-                                    pcb_file: project_pcb_overview.pcb_file.clone(),
+                                    path: project_pcb_overview.pcb_path.clone(),
                                     design,
                                     files,
                                 })
@@ -273,7 +273,7 @@ impl UiComponent for PcbUi {
                                     .map(|file| (file, None, GerberPurpose::Other))
                                     .collect();
                                 Some(PcbUiAction::AddGerberFiles {
-                                    pcb_file: project_pcb_overview.pcb_file.clone(),
+                                    path: project_pcb_overview.pcb_path.clone(),
                                     design,
                                     files,
                                 })
@@ -293,7 +293,7 @@ impl UiComponent for PcbUi {
                     None
                 }
             }
-            PcbUiCommand::RequestPcbOverview(pcb_file) => Some(PcbUiAction::RequestPcbOverview(pcb_file)),
+            PcbUiCommand::RequestPcbOverview(path) => Some(PcbUiAction::RequestPcbOverview(path)),
         }
     }
 }
