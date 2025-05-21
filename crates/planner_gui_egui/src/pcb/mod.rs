@@ -10,6 +10,7 @@ use planner_app::{PcbSide, PcbUnitIndex};
 use slotmap::new_key_type;
 use tracing::debug;
 
+use crate::planner_app_core::PlannerCoreService;
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -29,6 +30,9 @@ pub enum PcbAction {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Pcb {
+    #[derivative(Debug = "ignore")]
+    planner_core_service: PlannerCoreService,
+
     path: Option<PathBuf>,
 
     #[derivative(Debug = "ignore")]
@@ -172,7 +176,9 @@ impl Pcb {
 
         let component: ComponentState<(PcbKey, PcbUiCommand)> = ComponentState::default();
 
+        let core_service = PlannerCoreService::new();
         Self {
+            planner_core_service: core_service,
             tree_view_state: Default::default(),
             path,
             modified: false,
