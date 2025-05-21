@@ -4,7 +4,7 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::{DesignName, GerberPurpose, PcbOverview, PcbSide};
+use planner_app::{DesignName, FileReference, GerberPurpose, PcbSide, ProjectPcbOverview};
 use tracing::{debug, trace};
 
 use crate::project::dialogs::manage_gerbers::{
@@ -18,7 +18,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derivative(Debug)]
 pub struct PcbUi {
     path: PathBuf,
-    pcb_overview: Option<PcbOverview>,
+    pcb_overview: Option<ProjectPcbOverview>,
 
     manage_gerbers_modal: Option<ManageGerbersModal>,
 
@@ -35,7 +35,7 @@ impl PcbUi {
         }
     }
 
-    pub fn update_overview(&mut self, pcb_overview: PcbOverview) {
+    pub fn update_overview(&mut self, pcb_overview: ProjectPcbOverview) {
         if let Some(modal) = &mut self.manage_gerbers_modal {
             modal.update_gerbers(&pcb_overview.gerbers)
         }
@@ -79,12 +79,12 @@ pub enum PcbUiCommand {
 pub enum PcbUiAction {
     None,
     AddGerberFiles {
-        pcb_index: u16,
+        pcb_file: FileReference,
         design: DesignName,
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
-        pcb_index: u16,
+        pcb_file: FileReference,
         design: DesignName,
         files: Vec<PathBuf>,
     },
@@ -219,7 +219,7 @@ impl UiComponent for PcbUi {
                             if let Some(pcb_overview) = &mut self.pcb_overview {
                                 let design = pcb_overview.designs[design_index].clone();
                                 Some(PcbUiAction::RemoveGerberFiles {
-                                    pcb_index: pcb_overview.index,
+                                    pcb_file: pcb_overview.pcb_file.clone(),
                                     design,
                                     files,
                                 })
@@ -242,7 +242,7 @@ impl UiComponent for PcbUi {
                                     .map(|file| (file, None, GerberPurpose::Other))
                                     .collect();
                                 Some(PcbUiAction::AddGerberFiles {
-                                    pcb_index: pcb_overview.index,
+                                    pcb_file: pcb_overview.pcb_file.clone(),
                                     design,
                                     files,
                                 })

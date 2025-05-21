@@ -27,14 +27,13 @@ use util::sorting::SortOrder;
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::{DesignIndex, DesignName, DesignVariant};
 use crate::file::FileReference;
-use crate::gerber::{GerberFile, GerberPurpose};
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
     ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
-use crate::pcb::Pcb;
+use crate::pcb::{Pcb, PcbError};
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
@@ -62,11 +61,6 @@ pub struct Project {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[serde(default)]
     pub pcbs: Vec<ProjectPcb>,
-
-    #[serde_as(as = "Vec<(DisplayFromStr, _)>")]
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    #[serde(default)]
-    pub design_gerbers: BTreeMap<DesignName, Vec<GerberFile>>,
 
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
@@ -284,57 +278,6 @@ impl Project {
 
         modified
     }
-
-    pub fn add_gerbers(&mut self, design: DesignName, files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>) -> bool {
-        let mut modified = false;
-        let gerbers = self
-            .design_gerbers
-            .entry(design)
-            .or_insert(vec![]);
-
-        for (file, pcb_side, purpose) in files {
-            if let Some(existing_gerber) = gerbers
-                .iter_mut()
-                .find(|candidate| candidate.file.eq(&file))
-            {
-                // change it
-                existing_gerber.purpose = purpose;
-                existing_gerber.pcb_side = pcb_side;
-                modified |= true;
-            } else {
-                // add it
-                gerbers.push(GerberFile {
-                    file,
-                    purpose,
-                    pcb_side,
-                });
-                modified |= true;
-            }
-        }
-
-        modified
-    }
-
-    // FUTURE currently this silently ignore paths that were not in the list, but perhaps we should return a result to
-    //        allow the user to be informed which files could not be removed.
-    pub fn remove_gerbers(&mut self, design: DesignName, files: Vec<PathBuf>) -> bool {
-        let mut modified = false;
-        let gerbers = self
-            .design_gerbers
-            .entry(design)
-            .or_insert(vec![]);
-
-        for file in files {
-            gerbers.retain(|candidate| {
-                let should_remove = candidate.file.eq(&file);
-                modified |= should_remove;
-
-                !should_remove
-            });
-        }
-
-        modified
-    }
 }
 
 #[serde_as]
@@ -528,7 +471,6 @@ impl Default for Project {
                 ProcessFactory::by_name("manual").unwrap(),
             ],
             pcbs: vec![],
-            design_gerbers: Default::default(),
             part_states: Default::default(),
             phases: Default::default(),
             placements: Default::default(),
@@ -544,6 +486,8 @@ pub enum PcbOperationError {
     Unknown,
     #[error("PCB not loaded")]
     PcbNotLoaded,
+    #[error("PCB error. cause: {0}")]
+    PcbError(PcbError),
 }
 
 pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {

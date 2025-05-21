@@ -1589,13 +1589,14 @@ impl UiComponent for Project {
                     None => None,
                     Some(PcbUiAction::None) => None,
                     Some(PcbUiAction::AddGerberFiles {
-                        pcb_index,
+                        pcb_file,
                         design,
                         files,
                     }) => {
                         match self
                             .planner_core_service
                             .update(key, Event::AddGerberFiles {
+                                pcb_file,
                                 design,
                                 files,
                             })
@@ -1620,13 +1621,14 @@ impl UiComponent for Project {
                         }
                     }
                     Some(PcbUiAction::RemoveGerberFiles {
-                        pcb_index,
+                        pcb_file,
                         design,
                         files,
                     }) => {
                         match self
                             .planner_core_service
                             .update(key, Event::RemoveGerberFiles {
+                                pcb_file,
                                 design,
                                 files,
                             })

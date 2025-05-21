@@ -1,14 +1,16 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use indexmap::IndexSet;
 use itertools::Itertools;
-use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
+use pnp::pcb::{PcbSide, PcbUnitIndex, PcbUnitNumber};
 use serde_with::serde_as;
+use thiserror::Error;
 use tracing::{info, trace};
 
 use crate::design::{DesignIndex, DesignName};
 use crate::file::FileReference;
-use crate::gerber::GerberFile;
+use crate::gerber::{GerberFile, GerberPurpose};
 use crate::project::PcbOperationError;
 
 /// Defines a PCB
@@ -34,9 +36,9 @@ pub struct Pcb {
     // TODO validate this after deserializing
     pub units: u16,
 
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    #[serde(skip_serializing_if = "IndexSet::is_empty")]
     #[serde(default)]
-    pub design_names: BTreeSet<DesignName>,
+    pub design_names: IndexSet<DesignName>,
 
     /// A hash map of pcb unit number to design index
     /// It's possible that units are not assigned to designs
@@ -69,6 +71,12 @@ pub struct Pcb {
     // TODO consider adding fiducials here?  Creates a dependency on the gerber types and requires the gerber units (mil, mm) too.
 }
 
+#[derive(Error, Debug)]
+pub enum PcbError {
+    #[error("Unknown design. name: {0:?}")]
+    UnknownDesign(DesignName),
+}
+
 impl PartialEq for Pcb {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
@@ -82,7 +90,7 @@ impl Pcb {
     pub fn new(
         name: String,
         units: u16,
-        design_names: BTreeSet<DesignName>,
+        design_names: IndexSet<DesignName>,
         unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
     ) -> Self {
         Self {
@@ -95,14 +103,99 @@ impl Pcb {
         }
     }
 
+    /// returns true if the design exists
     pub fn has_design(&mut self, design_name: &DesignName) -> bool {
         self.design_names
             .iter()
             .any(|candidate| candidate.eq(design_name))
     }
 
+    /// returns the design index if the design exists, otherwise None
+    pub fn design_index(&mut self, design_name: &DesignName) -> Option<DesignIndex> {
+        self.design_names
+            .iter()
+            .position(|candidate| candidate.eq(design_name))
+    }
+
     pub fn unique_designs_iter(&self) -> impl Iterator<Item = &DesignName> {
         self.design_names.iter()
+    }
+
+    /// returns a [`Result`] containing the modified state of the PCB, or an error.
+    pub fn add_gerbers(
+        &mut self,
+        design: DesignName,
+        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
+    ) -> Result<bool, PcbError> {
+        let design_index = self
+            .design_index(&design)
+            .ok_or(PcbError::UnknownDesign(design))?;
+
+        let mut modified = false;
+        let gerbers = self
+            .design_gerbers
+            .entry(design_index)
+            .or_insert(vec![]);
+
+        for (file, pcb_side, purpose) in files {
+            if let Some(existing_gerber) = gerbers
+                .iter_mut()
+                .find(|candidate| candidate.file.eq(&file))
+            {
+                // change it
+                existing_gerber.purpose = purpose;
+                existing_gerber.pcb_side = pcb_side;
+                modified |= true;
+            } else {
+                // add it
+                gerbers.push(GerberFile {
+                    file,
+                    purpose,
+                    pcb_side,
+                });
+                modified |= true;
+            }
+        }
+
+        Ok(modified)
+    }
+
+    // FUTURE currently this silently ignore paths that were not in the list, but perhaps we should return a result to
+    //        allow the user to be informed which files could not be removed.
+    pub fn remove_gerbers(
+        &mut self,
+        design: DesignName,
+        files: Vec<PathBuf>,
+    ) -> Result<(bool, Vec<PathBuf>), PcbError> {
+        let design_index = self
+            .design_index(&design)
+            .ok_or(PcbError::UnknownDesign(design))?;
+
+        let mut modified = false;
+        let gerbers = self
+            .design_gerbers
+            .entry(design_index)
+            .or_insert(vec![]);
+
+        let mut unremoved_files = files;
+
+        unremoved_files.retain(|file| {
+            let mut should_remove = false;
+
+            gerbers.retain(|candidate| {
+                should_remove = candidate.file.eq(file);
+                if should_remove {
+                    trace!("Removing gerber file. file: {:?}", file);
+                }
+                modified |= should_remove;
+
+                !should_remove
+            });
+
+            !should_remove
+        });
+
+        Ok((modified, unremoved_files))
     }
 }
 
@@ -118,7 +211,7 @@ pub fn create_pcb(
     // 'Intern' the DesignNames
     let mut unit_to_design_index_mapping: BTreeMap<PcbUnitIndex, DesignIndex> = BTreeMap::new();
     let mut unique_strings: Vec<DesignName> = Vec::new();
-    let mut design_names: BTreeSet<DesignName> = BTreeSet::new();
+    let mut design_names: IndexSet<DesignName> = IndexSet::new();
 
     for (pcb_unit_number, design) in unit_to_design_name_map {
         // Insert into unique list if not seen

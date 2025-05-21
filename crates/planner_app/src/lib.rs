@@ -41,7 +41,7 @@ use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
-use tracing::{debug, info, trace};
+use tracing::{debug, info, trace, warn};
 
 use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
 use crate::effects::project_view_renderer::ProjectViewRendererOperation;
@@ -222,8 +222,9 @@ pub struct PcbGerberItem {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct PcbOverview {
+pub struct ProjectPcbOverview {
     pub index: u16,
+    pub pcb_file: FileReference,
     pub name: String,
     pub units: u16,
     /// A list of unique designs, a panel can have multiple designs.
@@ -389,7 +390,7 @@ pub enum ProjectView {
     Placements(PlacementsList),
     ProjectTree(ProjectTreeView),
     Process(ProcessDefinition),
-    PcbOverview(PcbOverview),
+    PcbOverview(ProjectPcbOverview),
     PcbUnitAssignments(PcbUnitAssignments),
 }
 
@@ -520,10 +521,13 @@ pub enum Event {
     // Gerber file management
     //
     AddGerberFiles {
+        pcb_file: FileReference,
         design: DesignName,
+        // TODO use FileReferences, not paths?
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
+        pcb_file: FileReference,
         design: DesignName,
         files: Vec<PathBuf>,
     },
@@ -642,8 +646,8 @@ impl Planner {
 
                 let project_directory = path.parent().unwrap();
 
-                let (pcb, pcb_file, pcb_path) =
-                    planning::pcb::create_pcb(project_directory, name, units, unit_map).map_err(AppError::PcbError)?;
+                let (pcb, pcb_file, pcb_path) = planning::pcb::create_pcb(project_directory, name, units, unit_map)
+                    .map_err(AppError::PcbOperationError)?;
 
                 model
                     .model_pcbs
@@ -708,7 +712,7 @@ impl Planner {
 
                 let pcb = file::load::<Pcb>(&pcb_path).map_err(AppError::IoError)?;
 
-                project::add_pcb(project, &pcb_file).map_err(AppError::PcbError)?;
+                project::add_pcb(project, &pcb_file).map_err(AppError::PcbOperationError)?;
 
                 model
                     .model_pcbs
@@ -1082,39 +1086,56 @@ impl Planner {
             // Gerber file management
             //
             Event::AddGerberFiles {
+                pcb_file,
                 design,
                 files,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
+                let ModelPcb {
                     modified,
+                    pcb,
                     ..
                 } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                    .model_pcbs
+                    .get_mut(&pcb_file)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
-                debug!("adding gerbers. design: {} files: {:?}", design, files);
+                debug!(
+                    "Adding gerbers to pcb. pcb_file: {}, design: {} files: {:?}",
+                    pcb_file, design, files
+                );
 
-                *modified |= project.add_gerbers(design, files);
+                *modified |= pcb
+                    .add_gerbers(design, files)
+                    .map_err(|e| AppError::PcbOperationError(PcbOperationError::PcbError(e)))?;
 
                 Ok(render::render())
             }),
             Event::RemoveGerberFiles {
+                pcb_file,
                 design,
                 files,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
+                let ModelPcb {
                     modified,
+                    pcb,
                     ..
                 } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                    .model_pcbs
+                    .get_mut(&pcb_file)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
-                debug!("removing gerbers. design: {} files: {:?}", design, files);
-                *modified |= project.remove_gerbers(design, files);
+                debug!(
+                    "Removing gerbers from pcb. pcb_file: {}, design: {} files: {:?}",
+                    pcb_file, design, files
+                );
+                let (was_modified, unremoved_files) = pcb
+                    .remove_gerbers(design, files)
+                    .map_err(|e| AppError::PcbOperationError(PcbOperationError::PcbError(e)))?;
+
+                if !unremoved_files.is_empty() {
+                    warn!("Unable to remove the following gerbers. files: {:?}", unremoved_files);
+                }
+                *modified |= was_modified;
 
                 Ok(render::render())
             }),
@@ -1152,10 +1173,10 @@ impl Planner {
                 ) = { Self::model_project_and_pcbs(model) }?;
 
                 // we need to make sure the index is valid before attempting to get the corresponding PCB from the model.
-                let _project_pcb = project
+                let project_pcb = project
                     .pcbs
                     .get(pcb_index as usize)
-                    .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::Unknown))?;
 
                 let pcb = pcbs[pcb_index as usize];
 
@@ -1166,10 +1187,13 @@ impl Planner {
 
                 let gerbers = designs
                     .iter()
-                    .map(|design_name| {
-                        let design_gerbers = project
+                    .enumerate()
+                    .map(|(index, _design_name)| {
+                        let design_index = DesignIndex::from(index);
+
+                        let design_gerbers = pcb
                             .design_gerbers
-                            .get(design_name)
+                            .get(&design_index)
                             .map_or(Vec::new(), |v| {
                                 v.iter()
                                     .map(|gerber_file| {
@@ -1193,8 +1217,9 @@ impl Planner {
                     .map(|(a, b)| (*a, *b))
                     .collect::<HashMap<PcbUnitIndex, DesignIndex>>();
 
-                let pcb_overview = PcbOverview {
+                let pcb_overview = ProjectPcbOverview {
                     index: pcb_index,
+                    pcb_file: project_pcb.pcb_file.clone(),
                     name: pcb.name.clone(),
                     units: pcb.units,
                     designs,
@@ -1216,7 +1241,7 @@ impl Planner {
                 let project_pcb = project
                     .pcbs
                     .get(pcb_index as usize)
-                    .ok_or(AppError::PcbError(PcbOperationError::Unknown))?;
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::Unknown))?;
 
                 let unit_assignments = project_pcb
                     .unit_assignments
@@ -1775,7 +1800,7 @@ enum AppError {
     #[error("Loadout error. cause: {0}")]
     LoadoutError(LoadOutOperationError),
     #[error("PCB error. cause: {0}")]
-    PcbError(PcbOperationError),
+    PcbOperationError(PcbOperationError),
     #[error("IO error. cause: {0}")]
     IoError(std::io::Error),
 

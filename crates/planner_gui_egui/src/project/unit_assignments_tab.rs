@@ -14,7 +14,9 @@ use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, VariantName};
+use planner_app::{
+    DesignIndex, DesignName, DesignVariant, PcbUnitAssignments, PcbUnitIndex, ProjectPcbOverview, VariantName,
+};
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
@@ -35,7 +37,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub struct UnitAssignmentsUi {
     path: PathBuf,
     placements_directory: PathBuf,
-    pcb_overview: Option<PcbOverview>,
+    pcb_overview: Option<ProjectPcbOverview>,
     pcb_unit_assignments: Option<PcbUnitAssignments>,
 
     fields: Value<UnitAssignmentsFields>,
@@ -67,7 +69,7 @@ impl UnitAssignmentsUi {
         }
     }
 
-    pub fn update_overview(&mut self, pcb_overview: PcbOverview) {
+    pub fn update_overview(&mut self, pcb_overview: ProjectPcbOverview) {
         // block to limit the scope of the borrow
         {
             let mut fields = self.fields.lock().unwrap();
@@ -89,7 +91,7 @@ impl UnitAssignmentsUi {
 
     fn build_design_variants(
         pcb_unit_assignments: &PcbUnitAssignments,
-        pcb_overview: &PcbOverview,
+        pcb_overview: &ProjectPcbOverview,
     ) -> Vec<DesignVariant> {
         let mut design_variants = pcb_overview
             .unit_map
@@ -149,7 +151,7 @@ impl UnitAssignmentsUi {
         &self,
         ui: &mut Ui,
         form: &Form<UnitAssignmentsFields, UnitAssignmentsUiCommand>,
-        pcb_overview: &PcbOverview,
+        pcb_overview: &ProjectPcbOverview,
     ) {
         let default_style = || Style {
             padding: length(2.),
