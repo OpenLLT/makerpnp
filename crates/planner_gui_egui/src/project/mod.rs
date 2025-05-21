@@ -1013,9 +1013,9 @@ impl UiComponent for Project {
             ProjectUiCommand::RequestPcbView(view_request) => {
                 let event = match view_request {
                     PcbViewRequest::Overview {
-                        pcb_file: file,
+                        path,
                     } => Event::RequestPcbOverviewView {
-                        pcb_file: file,
+                        path,
                     },
                 };
                 self.planner_core_service
@@ -1595,14 +1595,14 @@ impl UiComponent for Project {
                     None => None,
                     Some(PcbUiAction::None) => None,
                     Some(PcbUiAction::AddGerberFiles {
-                        pcb_file,
+                        path,
                         design,
                         files,
                     }) => {
                         match self
                             .planner_core_service
                             .update(key, Event::AddGerberFiles {
-                                pcb_file,
+                                path,
                                 design,
                                 files,
                             })
@@ -1627,14 +1627,14 @@ impl UiComponent for Project {
                         }
                     }
                     Some(PcbUiAction::RemoveGerberFiles {
-                        pcb_file,
+                        path,
                         design,
                         files,
                     }) => {
                         match self
                             .planner_core_service
                             .update(key, Event::RemoveGerberFiles {
-                                pcb_file,
+                                path,
                                 design,
                                 files,
                             })
@@ -1664,11 +1664,11 @@ impl UiComponent for Project {
                             pcb_index,
                         ))),
                     )),
-                    Some(PcbUiAction::RequestPcbOverview(pcb_file)) => Some(ProjectAction::Task(
+                    Some(PcbUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
                             PcbViewRequest::Overview {
-                                pcb_file,
+                                path,
                             },
                         ))),
                     )),
@@ -1736,11 +1736,11 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
-                    Some(UnitAssignmentsUiAction::RequestPcbOverview(pcb_file)) => Some(ProjectAction::Task(
+                    Some(UnitAssignmentsUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
                             PcbViewRequest::Overview {
-                                pcb_file,
+                                path,
                             },
                         ))),
                     )),
