@@ -6,7 +6,7 @@ use egui::Ui;
 use egui_ltreeview::{NodeBuilder, TreeView, TreeViewState};
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{PcbSide, PcbUnitIndex};
+use planner_app::{Event, PcbSide, PcbUnitIndex};
 use slotmap::new_key_type;
 use tracing::debug;
 
@@ -262,6 +262,11 @@ impl UiComponent for Pcb {
             }
             PcbUiCommand::Load => {
                 debug!("Loading pcb. path: {:?}", self.path);
+
+                // self.planner_core_service.update(None, Event::RequestPcbOverviewView { path: self.path.clone() })
+                //     .when_ok(|_|{
+                //         Some(ProjectAction... <-- no wrong!)
+                //     })
                 None
             }
             PcbUiCommand::Save => {

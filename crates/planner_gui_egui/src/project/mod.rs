@@ -16,7 +16,8 @@ use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
 use crate::file_picker::Picker;
-use crate::planner_app_core::PlannerCoreService;
+use crate::planner_app_core::{PlannerCoreService, PlannerError};
+use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
 use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
@@ -662,7 +663,7 @@ impl Project {
 
         fn handle_phase(
             planner_core_service: &mut PlannerCoreService,
-            key: &ProjectKey,
+            _key: &ProjectKey,
             object_path: &ObjectPath,
             new_placement: &PlacementState,
             old_placement: &PlacementState,
@@ -696,7 +697,7 @@ impl Project {
                 Some((
                     update_placement_actions,
                     planner_core_service
-                        .update(key.clone(), Event::AssignPlacementsToPhase {
+                        .update(Event::AssignPlacementsToPhase {
                             phase: phase.clone(),
                             operation,
                             placements: exact_match(&object_path.to_string()),
@@ -710,7 +711,7 @@ impl Project {
 
         fn handle_placed(
             planner_core_service: &mut PlannerCoreService,
-            key: &ProjectKey,
+            _key: &ProjectKey,
             object_path: &ObjectPath,
             new_placement: &PlacementState,
             old_placement: &PlacementState,
@@ -739,7 +740,7 @@ impl Project {
                             .clone(),
                     }],
                     planner_core_service
-                        .update(key.clone(), Event::RecordPlacementsOperation {
+                        .update(Event::RecordPlacementsOperation {
                             object_path_patterns: vec![exact_match(&object_path.to_string())],
                             operation,
                         })
@@ -915,15 +916,15 @@ impl UiComponent for Project {
                 debug!("Loading project from path. path: {}", self.path.display());
 
                 self.planner_core_service
-                    .update(key, Event::Load {
+                    .update(Event::Load {
                         path: self.path.clone(),
                     })
-                    .when_ok(|_tasks| Some(ProjectUiCommand::Loaded))
+                    .when_ok(key, |_tasks| Some(ProjectUiCommand::Loaded))
             }
             ProjectUiCommand::Loaded => {
                 match self
                     .planner_core_service
-                    .update(key, Event::RequestOverviewView {})
+                    .update(Event::RequestOverviewView {})
                     .into_actions()
                 {
                     Ok(actions) => {
@@ -946,21 +947,23 @@ impl UiComponent for Project {
             ProjectUiCommand::Create => {
                 let state = self.project_ui_state.lock().unwrap();
                 self.planner_core_service
-                    .update(key, Event::CreateProject {
+                    .update(Event::CreateProject {
                         name: state.name.clone().unwrap(),
                         path: self.path.clone(),
                     })
-                    .when_ok(|_| Some(ProjectUiCommand::Created))
+                    .when_ok(key, |_| Some(ProjectUiCommand::Created))
             }
             ProjectUiCommand::Created => self
                 .planner_core_service
-                .update(key, Event::RequestOverviewView {})
-                .when_ok(|_| Some(ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree))),
+                .update(Event::RequestOverviewView {})
+                .when_ok(key, |_| {
+                    Some(ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree))
+                }),
             ProjectUiCommand::Save => {
                 debug!("saving project. path: {}", self.path.display());
                 self.planner_core_service
-                    .update(key, Event::Save)
-                    .when_ok(|_| Some(ProjectUiCommand::Saved))
+                    .update(Event::Save)
+                    .when_ok(key, |_| Some(ProjectUiCommand::Saved))
             }
             ProjectUiCommand::Saved => {
                 debug!("saved");
@@ -1006,8 +1009,8 @@ impl UiComponent for Project {
                 };
 
                 self.planner_core_service
-                    .update(key, event)
-                    .when_ok(|_| None)
+                    .update(event)
+                    .when_ok(key, |_| None)
             }
 
             ProjectUiCommand::RequestPcbView(view_request) => {
@@ -1019,8 +1022,8 @@ impl UiComponent for Project {
                     },
                 };
                 self.planner_core_service
-                    .update(key, event)
-                    .when_ok(|_| None)
+                    .update(event)
+                    .when_ok(key, |_| None)
             }
             ProjectUiCommand::PcbView(view) => {
                 match view {
@@ -1163,7 +1166,7 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::Error(error) => {
                 match error {
-                    ProjectError::CoreError(message) => {
+                    PlannerError::CoreError(message) => {
                         self.errors.push(message);
                     }
                 }
@@ -1232,7 +1235,7 @@ impl UiComponent for Project {
 
                             match self
                                 .planner_core_service
-                                .update(key, Event::AssignProcessToParts {
+                                .update(Event::AssignProcessToParts {
                                     process,
                                     operation,
                                     manufacturer: exact_match(part.manufacturer.as_str()),
@@ -1303,19 +1306,19 @@ impl UiComponent for Project {
                         mpn_pattern,
                     }) => self
                         .planner_core_service
-                        .update(key, Event::AddPartsToLoadout {
+                        .update(Event::AddPartsToLoadout {
                             phase,
                             manufacturer: manufacturer_pattern,
                             mpn: mpn_pattern,
                         })
-                        .when_ok(|_| None),
+                        .when_ok(key, |_| None),
                     Some(PhaseUiAction::SetPlacementOrderings(args)) => self
                         .planner_core_service
-                        .update(key, Event::SetPlacementOrdering {
+                        .update(Event::SetPlacementOrdering {
                             phase: phase.clone(),
                             placement_orderings: args.orderings,
                         })
-                        .when_ok(|_| Some(ProjectUiCommand::RefreshPhase(phase))),
+                        .when_ok(key, |_| Some(ProjectUiCommand::RefreshPhase(phase))),
                     Some(PhaseUiAction::TaskAction {
                         phase,
                         operation,
@@ -1323,13 +1326,13 @@ impl UiComponent for Project {
                         action,
                     }) => self
                         .planner_core_service
-                        .update(key, Event::RecordPhaseOperation {
+                        .update(Event::RecordPhaseOperation {
                             phase: phase.clone(),
                             operation,
                             task,
                             action,
                         })
-                        .when_ok(|_| Some(ProjectUiCommand::RefreshPhase(phase))),
+                        .when_ok(key, |_| Some(ProjectUiCommand::RefreshPhase(phase))),
                 }
             }
             ProjectUiCommand::LoadOutUiCommand {
@@ -1359,13 +1362,13 @@ impl UiComponent for Project {
                             phase, part, feeder
                         );
                         self.planner_core_service
-                            .update(key, Event::AssignFeederToLoadOutItem {
+                            .update(Event::AssignFeederToLoadOutItem {
                                 phase,
                                 feeder_reference: feeder,
                                 manufacturer: exact_match(&part.manufacturer),
                                 mpn: exact_match(&part.mpn),
                             })
-                            .when_ok(|_| None)
+                            .when_ok(key, |_| None)
                     }
                 }
             }
@@ -1410,18 +1413,18 @@ impl UiComponent for Project {
                     }
                     Some(ProjectToolbarAction::GenerateArtifacts) => self
                         .planner_core_service
-                        .update(key, Event::GenerateArtifacts)
-                        .when_ok(|_| None),
+                        .update(Event::GenerateArtifacts)
+                        .when_ok(key, |_| None),
                     Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
                         .planner_core_service
-                        .update(key, Event::RefreshFromDesignVariants)
-                        .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
+                        .update(Event::RefreshFromDesignVariants)
+                        .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::RemoveUnusedPlacements) => self
                         .planner_core_service
-                        .update(key, Event::RemoveUsedPlacements {
+                        .update(Event::RemoveUsedPlacements {
                             phase: None,
                         })
-                        .when_ok(|_| Some(ProjectUiCommand::ProjectRefreshed)),
+                        .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::PickPcbFile) => {
                         let mut picker = self.file_picker.lock().unwrap();
 
@@ -1467,7 +1470,7 @@ impl UiComponent for Project {
 
                 match self
                     .planner_core_service
-                    .update(key, Event::AddPcb {
+                    .update(Event::AddPcb {
                         pcb_file,
                     })
                     .into_actions()
@@ -1498,7 +1501,7 @@ impl UiComponent for Project {
 
                             match self
                                 .planner_core_service
-                                .update(key, Event::CreatePhase {
+                                .update(Event::CreatePhase {
                                     process: args.process,
                                     reference: args.reference,
                                     load_out: args.load_out,
@@ -1601,7 +1604,7 @@ impl UiComponent for Project {
                     }) => {
                         match self
                             .planner_core_service
-                            .update(key, Event::AddGerberFiles {
+                            .update(Event::AddGerberFiles {
                                 path,
                                 design,
                                 files,
@@ -1633,7 +1636,7 @@ impl UiComponent for Project {
                     }) => {
                         match self
                             .planner_core_service
-                            .update(key, Event::RemoveGerberFiles {
+                            .update(Event::RemoveGerberFiles {
                                 path,
                                 design,
                                 files,
@@ -1710,7 +1713,7 @@ impl UiComponent for Project {
                         for event in events {
                             match self
                                 .planner_core_service
-                                .update(key, event)
+                                .update(event)
                                 .into_actions()
                             {
                                 Ok(actions) => {
@@ -1886,7 +1889,7 @@ pub enum ProjectUiCommand {
     Saved,
     ProjectView(ProjectView),
     PcbView(PcbView),
-    Error(ProjectError),
+    Error(PlannerError),
     SetModifiedState {
         project_modified: bool,
         pcbs_modified: bool,
@@ -1928,11 +1931,6 @@ pub enum ProjectUiCommand {
     RequestPcbView(PcbViewRequest),
 }
 
-#[derive(Debug, Clone)]
-pub enum ProjectError {
-    CoreError((chrono::DateTime<chrono::Utc>, String)),
-}
-
 fn project_path_from_view_path(view_path: &String) -> ProjectPath {
     let project_path = ProjectPath(format!("/project{}", view_path).to_string());
     project_path
@@ -1950,4 +1948,93 @@ fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
 
 fn exact_match(value: &str) -> Regex {
     Regex::new(format!("^{}$", regex::escape(value).as_str()).as_str()).unwrap()
+}
+
+mod core_helper {
+    use crate::planner_app_core::{PlannerAction, PlannerError};
+    use crate::project::{ProjectAction, ProjectKey, ProjectUiCommand};
+    use crate::task::Task;
+
+    #[must_use]
+    fn when_ok_inner<F>(
+        result: Result<Vec<PlannerAction>, PlannerError>,
+        project_key: ProjectKey,
+        f: F,
+    ) -> Option<ProjectAction>
+    where
+        F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>,
+    {
+        match result {
+            Ok(actions) => {
+                let mut tasks = vec![];
+                let effect_tasks: Vec<Task<ProjectAction>> = actions
+                    .into_iter()
+                    .map(|planner_action| {
+                        let project_action = into_project_action(planner_action);
+                        Task::done(project_action)
+                    })
+                    .collect();
+
+                tasks.extend(effect_tasks);
+
+                if let Some(command) = f(&mut tasks) {
+                    let final_task = Task::done(ProjectAction::UiCommand(command));
+                    tasks.push(final_task);
+                }
+
+                let action = ProjectAction::Task(project_key, Task::batch(tasks));
+
+                Some(action)
+            }
+            Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
+        }
+    }
+
+    fn into_actions_inner(
+        result: Result<Vec<PlannerAction>, PlannerError>,
+    ) -> Result<Vec<ProjectAction>, ProjectAction> {
+        match result {
+            Ok(actions) => Ok(actions
+                .into_iter()
+                .map(into_project_action)
+                .collect()),
+            Err(error) => Err(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
+        }
+    }
+
+    fn into_project_action(action: PlannerAction) -> ProjectAction {
+        match action {
+            PlannerAction::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            } => ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            }),
+            PlannerAction::ProjectView(project_view) => {
+                ProjectAction::UiCommand(ProjectUiCommand::ProjectView(project_view))
+            }
+            PlannerAction::PcbView(pcb_view) => ProjectAction::UiCommand(ProjectUiCommand::PcbView(pcb_view)),
+        }
+    }
+
+    pub trait ProjectCoreHelper {
+        fn into_actions(self) -> Result<Vec<ProjectAction>, ProjectAction>;
+        fn when_ok<F>(self, project_key: ProjectKey, f: F) -> Option<ProjectAction>
+        where
+            F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>;
+    }
+
+    impl ProjectCoreHelper for Result<Vec<PlannerAction>, PlannerError> {
+        fn into_actions(self) -> Result<Vec<ProjectAction>, ProjectAction> {
+            into_actions_inner(self)
+        }
+
+        fn when_ok<F>(self, project_key: ProjectKey, f: F) -> Option<ProjectAction>
+        where
+            F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>,
+        {
+            when_ok_inner(self, project_key, f)
+        }
+    }
 }
