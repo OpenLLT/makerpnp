@@ -75,24 +75,10 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                 // Currently, the CLI app should not cause these effects.
                 unreachable!()
             }
-            Effect::PcbView(view) => match view.operation {
-                PcbViewRendererOperation::View {
-                    view,
-                } => match view {
-                    PcbView::Pcb {
-                        file_reference,
-                        pcb,
-                    } => {
-                        trace!(
-                            "effect::pcb_view::view::pcb. file_reference: {:?}, pcb: {:?}",
-                            file_reference,
-                            pcb
-                        );
-
-                        // TODO we need to somehow save the PCB.
-                    }
-                },
-            },
+            Effect::PcbView(view) => {
+                // Currently, the CLI app should not cause these effects.
+                unreachable!()
+            }
         }
     }
     Ok(())

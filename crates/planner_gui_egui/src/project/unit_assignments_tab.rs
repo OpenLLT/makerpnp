@@ -15,12 +15,14 @@ use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{
-    DesignIndex, DesignName, DesignVariant, PcbUnitAssignments, PcbUnitIndex, ProjectPcbOverview, VariantName,
+    DesignIndex, DesignName, DesignVariant, FileReference, PcbOverview, PcbUnitAssignments, PcbUnitIndex,
+    ProjectPcbOverview, VariantName,
 };
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
+use crate::project::pcb_tab::{PcbUiAction, PcbUiCommand};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -35,9 +37,14 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct UnitAssignmentsUi {
-    path: PathBuf,
+    project_path: PathBuf,
+
+    /// Not to be confused with [`PcbUnitIndex`], this is the index of the PCB in the project
+    pcb_index: u16,
+
     placements_directory: PathBuf,
-    pcb_overview: Option<ProjectPcbOverview>,
+    pcb_overview: Option<PcbOverview>,
+    project_pcb_overview: Option<ProjectPcbOverview>,
     pcb_unit_assignments: Option<PcbUnitAssignments>,
 
     fields: Value<UnitAssignmentsFields>,
@@ -52,7 +59,7 @@ impl UnitAssignmentsUi {
     const TABLE_HEIGHT_MAX: f32 = 200.0;
     const TABLE_SCROLL_HEIGHT_MIN: f32 = 40.0;
 
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(path: PathBuf, pcb_index: u16) -> Self {
         let placements_directory = path
             .clone()
             .parent()
@@ -60,16 +67,36 @@ impl UnitAssignmentsUi {
             .to_path_buf();
 
         Self {
-            path,
+            project_path: path,
+
+            pcb_index,
+
             placements_directory,
             pcb_overview: None,
+            project_pcb_overview: None,
             pcb_unit_assignments: None,
             fields: Default::default(),
             component: Default::default(),
         }
     }
 
-    pub fn update_overview(&mut self, pcb_overview: ProjectPcbOverview) {
+    pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
+        self.component
+            .send(UnitAssignmentsUiCommand::RequestPcbOverview(
+                project_pcb_overview.pcb_file.clone(),
+            ));
+        self.project_pcb_overview = Some(project_pcb_overview);
+    }
+
+    pub fn update_pcb_overview(&mut self, pcb_overview: &PcbOverview) {
+        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_file.eq(&pcb_overview.pcb_file))
+        {
+            // this pcb is not for this pcb tab instance
+            return;
+        }
+
+        let pcb_overview = pcb_overview.clone();
+
         // block to limit the scope of the borrow
         {
             let mut fields = self.fields.lock().unwrap();
@@ -91,7 +118,7 @@ impl UnitAssignmentsUi {
 
     fn build_design_variants(
         pcb_unit_assignments: &PcbUnitAssignments,
-        pcb_overview: &ProjectPcbOverview,
+        pcb_overview: &PcbOverview,
     ) -> Vec<DesignVariant> {
         let mut design_variants = pcb_overview
             .unit_map
@@ -151,7 +178,7 @@ impl UnitAssignmentsUi {
         &self,
         ui: &mut Ui,
         form: &Form<UnitAssignmentsFields, UnitAssignmentsUiCommand>,
-        pcb_overview: &ProjectPcbOverview,
+        pcb_overview: &PcbOverview,
     ) {
         let default_style = || Style {
             padding: length(2.),
@@ -746,10 +773,7 @@ impl UnitAssignmentsUi {
         });
     }
 
-    fn apply_variant_map(
-        fields: ValueGuard<UnitAssignmentsFields>,
-        pcb_index: PcbUnitIndex,
-    ) -> Option<UnitAssignmentsUiAction> {
+    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>, pcb_index: u16) -> Option<UnitAssignmentsUiAction> {
         let variant_map = fields
             .variant_map
             .iter()
@@ -863,12 +887,15 @@ pub enum UnitAssignmentsUiCommand {
     UnassignSelection(Vec<usize>),
     AssignSelection(usize, Vec<usize>),
     DesignVariantSelectionChanged(Option<usize>),
+
+    RequestPcbOverview(FileReference),
 }
 
 #[derive(Debug, Clone)]
 pub enum UnitAssignmentsUiAction {
     None,
     UpdateUnitAssignments(UpdateUnitAssignmentsArgs),
+    RequestPcbOverview(FileReference),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -980,7 +1007,7 @@ impl UiComponent for UnitAssignmentsUi {
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
@@ -1008,7 +1035,7 @@ impl UiComponent for UnitAssignmentsUi {
                         }) {
                         *assigned_variant_name = None;
                     }
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
@@ -1033,7 +1060,7 @@ impl UiComponent for UnitAssignmentsUi {
                     {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
@@ -1045,7 +1072,7 @@ impl UiComponent for UnitAssignmentsUi {
                         *assigned_variant_name = None;
                     }
 
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
@@ -1072,7 +1099,7 @@ impl UiComponent for UnitAssignmentsUi {
                         *assigned_variant_name = Some(design_variant.variant_name.clone());
                     }
 
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
@@ -1089,10 +1116,13 @@ impl UiComponent for UnitAssignmentsUi {
                         *assigned_variant_name = None;
                     }
 
-                    Self::apply_variant_map(fields, pcb_overview.index)
+                    Self::apply_variant_map(fields, self.pcb_index)
                 } else {
                     None
                 }
+            }
+            UnitAssignmentsUiCommand::RequestPcbOverview(pcb_file) => {
+                Some(UnitAssignmentsUiAction::RequestPcbOverview(pcb_file))
             }
         }
     }

@@ -7,9 +7,9 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbView, PhaseOverview, PhaseReference,
-    PlacementOperation, PlacementState, PlacementStatus, ProcessReference, ProjectOverview, ProjectView,
-    ProjectViewRequest, Reference, SetOrClearAction,
+    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbView, PcbViewRequest, PhaseOverview,
+    PhaseReference, PlacementOperation, PlacementState, PlacementStatus, ProcessReference, ProjectOverview,
+    ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -200,7 +200,7 @@ impl Project {
             project_tabs.add_tab(ProjectTabKind::Explorer(ExplorerTab::default()));
         }
 
-        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
             ProjectViewRequest::ProjectTree,
         )))
     }
@@ -212,7 +212,7 @@ impl Project {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Overview(OverviewTab::default()));
         }
 
-        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
             ProjectViewRequest::Overview,
         )))
     }
@@ -224,7 +224,7 @@ impl Project {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Parts(PartsTab::default()));
         }
 
-        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
             ProjectViewRequest::Parts,
         )))
     }
@@ -237,10 +237,10 @@ impl Project {
         }
 
         let tasks = vec![
-            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                 ProjectViewRequest::Phases,
             ))),
-            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                 ProjectViewRequest::Placements,
             ))),
         ];
@@ -264,12 +264,12 @@ impl Project {
                 self.ensure_phase(key, &phase);
 
                 tasks = Some(vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhaseOverview {
                             phase: phase.clone(),
                         },
                     ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhasePlacements {
                             phase: phase.clone(),
                         },
@@ -307,7 +307,7 @@ impl Project {
             .inspect_err(|_| {
                 self.ensure_load_out(key, phase.clone(), load_out_source);
 
-                task = Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                task = Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::PhaseLoadOut {
                         phase,
                     },
@@ -337,11 +337,13 @@ impl Project {
             .inspect_err(|_|{
                 self.ensure_pcb(key, pcb_index);
 
-                tasks = Some(vec![Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::PcbOverview {
-                        pcb: pcb_index.clone(),
-                    },
-                )))]);
+                tasks = Some(vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::PcbOverview {
+                            pcb: pcb_index.clone(),
+                        },
+                    ))),
+                ]);
 
 
 
@@ -369,12 +371,12 @@ impl Project {
             .inspect_err(|_|{
                 self.ensure_unit_assignments(key, pcb_index);
                 tasks = Some(vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PcbOverview {
                             pcb: pcb_index,
                         },
                     ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PcbUnitAssignments {
                             pcb: pcb_index,
                         },
@@ -470,7 +472,7 @@ impl Project {
             .entry(pcb_index as usize)
             .or_insert_with(|| {
                 debug!("ensuring unit assignments ui. pcb_index: {:?}", pcb_index);
-                let mut unit_assignments_ui = UnitAssignmentsUi::new(self.path.clone());
+                let mut unit_assignments_ui = UnitAssignmentsUi::new(self.path.clone(), pcb_index as u16);
                 unit_assignments_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -527,7 +529,7 @@ impl Project {
         #[must_use]
         fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
             if path.eq(&"/project/phases".into()) {
-                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::Phases,
                 )));
 
@@ -570,7 +572,7 @@ impl Project {
                 debug!("phase_reference: {}", phase_reference);
 
                 let tasks: Vec<_> = vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::Phases,
                     ))),
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPhaseLoadout {
@@ -796,7 +798,7 @@ impl Project {
         // FUTURE  Ideally, prevent pasting invalid values into the cells in the first place.
         //         This is a limitation of the design of egui_data_tables and the architecture of this app and
         //         would require a large refactoring.
-        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
             ProjectViewRequest::Placements,
         )));
         tasks.push(final_task);
@@ -811,18 +813,18 @@ impl Project {
             if let Some(task) = match action {
                 UpdatePlacementAction::RefreshPhaseOverview {
                     phase,
-                } => Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::PhaseOverview {
+                } => Some(Task::done(ProjectAction::UiCommand(
+                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PhaseOverview {
                         phase,
-                    },
-                )))),
+                    }),
+                ))),
                 UpdatePlacementAction::RefreshPhasePlacements {
                     phase,
-                } => Some(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                    ProjectViewRequest::PhasePlacements {
+                } => Some(Task::done(ProjectAction::UiCommand(
+                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PhasePlacements {
                         phase,
-                    },
-                )))),
+                    }),
+                ))),
             } {
                 tasks.push(task);
             }
@@ -953,7 +955,7 @@ impl UiComponent for Project {
             ProjectUiCommand::Created => self
                 .planner_core_service
                 .update(key, Event::RequestOverviewView {})
-                .when_ok(|_| Some(ProjectUiCommand::RequestView(ProjectViewRequest::ProjectTree))),
+                .when_ok(|_| Some(ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree))),
             ProjectUiCommand::Save => {
                 debug!("saving project. path: {}", self.path.display());
                 self.planner_core_service
@@ -969,7 +971,7 @@ impl UiComponent for Project {
                 // TODO anything that is using data from views, this requires ui components to subscribe to refresh events or something.
                 None
             }
-            ProjectUiCommand::RequestView(view_request) => {
+            ProjectUiCommand::RequestProjectView(view_request) => {
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::Parts => Event::RequestPartStatesView {},
@@ -993,7 +995,7 @@ impl UiComponent for Project {
                     },
                     ProjectViewRequest::PcbOverview {
                         pcb,
-                    } => Event::RequestPcbOverviewView {
+                    } => Event::RequestProjectPcbOverviewView {
                         pcb,
                     },
                     ProjectViewRequest::PcbUnitAssignments {
@@ -1006,6 +1008,37 @@ impl UiComponent for Project {
                 self.planner_core_service
                     .update(key, event)
                     .when_ok(|_| None)
+            }
+
+            ProjectUiCommand::RequestPcbView(view_request) => {
+                let event = match view_request {
+                    PcbViewRequest::Overview {
+                        pcb_file: file,
+                    } => Event::RequestPcbOverviewView {
+                        pcb_file: file,
+                    },
+                };
+                self.planner_core_service
+                    .update(key, event)
+                    .when_ok(|_| None)
+            }
+            ProjectUiCommand::PcbView(view) => {
+                match view {
+                    PcbView::PcbOverview(pcb_overview) => {
+                        let mut state = self.project_ui_state.lock().unwrap();
+
+                        for (_index, pcb_ui) in state.pcbs.iter_mut() {
+                            pcb_ui.update_pcb_overview(&pcb_overview);
+                        }
+
+                        for (_index, unit_assignments_ui) in state.unit_assignments.iter_mut() {
+                            unit_assignments_ui.update_pcb_overview(&pcb_overview);
+                        }
+
+                        // TODO don't do this when there's some other means of UI navigation.
+                        Some(ProjectAction::ShowPcb(pcb_overview.path))
+                    }
+                }
             }
             ProjectUiCommand::ProjectView(view) => {
                 match view {
@@ -1026,29 +1059,29 @@ impl UiComponent for Project {
                             .explorer_ui
                             .update_tree(project_tree);
                     }
-                    ProjectView::PcbOverview(pcb_overview) => {
-                        trace!("pcb_overview: {:?}", pcb_overview);
+                    ProjectView::PcbOverview(project_pcb_overview) => {
+                        trace!("project_pcb_overview: {:?}", project_pcb_overview);
 
                         // FUTURE use the name to update the tab label of the pcb overview and unit_assignments tabs?
                         //        would need multiple actions...
                         //        A reactive 'Reactive<Option<PcbOverview>>' that's given to both tabs
                         //        would be perfect here to avoid needing any actions.
-                        let _name = pcb_overview.name.clone();
+                        let _pcb_file = project_pcb_overview.pcb_file.clone();
 
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         if let Some(pcb_ui) = state
                             .pcbs
-                            .get_mut(&(pcb_overview.index as usize))
+                            .get_mut(&(project_pcb_overview.index as usize))
                         {
-                            pcb_ui.update_overview(pcb_overview.clone());
+                            pcb_ui.update_project_pcb_overview(project_pcb_overview.clone());
                         }
 
                         if let Some(unit_assignments_ui) = state
                             .unit_assignments
-                            .get_mut(&(pcb_overview.index as usize))
+                            .get_mut(&(project_pcb_overview.index as usize))
                         {
-                            unit_assignments_ui.update_overview(pcb_overview);
+                            unit_assignments_ui.update_project_pcb_overview(project_pcb_overview.clone());
                         }
                     }
                     ProjectView::PcbUnitAssignments(pcb_unit_assignments) => {
@@ -1222,7 +1255,7 @@ impl UiComponent for Project {
                             }
                         }
 
-                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                             ProjectViewRequest::Parts,
                         )));
                         tasks.push(final_task);
@@ -1447,9 +1480,9 @@ impl UiComponent for Project {
 
                         tasks.extend(event_tasks);
 
-                        tasks.push(Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
-                            ProjectViewRequest::ProjectTree,
-                        ))));
+                        tasks.push(Task::done(ProjectAction::UiCommand(
+                            ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree),
+                        )));
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
                     Err(error_action) => Some(error_action),
@@ -1480,10 +1513,10 @@ impl UiComponent for Project {
                                         .collect::<Vec<Task<ProjectAction>>>();
 
                                     let additional_tasks = vec![
-                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                                             ProjectViewRequest::ProjectTree,
                                         ))),
-                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                                             ProjectViewRequest::Phases,
                                         ))),
                                     ];
@@ -1533,12 +1566,12 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::RefreshPhase(phase) => {
                 let tasks = vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhaseOverview {
                             phase: phase.clone(),
                         },
                     ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhasePlacements {
                             phase: phase.clone(),
                         },
@@ -1582,7 +1615,7 @@ impl UiComponent for Project {
                                     .collect::<Vec<Task<ProjectAction>>>();
 
                                 let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestView(ProjectViewRequest::PcbOverview {
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PcbOverview {
                                         pcb: pcb_index,
                                     }),
                                 ))];
@@ -1614,7 +1647,7 @@ impl UiComponent for Project {
                                     .collect::<Vec<Task<ProjectAction>>>();
 
                                 let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestView(ProjectViewRequest::PcbOverview {
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PcbOverview {
                                         pcb: pcb_index,
                                     }),
                                 ))];
@@ -1629,6 +1662,14 @@ impl UiComponent for Project {
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(
                             pcb_index,
+                        ))),
+                    )),
+                    Some(PcbUiAction::RequestPcbOverview(pcb_file)) => Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
+                            PcbViewRequest::Overview {
+                                pcb_file,
+                            },
                         ))),
                     )),
                 }
@@ -1686,7 +1727,7 @@ impl UiComponent for Project {
                             }
                         }
 
-                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestView(
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                             ProjectViewRequest::ProjectTree,
                         )));
                         tasks.push(final_task);
@@ -1695,24 +1736,16 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
+                    Some(UnitAssignmentsUiAction::RequestPcbOverview(pcb_file)) => Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
+                            PcbViewRequest::Overview {
+                                pcb_file,
+                            },
+                        ))),
+                    )),
                 }
             }
-            ProjectUiCommand::PcbView(view) => match view {
-                PcbView::Pcb {
-                    file_reference,
-                    pcb,
-                } => {
-                    debug!("pcb view.  file_reference: {:?}, pcb: {:?}", file_reference, pcb);
-
-                    let project_directory = self
-                        .path
-                        .parent()
-                        .unwrap()
-                        .to_path_buf();
-                    let path = file_reference.build_path(&project_directory);
-                    Some(ProjectAction::ShowPcb(path))
-                }
-            },
         }
     }
 }
@@ -1858,7 +1891,7 @@ pub enum ProjectUiCommand {
         project_modified: bool,
         pcbs_modified: bool,
     },
-    RequestView(ProjectViewRequest),
+    RequestProjectView(ProjectViewRequest),
     ClearErrors,
     ToolbarCommand(ProjectToolbarUiCommand),
     TabCommand(ProjectTabUiCommand),
@@ -1892,6 +1925,7 @@ pub enum ProjectUiCommand {
     },
     ShowPcbUnitAssignments(u16),
     PcbFilePicked(PathBuf),
+    RequestPcbView(PcbViewRequest),
 }
 
 #[derive(Debug, Clone)]

@@ -4,21 +4,26 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::{DesignName, FileReference, GerberPurpose, PcbSide, ProjectPcbOverview};
+use planner_app::{DesignName, FileReference, GerberPurpose, PcbOverview, PcbSide, ProjectPcbOverview};
 use tracing::{debug, trace};
 
 use crate::project::dialogs::manage_gerbers::{
     ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand,
 };
 use crate::project::tabs::ProjectTabContext;
+use crate::project::{ProjectAction, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
+use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PcbUi {
-    path: PathBuf,
-    pcb_overview: Option<ProjectPcbOverview>,
+    project_path: PathBuf,
+    /// the link to the pcb
+    project_pcb_overview: Option<ProjectPcbOverview>,
+    /// the actual pcb
+    pcb_overview: Option<PcbOverview>,
 
     manage_gerbers_modal: Option<ManageGerbersModal>,
 
@@ -28,14 +33,29 @@ pub struct PcbUi {
 impl PcbUi {
     pub fn new(path: PathBuf) -> Self {
         Self {
-            path,
+            project_path: path,
             pcb_overview: None,
+            project_pcb_overview: None,
             manage_gerbers_modal: None,
             component: Default::default(),
         }
     }
 
-    pub fn update_overview(&mut self, pcb_overview: ProjectPcbOverview) {
+    pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
+        self.component
+            .send(PcbUiCommand::RequestPcbOverview(project_pcb_overview.pcb_file.clone()));
+        self.project_pcb_overview = Some(project_pcb_overview);
+    }
+
+    pub fn update_pcb_overview(&mut self, pcb_overview: &PcbOverview) {
+        if !matches!(&self.project_pcb_overview, Some(project_pcb_overview) if project_pcb_overview.pcb_file.eq(&pcb_overview.pcb_file))
+        {
+            // this pcb is not for this pcb tab instance
+            return;
+        }
+
+        let pcb_overview = pcb_overview.clone();
+
         if let Some(modal) = &mut self.manage_gerbers_modal {
             modal.update_gerbers(&pcb_overview.gerbers)
         }
@@ -73,6 +93,7 @@ pub enum PcbUiCommand {
     ManageGerbersClicked { design_index: usize },
     ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
     CreateUnitAssignmentClicked,
+    RequestPcbOverview(FileReference),
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +110,7 @@ pub enum PcbUiAction {
         files: Vec<PathBuf>,
     },
     ShowUnitAssignments(u16),
+    RequestPcbOverview(FileReference),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -101,7 +123,7 @@ impl UiComponent for PcbUi {
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-pcb-header"));
-        let Some(pcb_overview) = &self.pcb_overview else {
+        let (Some(project_pcb_overview), Some(pcb_overview)) = (&self.project_pcb_overview, &self.pcb_overview) else {
             ui.spinner();
             return;
         };
@@ -123,7 +145,12 @@ impl UiComponent for PcbUi {
         //
         // overview
         //
-        ui.label(&pcb_overview.name);
+        ui.label(
+            &project_pcb_overview
+                .pcb_file
+                .to_string(),
+        );
+        ui.label(&pcb_overview.name.to_string());
 
         let text_height = egui::TextStyle::Body
             .resolve(ui.style())
@@ -216,10 +243,12 @@ impl UiComponent for PcbUi {
                                 "removing gerber file. design_index: {}, files: {:?}",
                                 design_index, files
                             );
-                            if let Some(pcb_overview) = &mut self.pcb_overview {
+                            if let (Some(pcb_overview), Some(project_pcb_overview)) =
+                                (&mut self.pcb_overview, &mut self.project_pcb_overview)
+                            {
                                 let design = pcb_overview.designs[design_index].clone();
                                 Some(PcbUiAction::RemoveGerberFiles {
-                                    pcb_file: pcb_overview.pcb_file.clone(),
+                                    pcb_file: project_pcb_overview.pcb_file.clone(),
                                     design,
                                     files,
                                 })
@@ -235,14 +264,16 @@ impl UiComponent for PcbUi {
                                 "gerber files picked. design_index: {}, picked: {:?}",
                                 design_index, files
                             );
-                            if let Some(pcb_overview) = &mut self.pcb_overview {
+                            if let (Some(pcb_overview), Some(project_pcb_overview)) =
+                                (&mut self.pcb_overview, &mut self.project_pcb_overview)
+                            {
                                 let design = pcb_overview.designs[design_index].clone();
                                 let files = files
                                     .into_iter()
                                     .map(|file| (file, None, GerberPurpose::Other))
                                     .collect();
                                 Some(PcbUiAction::AddGerberFiles {
-                                    pcb_file: pcb_overview.pcb_file.clone(),
+                                    pcb_file: project_pcb_overview.pcb_file.clone(),
                                     design,
                                     files,
                                 })
@@ -256,12 +287,13 @@ impl UiComponent for PcbUi {
                 }
             }
             PcbUiCommand::CreateUnitAssignmentClicked => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    Some(PcbUiAction::ShowUnitAssignments(pcb_overview.index))
+                if let Some(project_pcb_overview) = &self.project_pcb_overview {
+                    Some(PcbUiAction::ShowUnitAssignments(project_pcb_overview.index))
                 } else {
                     None
                 }
             }
+            PcbUiCommand::RequestPcbOverview(pcb_file) => Some(PcbUiAction::RequestPcbOverview(pcb_file)),
         }
     }
 }

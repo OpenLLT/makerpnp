@@ -225,6 +225,13 @@ pub struct PcbGerberItem {
 pub struct ProjectPcbOverview {
     pub index: u16,
     pub pcb_file: FileReference,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct PcbOverview {
+    pub path: PathBuf,
+    pub pcb_file: FileReference,
+
     pub name: String,
     pub units: u16,
     /// A list of unique designs, a panel can have multiple designs.
@@ -410,7 +417,12 @@ pub enum ProjectViewRequest {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum PcbView {
-    Pcb { file_reference: FileReference, pcb: Pcb },
+    PcbOverview(PcbOverview),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum PcbViewRequest {
+    Overview { pcb_file: FileReference },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]
@@ -436,12 +448,6 @@ pub enum Event {
     Load {
         /// The name of the project file
         path: PathBuf,
-    },
-    LoadPcb {
-        pcb_file: FileReference,
-        /// The directory, for relative paths. e.g. the project's directory
-        /// if this is None, only Absolute paths can be used.
-        root: Option<PathBuf>,
     },
     AddPcb {
         pcb_file: FileReference,
@@ -518,22 +524,7 @@ pub enum Event {
     ResetOperations {},
 
     //
-    // Gerber file management
-    //
-    AddGerberFiles {
-        pcb_file: FileReference,
-        design: DesignName,
-        // TODO use FileReferences, not paths?
-        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
-    },
-    RemoveGerberFiles {
-        pcb_file: FileReference,
-        design: DesignName,
-        files: Vec<PathBuf>,
-    },
-
-    //
-    // Views
+    // Project Views
     //
     RequestOverviewView {},
     RequestPlacementsView {},
@@ -552,13 +543,42 @@ pub enum Event {
     RequestPhaseLoadOutView {
         phase_reference: PhaseReference,
     },
-    RequestPcbOverviewView {
+    RequestProjectPcbOverviewView {
         /// index, 0-based
         pcb: u16,
     },
     RequestPcbUnitAssignmentsView {
         /// index, 0-based
         pcb: u16,
+    },
+
+    //
+    // PCB operations
+    //
+    LoadPcb {
+        pcb_file: FileReference,
+        /// The directory, for relative paths. e.g. the project's directory
+        /// if this is None, only Absolute paths can be used.
+        root: Option<PathBuf>,
+    },
+
+    AddGerberFiles {
+        pcb_file: FileReference,
+        design: DesignName,
+        // TODO use FileReferences, not paths?
+        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
+    },
+    RemoveGerberFiles {
+        pcb_file: FileReference,
+        design: DesignName,
+        files: Vec<PathBuf>,
+    },
+
+    //
+    // PCB views
+    //
+    RequestPcbOverviewView {
+        pcb_file: FileReference,
     },
 }
 
@@ -660,10 +680,8 @@ impl Planner {
 
                 model.save_pcb(&pcb_file)?;
 
-                Ok(pcb_view_renderer::view(PcbView::Pcb {
-                    file_reference: pcb_file,
-                    pcb,
-                }))
+                // TODO tell to UI to navigate to the newly created file, don't use a view
+                Ok(render::render())
             }),
             Event::LoadPcb {
                 pcb_file,
@@ -1161,16 +1179,15 @@ impl Planner {
                 };
                 Ok(project_view_renderer::view(ProjectView::Overview(overview)))
             }),
-            Event::RequestPcbOverviewView {
+            Event::RequestProjectPcbOverviewView {
                 pcb: pcb_index,
             } => Box::new(move |model: &mut Model| {
-                let (
-                    ModelProject {
-                        project, ..
-                    },
-                    pcbs,
-                    ..,
-                ) = { Self::model_project_and_pcbs(model) }?;
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
 
                 // we need to make sure the index is valid before attempting to get the corresponding PCB from the model.
                 let project_pcb = project
@@ -1178,7 +1195,24 @@ impl Planner {
                     .get(pcb_index as usize)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::Unknown))?;
 
-                let pcb = pcbs[pcb_index as usize];
+                let pcb_overview = ProjectPcbOverview {
+                    index: pcb_index,
+                    pcb_file: project_pcb.pcb_file.clone(),
+                };
+
+                Ok(project_view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
+            }),
+            Event::RequestPcbOverviewView {
+                pcb_file,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    pcb,
+                    path,
+                    ..
+                } = &model
+                    .model_pcbs
+                    .get(&pcb_file)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 let designs = pcb
                     .unique_designs_iter()
@@ -1217,16 +1251,17 @@ impl Planner {
                     .map(|(a, b)| (*a, *b))
                     .collect::<HashMap<PcbUnitIndex, DesignIndex>>();
 
-                let pcb_overview = ProjectPcbOverview {
-                    index: pcb_index,
-                    pcb_file: project_pcb.pcb_file.clone(),
+                let pcb_overview = PcbOverview {
+                    path: path.clone(),
+                    pcb_file: pcb_file.clone(),
                     name: pcb.name.clone(),
                     units: pcb.units,
                     designs,
                     unit_map,
                     gerbers,
                 };
-                Ok(project_view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
+
+                Ok(pcb_view_renderer::view(PcbView::PcbOverview(pcb_overview)))
             }),
             Event::RequestPcbUnitAssignmentsView {
                 pcb: pcb_index,
