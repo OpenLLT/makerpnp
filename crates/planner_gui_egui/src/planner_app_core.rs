@@ -2,16 +2,28 @@ use std::sync::Arc;
 
 use planner_app::effects::pcb_view_renderer::PcbViewRendererOperation;
 use planner_app::effects::project_view_renderer::ProjectViewRendererOperation;
-use planner_app::{Effect, Event, Planner};
+use planner_app::{Effect, Event, PcbView, Planner, ProjectView};
 use tracing::{debug, error};
-
-use crate::project::{ProjectAction, ProjectError, ProjectKey, ProjectUiCommand};
-use crate::task::Task;
 
 type Core = Arc<planner_app::Core<Planner>>;
 
 pub struct PlannerCoreService {
     core: Core,
+}
+
+#[derive(Debug, Clone)]
+pub enum PlannerAction {
+    SetModifiedState {
+        project_modified: bool,
+        pcbs_modified: bool,
+    },
+    ProjectView(ProjectView),
+    PcbView(PcbView),
+}
+
+#[derive(Debug, Clone)]
+pub enum PlannerError {
+    CoreError((chrono::DateTime<chrono::Utc>, String)),
 }
 
 impl PlannerCoreService {
@@ -22,10 +34,10 @@ impl PlannerCoreService {
     }
 
     #[must_use]
-    pub fn update(&mut self, project_key: ProjectKey, event: Event) -> ResultHelper {
+    pub fn update(&mut self, event: Event) -> Result<Vec<PlannerAction>, PlannerError> {
         debug!("event: {:?}", event);
 
-        let mut actions: Vec<ProjectAction> = Vec::new();
+        let mut actions: Vec<PlannerAction> = Vec::new();
 
         for effect in self.core.process_event(event) {
             let action = Self::process_effect(&self.core, effect);
@@ -33,14 +45,14 @@ impl PlannerCoreService {
                 Ok(action) => {
                     actions.push(action);
                 }
-                Err(error) => return ResultHelper::new(project_key, Err(error)),
+                Err(error) => return Err(error),
             }
         }
 
-        ResultHelper::new(project_key, Ok(actions))
+        Ok(actions)
     }
 
-    pub fn process_effect(core: &Core, effect: Effect) -> Result<ProjectAction, ProjectError> {
+    pub fn process_effect(core: &Core, effect: Effect) -> Result<PlannerAction, PlannerError> {
         debug!("effect: {:?}", effect);
 
         match effect {
@@ -49,12 +61,12 @@ impl PlannerCoreService {
                 let task = match view.error.take() {
                     Some(error) => {
                         error!("core error: {:?}", error);
-                        Err(ProjectError::CoreError(error))
+                        Err(PlannerError::CoreError(error))
                     }
-                    None => Ok(ProjectAction::UiCommand(ProjectUiCommand::SetModifiedState {
+                    None => Ok(PlannerAction::SetModifiedState {
                         project_modified: view.project_modified,
                         pcbs_modified: view.pcbs_modified,
-                    })),
+                    }),
                 };
 
                 task
@@ -64,64 +76,15 @@ impl PlannerCoreService {
                     view,
                 } = request.operation;
 
-                Ok(ProjectAction::UiCommand(ProjectUiCommand::ProjectView(view)))
+                Ok(PlannerAction::ProjectView(view))
             }
             Effect::PcbView(request) => {
                 let PcbViewRendererOperation::View {
                     view,
                 } = request.operation;
 
-                Ok(ProjectAction::UiCommand(ProjectUiCommand::PcbView(view)))
+                Ok(PlannerAction::PcbView(view))
             }
-        }
-    }
-}
-
-pub struct ResultHelper {
-    result: Result<Vec<ProjectAction>, ProjectError>,
-    project_key: ProjectKey,
-}
-
-impl ResultHelper {
-    pub fn new(project_key: ProjectKey, result: Result<Vec<ProjectAction>, ProjectError>) -> Self {
-        Self {
-            project_key,
-            result,
-        }
-    }
-
-    #[must_use]
-    pub fn when_ok<F>(self, f: F) -> Option<ProjectAction>
-    where
-        F: FnOnce(&mut Vec<Task<ProjectAction>>) -> Option<ProjectUiCommand>,
-    {
-        match self.result {
-            Ok(actions) => {
-                let mut tasks = vec![];
-                let effect_tasks: Vec<Task<ProjectAction>> = actions
-                    .into_iter()
-                    .map(Task::done)
-                    .collect();
-
-                tasks.extend(effect_tasks);
-
-                if let Some(command) = f(&mut tasks) {
-                    let final_task = Task::done(ProjectAction::UiCommand(command));
-                    tasks.push(final_task);
-                }
-
-                let action = ProjectAction::Task(self.project_key, Task::batch(tasks));
-
-                Some(action)
-            }
-            Err(error) => Some(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
-        }
-    }
-
-    pub fn into_actions(self) -> Result<Vec<ProjectAction>, ProjectAction> {
-        match self.result {
-            Ok(actions) => Ok(actions),
-            Err(error) => Err(ProjectAction::UiCommand(ProjectUiCommand::Error(error))),
         }
     }
 }
