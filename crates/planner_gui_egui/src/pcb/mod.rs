@@ -6,11 +6,13 @@ use egui::Ui;
 use egui_ltreeview::{NodeBuilder, TreeView, TreeViewState};
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Event, PcbSide, PcbUnitIndex};
+use planner_app::{Event, FileReference, PcbOverview, PcbSide, PcbUnitIndex, PcbView};
 use slotmap::new_key_type;
 use tracing::debug;
 
-use crate::planner_app_core::PlannerCoreService;
+use crate::pcb::core_helper::PcbCoreHelper;
+use crate::planner_app_core::{PlannerCoreService, PlannerError};
+use crate::project::ProjectUiCommand;
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -34,11 +36,12 @@ pub struct Pcb {
     planner_core_service: PlannerCoreService,
 
     path: Option<PathBuf>,
+    modified: bool,
 
     #[derivative(Debug = "ignore")]
     tree_view_state: Value<TreeViewState<usize>>,
 
-    modified: bool,
+    pcb_overview: Option<PcbOverview>,
 
     pub component: ComponentState<(PcbKey, PcbUiCommand)>,
 }
@@ -183,6 +186,7 @@ impl Pcb {
             path,
             modified: false,
             component,
+            pcb_overview: None,
         }
     }
 }
@@ -212,6 +216,14 @@ pub enum PcbUiCommand {
     DebugMarkModified,
     Load,
     Save,
+    Error(PlannerError),
+    PcbView(PcbView),
+    // FIXME don't care about projects, don't care ablout all pcbs, care about *this* PCB.
+    SetModifiedState {
+        project_modified: bool,
+        pcbs_modified: bool,
+    },
+    Loaded,
 }
 
 pub struct PcbContext {
@@ -238,7 +250,12 @@ impl UiComponent for Pcb {
             });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
-            ui.label("TODO: PCB UI"); // TODO
+            if let Some(pcb_overview) = &self.pcb_overview {
+                ui.label(&pcb_overview.name);
+                // TODO expand the ui, show different content based on tree view selection
+            } else {
+                ui.spinner();
+            }
 
             if ui.button("mark modified").clicked() {
                 self.component
@@ -252,7 +269,7 @@ impl UiComponent for Pcb {
         command: Self::UiCommand,
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
-        let (_key, command) = command;
+        let (key, command) = command;
 
         match command {
             PcbUiCommand::None => None,
@@ -263,16 +280,146 @@ impl UiComponent for Pcb {
             PcbUiCommand::Load => {
                 debug!("Loading pcb. path: {:?}", self.path);
 
-                // self.planner_core_service.update(None, Event::RequestPcbOverviewView { path: self.path.clone() })
-                //     .when_ok(|_|{
-                //         Some(ProjectAction... <-- no wrong!)
-                //     })
-                None
+                if let Some(path) = &self.path {
+                    let pcb_file = FileReference::Absolute(path.clone());
+
+                    self.planner_core_service
+                        .update(Event::LoadPcb {
+                            pcb_file,
+                            root: None,
+                        })
+                        .when_ok(key, |_| Some(PcbUiCommand::Loaded))
+                } else {
+                    None
+                }
             }
             PcbUiCommand::Save => {
                 debug!("Saving pcb. path: {:?}", self.path);
+                // TODO
                 None
             }
+            PcbUiCommand::Error(_) => {
+                // TODO
+                None
+            }
+            PcbUiCommand::PcbView(view) => {
+                match view {
+                    PcbView::PcbOverview(pcb_overview) => {
+                        debug!("Received pcb overview.");
+                        self.pcb_overview = Some(pcb_overview);
+                    }
+                }
+                // TODO
+                None
+            }
+            PcbUiCommand::SetModifiedState {
+                ..
+            } => {
+                //TODO
+                None
+            }
+            PcbUiCommand::Loaded => {
+                debug!("Loaded pcb. path: {:?}", self.path);
+                if let Some(path) = &self.path {
+                    self.planner_core_service
+                        .update(Event::RequestPcbOverviewView {
+                            path: path.clone(),
+                        })
+                        .when_ok(key, |_| None)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+mod core_helper {
+    use tracing::warn;
+
+    use crate::pcb::{PcbAction, PcbKey, PcbUiCommand};
+    use crate::planner_app_core::{PlannerAction, PlannerError};
+    use crate::task::Task;
+
+    #[must_use]
+    fn when_ok_inner<F>(
+        result: Result<Vec<PlannerAction>, PlannerError>,
+        project_key: PcbKey,
+        f: F,
+    ) -> Option<PcbAction>
+    where
+        F: FnOnce(&mut Vec<Task<PcbAction>>) -> Option<PcbUiCommand>,
+    {
+        match result {
+            Ok(actions) => {
+                let mut tasks = vec![];
+                let effect_tasks: Vec<Task<PcbAction>> = actions
+                    .into_iter()
+                    .map(|planner_action| {
+                        let project_action = into_project_action(planner_action);
+                        Task::done(project_action)
+                    })
+                    .collect();
+
+                tasks.extend(effect_tasks);
+
+                if let Some(command) = f(&mut tasks) {
+                    let final_task = Task::done(PcbAction::UiCommand(command));
+                    tasks.push(final_task);
+                }
+
+                let action = PcbAction::Task(project_key, Task::batch(tasks));
+
+                Some(action)
+            }
+            Err(error) => Some(PcbAction::UiCommand(PcbUiCommand::Error(error))),
+        }
+    }
+
+    fn into_actions_inner(result: Result<Vec<PlannerAction>, PlannerError>) -> Result<Vec<PcbAction>, PcbAction> {
+        match result {
+            Ok(actions) => Ok(actions
+                .into_iter()
+                .map(into_project_action)
+                .collect()),
+            Err(error) => Err(PcbAction::UiCommand(PcbUiCommand::Error(error))),
+        }
+    }
+
+    fn into_project_action(action: PlannerAction) -> PcbAction {
+        match action {
+            PlannerAction::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            } => PcbAction::UiCommand(PcbUiCommand::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            }),
+            PlannerAction::ProjectView(_project_view) => {
+                warn!("pcb received project view action. ignoring.");
+                PcbAction::UiCommand(PcbUiCommand::None)
+            }
+            PlannerAction::PcbView(pcb_view) => PcbAction::UiCommand(PcbUiCommand::PcbView(pcb_view)),
+        }
+    }
+
+    pub trait PcbCoreHelper {
+        fn into_actions(self) -> Result<Vec<PcbAction>, PcbAction>;
+        fn when_ok<F>(self, project_key: PcbKey, f: F) -> Option<PcbAction>
+        where
+            F: FnOnce(&mut Vec<Task<PcbAction>>) -> Option<PcbUiCommand>;
+    }
+
+    impl PcbCoreHelper for Result<Vec<PlannerAction>, PlannerError> {
+        fn into_actions(self) -> Result<Vec<PcbAction>, PcbAction> {
+            into_actions_inner(self)
+        }
+
+        fn when_ok<F>(self, project_key: PcbKey, f: F) -> Option<PcbAction>
+        where
+            F: FnOnce(&mut Vec<Task<PcbAction>>) -> Option<PcbUiCommand>,
+        {
+            when_ok_inner(self, project_key, f)
         }
     }
 }
