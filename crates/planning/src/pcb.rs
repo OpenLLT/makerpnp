@@ -20,10 +20,6 @@ use crate::project::PcbOperationError;
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct Pcb {
-    // Reminder: do not store anything in here that is related to the project, e.g. unit assignments were specifically
-    //           moved out of this struct.
-    //           The intention is that this struct can be independently serialized and deserialized and re-used in
-    //           multiple projects.
     /// A name for this PCB.  e.g. the reference number provided by the PCB fabricator which is often found on the
     /// PCB silk-screen.
     pub name: String,
