@@ -11,6 +11,7 @@ use crate::tabs::TabKey;
 use crate::task::Task;
 use crate::toolbar::{ToolbarAction, ToolbarUiCommand};
 use crate::ui_app::app_tabs::home::HomeTabAction;
+use crate::ui_app::app_tabs::new_pcb::NewPcbTabAction;
 use crate::ui_app::app_tabs::new_project::NewProjectTabAction;
 use crate::ui_app::app_tabs::pcb::{PcbTabAction, PcbTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTabAction, ProjectTabUiCommand};
@@ -140,6 +141,15 @@ pub fn handle_command(
                             Task::none()
                         }
                     },
+                    TabKindAction::NewPcbTabAction {
+                        action,
+                    } => match action {
+                        NewPcbTabAction::Submit(args) => {
+                            let mut app_state = app_state.lock().unwrap();
+                            app_state.create_pcb(tab_key, args, app_tabs);
+                            Task::none()
+                        }
+                    },
                     TabKindAction::PcbTabAction {
                         action,
                     } => match action {
@@ -236,23 +246,23 @@ fn handle_toolbar_action(
 
     match toolbar_action {
         ToolbarAction::ShowHomeTab => {
-            let mut ui_state = app_tabs.lock().unwrap();
-            ui_state.show_home_tab();
+            let mut app_tabs = app_tabs.lock().unwrap();
+            app_tabs.show_home_tab();
             Task::none()
         }
         ToolbarAction::AddNewProjectTab => {
-            let mut ui_state = app_tabs.lock().unwrap();
-            ui_state.add_new_project_tab();
+            let mut app_tabs = app_tabs.lock().unwrap();
+            app_tabs.add_new_project_tab();
             Task::none()
         }
         ToolbarAction::AddNewPcbTab => {
-            let mut app_state = app_state.lock().unwrap();
-            app_state.create_pcb(app_tabs.clone());
+            let mut app_tabs = app_tabs.lock().unwrap();
+            app_tabs.add_new_pcb_tab();
             Task::none()
         }
         ToolbarAction::CloseAllTabs => {
-            let mut ui_state = app_tabs.lock().unwrap();
-            ui_state.close_all_tabs();
+            let mut app_tabs = app_tabs.lock().unwrap();
+            app_tabs.close_all_tabs();
             Task::none()
         }
         ToolbarAction::PickProjectFile => {

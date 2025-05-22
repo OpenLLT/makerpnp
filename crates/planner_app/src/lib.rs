@@ -553,6 +553,11 @@ pub enum Event {
     //
     // PCB operations
     //
+    CreatePcb {
+        name: String,
+        units: u16,
+        path: PathBuf,
+    },
     LoadPcb {
         path: PathBuf,
     },
@@ -659,7 +664,7 @@ impl Planner {
                 units,
                 unit_map,
             } => Box::new(move |model: &mut Model| {
-                // project required so that relative file references can be created.
+                // only the project directory is required so a filename can be built
                 let ModelProject {
                     project_directory, ..
                 } = model
@@ -667,8 +672,11 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let (pcb, _pcb_file, pcb_path) = planning::pcb::create_pcb(project_directory, name, units, unit_map)
-                    .map_err(AppError::PcbOperationError)?;
+                let pcb_file_name = format!("{}.pcb.json", name);
+                let mut pcb_path = project_directory.to_path_buf();
+                pcb_path.push(pcb_file_name.clone());
+
+                let pcb = planning::pcb::create_pcb(name, units, unit_map).map_err(AppError::PcbOperationError)?;
 
                 model
                     .model_pcbs
@@ -681,6 +689,26 @@ impl Planner {
                 model.save_pcb(&pcb_path)?;
 
                 // TODO tell to UI to navigate to the newly created file, don't use a view
+                Ok(render::render())
+            }),
+            Event::CreatePcb {
+                name,
+                units,
+                path,
+            } => Box::new(move |model: &mut Model| {
+                let pcb =
+                    planning::pcb::create_pcb(name, units, BTreeMap::default()).map_err(AppError::PcbOperationError)?;
+
+                model
+                    .model_pcbs
+                    .insert(path.clone(), ModelPcb {
+                        pcb: pcb.clone(),
+                        // not saved, yet
+                        modified: true,
+                    });
+
+                model.save_pcb(&path)?;
+
                 Ok(render::render())
             }),
             Event::LoadPcb {

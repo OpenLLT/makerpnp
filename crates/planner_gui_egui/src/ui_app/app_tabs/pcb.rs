@@ -17,7 +17,7 @@ pub struct PcbTab {
     pub pcb_key: PcbKey,
 
     // path is required here so the pcb can be loaded when the application restarts
-    pub path: Option<PathBuf>,
+    pub path: PathBuf,
     pub label: String,
 
     #[serde(skip)]
@@ -45,7 +45,7 @@ pub struct PcbTabContext {
 }
 
 impl PcbTab {
-    pub fn new(label: String, path: Option<PathBuf>, pcb_key: PcbKey) -> Self {
+    pub fn new(label: String, path: PathBuf, pcb_key: PcbKey) -> Self {
         debug!("Creating pcb tab. key: {:?}, path: {:?}", &pcb_key, &path);
         Self {
             pcb_key,

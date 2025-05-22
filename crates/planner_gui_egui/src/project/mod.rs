@@ -889,6 +889,21 @@ impl UiComponent for Project {
 
         match command {
             ProjectUiCommand::None => None,
+            ProjectUiCommand::Create => {
+                let state = self.project_ui_state.lock().unwrap();
+                self.planner_core_service
+                    .update(Event::CreateProject {
+                        name: state.name.clone().unwrap(),
+                        path: self.path.clone(),
+                    })
+                    .when_ok(key, |_| Some(ProjectUiCommand::Created))
+            }
+            ProjectUiCommand::Created => {
+                let task1 = self.show_explorer();
+                let task2 = self.show_overview();
+                let tasks = vec![task1, task2];
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
             ProjectUiCommand::Load => {
                 debug!("Loading project from path. path: {}", self.path.display());
 
@@ -899,55 +914,23 @@ impl UiComponent for Project {
                     .when_ok(key, |_tasks| Some(ProjectUiCommand::Loaded))
             }
             ProjectUiCommand::Loaded => {
-                match self
-                    .planner_core_service
-                    .update(Event::RequestOverviewView {})
-                    .into_actions()
-                {
-                    Ok(actions) => {
-                        let mut tasks = actions
-                            .into_iter()
-                            .map(Task::done)
-                            .collect::<Vec<Task<ProjectAction>>>();
-
-                        let task1 = self.show_explorer();
-                        let task2 = self.show_overview();
-
-                        let additional_tasks = vec![task1, task2];
-                        tasks.extend(additional_tasks);
-
-                        Some(ProjectAction::Task(key, Task::batch(tasks)))
-                    }
-                    Err(error_action) => Some(error_action),
-                }
+                let task1 = self.show_explorer();
+                let task2 = self.show_overview();
+                let tasks = vec![task1, task2];
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
-            ProjectUiCommand::Create => {
-                let state = self.project_ui_state.lock().unwrap();
-                self.planner_core_service
-                    .update(Event::CreateProject {
-                        name: state.name.clone().unwrap(),
-                        path: self.path.clone(),
-                    })
-                    .when_ok(key, |_| Some(ProjectUiCommand::Created))
-            }
-            ProjectUiCommand::Created => self
-                .planner_core_service
-                .update(Event::RequestOverviewView {})
-                .when_ok(key, |_| {
-                    Some(ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree))
-                }),
             ProjectUiCommand::Save => {
-                debug!("saving project. path: {}", self.path.display());
+                debug!("Saving project. path: {}", self.path.display());
                 self.planner_core_service
                     .update(Event::Save)
                     .when_ok(key, |_| Some(ProjectUiCommand::Saved))
             }
             ProjectUiCommand::Saved => {
-                debug!("saved");
+                debug!("Saved project.");
                 None
             }
             ProjectUiCommand::ProjectRefreshed => {
-                debug!("project refreshed");
+                debug!("Project refreshed.");
                 // TODO anything that is using data from views, this requires ui components to subscribe to refresh events or something.
                 None
             }
