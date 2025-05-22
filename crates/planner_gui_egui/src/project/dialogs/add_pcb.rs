@@ -28,6 +28,9 @@ pub struct AddPcbModal {
 }
 
 impl AddPcbModal {
+    
+    // TODO restore PCB creation functionality
+    
     pub fn new(path: PathBuf) -> Self {
         Self {
             fields: Default::default(),
