@@ -173,6 +173,8 @@ impl UnitAssignmentsUi {
             .collect::<Vec<_>>();
     }
 
+    // IMPORTANT SYNC LAYOUT CHANGES WITH [`configuration_tab.rs`]
+
     fn show_form(
         &self,
         ui: &mut Ui,

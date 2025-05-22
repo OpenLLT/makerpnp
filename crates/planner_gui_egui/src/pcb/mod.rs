@@ -405,6 +405,33 @@ impl UiComponent for Pcb {
                 match configuration_ui_action {
                     None => None,
                     Some(ConfigurationUiAction::None) => None,
+
+                    //
+                    // form
+                    //
+                    Some(ConfigurationUiAction::Reset) => self
+                        .planner_core_service
+                        .update(Event::RequestPcbOverviewView {
+                            path: self.path.clone(),
+                        })
+                        .when_ok(key, |_| None),
+                    Some(ConfigurationUiAction::Apply(args)) => self
+                        .planner_core_service
+                        .update(Event::ApplyPcbUnitConfiguration {
+                            path: self.path.clone(),
+                            units: args.units,
+                            designs: args.designs,
+                            unit_map: args.unit_map,
+                        })
+                        .when_ok(key, |_| {
+                            Some(PcbUiCommand::RequestPcbView(PcbViewRequest::Overview {
+                                path: self.path.clone(),
+                            }))
+                        }),
+
+                    //
+                    // gerber file management
+                    //
                     Some(ConfigurationUiAction::AddGerberFiles {
                         path,
                         design,

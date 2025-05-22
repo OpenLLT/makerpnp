@@ -55,7 +55,9 @@ project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
 
 project-pcb-header = PCB
+# deprecated
 project-pcb-designs-header = Designs
+# deprecated
 project-pcb-designs-button-gerbers = Gerbers...
 
 project-placements-tab-label = Placements
@@ -131,6 +133,16 @@ form-button-cancel = Cancel
 form-button-close = Close
 form-button-add = Add
 form-button-remove = Remove
+form-button-apply = Apply
+form-button-reset = Reset
+
+form-configure-pcb-input-units = Units
+form-configure-pcb-group-unit-map = Unit mapping
+form-configure-pcb-input-design-name = Design name
+form-configure-pcb-input-design-name-placeholder = (e.g. 'my_eda_project', for unit assignments)
+form-configure-pcb-input-pcb-unit-range = Unit range
+
+form-configure-pcb-designs-button-gerbers = Gerbers...
 
 form-add-pcb-input-name = PCB Name
 form-add-pcb-input-name-placeholder = (e.g. the PCB factory's order reference number)
@@ -255,14 +267,17 @@ table-parts-column-ref-des-set = Ref. Des. Set
 table-parts-column-quantity = Quantity
 
 table-designs-column-index = #
-table-designs-column-actions = Actions
 table-designs-column-name = Name
+table-designs-column-actions = Actions
 
 table-gerbers-column-index = #
 table-gerbers-column-file = File
 table-gerbers-column-pcb-side = PCB Side
 table-gerbers-column-gerber-purpose = Purpose
 table-gerbers-column-actions = Actions
+
+table-design-assignments-column-pcb-unit = PCB Unit
+table-design-assignments-column-design = Design Name
 
 table-design-variants-column-design = Design name
 table-design-variants-column-variant = Variant name
