@@ -4,10 +4,9 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::{DesignName, GerberPurpose, PcbOverview, PcbSide, ProjectPcbOverview};
-use tracing::{debug, trace};
+use planner_app::{PcbOverview, ProjectPcbOverview};
+use tracing::debug;
 
-use crate::dialogs::manage_gerbers::{ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -21,8 +20,6 @@ pub struct PcbUi {
     /// the actual pcb
     pcb_overview: Option<PcbOverview>,
 
-    manage_gerbers_modal: Option<ManageGerbersModal>,
-
     pub component: ComponentState<PcbUiCommand>,
 }
 
@@ -32,7 +29,6 @@ impl PcbUi {
             project_path: path,
             pcb_overview: None,
             project_pcb_overview: None,
-            manage_gerbers_modal: None,
             component: Default::default(),
         }
     }
@@ -52,42 +48,13 @@ impl PcbUi {
 
         let pcb_overview = pcb_overview.clone();
 
-        if let Some(modal) = &mut self.manage_gerbers_modal {
-            modal.update_gerbers(&pcb_overview.gerbers)
-        }
         self.pcb_overview = Some(pcb_overview);
-    }
-
-    fn show_manage_gerbers_modal(&mut self, design_index: usize) {
-        let Some((design_name, design_gerbers)) = self
-            .pcb_overview
-            .as_ref()
-            .map(|pcb_overview| {
-                let design_name = pcb_overview.designs[design_index].clone();
-                let gerbers = pcb_overview.gerbers[design_index].clone();
-                (design_name, gerbers)
-            })
-        else {
-            return;
-        };
-
-        let mut modal = ManageGerbersModal::new(design_index, design_name.to_string(), design_gerbers);
-        modal
-            .component
-            .configure_mapper(self.component.sender.clone(), move |command| {
-                trace!("manage gerbers modal mapper. command: {:?}", command);
-                PcbUiCommand::ManageGerbersModalUiCommand(command)
-            });
-
-        self.manage_gerbers_modal = Some(modal);
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum PcbUiCommand {
     None,
-    ManageGerbersClicked { design_index: usize },
-    ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
     CreateUnitAssignmentClicked,
     RequestPcbOverview(PathBuf),
 }
@@ -95,16 +62,6 @@ pub enum PcbUiCommand {
 #[derive(Debug, Clone)]
 pub enum PcbUiAction {
     None,
-    AddGerberFiles {
-        path: PathBuf,
-        design: DesignName,
-        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
-    },
-    RemoveGerberFiles {
-        path: PathBuf,
-        design: DesignName,
-        files: Vec<PathBuf>,
-    },
     ShowUnitAssignments(u16),
     RequestPcbOverview(PathBuf),
 }
@@ -160,6 +117,7 @@ impl UiComponent for PcbUi {
         //
         ui.label(tr!("project-pcb-designs-header"));
 
+        // TODO put this in a resizable container, minimum height, full width.
         egui_extras::TableBuilder::new(ui)
             .striped(true)
             .column(Column::auto())
@@ -168,9 +126,6 @@ impl UiComponent for PcbUi {
             .header(text_height, |mut header| {
                 header.col(|ui| {
                     ui.strong(tr!("table-designs-column-index"));
-                });
-                header.col(|ui| {
-                    ui.strong(tr!("table-designs-column-actions"));
                 });
                 header.col(|ui| {
                     ui.strong(tr!("table-designs-column-name"));
@@ -184,30 +139,11 @@ impl UiComponent for PcbUi {
                         });
 
                         row.col(|ui| {
-                            if ui
-                                .button(tr!("project-pcb-designs-button-gerbers"))
-                                .clicked()
-                            {
-                                self.component
-                                    .send(PcbUiCommand::ManageGerbersClicked {
-                                        design_index: index,
-                                    });
-                            }
-                        });
-
-                        row.col(|ui| {
                             ui.label(design.to_string());
                         });
                     })
                 }
             });
-
-        //
-        // Modals
-        //
-        if let Some(dialog) = &self.manage_gerbers_modal {
-            dialog.ui(ui, &mut ());
-        }
     }
 
     fn update<'context>(
@@ -217,71 +153,6 @@ impl UiComponent for PcbUi {
     ) -> Option<Self::UiAction> {
         match command {
             PcbUiCommand::None => Some(PcbUiAction::None),
-            PcbUiCommand::ManageGerbersClicked {
-                design_index,
-            } => {
-                self.show_manage_gerbers_modal(design_index);
-                None
-            }
-            PcbUiCommand::ManageGerbersModalUiCommand(command) => {
-                if let Some(modal) = &mut self.manage_gerbers_modal {
-                    match modal.update(command, &mut ()) {
-                        None => None,
-                        Some(ManagerGerberModalAction::CloseDialog) => {
-                            self.manage_gerbers_modal = None;
-                            None
-                        }
-                        Some(ManagerGerberModalAction::RemoveGerberFiles {
-                            design_index,
-                            files,
-                        }) => {
-                            debug!(
-                                "removing gerber file. design_index: {}, files: {:?}",
-                                design_index, files
-                            );
-                            if let (Some(pcb_overview), Some(project_pcb_overview)) =
-                                (&mut self.pcb_overview, &mut self.project_pcb_overview)
-                            {
-                                let design = pcb_overview.designs[design_index].clone();
-                                Some(PcbUiAction::RemoveGerberFiles {
-                                    path: project_pcb_overview.pcb_path.clone(),
-                                    design,
-                                    files,
-                                })
-                            } else {
-                                None
-                            }
-                        }
-                        Some(ManagerGerberModalAction::AddGerberFiles {
-                            design_index,
-                            files,
-                        }) => {
-                            debug!(
-                                "gerber files picked. design_index: {}, picked: {:?}",
-                                design_index, files
-                            );
-                            if let (Some(pcb_overview), Some(project_pcb_overview)) =
-                                (&mut self.pcb_overview, &mut self.project_pcb_overview)
-                            {
-                                let design = pcb_overview.designs[design_index].clone();
-                                let files = files
-                                    .into_iter()
-                                    .map(|file| (file, None, GerberPurpose::Other))
-                                    .collect();
-                                Some(PcbUiAction::AddGerberFiles {
-                                    path: project_pcb_overview.pcb_path.clone(),
-                                    design,
-                                    files,
-                                })
-                            } else {
-                                None
-                            }
-                        }
-                    }
-                } else {
-                    None
-                }
-            }
             PcbUiCommand::CreateUnitAssignmentClicked => {
                 if let Some(project_pcb_overview) = &self.project_pcb_overview {
                     Some(PcbUiAction::ShowUnitAssignments(project_pcb_overview.index))

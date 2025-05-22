@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
@@ -195,7 +194,7 @@ impl UiComponent for ExplorerUi {
     type UiAction = ExplorerUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        if let Some(pcb_overview) = &self.pcb_overview {
+        if self.pcb_overview.is_some() {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 self.show_pcb_tree(ui);
             });

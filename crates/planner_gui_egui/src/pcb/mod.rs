@@ -1,15 +1,11 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::Ui;
-use egui_ltreeview::{NodeBuilder, TreeView, TreeViewState};
+use egui_ltreeview::TreeViewState;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{
-    Event, FileReference, LoadOutSource, PcbOverview, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
-    ProjectViewRequest, Reference,
-};
+use planner_app::{Event, PcbOverview, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest, ProjectViewRequest, Reference};
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
@@ -20,7 +16,6 @@ use crate::pcb::core_helper::PcbCoreHelper;
 use crate::pcb::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiCommand, ExplorerUiContext};
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
-use crate::project::{ProjectAction, ProjectKey, ProjectUiCommand, ProjectUiState};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_util::NavigationPath;

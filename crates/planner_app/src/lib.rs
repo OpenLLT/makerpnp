@@ -143,7 +143,7 @@ impl Model {
 
         // Then, process one-by-one: load and insert
         for pcb in pcbs_to_load {
-            let (pcb_file, pcb_data, pcb_path) = pcb
+            let (_pcb_file, pcb_data, pcb_path) = pcb
                 .load_pcb(root)
                 .map_err(AppError::IoError)?;
 
@@ -661,15 +661,13 @@ impl Planner {
             } => Box::new(move |model: &mut Model| {
                 // project required so that relative file references can be created.
                 let ModelProject {
-                    path,
-                    project_directory,
-                    ..
+                    project_directory, ..
                 } = model
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let (pcb, pcb_file, pcb_path) = planning::pcb::create_pcb(project_directory, name, units, unit_map)
+                let (pcb, _pcb_file, pcb_path) = planning::pcb::create_pcb(project_directory, name, units, unit_map)
                     .map_err(AppError::PcbOperationError)?;
 
                 model
@@ -1853,9 +1851,6 @@ enum AppError {
 
     #[error("Unknown phase reference. reference: {0}")]
     UnknownPhaseReference(Reference),
-
-    #[error("File reference error")]
-    FileReferenceError(FileReferenceError),
 }
 
 impl Planner {
