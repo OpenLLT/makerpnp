@@ -15,8 +15,7 @@ use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{
-    DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, ProjectPcbOverview,
-    VariantName,
+    DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, ProjectPcbOverview, VariantName,
 };
 use tracing::debug;
 use validator::{Validate, ValidationError};

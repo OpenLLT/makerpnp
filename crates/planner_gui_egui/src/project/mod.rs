@@ -1,9 +1,7 @@
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
 use std::path::PathBuf;
 
-use egui::{Ui, WidgetText};
+use egui::Ui;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
@@ -34,7 +32,6 @@ use crate::project::unit_assignments_tab::{
     UnitAssignmentsTab, UnitAssignmentsUi, UnitAssignmentsUiAction, UnitAssignmentsUiCommand, UnitAssignmentsUiContext,
     UpdateUnitAssignmentsArgs,
 };
-use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_util::NavigationPath;
@@ -1577,70 +1574,6 @@ impl UiComponent for Project {
                 match pcb_ui_action {
                     None => None,
                     Some(PcbUiAction::None) => None,
-                    Some(PcbUiAction::AddGerberFiles {
-                        path,
-                        design,
-                        files,
-                    }) => {
-                        match self
-                            .planner_core_service
-                            .update(Event::AddGerberFiles {
-                                path,
-                                design,
-                                files,
-                            })
-                            .into_actions()
-                        {
-                            Ok(actions) => {
-                                let mut tasks = actions
-                                    .into_iter()
-                                    .map(Task::done)
-                                    .collect::<Vec<Task<ProjectAction>>>();
-
-                                let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PcbOverview {
-                                        pcb: pcb_index,
-                                    }),
-                                ))];
-                                tasks.extend(additional_tasks);
-
-                                Some(ProjectAction::Task(key, Task::batch(tasks)))
-                            }
-                            Err(error_action) => Some(error_action),
-                        }
-                    }
-                    Some(PcbUiAction::RemoveGerberFiles {
-                        path,
-                        design,
-                        files,
-                    }) => {
-                        match self
-                            .planner_core_service
-                            .update(Event::RemoveGerberFiles {
-                                path,
-                                design,
-                                files,
-                            })
-                            .into_actions()
-                        {
-                            Ok(actions) => {
-                                let mut tasks = actions
-                                    .into_iter()
-                                    .map(Task::done)
-                                    .collect::<Vec<Task<ProjectAction>>>();
-
-                                let additional_tasks = vec![Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::PcbOverview {
-                                        pcb: pcb_index,
-                                    }),
-                                ))];
-                                tasks.extend(additional_tasks);
-
-                                Some(ProjectAction::Task(key, Task::batch(tasks)))
-                            }
-                            Err(error_action) => Some(error_action),
-                        }
-                    }
                     Some(PcbUiAction::ShowUnitAssignments(pcb_index)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(

@@ -196,7 +196,7 @@ impl Pcb {
 }
 
 pub fn create_pcb(
-    path: &Path,
+    project_directory: &Path,
     name: String,
     units: u16,
     unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
@@ -233,7 +233,7 @@ pub fn create_pcb(
 
     let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
 
-    let mut pcb_path = path.to_path_buf();
+    let mut pcb_path = project_directory.to_path_buf();
     pcb_path.push(pcb_file_name.clone());
 
     let pcb_file = FileReference::Relative(PathBuf::from(pcb_file_name));
