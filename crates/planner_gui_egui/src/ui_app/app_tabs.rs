@@ -1,11 +1,12 @@
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
-use egui_dock::{DockArea, DockState, Style, Tree, Node, NodeIndex, Split};
+use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::{error, trace};
+
 use crate::config::Config;
 use crate::pcb::{Pcb, PcbKey};
 use crate::project::{Project, ProjectKey};
