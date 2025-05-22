@@ -15,14 +15,13 @@ use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{
-    DesignIndex, DesignName, DesignVariant, FileReference, PcbOverview, PcbUnitAssignments, PcbUnitIndex,
-    ProjectPcbOverview, VariantName,
+    DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, PcbUnitIndex, ProjectPcbOverview,
+    VariantName,
 };
 use tracing::debug;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
-use crate::project::pcb_tab::{PcbUiAction, PcbUiCommand};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -1066,16 +1065,12 @@ impl UiComponent for UnitAssignmentsUi {
                 }
             }
             UnitAssignmentsUiCommand::UnassignAllClicked => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
-                    for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
-                        *assigned_variant_name = None;
-                    }
-
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                let mut fields = self.fields.lock().unwrap();
+                for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
+                    *assigned_variant_name = None;
                 }
+
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsUiCommand::AssignSelection(design_variant_index, variant_map_selected_indexes) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
@@ -1105,21 +1100,17 @@ impl UiComponent for UnitAssignmentsUi {
                 }
             }
             UnitAssignmentsUiCommand::UnassignSelection(variant_map_selected_indexes) => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
-                    for (_index, (_design_index, assigned_variant_name)) in fields
-                        .variant_map
-                        .iter_mut()
-                        .enumerate()
-                        .filter(|(index, _)| variant_map_selected_indexes.contains(index))
-                    {
-                        *assigned_variant_name = None;
-                    }
-
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                let mut fields = self.fields.lock().unwrap();
+                for (_index, (_design_index, assigned_variant_name)) in fields
+                    .variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(index, _)| variant_map_selected_indexes.contains(index))
+                {
+                    *assigned_variant_name = None;
                 }
+
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsUiCommand::RequestPcbOverview(path) => {
                 Some(UnitAssignmentsUiAction::RequestPcbOverview(path))

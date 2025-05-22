@@ -12,7 +12,6 @@ use tracing::debug;
 
 use crate::pcb::core_helper::PcbCoreHelper;
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
-use crate::project::ProjectUiCommand;
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 

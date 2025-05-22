@@ -4,16 +4,14 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_extras::Column;
 use egui_i18n::tr;
-use planner_app::{DesignName, FileReference, GerberPurpose, PcbOverview, PcbSide, ProjectPcbOverview};
+use planner_app::{DesignName, GerberPurpose, PcbOverview, PcbSide, ProjectPcbOverview};
 use tracing::{debug, trace};
 
 use crate::project::dialogs::manage_gerbers::{
     ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand,
 };
 use crate::project::tabs::ProjectTabContext;
-use crate::project::{ProjectAction, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
-use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
