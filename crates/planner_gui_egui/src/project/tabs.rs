@@ -1,9 +1,9 @@
-use egui::Ui;
+use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
 
 use crate::project::{ProjectTabKind, ProjectUiState};
-use crate::tabs::{AppTabViewer, TabKey, Tabs};
+use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -72,6 +72,49 @@ impl UiComponent for ProjectTabs {
     ) -> Option<Self::UiAction> {
         match command {
             ProjectTabUiCommand::None => Some(ProjectTabAction::None),
+        }
+    }
+}
+
+impl Tab for ProjectTabKind {
+    type Context = ProjectTabContext;
+
+    fn label(&self) -> WidgetText {
+        match self {
+            ProjectTabKind::Explorer(tab) => tab.label(),
+            ProjectTabKind::Overview(tab) => tab.label(),
+            ProjectTabKind::Parts(tab) => tab.label(),
+            ProjectTabKind::Placements(tab) => tab.label(),
+            ProjectTabKind::Phase(tab) => tab.label(),
+            ProjectTabKind::LoadOut(tab) => tab.label(),
+            ProjectTabKind::Pcb(tab) => tab.label(),
+            ProjectTabKind::UnitAssignments(tab) => tab.label(),
+        }
+    }
+
+    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
+        match self {
+            ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::UnitAssignments(tab) => tab.ui(ui, tab_key, context),
+        }
+    }
+
+    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
+        match self {
+            ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::UnitAssignments(tab) => tab.on_close(tab_key, context),
         }
     }
 }

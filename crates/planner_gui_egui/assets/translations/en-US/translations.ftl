@@ -108,6 +108,18 @@ project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Processes
 project-explorer-node-process = { $name }
 
+pcb-configuration-header = Configuration
+pcb-configuration-detail-name = Name: { $name }
+pcb-configuration-tab-label = Configuration
+
+pcb-explorer-node-root = { $name }
+pcb-explorer-node-configuration = Configuration
+pcb-explorer-node-pcb-view = PCB
+pcb-explorer-node-designs = Designs
+pcb-explorer-node-units = Unit
+pcb-explorer-node-units-assignment-assigned = { $pcb_number }: {$design_name}
+pcb-explorer-node-units-assignment-unassigned = { $pcb_number }: Unassigned
+
 form-button-ok = Ok
 form-button-cancel = Cancel
 form-button-close = Close
