@@ -7,9 +7,7 @@ use egui_i18n::tr;
 use planner_app::{DesignName, GerberPurpose, PcbOverview, PcbSide, ProjectPcbOverview};
 use tracing::{debug, trace};
 
-use crate::project::dialogs::manage_gerbers::{
-    ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand,
-};
+use crate::dialogs::manage_gerbers::{ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -73,7 +71,7 @@ impl PcbUi {
             return;
         };
 
-        let mut modal = ManageGerbersModal::new(design_index, design_name, design_gerbers);
+        let mut modal = ManageGerbersModal::new(design_index, design_name.to_string(), design_gerbers);
         modal
             .component
             .configure_mapper(self.component.sender.clone(), move |command| {

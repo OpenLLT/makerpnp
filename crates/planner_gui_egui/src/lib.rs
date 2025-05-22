@@ -1,4 +1,6 @@
 pub mod config;
+
+pub mod dialogs;
 pub mod file_picker;
 pub mod filter;
 pub mod fonts;

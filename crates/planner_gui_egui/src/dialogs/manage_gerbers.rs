@@ -5,7 +5,7 @@ use egui::Modal;
 use egui_extras::Column;
 use egui_i18n::tr;
 use egui_mobius::Value;
-use planner_app::{DesignName, GerberPurpose, PcbGerberItem, PcbSide};
+use planner_app::{GerberPurpose, PcbGerberItem, PcbSide};
 
 use crate::file_picker::Picker;
 use crate::ui_component::{ComponentState, UiComponent};
@@ -14,7 +14,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derivative(Debug)]
 pub struct ManageGerbersModal {
     design_index: usize,
-    design_name: DesignName,
+    title: String,
     gerbers: Vec<PcbGerberItem>,
 
     #[derivative(Debug = "ignore")]
@@ -24,10 +24,10 @@ pub struct ManageGerbersModal {
 }
 
 impl ManageGerbersModal {
-    pub fn new(design_index: usize, design_name: DesignName, gerbers: Vec<PcbGerberItem>) -> Self {
+    pub fn new(design_index: usize, title: String, gerbers: Vec<PcbGerberItem>) -> Self {
         Self {
             design_index,
-            design_name,
+            title,
             gerbers,
             component: Default::default(),
             file_picker: Default::default(),
@@ -84,7 +84,7 @@ impl UiComponent for ManageGerbersModal {
         Modal::new(modal_id).show(ui.ctx(), |ui| {
             ui.set_width(ui.available_width() * 0.8);
 
-            ui.heading(tr!("modal-manager-gerbers-title", { design: self.design_name.to_string() }));
+            ui.heading(tr!("modal-manager-gerbers-title", { design: self.title.to_string() }));
 
             let text_height = egui::TextStyle::Body
                 .resolve(ui.style())
