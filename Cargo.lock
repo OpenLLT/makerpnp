@@ -5688,8 +5688,10 @@ name = "util"
 version = "0.1.0"
 dependencies = [
  "predicates",
+ "rstest 0.23.0",
  "serde",
  "tempfile",
+ "util",
 ]
 
 [[package]]

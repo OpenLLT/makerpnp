@@ -1,8 +1,8 @@
 pub mod assert;
 pub mod dynamic;
+pub mod path;
+pub mod range_utils;
 pub mod sorting;
 
 #[cfg(any(test, feature = "testing"))]
 pub mod test;
-
-pub mod path;

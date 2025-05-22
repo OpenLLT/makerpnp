@@ -13,3 +13,7 @@ testing = [
     "dep:tempfile",
     "dep:predicates",
 ]
+
+[dev-dependencies]
+rstest = { workspace = true}
+util = { path = ".", features = ["testing"]}
