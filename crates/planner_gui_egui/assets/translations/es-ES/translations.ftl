@@ -175,7 +175,7 @@ form-common-choice-process = Proceso
 
 form-common-button-assign-selected = Asignar seleccionado
 form-common-button-unassign-selected = Desasignar seleccionado
-form-common-button-unassign-all = Asignar todo
+form-common-button-unassign-all = Desasignar todo
 form-common-button-unassign-range = Desasignar rango
 
 form-common-button-apply-range = Aplicar rango
