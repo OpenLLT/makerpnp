@@ -108,6 +108,12 @@ project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Processes
 project-explorer-node-process = { $name }
 
+new-pcb-banner = New PCB
+form-new-pcb-input-name = PCB name
+form-new-pcb-input-name-placeholder = (e.g. the PCB factory's order reference number)
+form-new-pcb-input-directory = Directory
+form-new-pcb-input-units = Units
+
 pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
 pcb-configuration-tab-label = Configuration

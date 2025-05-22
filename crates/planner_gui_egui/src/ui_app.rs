@@ -17,6 +17,7 @@ use crate::project::{Project, ProjectKey, ProjectUiCommand};
 use crate::runtime::tokio_runtime::TokioRuntime;
 use crate::tabs::TabKey;
 use crate::toolbar::{Toolbar, ToolbarContext, ToolbarUiCommand};
+use crate::ui_app::app_tabs::new_pcb::NewPcbArgs;
 use crate::ui_app::app_tabs::new_project::NewProjectArgs;
 use crate::ui_app::app_tabs::pcb::{PcbTab, PcbTabUiCommand};
 use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabUiCommand};
@@ -126,7 +127,7 @@ impl AppState {
     }
 
     pub fn make_project_tab(&mut self, path: PathBuf, project_key: ProjectKey) -> (TabKind, ProjectKey) {
-        info!("open file. path: {:?}", path);
+        info!("Open project. path: {:?}", path);
 
         let label = path
             .file_name()
@@ -204,7 +205,7 @@ impl AppState {
 
     /// `tab_key` - the tab key of the tab to replace, e.g. the 'NewProjectTab' instance's key.
     pub fn create_project(&mut self, tab_key: TabKey, args: NewProjectArgs, app_tabs: Value<AppTabs>) {
-        debug!("creating project. tab_key: {:?}, args: {:?}", tab_key, args);
+        debug!("Creating project. tab_key: {:?}, args: {:?}", tab_key, args);
 
         let (project_command, project_key, path) = {
             let mut projects = self.projects.lock().unwrap();
@@ -245,17 +246,14 @@ impl AppState {
             .expect("sent");
     }
 
-    pub fn make_pcb_tab(&mut self, path: Option<PathBuf>, pcb_key: PcbKey) -> (TabKind, PcbKey) {
-        info!("open file. path: {:?}", path);
+    pub fn make_pcb_tab(&mut self, path: PathBuf, pcb_key: PcbKey) -> (TabKind, PcbKey) {
+        info!("Open pcb. path: {:?}", path);
 
         let label = path
-            .as_ref()
-            .map_or(tr!("pcb-tab-new-label"), |path| {
-                path.file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .to_string()
-            });
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
 
         let tab_kind_component = ComponentState::default();
         let tab_kind_sender = tab_kind_component.sender.clone();
@@ -291,7 +289,7 @@ impl AppState {
             pcb_from_path(path.clone(), &mut pcbs)
         };
 
-        let (tab_kind, pcb_key) = self.make_pcb_tab(Some(path), pcb_key);
+        let (tab_kind, pcb_key) = self.make_pcb_tab(path, pcb_key);
 
         let tab_key = app_tabs
             .lock()
@@ -301,20 +299,21 @@ impl AppState {
         self.configure_pcb_tab(pcb_key, tab_key, pcb_command);
     }
 
-    pub fn create_pcb(&mut self, app_tabs: Value<AppTabs>) {
-        debug!("creating pcb.");
+    pub fn create_pcb(&mut self, tab_key: TabKey, args: NewPcbArgs, app_tabs: Value<AppTabs>) {
+        debug!("Creating pcb.");
 
-        let (pcb_command, pcb_key) = {
+        let (pcb_command, pcb_key, path) = {
             let mut pcbs = self.pcbs.lock().unwrap();
-            pcb_new(&mut pcbs)
+            pcb_from_args(args, &mut pcbs)
         };
 
-        let (tab_kind, pcb_key) = self.make_pcb_tab(None, pcb_key);
+        let (tab_kind, pcb_key) = self.make_pcb_tab(path, pcb_key);
 
-        let tab_key = app_tabs
+        app_tabs
             .lock()
             .unwrap()
-            .add_tab(tab_kind);
+            .replace(&tab_key, tab_kind)
+            .expect("replaced");
 
         self.configure_pcb_tab(pcb_key, tab_key, pcb_command);
     }
@@ -457,7 +456,7 @@ impl UiApp {
         let mut ui_state = self.app_tabs.lock().unwrap();
 
         ui_state.retain(|tab_key, tab_kind| {
-            let should_retain = !matches!(tab_kind, TabKind::Pcb(pcb_tab, _) if pcb_tab.path.is_none());
+            let should_retain = !matches!(tab_kind, TabKind::NewPcb(_, _));
             if !should_retain {
                 debug!("removing 'new pcb' tab, tab_key: {:?}", tab_key);
             }
@@ -487,9 +486,7 @@ impl UiApp {
 
             ui_state.filter_map(|(tab_key, tab_kind)| match tab_kind {
                 TabKind::Project(project_tab, _) => Some((Kind::Project, *tab_key, project_tab.path.clone())),
-                TabKind::Pcb(pcb_tab, _) if pcb_tab.path.is_some() => {
-                    Some((Kind::Pcb, *tab_key, pcb_tab.path.clone().unwrap()))
-                }
+                TabKind::Pcb(pcb_tab, _) => Some((Kind::Pcb, *tab_key, pcb_tab.path.clone())),
                 _ => None,
             })
         };
@@ -831,15 +828,17 @@ fn pcb_from_path(path: PathBuf, pcbs: &mut ValueGuard<SlotMap<PcbKey, Pcb>>) -> 
     (pcb_command.unwrap(), pcb_key)
 }
 
-fn pcb_new(pcbs: &mut ValueGuard<SlotMap<PcbKey, Pcb>>) -> (PcbUiCommand, PcbKey) {
+fn pcb_from_args(args: NewPcbArgs, pcbs: &mut ValueGuard<SlotMap<PcbKey, Pcb>>) -> (PcbUiCommand, PcbKey, PathBuf) {
+    let path = args.build_path();
+
     let mut pcb_command = None;
     let pcb_key = pcbs.insert_with_key(|key| {
-        let (pcb, pcb_command_to_issue) = Pcb::new(key);
+        let (pcb, pcb_command_to_issue) = Pcb::new(path.clone(), key, args.name, args.units);
         pcb_command.replace(pcb_command_to_issue);
 
         pcb
     });
-    (pcb_command.unwrap(), pcb_key)
+    (pcb_command.unwrap(), pcb_key, path)
 }
 
 fn configure_pcb_component(app_command_sender: Sender<UiCommand>, tab_key: TabKey, pcb: &mut Pcb) {
@@ -870,6 +869,7 @@ pub fn build_toolbar_context(app_tabs: &Value<AppTabs>) -> ToolbarContext {
         app_tabs.with_tab_mut(&tab_key, |tab_kind| match tab_kind {
             TabKind::Home(_, _) => false,
             TabKind::NewProject(_, _) => false,
+            TabKind::NewPcb(_, _) => false,
             TabKind::Project(project_tab, _) => project_tab.modified,
             TabKind::Pcb(pcb_tab, _) => pcb_tab.modified,
         })

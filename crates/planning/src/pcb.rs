@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use indexmap::IndexSet;
 use itertools::Itertools;
@@ -9,7 +9,6 @@ use thiserror::Error;
 use tracing::{info, trace};
 
 use crate::design::{DesignIndex, DesignName};
-use crate::file::FileReference;
 use crate::gerber::{GerberFile, GerberPurpose};
 use crate::project::PcbOperationError;
 
@@ -196,12 +195,22 @@ impl Pcb {
 }
 
 pub fn create_pcb(
-    project_directory: &Path,
     name: String,
     units: u16,
     unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
-) -> Result<(Pcb, FileReference, PathBuf), PcbOperationError> {
+) -> Result<Pcb, PcbOperationError> {
     info!("Creating PCB. name: '{}'", name);
+
+    let (design_names, unit_to_design_index_mapping) = build_unit_to_design_index_mappping(unit_to_design_name_map);
+
+    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
+
+    Ok(pcb)
+}
+
+pub fn build_unit_to_design_index_mappping(
+    unit_to_design_name_map: BTreeMap<PcbUnitNumber, DesignName>,
+) -> (IndexSet<DesignName>, BTreeMap<PcbUnitIndex, DesignIndex>) {
     trace!("unit_to_design_name_map: {:?}", unit_to_design_name_map);
 
     // 'Intern' the DesignNames
@@ -229,14 +238,5 @@ pub fn create_pcb(
     info!("Added designs to PCB. design: [{}]", unique_strings.iter().join(", "));
     trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
 
-    let pcb_file_name = format!("{}.pcb.json", name);
-
-    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
-
-    let mut pcb_path = project_directory.to_path_buf();
-    pcb_path.push(pcb_file_name.clone());
-
-    let pcb_file = FileReference::Relative(PathBuf::from(pcb_file_name));
-
-    Ok((pcb, pcb_file, pcb_path))
+    (design_names, unit_to_design_index_mapping)
 }

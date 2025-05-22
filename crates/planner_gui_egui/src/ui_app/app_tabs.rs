@@ -12,6 +12,7 @@ use crate::pcb::{Pcb, PcbKey};
 use crate::project::{Project, ProjectKey};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::ui_app::app_tabs::home::{HomeTab, HomeTabAction, HomeTabContext, HomeTabUiCommand};
+use crate::ui_app::app_tabs::new_pcb::{NewPcbTab, NewPcbTabAction, NewPcbTabContext, NewPcbTabUiCommand};
 use crate::ui_app::app_tabs::new_project::{
     NewProjectTab, NewProjectTabAction, NewProjectTabContext, NewProjectTabUiCommand,
 };
@@ -20,6 +21,7 @@ use crate::ui_app::app_tabs::project::{ProjectTab, ProjectTabAction, ProjectTabU
 use crate::ui_component::{ComponentState, UiComponent};
 
 pub mod home;
+pub mod new_pcb;
 pub mod new_project;
 pub mod pcb;
 pub mod project;
@@ -35,6 +37,7 @@ pub enum TabKind {
     Home(HomeTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     NewProject(NewProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     Project(ProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
+    NewPcb(NewPcbTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     Pcb(PcbTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
 }
 
@@ -43,6 +46,7 @@ pub enum TabKindUiCommand {
     HomeTabCommand { command: HomeTabUiCommand },
     NewProjectTabCommand { command: NewProjectTabUiCommand },
     ProjectTabCommand { command: ProjectTabUiCommand },
+    NewPcbTabCommand { command: NewPcbTabUiCommand },
     PcbTabCommand { command: PcbTabUiCommand },
 }
 
@@ -52,6 +56,7 @@ pub enum TabKindAction {
     HomeTabAction { action: HomeTabAction },
     NewProjectTabAction { action: NewProjectTabAction },
     ProjectTabAction { action: ProjectTabAction },
+    NewPcbTabAction { action: NewPcbTabAction },
     PcbTabAction { action: PcbTabAction },
 }
 
@@ -63,6 +68,7 @@ impl Tab for TabKind {
             TabKind::Home(tab, _) => tab.label(),
             TabKind::NewProject(tab, _) => tab.label(),
             TabKind::Project(tab, _) => tab.label(),
+            TabKind::NewPcb(tab, _) => tab.label(),
             TabKind::Pcb(tab, _) => tab.label(),
         }
     }
@@ -92,6 +98,12 @@ impl Tab for TabKind {
                     projects: context.projects.clone(),
                 };
                 tab.on_close(tab_key, &mut project_tab_context)
+            }
+            TabKind::NewPcb(tab, _) => {
+                let mut new_pcb_tab_context = NewPcbTabContext {
+                    tab_key: tab_key.clone(),
+                };
+                tab.on_close(tab_key, &mut new_pcb_tab_context)
             }
             TabKind::Pcb(tab, _) => {
                 let mut pcb_tab_context = pcb::PcbTabContext {
@@ -133,6 +145,12 @@ impl UiComponent for TabKind {
                     projects: context.projects.clone(),
                 };
                 tab.ui(ui, &mut project_tab_context)
+            }
+            TabKind::NewPcb(tab, _) => {
+                let mut new_pcb_tab_context = NewPcbTabContext {
+                    tab_key,
+                };
+                tab.ui(ui, &mut new_pcb_tab_context)
             }
             TabKind::Pcb(tab, _) => {
                 let mut pcb_tab_context = pcb::PcbTabContext {
@@ -194,6 +212,20 @@ impl UiComponent for TabKind {
                 };
                 tab.update(command, &mut project_tab_context)
                     .map(|action| TabKindAction::ProjectTabAction {
+                        action,
+                    })
+            }
+            (
+                TabKind::NewPcb(tab, _),
+                TabKindUiCommand::NewPcbTabCommand {
+                    command,
+                },
+            ) => {
+                let mut new_pcb_tab_content = NewPcbTabContext {
+                    tab_key,
+                };
+                tab.update(command, &mut new_pcb_tab_content)
+                    .map(|action| TabKindAction::NewPcbTabAction {
                         action,
                     })
             }
@@ -431,6 +463,22 @@ impl AppTabs {
         tree.push_to_focused_leaf(tab_key);
     }
 
+    pub fn add_new_pcb_tab(&mut self) {
+        // create a new pcb tab
+        let tab_kind_component = ComponentState::default();
+
+        let mut tabs = self.tabs.lock().unwrap();
+        let new_pcb_tab = NewPcbTab::default();
+        let tab_kind = TabKind::NewPcb(new_pcb_tab, tab_kind_component);
+        let tab_key = tabs.add(tab_kind);
+
+        let tab_kind_sender = self.component.sender.clone();
+        Self::configure_new_pcb_tab_mappers(tab_kind_sender, tabs, tab_key);
+
+        let mut tree = self.tree.lock().unwrap();
+        tree.push_to_focused_leaf(tab_key);
+    }
+
     fn configure_new_project_tab_mappers(
         tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
         mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,
@@ -450,6 +498,33 @@ impl AppTabs {
                     .configure_mapper(tab_kind_component_sender, move |command| {
                         trace!("new project tab mapper. command: {:?}", command);
                         TabKindUiCommand::NewProjectTabCommand {
+                            command,
+                        }
+                    });
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn configure_new_pcb_tab_mappers(
+        tab_kind_sender: Enqueue<(TabKey, TabUiCommand)>,
+        mut tabs: ValueGuard<Tabs<TabKind, TabKindContext>>,
+        tab_key: TabKey,
+    ) {
+        match tabs.tabs.get_mut(&tab_key).unwrap() {
+            TabKind::NewPcb(new_pcb_tab, tab_kind_component) => {
+                tab_kind_component.configure_mapper(tab_kind_sender, move |command| {
+                    trace!("tab kind mapper. command: {:?}", command);
+                    (tab_key, TabUiCommand::TabKindCommand(command))
+                });
+
+                let tab_kind_component_sender = tab_kind_component.sender.clone();
+
+                new_pcb_tab
+                    .component
+                    .configure_mapper(tab_kind_component_sender, move |command| {
+                        trace!("new pcb tab mapper. command: {:?}", command);
+                        TabKindUiCommand::NewPcbTabCommand {
                             command,
                         }
                     });
@@ -479,9 +554,7 @@ impl AppTabs {
     }
 
     pub fn show_pcb_tab(&mut self, path: &PathBuf) -> Result<TabKey, ()> {
-        self.show_tab(
-            |candidate_tab| matches!(candidate_tab, TabKind::Pcb(tab, _) if tab.path.as_ref().eq(&Some(path))),
-        )
+        self.show_tab(|candidate_tab| matches!(candidate_tab, TabKind::Pcb(tab, _) if tab.path.eq(path)))
     }
 
     fn configure_home_tab_mappers(

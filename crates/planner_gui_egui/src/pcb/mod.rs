@@ -23,6 +23,11 @@ mod configuration_tab;
 mod explorer_tab;
 mod tabs;
 
+// TODO restore adding designs and assigning designs to units.  use the 'unit_assignments_tab.rs' as the basis for this.
+//      also refer to the unused 'add_pcb.rs' file.
+//      requires adding additional core events
+//      once complete delete the 'add_pcb.rs' file and assiciated code and translations
+
 new_key_type! {
     /// A key for a pcb
     pub struct PcbKey;
@@ -44,7 +49,7 @@ pub struct Pcb {
 
     pcb_ui_state: Value<PcbUiState>,
 
-    path: Option<PathBuf>,
+    path: PathBuf,
     modified: bool,
 
     // FIXME actually persist this, currently it should be treated as 'persistable_state'.
@@ -56,16 +61,20 @@ pub struct Pcb {
 
 impl Pcb {
     pub fn from_path(path: PathBuf, key: PcbKey) -> (Self, PcbUiCommand) {
-        let instance = Self::new_inner(Some(path), key, None);
+        let instance = Self::new_inner(path, key, None);
         (instance, PcbUiCommand::Load)
     }
 
-    pub fn new(key: PcbKey) -> (Self, PcbUiCommand) {
-        let instance = Self::new_inner(None, key, None);
-        (instance, PcbUiCommand::Load)
+    pub fn new(path: PathBuf, key: PcbKey, name: String, units: u16) -> (Self, PcbUiCommand) {
+        let instance = Self::new_inner(path.clone(), key, None);
+        (instance, PcbUiCommand::Create {
+            path,
+            name,
+            units,
+        })
     }
 
-    fn new_inner(path: Option<PathBuf>, key: PcbKey, name: Option<String>) -> Self {
+    fn new_inner(path: PathBuf, key: PcbKey, name: Option<String>) -> Self {
         debug!("Creating pcb instance from path. path: {:?}", path);
 
         let component: ComponentState<(PcbKey, PcbUiCommand)> = ComponentState::default();
@@ -201,6 +210,14 @@ pub enum PcbUiCommand {
     TabCommand(PcbTabUiCommand),
     RequestPcbView(PcbViewRequest),
     Saved,
+    Create {
+        path: PathBuf,
+        name: String,
+        units: u16,
+    },
+    Created {
+        path: PathBuf,
+    },
 }
 
 pub struct PcbContext {
@@ -247,11 +264,36 @@ impl UiComponent for Pcb {
                 self.modified = true;
                 Some(PcbAction::SetModifiedState(self.modified))
             }
+            PcbUiCommand::Create {
+                path,
+                name,
+                units,
+            } => {
+                debug!("Creating pcb. path: {:?}", self.path);
+                self.planner_core_service
+                    .update(Event::CreatePcb {
+                        name,
+                        units,
+                        path: path.clone(),
+                    })
+                    .when_ok(key, |_| {
+                        Some(PcbUiCommand::Created {
+                            path,
+                        })
+                    })
+            }
+            PcbUiCommand::Created {
+                path,
+            } => {
+                let task1 = self.show_explorer(path.clone());
+                let task2 = self.show_configuration(path);
+                let tasks = vec![task1, task2];
+                Some(PcbAction::Task(key, Task::batch(tasks)))
+            }
             PcbUiCommand::Load => {
                 debug!("Loading pcb. path: {:?}", self.path);
 
-                // Safety: can't 'Load' without a path, do not attempt to load without a path.
-                let path = self.path.clone().unwrap();
+                let path = self.path.clone();
 
                 self.planner_core_service
                     .update(Event::LoadPcb {
@@ -262,39 +304,15 @@ impl UiComponent for Pcb {
             PcbUiCommand::Loaded => {
                 debug!("Loaded pcb. path: {:?}", self.path);
 
-                // Safety: can't be 'Loaded' without a path.
-                let path = self.path.clone().unwrap();
-
-                match self
-                    .planner_core_service
-                    .update(Event::RequestPcbOverviewView {
-                        path: path.clone(),
-                    })
-                    .into_actions()
-                {
-                    Ok(actions) => {
-                        let mut tasks = actions
-                            .into_iter()
-                            .map(Task::done)
-                            .collect::<Vec<Task<PcbAction>>>();
-
-                        let task1 = self.show_explorer(path.clone());
-                        // TODO change this to show the PCB by default
-                        let task2 = self.show_configuration(path.clone());
-
-                        let additional_tasks = vec![task1, task2];
-                        tasks.extend(additional_tasks);
-
-                        Some(PcbAction::Task(key, Task::batch(tasks)))
-                    }
-                    Err(error_action) => Some(error_action),
-                }
+                let task1 = self.show_explorer(self.path.clone());
+                let task2 = self.show_configuration(self.path.clone());
+                let tasks = vec![task1, task2];
+                Some(PcbAction::Task(key, Task::batch(tasks)))
             }
             PcbUiCommand::Save => {
                 debug!("Saving pcb. path: {:?}", self.path);
 
-                // Safety: can't 'Load' without a path, do not attempt to load without a path.
-                let path = self.path.clone().unwrap();
+                let path = self.path.clone();
 
                 self.planner_core_service
                     .update(Event::SavePcb {
