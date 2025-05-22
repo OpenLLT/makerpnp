@@ -752,12 +752,16 @@ impl UnitAssignmentsUi {
                                             ));
                                     }
 
+                                    let have_assigned_selection = fields.variant_map_selected_indexes.iter().any(|index|{
+                                        let (_, assigned_variant_name) = &fields.variant_map[*index];
+                                        assigned_variant_name.is_some()
+                                    });
                                     if tui
                                         .style(Style {
                                             flex_grow: 1.0,
                                             ..default_style()
                                         })
-                                        .enabled_ui(is_selection_ok)
+                                        .enabled_ui(have_assigned_selection)
                                         .button(|tui| tui.label(tr!("form-common-button-unassign-selected")))
                                         .clicked()
                                     {
