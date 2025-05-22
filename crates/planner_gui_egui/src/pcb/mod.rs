@@ -206,6 +206,7 @@ pub enum PcbUiCommand {
     ConfigurationUiCommand(ConfigurationUiCommand),
     TabCommand(PcbTabUiCommand),
     RequestPcbView(PcbViewRequest),
+    Saved,
 }
 
 pub struct PcbContext {
@@ -258,48 +259,11 @@ impl UiComponent for Pcb {
                 // Safety: can't 'Load' without a path, do not attempt to load without a path.
                 let path = self.path.clone().unwrap();
 
-                let pcb_file = FileReference::Absolute(path.clone());
-
                 self.planner_core_service
                     .update(Event::LoadPcb {
-                        pcb_file,
-                        root: None,
+                        path,
                     })
                     .when_ok(key, |_| Some(PcbUiCommand::Loaded))
-            }
-            PcbUiCommand::Save => {
-                debug!("Saving pcb. path: {:?}", self.path);
-                // TODO
-                None
-            }
-            PcbUiCommand::Error(error) => {
-                error!("PCB error. error: {:?}", error);
-                // TODO show a dialog
-                None
-            }
-            PcbUiCommand::PcbView(view) => {
-                match view {
-                    PcbView::PcbOverview(pcb_overview) => {
-                        debug!("Received pcb overview.");
-
-                        let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
-                        pcb_ui_state
-                            .configuration_ui
-                            .update_pcb_overview(pcb_overview.clone());
-                        pcb_ui_state
-                            .explorer_ui
-                            .update_pcb_overview(pcb_overview);
-                    }
-                }
-                None
-            }
-            PcbUiCommand::SetModifiedState {
-                project_modified,
-                pcbs_modified,
-            } => {
-                // FIXME we want to know if *THIS* pcb is modified, not any pcb.
-                self.modified = pcbs_modified;
-                Some(PcbAction::SetModifiedState(pcbs_modified))
             }
             PcbUiCommand::Loaded => {
                 debug!("Loaded pcb. path: {:?}", self.path);
@@ -331,6 +295,51 @@ impl UiComponent for Pcb {
                     }
                     Err(error_action) => Some(error_action),
                 }
+            }
+            PcbUiCommand::Save => {
+                debug!("Saving pcb. path: {:?}", self.path);
+
+                // Safety: can't 'Load' without a path, do not attempt to load without a path.
+                let path = self.path.clone().unwrap();
+
+                self.planner_core_service
+                    .update(Event::SavePcb {
+                        path,
+                    })
+                    .when_ok(key, |_| Some(PcbUiCommand::Saved))
+            }
+            PcbUiCommand::Saved => {
+                debug!("Saved pcb. path: {:?}", self.path);
+                None
+            }
+            PcbUiCommand::Error(error) => {
+                error!("PCB error. error: {:?}", error);
+                // TODO show a dialog
+                None
+            }
+            PcbUiCommand::PcbView(view) => {
+                match view {
+                    PcbView::PcbOverview(pcb_overview) => {
+                        debug!("Received pcb overview.");
+
+                        let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+                        pcb_ui_state
+                            .configuration_ui
+                            .update_pcb_overview(pcb_overview.clone());
+                        pcb_ui_state
+                            .explorer_ui
+                            .update_pcb_overview(pcb_overview);
+                    }
+                }
+                None
+            }
+            PcbUiCommand::SetModifiedState {
+                project_modified,
+                pcbs_modified,
+            } => {
+                // FIXME we want to know if *THIS* pcb is modified, not any pcb.
+                self.modified = pcbs_modified;
+                Some(PcbAction::SetModifiedState(pcbs_modified))
             }
             PcbUiCommand::RequestPcbView(view_request) => {
                 let event = match view_request {
