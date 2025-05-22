@@ -2,10 +2,9 @@ use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::Ui;
-use egui_ltreeview::TreeViewState;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Event, PcbOverview, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest, ProjectViewRequest, Reference};
+use planner_app::{Event, PcbView, PcbViewRequest};
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
