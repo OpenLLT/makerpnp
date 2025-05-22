@@ -37,6 +37,7 @@ use crate::project::unit_assignments_tab::{
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_util::NavigationPath;
 
 //
 // tabs
@@ -62,35 +63,6 @@ mod toolbar;
 new_key_type! {
     /// A key for a project
     pub struct ProjectKey;
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProjectPath(String);
-
-impl ProjectPath {
-    pub fn new(path: String) -> Self {
-        Self(path)
-    }
-}
-
-impl Deref for ProjectPath {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Display for ProjectPath {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
-    }
-}
-
-impl From<&str> for ProjectPath {
-    fn from(value: &str) -> Self {
-        Self(value.to_string())
-    }
 }
 
 #[derive(Debug)]
@@ -490,13 +462,13 @@ impl Project {
             });
     }
 
-    fn navigate(&mut self, key: ProjectKey, path: ProjectPath) -> Option<ProjectAction> {
+    fn navigate(&mut self, key: ProjectKey, path: NavigationPath) -> Option<ProjectAction> {
         // if the path starts with `/project/` then show/hide UI elements based on the path,
         // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
-        info!("ProjectMessage::Navigate. path: {}", path);
+        info!("project::navigate. path: {}", path);
 
         #[must_use]
-        fn handle_root(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_root(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/".into()) {
                 let task = project.show_overview();
                 Some(ProjectAction::Task(*key, task))
@@ -506,7 +478,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_placements(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_placements(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/placements".into()) {
                 let tasks = project.show_placements();
 
@@ -517,7 +489,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_parts(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_parts(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/parts".into()) {
                 let task = project.show_parts();
 
@@ -528,7 +500,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/phases".into()) {
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::Phases,
@@ -541,7 +513,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_phase(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_phase(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let phase_reference: String = captures
@@ -562,7 +534,11 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_phase_loadout(_project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_phase_loadout(
+            _project: &mut Project,
+            key: &ProjectKey,
+            path: &NavigationPath,
+        ) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}/loadout$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let phase_reference: String = captures
@@ -588,7 +564,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_pcb(project: &mut Project, key: &ProjectKey, path: &ProjectPath) -> Option<ProjectAction> {
+        fn handle_pcb(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let pcb_index = captures
@@ -611,7 +587,7 @@ impl Project {
         fn handle_unit_assignments(
             project: &mut Project,
             key: &ProjectKey,
-            path: &ProjectPath,
+            path: &NavigationPath,
         ) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
@@ -865,6 +841,10 @@ impl UiComponent for Project {
 
             self.toolbar.ui(ui, &mut ());
         });
+
+        //
+        // Tabs
+        //
 
         let mut tab_context = ProjectTabContext {
             state: self.project_ui_state.clone(),
@@ -1753,49 +1733,6 @@ impl UiComponent for Project {
     }
 }
 
-impl Tab for ProjectTabKind {
-    type Context = ProjectTabContext;
-
-    fn label(&self) -> WidgetText {
-        match self {
-            ProjectTabKind::Explorer(tab) => tab.label(),
-            ProjectTabKind::Overview(tab) => tab.label(),
-            ProjectTabKind::Parts(tab) => tab.label(),
-            ProjectTabKind::Placements(tab) => tab.label(),
-            ProjectTabKind::Phase(tab) => tab.label(),
-            ProjectTabKind::LoadOut(tab) => tab.label(),
-            ProjectTabKind::Pcb(tab) => tab.label(),
-            ProjectTabKind::UnitAssignments(tab) => tab.label(),
-        }
-    }
-
-    fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
-        match self {
-            ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::UnitAssignments(tab) => tab.ui(ui, tab_key, context),
-        }
-    }
-
-    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
-        match self {
-            ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::UnitAssignments(tab) => tab.on_close(tab_key, context),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct ProjectUiState {
     /// initially unknown until the project is loaded
@@ -1931,12 +1868,12 @@ pub enum ProjectUiCommand {
     RequestPcbView(PcbViewRequest),
 }
 
-fn project_path_from_view_path(view_path: &String) -> ProjectPath {
-    let project_path = ProjectPath(format!("/project{}", view_path).to_string());
+fn project_path_from_view_path(view_path: &String) -> NavigationPath {
+    let project_path = NavigationPath::new(format!("/project{}", view_path).to_string());
     project_path
 }
 
-fn view_path_from_project_path(project_path: &ProjectPath) -> Option<String> {
+fn view_path_from_project_path(project_path: &NavigationPath) -> Option<String> {
     let view_path = project_path
         .to_string()
         .split("/project")

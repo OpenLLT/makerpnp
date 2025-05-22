@@ -6,14 +6,28 @@ use egui::Ui;
 use egui_ltreeview::{NodeBuilder, TreeView, TreeViewState};
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Event, FileReference, PcbOverview, PcbSide, PcbUnitIndex, PcbView};
+use planner_app::{
+    Event, FileReference, LoadOutSource, PcbOverview, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
+    ProjectViewRequest, Reference,
+};
 use slotmap::new_key_type;
-use tracing::debug;
+use tracing::{debug, error, info, trace};
 
+use crate::pcb::configuration_tab::{
+    ConfigurationTab, ConfigurationUi, ConfigurationUiAction, ConfigurationUiCommand, ConfigurationUiContext,
+};
 use crate::pcb::core_helper::PcbCoreHelper;
+use crate::pcb::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiCommand, ExplorerUiContext};
+use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
+use crate::project::{ProjectAction, ProjectKey, ProjectUiCommand, ProjectUiState};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_util::NavigationPath;
+
+mod configuration_tab;
+mod explorer_tab;
+mod tabs;
 
 new_key_type! {
     /// A key for a pcb
@@ -34,132 +48,16 @@ pub struct Pcb {
     #[derivative(Debug = "ignore")]
     planner_core_service: PlannerCoreService,
 
+    pcb_ui_state: Value<PcbUiState>,
+
     path: Option<PathBuf>,
     modified: bool,
 
+    // FIXME actually persist this, currently it should be treated as 'persistable_state'.
     #[derivative(Debug = "ignore")]
-    tree_view_state: Value<TreeViewState<usize>>,
-
-    pcb_overview: Option<PcbOverview>,
+    pcb_tabs: Value<tabs::PcbTabs>,
 
     pub component: ComponentState<(PcbKey, PcbUiCommand)>,
-}
-
-impl Pcb {
-    fn show_pcb_tree(&self, ui: &mut Ui, key: &mut PcbKey) {
-        let mut tree_view_state = self.tree_view_state.lock().unwrap();
-
-        let (_response, actions) = TreeView::new(ui.make_persistent_id("project_explorer_tree")).show_state(
-            ui,
-            &mut tree_view_state,
-            |tree_builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
-                let designs = vec!["Design 1", "Design 2"];
-                let gerbers: HashMap<&str, Vec<(&str, Vec<PcbSide>)>> = HashMap::from_iter([
-                    ("Design 1", vec![
-                        ("top silk", vec![PcbSide::Top]),
-                        ("pcb outline", vec![PcbSide::Top, PcbSide::Bottom]),
-                        ("bottom silk", vec![PcbSide::Bottom]),
-                    ]),
-                    ("Design 2", vec![
-                        ("top silk", vec![PcbSide::Top]),
-                        ("pcb outline", vec![PcbSide::Top, PcbSide::Bottom]),
-                        ("bottom silk", vec![PcbSide::Bottom]),
-                    ]),
-                ]);
-
-                let units = 100;
-
-                let unit_map: HashMap<PcbUnitIndex, &str> =
-                    HashMap::from_iter([(0, "Design 1"), (1, "Design 1"), (4, "Design 2"), (5, "Design 2")]);
-
-                let mut node_id = 0;
-
-                //
-                // Configuration
-                //
-
-                node_id += 1;
-                tree_builder.leaf(node_id, "Configuration"); // TODO translate
-
-                //
-                // Views
-                //
-
-                node_id += 1;
-                tree_builder.node(
-                    NodeBuilder::dir(node_id)
-                        .activatable(true)
-                        .label_ui(|ui| {
-                            ui.add(egui::Label::new("PCB").selectable(false)); // TODO translate
-                        }),
-                );
-
-                node_id += 1;
-                tree_builder.leaf(node_id, "Top"); // TODO translate
-                node_id += 1;
-                tree_builder.leaf(node_id, "Bottom"); // TODO translate
-
-                tree_builder.close_dir();
-
-                //
-                // designs
-                //
-
-                node_id += 1;
-                tree_builder.node(
-                    NodeBuilder::dir(node_id)
-                        .activatable(true)
-                        .label_ui(|ui| {
-                            ui.add(egui::Label::new("Designs").selectable(false)); // TODO translate
-                        }),
-                );
-
-                for design in designs {
-                    node_id += 1;
-                    tree_builder.node(
-                        NodeBuilder::dir(node_id)
-                            .activatable(true)
-                            .label_ui(|ui| {
-                                ui.add(egui::Label::new(design.to_string()).selectable(false)); // TODO translate
-                            }),
-                    );
-
-                    tree_builder.leaf(node_id, "Top");
-                    tree_builder.leaf(node_id, "Bottom");
-
-                    tree_builder.close_dir();
-                }
-
-                tree_builder.close_dir();
-
-                //
-                // units
-                //
-                node_id += 1;
-                tree_builder.node(
-                    NodeBuilder::dir(node_id)
-                        .activatable(true)
-                        .label_ui(|ui| {
-                            ui.add(egui::Label::new("Units").selectable(false)); // TODO translate
-                        }),
-                );
-
-                for index in 0_u16..units {
-                    node_id += 1;
-
-                    let assignment = match unit_map.get(&(index as PcbUnitIndex)) {
-                        Some(name) => name,
-                        None => "Unassigned", // TODO translate
-                    };
-
-                    let label = format!("{}: {}", index + 1, assignment);
-
-                    tree_builder.leaf(node_id, label.to_string());
-                }
-                tree_builder.close_dir();
-            },
-        );
-    }
 }
 
 impl Pcb {
@@ -177,16 +75,70 @@ impl Pcb {
         debug!("Creating pcb instance from path. path: {:?}", path);
 
         let component: ComponentState<(PcbKey, PcbUiCommand)> = ComponentState::default();
+        let component_sender = component.sender.clone();
+
+        let pcb_ui_state = Value::new(PcbUiState::new(key, name, component_sender.clone()));
+
+        let pcb_tabs = Value::new(PcbTabs::default());
+        {
+            let mut pcb_tabs = pcb_tabs.lock().unwrap();
+            pcb_tabs
+                .component
+                .configure_mapper(component_sender, move |command| {
+                    trace!("pcb inner-tab mapper. command: {:?}", command);
+                    (key, PcbUiCommand::TabCommand(command))
+                });
+            pcb_tabs.add_tab(PcbTabKind::Explorer(ExplorerTab::default()));
+        }
 
         let core_service = PlannerCoreService::new();
+
         Self {
             planner_core_service: core_service,
-            tree_view_state: Default::default(),
+            pcb_ui_state,
             path,
             modified: false,
             component,
-            pcb_overview: None,
+            pcb_tabs,
         }
+    }
+
+    pub fn show_explorer(&mut self, path: PathBuf) -> Task<PcbAction> {
+        let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+        let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Explorer(_)));
+        if result.is_err() {
+            pcb_tabs.add_tab(PcbTabKind::Explorer(ExplorerTab::default()));
+        }
+
+        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+            PcbViewRequest::Overview {
+                path,
+            },
+        )))
+    }
+
+    pub fn show_configuration(&mut self, path: PathBuf) -> Task<PcbAction> {
+        let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+        let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Configuration(_)));
+        if result.is_err() {
+            pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::Configuration(ConfigurationTab::default()));
+        }
+
+        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+            PcbViewRequest::Overview {
+                path,
+            },
+        )))
+    }
+
+    fn navigate(&mut self, path: NavigationPath) -> Option<PcbAction> {
+        // if the path starts with `/pcb/` then show/hide UI elements based on the path,
+        // e.g. update a dynamic that controls a per-pcb-tab-bar dynamic selector
+        info!("pcb::navigate. path: {}", path);
+
+        // TODO
+
+        None
     }
 }
 
@@ -196,17 +148,44 @@ pub struct PcbUiState {
     name: Option<String>,
 
     key: PcbKey,
-    sender: Enqueue<(PcbKey, PcbUiCommand)>,
+    explorer_ui: ExplorerUi,
+    configuration_ui: ConfigurationUi,
 }
 
 impl PcbUiState {
     pub fn new(key: PcbKey, name: Option<String>, sender: Enqueue<(PcbKey, PcbUiCommand)>) -> Self {
-        Self {
+        let mut instance = Self {
             name,
             key,
-            sender,
-        }
+            explorer_ui: ExplorerUi::new(),
+            configuration_ui: ConfigurationUi::new(),
+        };
+
+        instance
+            .explorer_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                trace!("explorer ui mapper. command: {:?}", command);
+                (key, PcbUiCommand::ExplorerUiCommand(command))
+            });
+
+        instance
+            .configuration_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                trace!("configuration ui mapper. command: {:?}", command);
+                (key, PcbUiCommand::ConfigurationUiCommand(command))
+            });
+
+        instance
     }
+}
+
+// these should not contain state
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+enum PcbTabKind {
+    Explorer(ExplorerTab),
+    Configuration(ConfigurationTab),
 }
 
 #[derive(Debug, Clone)]
@@ -223,6 +202,10 @@ pub enum PcbUiCommand {
         pcbs_modified: bool,
     },
     Loaded,
+    ExplorerUiCommand(ExplorerUiCommand),
+    ConfigurationUiCommand(ConfigurationUiCommand),
+    TabCommand(PcbTabUiCommand),
+    RequestPcbView(PcbViewRequest),
 }
 
 pub struct PcbContext {
@@ -235,32 +218,25 @@ impl UiComponent for Pcb {
     type UiAction = PcbAction;
 
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
+        ui.ctx().style_mut(|style| {
+            // if this is not done, text in labels/checkboxes/etc wraps when using taffy
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
+
         let PcbContext {
             key,
         } = context;
 
-        egui::SidePanel::left(ui.id().with("left_panel"))
-            .resizable(true)
-            .min_width(40.0)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    self.show_pcb_tree(ui, key);
-                })
-            });
+        //
+        // Tabs
+        //
+        let mut tab_context = PcbTabContext {
+            state: self.pcb_ui_state.clone(),
+        };
 
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            if let Some(pcb_overview) = &self.pcb_overview {
-                ui.label(&pcb_overview.name);
-                // TODO expand the ui, show different content based on tree view selection
-            } else {
-                ui.spinner();
-            }
-
-            if ui.button("mark modified").clicked() {
-                self.component
-                    .send((*key, PcbUiCommand::DebugMarkModified))
-            }
-        });
+        let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+        pcb_tabs.cleanup_tabs(&mut tab_context);
+        pcb_tabs.ui(ui, &mut tab_context);
     }
 
     fn update<'context>(
@@ -279,54 +255,135 @@ impl UiComponent for Pcb {
             PcbUiCommand::Load => {
                 debug!("Loading pcb. path: {:?}", self.path);
 
-                if let Some(path) = &self.path {
-                    let pcb_file = FileReference::Absolute(path.clone());
+                // Safety: can't 'Load' without a path, do not attempt to load without a path.
+                let path = self.path.clone().unwrap();
 
-                    self.planner_core_service
-                        .update(Event::LoadPcb {
-                            pcb_file,
-                            root: None,
-                        })
-                        .when_ok(key, |_| Some(PcbUiCommand::Loaded))
-                } else {
-                    None
-                }
+                let pcb_file = FileReference::Absolute(path.clone());
+
+                self.planner_core_service
+                    .update(Event::LoadPcb {
+                        pcb_file,
+                        root: None,
+                    })
+                    .when_ok(key, |_| Some(PcbUiCommand::Loaded))
             }
             PcbUiCommand::Save => {
                 debug!("Saving pcb. path: {:?}", self.path);
                 // TODO
                 None
             }
-            PcbUiCommand::Error(_) => {
-                // TODO
+            PcbUiCommand::Error(error) => {
+                error!("PCB error. error: {:?}", error);
+                // TODO show a dialog
                 None
             }
             PcbUiCommand::PcbView(view) => {
                 match view {
                     PcbView::PcbOverview(pcb_overview) => {
                         debug!("Received pcb overview.");
-                        self.pcb_overview = Some(pcb_overview);
+
+                        let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+                        pcb_ui_state
+                            .configuration_ui
+                            .update_pcb_overview(pcb_overview.clone());
+                        pcb_ui_state
+                            .explorer_ui
+                            .update_pcb_overview(pcb_overview);
                     }
                 }
-                // TODO
                 None
             }
             PcbUiCommand::SetModifiedState {
-                ..
+                project_modified,
+                pcbs_modified,
             } => {
-                //TODO
-                None
+                // FIXME we want to know if *THIS* pcb is modified, not any pcb.
+                self.modified = pcbs_modified;
+                Some(PcbAction::SetModifiedState(pcbs_modified))
             }
             PcbUiCommand::Loaded => {
                 debug!("Loaded pcb. path: {:?}", self.path);
-                if let Some(path) = &self.path {
-                    self.planner_core_service
-                        .update(Event::RequestPcbOverviewView {
-                            path: path.clone(),
-                        })
-                        .when_ok(key, |_| None)
-                } else {
-                    None
+
+                // Safety: can't be 'Loaded' without a path.
+                let path = self.path.clone().unwrap();
+
+                match self
+                    .planner_core_service
+                    .update(Event::RequestPcbOverviewView {
+                        path: path.clone(),
+                    })
+                    .into_actions()
+                {
+                    Ok(actions) => {
+                        let mut tasks = actions
+                            .into_iter()
+                            .map(Task::done)
+                            .collect::<Vec<Task<PcbAction>>>();
+
+                        let task1 = self.show_explorer(path.clone());
+                        // TODO change this to show the PCB by default
+                        let task2 = self.show_configuration(path.clone());
+
+                        let additional_tasks = vec![task1, task2];
+                        tasks.extend(additional_tasks);
+
+                        Some(PcbAction::Task(key, Task::batch(tasks)))
+                    }
+                    Err(error_action) => Some(error_action),
+                }
+            }
+            PcbUiCommand::RequestPcbView(view_request) => {
+                let event = match view_request {
+                    PcbViewRequest::Overview {
+                        path,
+                    } => Event::RequestPcbOverviewView {
+                        path,
+                    },
+                };
+                self.planner_core_service
+                    .update(event)
+                    .when_ok(key, |_| None)
+            }
+            PcbUiCommand::TabCommand(tab_command) => {
+                let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+
+                let mut tab_context = PcbTabContext {
+                    state: self.pcb_ui_state.clone(),
+                };
+
+                let action = pcb_tabs.update(tab_command, &mut tab_context);
+                match action {
+                    None => {}
+                    Some(PcbTabAction::None) => {
+                        debug!("PcbTabAction::None");
+                    }
+                }
+                None
+            }
+            PcbUiCommand::ExplorerUiCommand(command) => {
+                let context = &mut ExplorerUiContext::default();
+                let explorer_ui_action = self
+                    .pcb_ui_state
+                    .lock()
+                    .unwrap()
+                    .explorer_ui
+                    .update(command, context);
+                match explorer_ui_action {
+                    Some(explorer_tab::ExplorerUiAction::Navigate(path)) => self.navigate(path),
+                    None => None,
+                }
+            }
+            PcbUiCommand::ConfigurationUiCommand(command) => {
+                let context = &mut ConfigurationUiContext::default();
+                let configuration_ui_action = self
+                    .pcb_ui_state
+                    .lock()
+                    .unwrap()
+                    .configuration_ui
+                    .update(command, context);
+                match configuration_ui_action {
+                    Some(ConfigurationUiAction::None) => None,
+                    None => None,
                 }
             }
         }

@@ -13,9 +13,10 @@ use planner_app::{Arg, ProjectTreeItem, ProjectTreeView};
 use util::path::clip_path;
 
 use crate::project::tabs::ProjectTabContext;
-use crate::project::{ProjectPath, project_path_from_view_path, view_path_from_project_path};
+use crate::project::{project_path_from_view_path, view_path_from_project_path};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_util::NavigationPath;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -182,7 +183,7 @@ impl ExplorerUi {
         }
     }
 
-    pub fn select_path(&mut self, project_path: &ProjectPath) {
+    pub fn select_path(&mut self, project_path: &NavigationPath) {
         // it's an error to be given a path without a corresponding tree view node that has the same path
         let path = view_path_from_project_path(project_path).unwrap();
 
@@ -220,12 +221,12 @@ impl ExplorerUi {
 
 #[derive(Debug, Clone)]
 pub enum ExplorerUiCommand {
-    Navigate(ProjectPath),
+    Navigate(NavigationPath),
 }
 
 #[derive(Debug, Clone)]
 pub enum ExplorerUiAction {
-    Navigate(ProjectPath),
+    Navigate(NavigationPath),
 }
 
 #[derive(Debug, Clone, Default)]

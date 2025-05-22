@@ -22,7 +22,6 @@ toolbar-button-open-project = Abrir proyecto
 toolbar-button-new-pcb = Nuevo PCB
 toolbar-button-open-pcb = Abrir PCB
 toolbar-button-save = Guardar
-
 toolbar-button-close-all = Cerrar todo
 
 side-bar-header = Encabezado de la barra lateral
@@ -108,6 +107,18 @@ project-explorer-node-pcbs = PCBs
 project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Procesos
 project-explorer-node-process = { $name }
+
+pcb-configuration-header = Configuración
+pcb-configuration-detail-name = Nombre: { $name }
+pcb-configuration-tab-label = Configuración
+
+pcb-explorer-node-root = { $name }
+pcb-explorer-node-configuration = Configuración
+pcb-explorer-node-pcb-view = PCB
+pcb-explorer-node-designs = Diseños
+pcb-explorer-node-units = Unidad
+pcb-explorer-node-units-assignment-assigned = { $pcb_number }: {$design_name}
+pcb-explorer-node-units-assignment-unassigned = { $pcb_number }: Sin asignar
 
 form-button-ok = Aceptar
 form-button-cancel = Cancelar
