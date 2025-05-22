@@ -33,29 +33,6 @@ pub struct ProjectTabContext {
 
 impl ProjectTabs {
     tabs_impl!(ProjectTabKind, ProjectTabContext);
-
-    pub fn add_tab_to_second_leaf_or_split(&mut self, tab_kind: ProjectTabKind) -> TabKey {
-        let mut tabs = self.tabs.lock().unwrap();
-        let tab_key = tabs.add(tab_kind);
-
-        let mut tree = self.tree.lock().unwrap();
-
-        fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
-            tree.iter_mut()
-                .filter(|node| node.is_leaf())
-                .nth(target_index)
-        }
-
-        if let Some(leaf) = get_leaf_mut(tree.main_surface_mut(), 1) {
-            leaf.append_tab(tab_key);
-        } else {
-            let [_old_node_index, _new_node_index] =
-                tree.main_surface_mut()
-                    .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
-        }
-
-        tab_key
-    }
 }
 
 #[derive(Debug, Clone)]

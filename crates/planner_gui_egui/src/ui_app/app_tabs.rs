@@ -1,12 +1,11 @@
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
-use egui_dock::{DockArea, DockState, Style};
+use egui_dock::{DockArea, DockState, Style, Tree, Node, NodeIndex, Split};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::{error, trace};
-
 use crate::config::Config;
 use crate::pcb::{Pcb, PcbKey};
 use crate::project::{Project, ProjectKey};
@@ -370,6 +369,30 @@ macro_rules! tabs_impl {
 
             let mut tree = self.tree.lock().unwrap();
             tree.retain_tabs(|tab_key| tab_keys_to_retain.contains(&tab_key));
+        }
+
+        #[allow(dead_code)]
+        pub fn add_tab_to_second_leaf_or_split(&mut self, tab_kind: $tab_kind) -> TabKey {
+            let mut tabs = self.tabs.lock().unwrap();
+            let tab_key = tabs.add(tab_kind);
+
+            let mut tree = self.tree.lock().unwrap();
+
+            fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
+                tree.iter_mut()
+                    .filter(|node| node.is_leaf())
+                    .nth(target_index)
+            }
+
+            if let Some(leaf) = get_leaf_mut(tree.main_surface_mut(), 1) {
+                leaf.append_tab(tab_key);
+            } else {
+                let [_old_node_index, _new_node_index] =
+                    tree.main_surface_mut()
+                        .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
+            }
+
+            tab_key
         }
     };
 }
