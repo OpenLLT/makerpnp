@@ -176,17 +176,14 @@ impl Model {
     }
 
     /// Load a PCB, no project required.
-    fn load_pcb(&mut self, pcb_file: FileReference, root: &Option<PathBuf>) -> Result<(), AppError> {
-        let path = pcb_file
-            .try_build_path(root.as_ref())
-            .map_err(AppError::FileReferenceError)?;
+    fn load_pcb(&mut self, path: &PathBuf) -> Result<(), AppError> {
+        let pcb = file::load::<Pcb>(path).map_err(AppError::IoError)?;
 
-        let pcb = file::load::<Pcb>(&path).map_err(AppError::IoError)?;
-
-        self.model_pcbs.insert(path, ModelPcb {
-            pcb,
-            modified: false,
-        });
+        self.model_pcbs
+            .insert(path.clone(), ModelPcb {
+                pcb,
+                modified: false,
+            });
 
         Ok(())
     }
@@ -199,7 +196,7 @@ impl Model {
             .get_mut(path)
             .ok_or(AppError::OperationError(anyhow!("PCB not loaded. path: {:?}", path)))?;
 
-        file::save::<Pcb>(&model_pcb.pcb, &path).map_err(AppError::IoError)?;
+        file::save::<Pcb>(&model_pcb.pcb, path).map_err(AppError::IoError)?;
 
         model_pcb.modified = false;
 
@@ -557,10 +554,10 @@ pub enum Event {
     // PCB operations
     //
     LoadPcb {
-        pcb_file: FileReference,
-        /// The directory, for relative paths. e.g. the project's directory
-        /// if this is None, only Absolute paths can be used.
-        root: Option<PathBuf>,
+        path: PathBuf,
+    },
+    SavePcb {
+        path: PathBuf,
     },
 
     AddGerberFiles {
@@ -689,13 +686,22 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::LoadPcb {
-                pcb_file,
-                root,
+                path,
             } => Box::new(move |model: &mut Model| {
                 // Note: doesn't require a project.
-                info!("Load pcb. pcb_file: {:?}", &pcb_file);
+                info!("Load pcb. path: {:?}", &path);
 
-                model.load_pcb(pcb_file, &root)?;
+                model.load_pcb(&path)?;
+
+                Ok(render::render())
+            }),
+            Event::SavePcb {
+                path,
+            } => Box::new(move |model: &mut Model| {
+                // Note: doesn't require a project.
+                info!("Save pcb. path: {:?}", &path);
+
+                model.save_pcb(&path)?;
 
                 Ok(render::render())
             }),
