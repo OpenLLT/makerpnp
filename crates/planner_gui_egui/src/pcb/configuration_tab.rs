@@ -297,14 +297,17 @@ impl ConfigurationUi {
                                         let mut pcb_unit_start = fields.pcb_unit_range.start().clone();
                                         let mut pcb_unit_end = fields.pcb_unit_range.end().clone();
                                         let range = 1..=fields.units;
+                                        // FIXME due to egui/double slider bugs, a range of x..=x causes a panic, so disable the range controls in this case
+                                        let is_range_valid = range.end() > range.start();
+                                        //trace!("pcb_unit_start: {}, pcb_unit_end: {}, range: {:?}", pcb_unit_start, pcb_unit_start, range);
 
-                                        debug!("pcb_unit_start: {}, pcb_unit_end: {}, range: {:?}", pcb_unit_start, pcb_unit_start, range);
                                         tui.style(Style {
                                             display: Display::Flex,
                                             align_content: Some(AlignContent::Stretch),
                                             flex_grow: 1.0,
                                             ..container_style()
                                         })
+                                            .enabled_ui(is_range_valid)
                                             .add(|tui| {
                                                 tui.style(Style {
                                                     flex_grow: 1.0,
@@ -791,13 +794,15 @@ impl DesignAssignmentsFields {
     }
 
     fn update_units(&mut self, units: u16) {
-        let old_range = 1..=self.units;
-        let new_range = 1..=units;
+        let old_limits = 1..=self.units;
+        let new_limits = 1..=units;
 
-        self.pcb_unit_range = clamp_inclusive_range(&old_range, &new_range);
+        let old_range = self.pcb_unit_range.clone();
+
+        self.pcb_unit_range = clamp_inclusive_range(&old_limits, &new_limits, &self.pcb_unit_range);
         debug!(
-            "clamped pcb unit range. old_range: {:?}, new_range: {:?}, result: {:?}",
-            old_range, new_range, self.pcb_unit_range
+            "clamped pcb unit range. old_limits: {:?}, new_limits: {:?}, old_range: {:?}, result: {:?}",
+            old_limits, new_limits, old_range, self.pcb_unit_range
         );
 
         self.units = units;
