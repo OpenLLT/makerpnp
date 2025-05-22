@@ -382,8 +382,72 @@ impl UiComponent for Pcb {
                     .configuration_ui
                     .update(command, context);
                 match configuration_ui_action {
-                    Some(ConfigurationUiAction::None) => None,
                     None => None,
+                    Some(ConfigurationUiAction::None) => None,
+                    Some(ConfigurationUiAction::AddGerberFiles {
+                        path,
+                        design,
+                        files,
+                    }) => {
+                        match self
+                            .planner_core_service
+                            .update(Event::AddGerberFiles {
+                                path: path.clone(),
+                                design,
+                                files,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<_>>();
+
+                                let additional_tasks = vec![Task::done(PcbAction::UiCommand(
+                                    PcbUiCommand::RequestPcbView(PcbViewRequest::Overview {
+                                        path,
+                                    }),
+                                ))];
+                                tasks.extend(additional_tasks);
+
+                                Some(PcbAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
+                    Some(ConfigurationUiAction::RemoveGerberFiles {
+                        path,
+                        design,
+                        files,
+                    }) => {
+                        match self
+                            .planner_core_service
+                            .update(Event::RemoveGerberFiles {
+                                path: path.clone(),
+                                design,
+                                files,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<_>>();
+
+                                let additional_tasks = vec![Task::done(PcbAction::UiCommand(
+                                    PcbUiCommand::RequestPcbView(PcbViewRequest::Overview {
+                                        path,
+                                    }),
+                                ))];
+                                tasks.extend(additional_tasks);
+
+                                Some(PcbAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
                 }
             }
         }
