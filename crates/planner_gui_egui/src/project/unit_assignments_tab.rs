@@ -659,7 +659,7 @@ impl UnitAssignmentsUi {
                                                             ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
                                                         });
                                                         header.col(|ui| {
-                                                            ui.strong(tr!("table-unit-assignments-column-pcb-design"));
+                                                            ui.strong(tr!("table-unit-assignments-column-design"));
                                                         });
                                                         header.col(|ui| {
                                                             ui.strong(tr!("table-unit-assignments-column-variant"));
