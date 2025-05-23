@@ -18,6 +18,7 @@ use planner_app::{
     DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, ProjectPcbOverview, VariantName,
 };
 use tracing::debug;
+use util::range_utils::RangeIntoUsize;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
@@ -535,9 +536,12 @@ impl UnitAssignmentsUi {
 
                                     if fields.pcb_unit_range != pcb_unit_range {
                                         sender
-                                            .send(UnitAssignmentsUiCommand::PcbUnitRangeChanged(pcb_unit_range))
+                                            .send(UnitAssignmentsUiCommand::PcbUnitRangeChanged(pcb_unit_range.clone()))
                                             .expect("sent")
                                     }
+
+                                    let assignment_range_1_based = pcb_unit_range.to_usize_range();
+                                    let assignment_range = (assignment_range_1_based.start() - 1)..=(assignment_range_1_based.end() - 1);
 
                                     let is_design_selected = fields.design_variant_selected_index.is_some();
 
@@ -577,13 +581,28 @@ impl UnitAssignmentsUi {
                                             ..default_style()
                                         })
                                         .enabled_ui(is_design_selected)
+                                        .button(|tui| tui.label(tr!("form-common-button-unassign-from-range")))
+                                        .clicked()
+                                    {
+                                        self.component
+                                            .send(UnitAssignmentsUiCommand::UnassignFromRange(
+                                                fields.design_variant_selected_index.unwrap(),
+                                            ));
+                                    }
+
+                                    let have_assigned_items_in_range = fields.variant_map[assignment_range].iter().any(|(_, assignment)| assignment.is_some());
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 0.0,
+                                            ..default_style()
+                                        })
+                                        .enabled_ui(have_assigned_items_in_range)
                                         .button(|tui| tui.label(tr!("form-common-button-unassign-range")))
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignRange(
-                                                fields.design_variant_selected_index.unwrap(),
-                                            ));
+                                            .send(UnitAssignmentsUiCommand::UnassignRange);
                                     }
                                 }
                             },
@@ -877,7 +896,7 @@ pub enum UnitAssignmentsUiCommand {
 
     /// apply the selected design variant, specified by the index, and the pcb unit range to the variant map
     ApplyRangeClicked(usize),
-    UnassignRange(usize),
+    UnassignFromRange(usize),
     ApplyAllClicked(usize),
 
     UnassignAllClicked,
@@ -887,6 +906,7 @@ pub enum UnitAssignmentsUiCommand {
     DesignVariantSelectionChanged(Option<usize>),
 
     RequestPcbOverview(PathBuf),
+    UnassignRange,
 }
 
 #[derive(Debug, Clone)]
@@ -1010,8 +1030,7 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-
-            UnitAssignmentsUiCommand::UnassignRange(design_variant_index) => {
+            UnitAssignmentsUiCommand::UnassignFromRange(design_variant_index) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
@@ -1037,6 +1056,20 @@ impl UiComponent for UnitAssignmentsUi {
                 } else {
                     None
                 }
+            }
+            UnitAssignmentsUiCommand::UnassignRange => {
+                let mut fields = self.fields.lock().unwrap();
+                let pcb_unit_range = fields.pcb_unit_range.clone();
+
+                for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
+                    .variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                {
+                    *assigned_variant_name = None;
+                }
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsUiCommand::ApplyAllClicked(design_variant_index) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
