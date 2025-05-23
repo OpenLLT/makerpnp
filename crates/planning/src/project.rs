@@ -495,6 +495,9 @@ pub enum PcbOperationError {
     PcbNotLoaded,
     #[error("PCB error. cause: {0}")]
     PcbError(PcbError),
+
+    #[error("Invalid design set. Entries must be unique.")]
+    InvalidDesignSet,
 }
 
 pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {

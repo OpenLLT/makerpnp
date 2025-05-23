@@ -70,6 +70,19 @@ pub struct Pcb {
 pub enum PcbError {
     #[error("Unknown design. name: {0:?}")]
     UnknownDesign(DesignName),
+
+    #[error("Unit index {index} is out of range [{min}..{max}] (inclusive)")]
+    UnitIndexOutOfRange {
+        index: PcbUnitIndex,
+        min: PcbUnitIndex,
+        max: PcbUnitIndex,
+    },
+    #[error("Design index {index} is out of range [{min}..{max}] (inclusive)")]
+    DesignIndexOutOfRange {
+        index: DesignIndex,
+        min: DesignIndex,
+        max: DesignIndex,
+    },
 }
 
 impl PartialEq for Pcb {

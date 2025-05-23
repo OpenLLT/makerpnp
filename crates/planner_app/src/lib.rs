@@ -8,12 +8,13 @@ use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
+use indexmap::IndexSet;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
 pub use planning::gerber::GerberPurpose;
-use planning::pcb::Pcb;
+use planning::pcb::{Pcb, PcbError};
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementSortingItem;
@@ -564,7 +565,12 @@ pub enum Event {
     SavePcb {
         path: PathBuf,
     },
-
+    ApplyPcbUnitConfiguration {
+        path: PathBuf,
+        units: u16,
+        designs: Vec<DesignName>,
+        unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
+    },
     AddGerberFiles {
         path: PathBuf,
         design: DesignName,
@@ -708,6 +714,67 @@ impl Planner {
                     });
 
                 model.save_pcb(&path)?;
+
+                Ok(render::render())
+            }),
+            Event::ApplyPcbUnitConfiguration {
+                path: pcb_path,
+                units,
+                designs,
+                unit_map,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+
+                info!(
+                    "Applying PCB unit configuration. pcb_path: {:?}, units: {:?}, designs: {:?}, unit_map: {:?}",
+                    pcb_path, units, designs, unit_map
+                );
+
+                // FUTURE consider wrapping all event args in structures that can be validated using a validation framework to have consistent error handling instead of this type of thing...
+                // FUTURE and consider adding validation to everything that's deserialized too...
+
+                let designs_length = designs.len();
+                let design_index_max = designs_length - 1;
+                let design_name_set: IndexSet<DesignName> = IndexSet::from_iter(designs);
+                if design_name_set.len() != designs_length {
+                    return Err(AppError::PcbOperationError(PcbOperationError::InvalidDesignSet));
+                }
+
+                for (&unit_index, &design_index) in unit_map.iter() {
+                    if unit_index >= units {
+                        return Err(AppError::PcbOperationError(PcbOperationError::PcbError(
+                            PcbError::UnitIndexOutOfRange {
+                                index: unit_index,
+                                min: 0,
+                                max: units - 1,
+                            },
+                        )));
+                    }
+                    if design_index > design_index_max {
+                        return Err(AppError::PcbOperationError(PcbOperationError::PcbError(
+                            PcbError::DesignIndexOutOfRange {
+                                index: design_index,
+                                min: 0,
+                                max: design_index_max,
+                            },
+                        )));
+                    }
+                }
+
+                pcb.units = units;
+                pcb.unit_map = unit_map;
+                pcb.design_names = design_name_set;
+
+                *modified = true;
+
+                // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
 
                 Ok(render::render())
             }),
@@ -1455,7 +1522,7 @@ impl Planner {
                             .unit_assignments
                             .get(pcb_unit_index)
                         {
-                            // it's invalid for these to be mismatched
+                            // it's invalid for these to be mismatched; if this occurs, then the pcb variant map is out of sync with the pcb unit assignments.
                             debug_assert!(_design_index == design_index);
                             args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
                         }

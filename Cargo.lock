@@ -3939,6 +3939,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "crux_core",
+ "indexmap 2.9.0",
  "petgraph",
  "planning",
  "pnp",
