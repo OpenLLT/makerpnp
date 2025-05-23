@@ -119,6 +119,7 @@ pcb-configuration-header = Configuración
 pcb-configuration-detail-name = Nombre: { $name }
 pcb-configuration-tab-label = Configuración
 
+pcb-explorer-tab-label = Explorador de PCB
 pcb-explorer-node-root = { $name }
 pcb-explorer-node-configuration = Configuración
 pcb-explorer-node-pcb-view = PCB

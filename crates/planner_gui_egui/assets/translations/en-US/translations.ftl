@@ -115,10 +115,11 @@ form-new-pcb-input-name-placeholder = (e.g. the PCB factory's order reference nu
 form-new-pcb-input-directory = Directory
 form-new-pcb-input-units = Units
 
+pcb-configuration-tab-label = Configuration
 pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
-pcb-configuration-tab-label = Configuration
 
+pcb-explorer-tab-label = PCB Explorer
 pcb-explorer-node-root = { $name }
 pcb-explorer-node-configuration = Configuration
 pcb-explorer-node-pcb-view = PCB
