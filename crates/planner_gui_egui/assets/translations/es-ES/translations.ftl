@@ -10,7 +10,6 @@ menu-top-level-file = Archivo
 menu-item-quit = Salir
 
 modal-errors-title = Errores - { $file }
-modal-add-pcb-title = Añadir PCB - { $file }
 modal-add-phase-title = Añadir fase - { $file }
 modal-create-unit-assignment-title = Crear asignación de unidad - { $file }
 modal-phase-placement-orderings-title = Ordenación de la colocación de fases - { $phase }
@@ -141,19 +140,7 @@ form-configure-pcb-group-unit-map = Mapa de unidades
 form-configure-pcb-input-design-name = Nombre del diseño
 form-configure-pcb-input-design-name-placeholder = (p.ej. 'mi_eda_proyecto', para asignaciones de unidades)
 form-configure-pcb-input-pcb-unit-range = Rango de unidades
-
 form-configure-pcb-designs-button-gerbers = Gerbers...
-
-form-add-pcb-input-name = Nombre PCB
-form-add-pcb-input-name-placeholder = (por ejemplo, el número de referencia del pedido de la fábrica de PCB)
-form-add-pcb-input-units = Unidades
-form-add-pcb-input-design-name = Nombre del diseño
-form-add-pcb-input-design-name-placeholder = (p.ej. 'mi_eda_proyecto', para asignaciones de unidades)
-form-add-pcb-unit-map = Mapa de unidades
-form-add-pcb-assign-selection = Asignar a selección
-form-add-pcb-assign-all = Asignar todo
-form-add-pcb-unassign-selection = Desasignar selección
-form-add-pcb-unassign-all = Desasignar todo
 
 form-create-unit-assignment-group-variant-map = Mapa de variantes
 form-create-unit-assignment-input-design-name = Nombre del diseño
