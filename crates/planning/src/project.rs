@@ -363,7 +363,12 @@ impl ProjectPcb {
             });
         }
 
-        let design_index: DesignIndex = *pcb.unit_map.get(&unit).unwrap();
+        let design_index: DesignIndex = *pcb
+            .unit_map
+            .get(&unit)
+            .ok_or(ProjectPcbError::UnitNotAssignedToADesign {
+                unit,
+            })?;
 
         match self.unit_assignments.entry(unit) {
             Entry::Vacant(entry) => {
@@ -398,6 +403,8 @@ pub enum ProjectPcbError {
 
     #[error("Project PCB not loaded")]
     NotLoaded,
+    #[error("Unit {unit} has not been assigned to a design.")]
+    UnitNotAssignedToADesign { unit: u16 },
 }
 
 #[derive(Error, Debug)]
