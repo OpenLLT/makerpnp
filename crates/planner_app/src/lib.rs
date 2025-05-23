@@ -42,7 +42,7 @@ use serde_with::serde_as;
 pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
 use crate::effects::project_view_renderer::ProjectViewRendererOperation;
@@ -1504,7 +1504,7 @@ impl Planner {
                         .tree
                         .add_edge(pcb_node, unit_assignments_node, ());
 
-                    for (pcb_unit_index, design_index) in pcb.unit_map.iter() {
+                    for (map_index, (pcb_unit_index, design_index)) in pcb.unit_map.iter().enumerate() {
                         let mut object_path = ObjectPath::default();
                         object_path.set_pcb_instance((pcb_index + 1) as u16);
                         object_path.set_pcb_unit(pcb_unit_index + 1);
@@ -1518,13 +1518,22 @@ impl Planner {
                             .unwrap();
                         args.insert("design_name".to_string(), Arg::String(design_name.to_string()));
 
-                        if let Some((_design_index, variant_name)) = project_pcb
+                        if let Some((assignment_design_index, variant_name)) = project_pcb
                             .unit_assignments
                             .get(pcb_unit_index)
                         {
-                            // it's invalid for these to be mismatched; if this occurs, then the pcb variant map is out of sync with the pcb unit assignments.
-                            debug_assert!(_design_index == design_index);
-                            args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
+                            let design_changed = assignment_design_index != design_index;
+                            if design_changed {
+                                // It's invalid for these to be mismatched; if this occurs, then the pcb variant map is
+                                // out of sync with the pcb unit assignments and needs to be re-synced; since that
+                                // should happen before this code, ignore this `unit_map` entry.
+                                error!("PCB unit map is out of sync with pcb unit assignments. map_index: {}, unit: {}, assignment_design_index: {}, design_index: {}",
+                                    map_index, pcb_unit_index, assignment_design_index, design_index
+                                );
+                                continue;
+                            } else {
+                                args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
+                            }
                         }
 
                         let unit_assignment_node = project_tree
