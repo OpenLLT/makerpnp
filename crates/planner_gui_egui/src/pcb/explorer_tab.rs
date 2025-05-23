@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
-use egui_ltreeview::{NodeBuilder, TreeView, TreeViewState};
+use egui_ltreeview::{Action, NodeBuilder, TreeView, TreeViewState};
 use egui_mobius::types::Value;
-use planner_app::{PcbOverview, PcbSide, PcbUnitIndex};
+use planner_app::{PcbOverview, PcbUnitIndex};
+use tracing::debug;
 
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
@@ -47,24 +46,6 @@ impl ExplorerUi {
             ui,
             &mut tree_view_state,
             |tree_builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
-                let designs = vec!["Design 1", "Design 2"];
-                let gerbers: HashMap<&str, Vec<(&str, Vec<PcbSide>)>> = HashMap::from_iter([
-                    ("Design 1", vec![
-                        ("top silk", vec![PcbSide::Top]),
-                        ("pcb outline", vec![PcbSide::Top, PcbSide::Bottom]),
-                        ("bottom silk", vec![PcbSide::Bottom]),
-                    ]),
-                    ("Design 2", vec![
-                        ("top silk", vec![PcbSide::Top]),
-                        ("pcb outline", vec![PcbSide::Top, PcbSide::Bottom]),
-                        ("bottom silk", vec![PcbSide::Bottom]),
-                    ]),
-                ]);
-
-                let units = 100;
-
-                let unit_map: HashMap<PcbUnitIndex, &str> =
-                    HashMap::from_iter([(0, "Design 1"), (1, "Design 1"), (4, "Design 2"), (5, "Design 2")]);
 
                 let mut node_id = 0;
                 tree_builder.node(
@@ -116,7 +97,7 @@ impl ExplorerUi {
                         }),
                 );
 
-                for design in designs {
+                for design in &pcb_overview.designs {
                     node_id += 1;
                     tree_builder.node(
                         NodeBuilder::dir(node_id)
@@ -149,13 +130,16 @@ impl ExplorerUi {
                         }),
                 );
 
-                for index in 0_u16..units {
+                for index in 0_u16..pcb_overview.units {
                     node_id += 1;
 
                     let pcb_number = index + 1;
-                    let label = unit_map
+                    let label = pcb_overview.unit_map
                         .get(&(index as PcbUnitIndex))
-                        .map(|name| tr!("pcb-explorer-node-units-assignment-assigned", { pcb_number: pcb_number, design_name: name.to_string()}))
+                        .map(|design_index| {
+                            let name = &pcb_overview.designs[*design_index];
+                            tr!("pcb-explorer-node-units-assignment-assigned", { pcb_number: pcb_number, design_name: name.to_string()})
+                        })
                         .unwrap_or_else(|| tr!("pcb-explorer-node-units-assignment-unassigned", {pcb_number: pcb_number}).to_string());
 
                     tree_builder.leaf(node_id, label.to_string());
@@ -168,10 +152,34 @@ impl ExplorerUi {
 
             },
         );
+
+        for action in actions {
+            match action {
+                Action::SetSelected(selection) => {
+                    debug!("action, set-selected. selection: {:?}", selection);
+
+                    // TODO handle selection
+                }
+                Action::Move(dd) => {
+                    unreachable!();
+                }
+                Action::Drag(dd) => {
+                    unreachable!()
+                }
+                Action::Activate(activation) => {
+                    debug!(
+                        "action, activate. selection: {:?}, modifiers: {:?}",
+                        activation.selected, activation.modifiers
+                    );
+
+                    // TODO handle navigation
+                }
+            }
+        }
     }
 
     pub fn select_path(&mut self, navigation_path: &NavigationPath) {
-        // TODO
+        // TODO navigate to path
     }
 }
 
