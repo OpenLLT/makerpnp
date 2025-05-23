@@ -1,4 +1,5 @@
 use std::cmp::{max, min};
+use std::convert::TryInto;
 use std::ops::RangeInclusive;
 
 pub fn clamp_inclusive_range<T>(
@@ -35,7 +36,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+mod clamp_range_tests {
     use rstest::rstest;
 
     use super::*;
@@ -63,5 +64,85 @@ mod tests {
             "clamp({}: {:?}, {:?}) = {:?}, expected_range {:?}",
             scenario, old_limits, new_limits, result, expected_result
         );
+    }
+}
+
+/// Extension trait for converting `RangeInclusive<T>` into `RangeInclusive<usize>`
+/// for types that safely implement `Into<usize>`, like `u8` or `u16`.
+pub trait RangeIntoUsize {
+    /// Converts a `RangeInclusive<T>` into `RangeInclusive<usize>`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `T` does not implement `Into<usize>` safely or if the values cannot be represented as `usize`.
+    fn to_usize_range(&self) -> RangeInclusive<usize>;
+}
+
+impl<T> RangeIntoUsize for RangeInclusive<T>
+where
+    T: Clone + Into<usize>,
+{
+    fn to_usize_range(&self) -> RangeInclusive<usize> {
+        self.start().clone().into()..=self.end().clone().into()
+    }
+}
+
+/// Extension trait for converting `RangeInclusive<T>` into `RangeInclusive<usize>`
+/// fallibly, using `TryInto<usize>`.
+pub trait RangeTryIntoUsize {
+    /// Attempts to convert a `RangeInclusive<T>` into `RangeInclusive<usize>`.
+    ///
+    /// Returns `None` if either endpoint cannot be converted into `usize`.
+    fn try_to_usize_range(&self) -> Option<RangeInclusive<usize>>;
+}
+
+impl<T> RangeTryIntoUsize for RangeInclusive<T>
+where
+    T: Clone + TryInto<usize>,
+{
+    fn try_to_usize_range(&self) -> Option<RangeInclusive<usize>> {
+        let start = self.start().clone().try_into().ok()?;
+        let end = self.end().clone().try_into().ok()?;
+        Some(start..=end)
+    }
+}
+
+#[cfg(test)]
+mod range_into_usize {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(0u8..=5, 0..=5)]
+    #[case(1u16..=3, 1..=3)]
+    fn test_range_into_usize(
+        #[case] input: RangeInclusive<impl Clone + Into<usize>>,
+        #[case] expected: RangeInclusive<usize>,
+    ) {
+        assert_eq!(input.to_usize_range(), expected);
+    }
+}
+
+#[cfg(test)]
+mod range_try_into_usize {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(0u8..=5, Some(0..=5))]
+    #[case(2u16..=4, Some(2..=4))]
+    #[case(10u32..=15, Some(10..=15))]
+    #[case(0i8..=3, Some(0..=3))]
+    #[case(1i16..=5, Some(1..=5))]
+    #[case(7i32..=9, Some(7..=9))]
+    #[case(-2i8..=3, None)]
+    #[case(-10i32..=1, None)]
+    fn test_range_try_into_usize<T>(#[case] input: RangeInclusive<T>, #[case] expected: Option<RangeInclusive<usize>>)
+    where
+        T: Clone + TryInto<usize>,
+    {
+        assert_eq!(input.try_to_usize_range(), expected);
     }
 }
