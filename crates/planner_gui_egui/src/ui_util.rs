@@ -17,7 +17,7 @@ pub fn green_orange_red_grey_from_style(style: &Style) -> (Color32, Color32, Col
     (green, Color32::ORANGE, Color32::RED, Color32::LIGHT_GRAY)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct NavigationPath(String);
 
 impl NavigationPath {
@@ -43,5 +43,11 @@ impl Display for NavigationPath {
 impl From<&str> for NavigationPath {
     fn from(value: &str) -> Self {
         Self(value.to_string())
+    }
+}
+
+impl Default for NavigationPath {
+    fn default() -> Self {
+        Self::new("/".to_string())
     }
 }

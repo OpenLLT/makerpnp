@@ -172,7 +172,15 @@ impl ExplorerUi {
                         activation.selected, activation.modifiers
                     );
 
-                    // TODO handle navigation
+                    for node_id in activation.selected {
+                        let navigation_path = match node_id {
+                            0 => NavigationPath::new("/pcb/".to_string()),
+                            _ => NavigationPath::new("/pcb/designs/0".to_string()),
+                        };
+
+                        self.component
+                            .send(ExplorerUiCommand::Navigate(navigation_path));
+                    }
                 }
             }
         }
@@ -180,6 +188,10 @@ impl ExplorerUi {
 
     pub fn select_path(&mut self, navigation_path: &NavigationPath) {
         // TODO navigate to path
+    }
+
+    fn show_gerber_viewer(&self, navigation_path: String) {
+        todo!()
     }
 }
 

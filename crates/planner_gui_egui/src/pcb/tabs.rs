@@ -83,6 +83,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.label(),
             PcbTabKind::Configuration(tab) => tab.label(),
+            PcbTabKind::GerberViewer(tab) => tab.label(),
         }
     }
 
@@ -90,6 +91,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
             PcbTabKind::Configuration(tab) => tab.ui(ui, tab_key, context),
+            PcbTabKind::GerberViewer(tab) => tab.ui(ui, tab_key, context),
         }
     }
 
@@ -97,6 +99,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             PcbTabKind::Configuration(tab) => tab.on_close(tab_key, context),
+            PcbTabKind::GerberViewer(tab) => tab.on_close(tab_key, context),
         }
     }
 }
