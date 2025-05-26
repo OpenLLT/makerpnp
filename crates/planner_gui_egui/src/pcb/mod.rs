@@ -143,7 +143,7 @@ impl Pcb {
             .entry(navigation_path.clone())
             .or_insert_with(|| {
                 debug!("ensuring gerber_viewer ui. phase: {:?}", navigation_path);
-                let mut gerber_viewer_ui = GerberViewerUi::new();
+                let mut gerber_viewer_ui = GerberViewerUi::new(navigation_path.clone());
                 gerber_viewer_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -167,7 +167,7 @@ impl Pcb {
             self.ensure_gerber_viewer(*key, &navigation_path);
             pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(navigation_path)));
         }
-        Task::none()
+        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(PcbViewRequest::Overview { path: self.path.clone() })))
     }
 
     fn navigate(&mut self, key: &PcbKey, navigation_path: NavigationPath) -> Option<PcbAction> {
@@ -411,6 +411,11 @@ impl UiComponent for Pcb {
                         debug!("Received pcb overview.");
 
                         let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+
+                        for gerber_viewer_ui in pcb_ui_state.gerber_viewer_ui.values_mut() {
+                            gerber_viewer_ui.update_pcb_overview(pcb_overview.clone());
+                        }
+
                         pcb_ui_state
                             .configuration_ui
                             .update_pcb_overview(pcb_overview.clone());

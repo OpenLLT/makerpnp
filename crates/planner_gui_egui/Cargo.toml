@@ -55,8 +55,8 @@ regex = { workspace = true }
 # form validation
 validator = { workspace = true }
 
-# gerber rendering, types and parser
-gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "385b2aa80d1223e4cf3de8759fb438ffdc22dfd0" }
+# Gerber rendering, types and parser
+gerber_viewer = { workspace = true }
 
 # other
 slotmap = { workspace = true, features = ["serde"] }
