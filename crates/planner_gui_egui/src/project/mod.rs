@@ -821,6 +821,7 @@ impl UiComponent for Project {
     type UiCommand = (ProjectKey, ProjectUiCommand);
     type UiAction = ProjectAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let ProjectContext {
             key,
@@ -880,6 +881,7 @@ impl UiComponent for Project {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

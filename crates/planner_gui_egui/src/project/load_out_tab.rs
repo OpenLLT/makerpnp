@@ -95,6 +95,7 @@ impl UiComponent for LoadOutUi {
     type UiCommand = LoadOutUiCommand;
     type UiAction = LoadOutUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-load-out-header"));
         let mut load_out_table = self.load_out_table.lock().unwrap();
@@ -121,6 +122,7 @@ impl UiComponent for LoadOutUi {
         ui.add(table_renderer);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

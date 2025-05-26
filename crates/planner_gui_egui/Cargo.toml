@@ -3,6 +3,12 @@ name = "planner_gui_egui"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+profile-with-puffin = [
+    "profiling/profile-with-puffin",
+    "dep:puffin_http",
+]
+
 [dependencies]
 planner_app = { path = "../planner_app", features = ["markdown"] }
 
@@ -51,6 +57,10 @@ fluent-bundle = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 tracing = { workspace = true }
 regex = { workspace = true }
+
+# profiling
+profiling = { workspace = true}
+puffin_http = { workspace = true, optional = true}
 
 # form validation
 validator = { workspace = true }

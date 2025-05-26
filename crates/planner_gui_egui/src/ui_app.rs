@@ -586,8 +586,10 @@ impl eframe::App for UiApp {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
 
+    #[profiling::function]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            profiling::scope!("ui::top_panel");
             // The top panel is often a good place for a menu bar:
 
             egui::menu::bar(ui, |ui| {
@@ -712,6 +714,7 @@ impl eframe::App for UiApp {
 
         // in a block to limit the scope of the `ui_state` borrow/guard
         {
+            profiling::scope!("ui::central_panel");
             // block required limit the scope of the `app_state` guard
             let (projects, pcbs) = {
                 let app_state = self.app_state();
@@ -742,6 +745,7 @@ impl eframe::App for UiApp {
         let mut app_state = self.app_state();
 
         if let Some((_reason, picker, command_fn)) = app_state.file_picker.as_mut() {
+            profiling::scope!("ui::file_picker");
             // FIXME this `update` method does not get called immediately after picking a file, instead update gets
             //       called when the user moves the mouse or interacts with the window again.
             match picker.picked() {

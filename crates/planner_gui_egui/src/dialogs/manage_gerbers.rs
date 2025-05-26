@@ -61,6 +61,7 @@ impl UiComponent for ManageGerbersModal {
     type UiCommand = ManagerGerbersModalUiCommand;
     type UiAction = ManagerGerberModalAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut egui::Ui, _context: &mut Self::UiContext<'context>) {
         if let Ok(picked_files) = self
             .file_picker
@@ -199,6 +200,7 @@ impl UiComponent for ManageGerbersModal {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

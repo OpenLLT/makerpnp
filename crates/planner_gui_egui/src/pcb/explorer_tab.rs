@@ -213,6 +213,7 @@ impl UiComponent for ExplorerUi {
     type UiCommand = ExplorerUiCommand;
     type UiAction = ExplorerUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         if self.pcb_overview.is_some() {
             egui::ScrollArea::vertical().show(ui, |ui| {
@@ -225,6 +226,7 @@ impl UiComponent for ExplorerUi {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

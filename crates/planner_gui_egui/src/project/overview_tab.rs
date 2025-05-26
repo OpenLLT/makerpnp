@@ -44,6 +44,7 @@ impl UiComponent for OverviewUi {
     type UiCommand = OverviewUiCommand;
     type UiAction = OverviewUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-overview-header"));
         if let Some(overview) = &self.overview {
@@ -51,6 +52,7 @@ impl UiComponent for OverviewUi {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

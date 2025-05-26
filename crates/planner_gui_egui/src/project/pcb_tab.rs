@@ -74,6 +74,7 @@ impl UiComponent for PcbUi {
     type UiCommand = PcbUiCommand;
     type UiAction = PcbUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-pcb-header"));
         let (Some(project_pcb_overview), Some(pcb_overview)) = (&self.project_pcb_overview, &self.pcb_overview) else {
@@ -146,6 +147,7 @@ impl UiComponent for PcbUi {
             });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

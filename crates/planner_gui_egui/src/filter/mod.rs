@@ -196,6 +196,7 @@ impl UiComponent for Filter {
     type UiCommand = FilterUiCommand;
     type UiAction = FilterUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.horizontal(|ui| {
             let mut expression = self.expression.clone();
@@ -246,6 +247,7 @@ impl UiComponent for Filter {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

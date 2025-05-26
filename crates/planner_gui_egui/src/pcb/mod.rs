@@ -167,7 +167,11 @@ impl Pcb {
             self.ensure_gerber_viewer(*key, &navigation_path);
             pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(navigation_path)));
         }
-        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(PcbViewRequest::Overview { path: self.path.clone() })))
+        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+            PcbViewRequest::Overview {
+                path: self.path.clone(),
+            },
+        )))
     }
 
     fn navigate(&mut self, key: &PcbKey, navigation_path: NavigationPath) -> Option<PcbAction> {
@@ -305,6 +309,7 @@ impl UiComponent for Pcb {
     type UiCommand = (PcbKey, PcbUiCommand);
     type UiAction = PcbAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         ui.ctx().style_mut(|style| {
             // if this is not done, text in labels/checkboxes/etc wraps when using taffy
@@ -327,6 +332,7 @@ impl UiComponent for Pcb {
         pcb_tabs.ui(ui, &mut tab_context);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,
@@ -412,7 +418,10 @@ impl UiComponent for Pcb {
 
                         let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
 
-                        for gerber_viewer_ui in pcb_ui_state.gerber_viewer_ui.values_mut() {
+                        for gerber_viewer_ui in pcb_ui_state
+                            .gerber_viewer_ui
+                            .values_mut()
+                        {
                             gerber_viewer_ui.update_pcb_overview(pcb_overview.clone());
                         }
 

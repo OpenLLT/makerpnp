@@ -112,6 +112,7 @@ impl UiComponent for PhaseUi {
     type UiCommand = PhaseUiCommand;
     type UiAction = PhaseUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("phase-placements-header"));
 
@@ -260,6 +261,7 @@ impl UiComponent for PhaseUi {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

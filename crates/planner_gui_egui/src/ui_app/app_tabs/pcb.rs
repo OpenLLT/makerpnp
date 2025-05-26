@@ -93,6 +93,7 @@ impl UiComponent for PcbTab {
     type UiCommand = PcbTabUiCommand;
     type UiAction = PcbTabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let pcbs = context.pcbs.lock().unwrap();
         let pcb = pcbs.get(self.pcb_key).unwrap();
@@ -104,6 +105,7 @@ impl UiComponent for PcbTab {
         pcb.ui(ui, &mut pcb_context);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

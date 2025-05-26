@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
+
 use derivative::Derivative;
 use eframe::emath::{Rect, Vec2};
 use eframe::epaint::Color32;
@@ -9,12 +10,16 @@ use egui::{Ui, WidgetText};
 use egui_i18n::tr;
 use egui_ltreeview::TreeViewState;
 use egui_mobius::Value;
-use gerber_viewer::gerber_parser::{parse, GerberDoc, ParseError};
-use gerber_viewer::{draw_crosshair, generate_pastel_color, BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState};
+use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::position::Vector;
+use gerber_viewer::{
+    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
+    generate_pastel_color,
+};
+use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};
-use planner_app::{DesignIndex, PcbOverview};
+
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -26,22 +31,21 @@ const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 #[derivative(Debug)]
 pub struct GerberViewerUi {
     design_index: DesignIndex,
-    
+
     #[derivative(Debug = "ignore")]
     tree_view_state: Value<TreeViewState<usize>>,
 
     #[derivative(Debug = "ignore")]
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
-    
+
     pub component: ComponentState<GerberViewerUiCommand>,
 }
 
 impl GerberViewerUi {
     pub fn new(navigation_path: NavigationPath) -> Self {
-        
         // TODO get the design index from the navigation path
-        
+
         Self {
             design_index: 0,
             tree_view_state: Default::default(),
@@ -52,12 +56,12 @@ impl GerberViewerUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
-        
         let gerber_items = pcb_overview.gerbers[self.design_index].clone();
-        
+
         for gerber_item in gerber_items {
             let path = gerber_item.path.clone();
-            self.add_gerber_layer_from_file(path).unwrap();
+            self.add_gerber_layer_from_file(path)
+                .unwrap();
         }
     }
 
@@ -96,7 +100,8 @@ impl GerberViewerUi {
 
         let reader = BufReader::new(file);
 
-        let gerber_doc: GerberDoc = parse(reader).map_err(|(_partial_doc, error)| GerberViewerUiError::ParserError(error))?;
+        let gerber_doc: GerberDoc =
+            parse(reader).map_err(|(_partial_doc, error)| GerberViewerUiError::ParserError(error))?;
 
         // TODO let the user see the errors in the UI
         let log_entries = gerber_doc
@@ -122,7 +127,6 @@ impl GerberViewerUi {
 
         Ok((gerber_doc, commands))
     }
-
 }
 
 struct GerberViewState {
@@ -143,7 +147,6 @@ struct GerberViewState {
     mirroring: Mirroring,
 }
 
-
 impl Default for GerberViewState {
     fn default() -> Self {
         Self {
@@ -163,7 +166,6 @@ impl Default for GerberViewState {
 }
 
 impl GerberViewState {
-
     pub fn add_layer(
         &mut self,
         path: PathBuf,
@@ -180,11 +182,7 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (layer_index, (_, layer_view_state, layer, _)) in self
-            .layers
-            .iter()
-            .enumerate()
-        {
+        for (layer_index, (_, layer_view_state, layer, _)) in self.layers.iter().enumerate() {
             let layer_bbox = &layer.bounding_box();
 
             let origin = self.design_origin - self.design_offset;
@@ -205,7 +203,7 @@ impl GerberViewState {
             bbox.max.y = f64::max(bbox.max.y, layer_bbox.max.y);
             debug!("view bbox after layer. layer: {}, bbox: {:?}", layer_index, bbox);
         }
-        
+
         self.bounding_box = bbox;
         self.needs_bbox_update = false;
     }
@@ -263,7 +261,6 @@ struct LayerViewState {
     design_offset: Vector,
 }
 
-
 impl LayerViewState {
     fn new(color: Color32) -> Self {
         Self {
@@ -294,9 +291,10 @@ impl UiComponent for GerberViewerUi {
     type UiCommand = GerberViewerUiCommand;
     type UiAction = GerberViewerUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         let mut state = self.gerber_state.lock().unwrap();
-        
+
         let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
         let viewport = response.rect;
 
@@ -332,6 +330,7 @@ impl UiComponent for GerberViewerUi {
         draw_crosshair(&painter, ui_state.center_screen_pos, Color32::LIGHT_GRAY);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

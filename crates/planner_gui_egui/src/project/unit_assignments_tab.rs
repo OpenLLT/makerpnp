@@ -930,6 +930,7 @@ impl UiComponent for UnitAssignmentsUi {
     type UiCommand = UnitAssignmentsUiCommand;
     type UiAction = UnitAssignmentsUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-unit-assignments-header"));
         let Some(pcb_overview) = &self.pcb_overview else {
@@ -946,6 +947,7 @@ impl UiComponent for UnitAssignmentsUi {
         self.show_form(ui, &form, pcb_overview);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

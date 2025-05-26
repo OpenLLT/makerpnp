@@ -115,6 +115,7 @@ impl UiComponent for PlacementsTableUi {
     type UiCommand = PlacementsTableUiCommand;
     type UiAction = PlacementsTableUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         let mut placements_table = self.placements_table.lock().unwrap();
 
@@ -140,6 +141,7 @@ impl UiComponent for PlacementsTableUi {
         ui.add(table_renderer);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,
@@ -364,6 +366,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         .into()
     }
 
+    #[profiling::function]
     fn show_cell_view(&mut self, ui: &mut Ui, row: &PlacementsRow, column: usize) {
         let _ = match column {
             OBJECT_PATH_COL => ui.label(&row.object_path.to_string()),
@@ -627,6 +630,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         unreachable!();
     }
 
+    #[profiling::function]
     fn filter_row(&mut self, row: &PlacementsRow) -> bool {
         let haystack = format!(
             "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",

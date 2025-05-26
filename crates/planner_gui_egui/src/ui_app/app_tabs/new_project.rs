@@ -63,6 +63,7 @@ impl UiComponent for NewProjectTab {
     type UiCommand = NewProjectTabUiCommand;
     type UiAction = NewProjectTabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         if let Ok(picked_directory) = self
             .file_picker
@@ -84,6 +85,7 @@ impl UiComponent for NewProjectTab {
         self.show_form(ui, &form);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

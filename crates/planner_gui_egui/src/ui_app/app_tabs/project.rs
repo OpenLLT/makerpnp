@@ -98,6 +98,7 @@ impl UiComponent for ProjectTab {
     type UiCommand = ProjectTabUiCommand;
     type UiAction = ProjectTabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let projects = context.projects.lock().unwrap();
         let project = projects.get(self.project_key).unwrap();
@@ -109,6 +110,7 @@ impl UiComponent for ProjectTab {
         project.ui(ui, &mut project_context);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

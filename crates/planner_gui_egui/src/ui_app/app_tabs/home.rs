@@ -57,6 +57,7 @@ impl UiComponent for HomeTab {
     type UiCommand = HomeTabUiCommand;
     type UiAction = HomeTabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         ui.ctx().style_mut(|style| {
             // if this is not done, text in labels/checkboxes/etc wraps
@@ -120,6 +121,7 @@ impl UiComponent for HomeTab {
             });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

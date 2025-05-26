@@ -121,6 +121,7 @@ impl UiComponent for TabKind {
     type UiCommand = (TabKey, TabKindUiCommand);
     type UiAction = TabKindAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let (tab_key, context) = context;
         let tab_key = *tab_key;
@@ -162,6 +163,7 @@ impl UiComponent for TabKind {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,
@@ -625,6 +627,7 @@ impl UiComponent for AppTabs {
     type UiCommand = (TabKey, TabUiCommand);
     type UiAction = TabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let ctx = ui.ctx();
 
@@ -641,6 +644,7 @@ impl UiComponent for AppTabs {
             .show(ctx, &mut app_tab_viewer);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

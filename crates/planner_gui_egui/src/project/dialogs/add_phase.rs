@@ -268,6 +268,7 @@ impl UiComponent for AddPhaseModal {
     type UiCommand = AddPhaseModalUiCommand;
     type UiAction = AddPhaseModalAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut egui::Ui, _context: &mut Self::UiContext<'context>) {
         if let Ok(picked_file) = self
             .file_picker
@@ -331,6 +332,7 @@ impl UiComponent for AddPhaseModal {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

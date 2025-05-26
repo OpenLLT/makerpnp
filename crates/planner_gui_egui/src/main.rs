@@ -19,6 +19,8 @@ fn main() {
 
     info!("Started");
 
+    planner_gui_egui::profiling::init();
+
     i18n::init(I18nConfig {
         languages: vec![String::from("es-ES"), String::from("en-US")],
         default: "en-US".to_string(),

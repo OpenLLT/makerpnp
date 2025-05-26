@@ -202,6 +202,7 @@ impl UiComponent for PlacementOrderingsModal {
     type UiCommand = PlacementOrderingsModalUiCommand;
     type UiAction = PlacementOrderingsModalAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.ctx().style_mut(|style| {
             // if this is not done, text in labels/checkboxes/etc wraps
@@ -246,6 +247,7 @@ impl UiComponent for PlacementOrderingsModal {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

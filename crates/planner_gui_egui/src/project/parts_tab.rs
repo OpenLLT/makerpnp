@@ -98,6 +98,7 @@ impl UiComponent for PartsUi {
     type UiCommand = PartsUiCommand;
     type UiAction = PartsUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-parts-header"));
         let mut part_states_table = self.part_states_table.lock().unwrap();
@@ -124,6 +125,7 @@ impl UiComponent for PartsUi {
         ui.add(table_renderer);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

@@ -73,12 +73,14 @@ impl UiComponent for PlacementsUi {
     type UiCommand = PlacementsUiCommand;
     type UiAction = PlacementsUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-placements-header"));
         self.placements_table_ui
             .ui(ui, &mut PlacementsTableUiContext::default())
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

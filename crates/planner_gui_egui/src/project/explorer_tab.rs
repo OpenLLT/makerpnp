@@ -237,6 +237,7 @@ impl UiComponent for ExplorerUi {
     type UiCommand = ExplorerUiCommand;
     type UiAction = ExplorerUiAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         if let Some(tree) = &self.project_tree_view {
             self.show_project_tree(ui, &tree.tree, NodeIndex::new(0));
@@ -247,6 +248,7 @@ impl UiComponent for ExplorerUi {
         }
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

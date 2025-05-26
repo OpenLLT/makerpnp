@@ -34,6 +34,7 @@ impl UiComponent for ProjectToolbar {
     type UiCommand = ProjectToolbarUiCommand;
     type UiAction = ProjectToolbarAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.horizontal(|ui| {
             if ui
@@ -81,6 +82,7 @@ impl UiComponent for ProjectToolbar {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

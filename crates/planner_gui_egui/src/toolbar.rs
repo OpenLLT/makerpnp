@@ -50,6 +50,7 @@ impl UiComponent for Toolbar {
     type UiCommand = ToolbarUiCommand;
     type UiAction = ToolbarAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         egui::Frame::new().show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -120,6 +121,7 @@ impl UiComponent for Toolbar {
         });
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,

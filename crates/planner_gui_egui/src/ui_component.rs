@@ -62,6 +62,7 @@ pub trait UiComponent {
 
     fn ui<'context>(&self, ui: &mut egui::Ui, context: &mut Self::UiContext<'context>);
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         _command: Self::UiCommand,

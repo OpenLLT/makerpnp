@@ -49,6 +49,7 @@ impl UiComponent for ProjectTabs {
     type UiCommand = ProjectTabUiCommand;
     type UiAction = ProjectTabAction;
 
+    #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
         let ctx = ui.ctx();
 
@@ -65,6 +66,7 @@ impl UiComponent for ProjectTabs {
             .show_inside(ui, &mut tab_viewer);
     }
 
+    #[profiling::function]
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,
