@@ -23,11 +23,6 @@ mod configuration_tab;
 mod explorer_tab;
 mod tabs;
 
-// TODO restore adding designs and assigning designs to units.  use the 'unit_assignments_tab.rs' as the basis for this.
-//      also refer to the unused 'add_pcb.rs' file.
-//      requires adding additional core events
-//      once complete delete the 'add_pcb.rs' file and assiciated code and translations
-
 new_key_type! {
     /// A key for a pcb
     pub struct PcbKey;
