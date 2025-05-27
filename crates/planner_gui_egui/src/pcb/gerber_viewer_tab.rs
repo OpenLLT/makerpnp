@@ -33,9 +33,6 @@ pub struct GerberViewerUi {
     design_index: DesignIndex,
 
     #[derivative(Debug = "ignore")]
-    tree_view_state: Value<TreeViewState<usize>>,
-
-    #[derivative(Debug = "ignore")]
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
 
@@ -48,7 +45,6 @@ impl GerberViewerUi {
 
         Self {
             design_index: 0,
-            tree_view_state: Default::default(),
             gerber_state: Value::default(),
             gerber_ui_state: Value::default(),
             component: Default::default(),
@@ -103,15 +99,13 @@ impl GerberViewerUi {
         let gerber_doc: GerberDoc =
             parse(reader).map_err(|(_partial_doc, error)| GerberViewerUiError::ParserError(error))?;
 
-        // TODO let the user see the errors in the UI
-        let log_entries = gerber_doc
+        gerber_doc
             .commands
             .iter()
-            .map(|c| match c {
+            .for_each(|c| match c {
                 Ok(command) => info!("{:?}", command),
                 Err(error) => error!("{:?}", error),
-            })
-            .collect::<Vec<_>>();
+            });
 
         let message = format!("Gerber file parsed successfully. path: {}", path.to_str().unwrap());
         info!("{}", message);
