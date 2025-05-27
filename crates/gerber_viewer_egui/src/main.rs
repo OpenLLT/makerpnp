@@ -166,7 +166,7 @@ impl GerberViewState {
             .layers
             .iter()
             .enumerate()
-            .filter(|(_index, (_path, view_state, _, _))| view_state.enabled)
+            .filter(|(_index, (_path, view_state, layer, _))| view_state.enabled && !layer.is_empty())
         {
             let layer_bbox = &layer.bounding_box();
 

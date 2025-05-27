@@ -185,7 +185,12 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (layer_index, (_, layer_view_state, layer, _)) in self.layers.iter().enumerate() {
+        for (layer_index, (_, layer_view_state, layer, _)) in self
+            .layers
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, _, layer, _))| !layer.is_empty())
+        {
             let layer_bbox = &layer.bounding_box();
 
             let origin = self.design_origin - self.design_offset;
