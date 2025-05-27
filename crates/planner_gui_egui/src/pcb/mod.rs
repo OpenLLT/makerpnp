@@ -5,7 +5,7 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{DesignIndex, Event, PcbView, PcbViewRequest, Reference};
+use planner_app::{DesignIndex, Event, PcbView, PcbViewRequest};
 use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
@@ -20,7 +20,6 @@ use crate::pcb::gerber_viewer_tab::{
 };
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
-use crate::project::{Project, ProjectAction, ProjectKey, ProjectUiCommand};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_util::NavigationPath;
@@ -205,7 +204,7 @@ impl Pcb {
             pcb: &mut Pcb,
             key: &PcbKey,
             navigation_path: &NavigationPath,
-            path: &PathBuf,
+            _path: &PathBuf,
         ) -> Option<PcbAction> {
             let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}$").unwrap();
             if let Some(captures) = design_pattern.captures(&navigation_path) {

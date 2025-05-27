@@ -189,10 +189,6 @@ impl ExplorerUi {
     pub fn select_path(&mut self, navigation_path: &NavigationPath) {
         // TODO navigate to path
     }
-
-    fn show_gerber_viewer(&self, navigation_path: String) {
-        todo!()
-    }
 }
 
 #[derive(Debug, Clone)]

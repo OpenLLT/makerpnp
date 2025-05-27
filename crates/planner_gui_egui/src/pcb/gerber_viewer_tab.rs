@@ -7,8 +7,6 @@ use derivative::Derivative;
 use eframe::emath::{Rect, Vec2};
 use eframe::epaint::Color32;
 use egui::{Ui, WidgetText};
-use egui_i18n::tr;
-use egui_ltreeview::TreeViewState;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::position::Vector;
@@ -342,7 +340,7 @@ impl UiComponent for GerberViewerUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            GerberViewerUiCommand::None => None,
+            GerberViewerUiCommand::None => Some(GerberViewerUiAction::None),
         }
     }
 }
