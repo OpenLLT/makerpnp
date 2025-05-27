@@ -54,6 +54,15 @@ impl GerberViewerUi {
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         let gerber_items = pcb_overview.gerbers[self.design_index].clone();
 
+        // the list of gerber items may contain fewer, more or different entries and/or the same entries in a different
+        // order.  for now, reset and reload everything; it would be more optimal only to reparse files that
+        // need reparsing. e.g., by storing the existing gerberdoc and gerberlayer and re-using them instead of
+        // regenerating them.
+        self.gerber_state
+            .set(GerberViewState::default());
+        self.gerber_ui_state
+            .set(UiState::default());
+
         for gerber_item in gerber_items {
             let path = gerber_item.path.clone();
             self.add_gerber_layer_from_file(path)
