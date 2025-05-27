@@ -5,9 +5,9 @@ use egui::Ui;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
 use planner_app::{
-    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbView, PcbViewRequest, PhaseOverview,
-    PhaseReference, PlacementOperation, PlacementState, PlacementStatus, ProcessReference, ProjectOverview,
-    ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
+    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbUnitIndex, PcbView, PcbViewRequest,
+    PhaseOverview, PhaseReference, PlacementOperation, PlacementState, PlacementStatus, ProcessReference,
+    ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -465,9 +465,9 @@ impl Project {
         info!("project::navigate. path: {}", path);
 
         #[must_use]
-        fn handle_root(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_root(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/".into()) {
-                let task = project.show_overview();
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowOverview));
                 Some(ProjectAction::Task(*key, task))
             } else {
                 None
@@ -475,21 +475,19 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_placements(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_placements(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/placements".into()) {
-                let tasks = project.show_placements();
-
-                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPlacements));
+                Some(ProjectAction::Task(*key, task))
             } else {
                 None
             }
         }
 
         #[must_use]
-        fn handle_parts(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_parts(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/parts".into()) {
-                let task = project.show_parts();
-
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowParts));
                 Some(ProjectAction::Task(*key, task))
             } else {
                 None
@@ -497,12 +495,9 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_phases(_project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_phases(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/phases".into()) {
-                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-                    ProjectViewRequest::Phases,
-                )));
-
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RefreshPhases));
                 Some(ProjectAction::Task(*key, task))
             } else {
                 None
@@ -510,7 +505,7 @@ impl Project {
         }
 
         #[must_use]
-        fn handle_phase(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_phase(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let phase_reference: String = captures
@@ -521,21 +516,15 @@ impl Project {
                 debug!("phase_reference: {}", phase_reference);
 
                 let reference = Reference::from_raw(phase_reference);
-
-                let tasks = project.show_phase(key.clone(), reference.clone());
-
-                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPhase(reference)));
+                Some(ProjectAction::Task(*key, task))
             } else {
                 None
             }
         }
 
         #[must_use]
-        fn handle_phase_loadout(
-            _project: &mut Project,
-            key: &ProjectKey,
-            path: &NavigationPath,
-        ) -> Option<ProjectAction> {
+        fn handle_phase_loadout(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}/loadout$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let phase_reference: String = captures
@@ -545,23 +534,18 @@ impl Project {
                     .to_string();
                 debug!("phase_reference: {}", phase_reference);
 
-                let tasks: Vec<_> = vec![
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-                        ProjectViewRequest::Phases,
-                    ))),
-                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPhaseLoadout {
-                        phase: Reference(phase_reference),
-                    })),
-                ];
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPhaseLoadout {
+                    phase: Reference(phase_reference),
+                }));
 
-                Some(ProjectAction::Task(*key, Task::batch(tasks)))
+                Some(ProjectAction::Task(*key, task))
             } else {
                 None
             }
         }
 
         #[must_use]
-        fn handle_pcb(project: &mut Project, key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+        fn handle_pcb(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let pcb_index = captures
@@ -572,20 +556,16 @@ impl Project {
                     .unwrap();
                 debug!("pcb: {}", pcb_index);
 
-                let tasks = project.show_pcb(key.clone(), pcb_index);
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcb(pcb_index)));
 
-                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
+                Some(ProjectAction::Task(*key, task))
             } else {
                 None
             }
         }
 
         #[must_use]
-        fn handle_unit_assignments(
-            project: &mut Project,
-            key: &ProjectKey,
-            path: &NavigationPath,
-        ) -> Option<ProjectAction> {
+        fn handle_unit_assignments(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$").unwrap();
             if let Some(captures) = phase_pattern.captures(&path) {
                 let pcb_index = captures
@@ -596,9 +576,11 @@ impl Project {
                     .unwrap();
                 debug!("pcb: {}", pcb_index);
 
-                let tasks = project.show_unit_assignments(*key, pcb_index);
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(
+                    pcb_index,
+                )));
 
-                tasks.map(|tasks| ProjectAction::Task(*key, Task::batch(tasks)))
+                Some(ProjectAction::Task(*key, task))
             } else {
                 None
             }
@@ -617,7 +599,7 @@ impl Project {
 
         handlers
             .iter()
-            .find_map(|handler| handler(self, &key, &path))
+            .find_map(|handler| handler(&key, &path))
     }
 
     pub fn update_processes(&mut self, project_overview: &ProjectOverview) {
@@ -1504,6 +1486,20 @@ impl UiComponent for Project {
             ProjectUiCommand::ShowPhaseLoadout {
                 phase,
             } => {
+                let tasks = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::Phases,
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::ContinueShowPhaseLoadout {
+                        phase,
+                    })),
+                ];
+
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
+            ProjectUiCommand::ContinueShowPhaseLoadout {
+                phase,
+            } => {
                 let phase_overview = self
                     .phases
                     .iter()
@@ -1527,6 +1523,34 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::ShowPcbUnitAssignments(pcb_index) => {
                 let tasks = self.show_unit_assignments(key, pcb_index);
+                tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
+            }
+            ProjectUiCommand::ShowOverview => {
+                let task = self.show_overview();
+                Some(ProjectAction::Task(key, task))
+            }
+            ProjectUiCommand::ShowParts => {
+                let task = self.show_parts();
+                Some(ProjectAction::Task(key, task))
+            }
+            ProjectUiCommand::ShowPlacements => {
+                let tasks = self.show_placements();
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
+            ProjectUiCommand::RefreshPhases => {
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::Phases,
+                )));
+                Some(ProjectAction::Task(key, task))
+            }
+            ProjectUiCommand::ShowPhase(phase) => {
+                let tasks = self.show_phase(key.clone(), phase.clone());
+
+                tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
+            }
+            ProjectUiCommand::ShowPcb(pcb_index) => {
+                let tasks = self.show_pcb(key.clone(), pcb_index);
+
                 tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::RefreshPhase(phase) => {
@@ -1768,6 +1792,9 @@ pub enum ProjectUiCommand {
     ShowPhaseLoadout {
         phase: Reference,
     },
+    ContinueShowPhaseLoadout {
+        phase: Reference,
+    },
     LoadOutUiCommand {
         load_out_source: LoadOutSource,
         command: LoadOutUiCommand,
@@ -1784,6 +1811,12 @@ pub enum ProjectUiCommand {
     ShowPcbUnitAssignments(u16),
     PcbFilePicked(PathBuf),
     RequestPcbView(PcbViewRequest),
+    ShowParts,
+    RefreshPhases,
+    ShowOverview,
+    ShowPlacements,
+    ShowPhase(Reference),
+    ShowPcb(PcbUnitIndex),
 }
 
 fn project_path_from_view_path(view_path: &String) -> NavigationPath {
