@@ -40,11 +40,9 @@ pub struct GerberViewerUi {
 }
 
 impl GerberViewerUi {
-    pub fn new(navigation_path: NavigationPath) -> Self {
-        // TODO get the design index from the navigation path
-
+    pub fn new(design_index: DesignIndex) -> Self {
         Self {
-            design_index: 0,
+            design_index,
             gerber_state: Value::default(),
             gerber_ui_state: Value::default(),
             component: Default::default(),
@@ -65,12 +63,16 @@ impl GerberViewerUi {
 
         for gerber_item in gerber_items {
             let path = gerber_item.path.clone();
+            info!("Adding gerber layer: {}", path.to_str().unwrap());
             self.add_gerber_layer_from_file(path)
-                .unwrap();
+                .inspect_err(|e| {
+                    error!("Error adding gerber layer: {}", e);
+                })
+                .ok();
         }
     }
 
-    pub fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), GerberViewerUiError> {
+    fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), GerberViewerUiError> {
         let (gerber_doc, commands) = Self::parse_gerber(&path)?;
 
         let mut state = self.gerber_state.lock().unwrap();

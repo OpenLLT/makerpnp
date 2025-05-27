@@ -5,7 +5,8 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Event, PcbView, PcbViewRequest, Reference};
+use planner_app::{DesignIndex, Event, PcbView, PcbViewRequest, Reference};
+use regex::Regex;
 use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
@@ -135,7 +136,7 @@ impl Pcb {
         )))
     }
 
-    fn ensure_gerber_viewer(&self, key: PcbKey, navigation_path: &NavigationPath) {
+    fn ensure_gerber_viewer(&self, key: PcbKey, navigation_path: &NavigationPath, design_index: DesignIndex) {
         let navigation_path = navigation_path.clone();
         let mut state = self.pcb_ui_state.lock().unwrap();
         let _navigation_path_state = state
@@ -143,7 +144,7 @@ impl Pcb {
             .entry(navigation_path.clone())
             .or_insert_with(|| {
                 debug!("ensuring gerber_viewer ui. phase: {:?}", navigation_path);
-                let mut gerber_viewer_ui = GerberViewerUi::new(navigation_path.clone());
+                let mut gerber_viewer_ui = GerberViewerUi::new(design_index);
                 gerber_viewer_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -160,11 +161,16 @@ impl Pcb {
             });
     }
 
-    pub fn show_gerber_viewer(&mut self, key: &PcbKey, navigation_path: NavigationPath) -> Task<PcbAction> {
+    pub fn show_gerber_viewer(
+        &mut self,
+        key: &PcbKey,
+        navigation_path: NavigationPath,
+        design_index: DesignIndex,
+    ) -> Task<PcbAction> {
         let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
         let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::GerberViewer(tab) if tab.navigation_path.eq(&navigation_path)));
         if result.is_err() {
-            self.ensure_gerber_viewer(*key, &navigation_path);
+            self.ensure_gerber_viewer(*key, &navigation_path, design_index);
             pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(navigation_path)));
         }
         Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
@@ -195,21 +201,30 @@ impl Pcb {
         }
 
         #[must_use]
-        fn handle_gerber_viewer(
+        fn handle_pcb_design(
             pcb: &mut Pcb,
             key: &PcbKey,
             navigation_path: &NavigationPath,
             path: &PathBuf,
         ) -> Option<PcbAction> {
-            if navigation_path.eq(&"/pcb/designs/0".into()) {
-                let task = pcb.show_gerber_viewer(key, navigation_path.clone());
+            let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}$").unwrap();
+            if let Some(captures) = design_pattern.captures(&navigation_path) {
+                let design_index: DesignIndex = captures
+                    .name("design")
+                    .unwrap()
+                    .as_str()
+                    .parse::<DesignIndex>()
+                    .unwrap();
+                debug!("design_index: {}", design_index);
+
+                let task = pcb.show_gerber_viewer(key, navigation_path.clone(), design_index);
                 Some(PcbAction::Task(*key, task))
             } else {
                 None
             }
         }
 
-        let handlers = [handle_root, handle_gerber_viewer];
+        let handlers = [handle_root, handle_pcb_design];
 
         let path = &self.path.clone();
         handlers
