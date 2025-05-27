@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_i18n::tr;
@@ -18,6 +20,7 @@ pub struct ExplorerUi {
 
     #[derivative(Debug = "ignore")]
     tree_view_state: Value<TreeViewState<usize>>,
+    navigation_paths: Value<BTreeMap<usize, NavigationPath>>,
 
     pub component: ComponentState<ExplorerUiCommand>,
 }
@@ -27,6 +30,7 @@ impl ExplorerUi {
         Self {
             pcb_overview: None,
             tree_view_state: Default::default(),
+            navigation_paths: Default::default(),
             component: Default::default(),
         }
     }
@@ -42,7 +46,11 @@ impl ExplorerUi {
 
         let mut tree_view_state = self.tree_view_state.lock().unwrap();
 
-        let (_response, actions) = TreeView::new(ui.make_persistent_id("pcb_explorer_tree")).show_state(
+        let mut navigation_paths = self.navigation_paths.lock().unwrap();
+
+        let (_response, actions) = TreeView::new(ui.make_persistent_id("pcb_explorer_tree"))
+            .allow_multi_selection(false)
+            .show_state(
             ui,
             &mut tree_view_state,
             |tree_builder: &mut egui_ltreeview::TreeViewBuilder<'_, usize>| {
@@ -55,6 +63,7 @@ impl ExplorerUi {
                             ui.add(egui::Label::new(tr!("pcb-explorer-node-root", {name: &pcb_overview.name})).selectable(false));
                         }),
                 );
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/".to_string()));
 
                 //
                 // Configuration
@@ -97,7 +106,7 @@ impl ExplorerUi {
                         }),
                 );
 
-                for design in &pcb_overview.designs {
+                for (design_index, design) in pcb_overview.designs.iter().enumerate() {
                     node_id += 1;
                     tree_builder.node(
                         NodeBuilder::dir(node_id)
@@ -106,11 +115,15 @@ impl ExplorerUi {
                                 ui.add(egui::Label::new(design.to_string()).selectable(false));
                             }),
                     );
+                    navigation_paths.insert(node_id, NavigationPath::new(format!("/pcb/designs/{}", design_index).to_string()));
 
                     node_id += 1;
                     tree_builder.leaf(node_id, tr!("pcb-side-top"));
+                    navigation_paths.insert(node_id, NavigationPath::new(format!("/pcb/designs/{}/top", design_index).to_string()));
+
                     node_id += 1;
                     tree_builder.leaf(node_id, tr!("pcb-side-bottom"));
+                    navigation_paths.insert(node_id, NavigationPath::new(format!("/pcb/designs/{}/bottom", design_index).to_string()));
 
                     tree_builder.close_dir();
                 }
@@ -173,13 +186,10 @@ impl ExplorerUi {
                     );
 
                     for node_id in activation.selected {
-                        let navigation_path = match node_id {
-                            0 => NavigationPath::new("/pcb/".to_string()),
-                            _ => NavigationPath::new("/pcb/designs/0".to_string()),
-                        };
-
-                        self.component
-                            .send(ExplorerUiCommand::Navigate(navigation_path));
+                        if let Some(navigation_path) = navigation_paths.get(&node_id) {
+                            self.component
+                                .send(ExplorerUiCommand::Navigate(navigation_path.clone()));
+                        }
                     }
                 }
             }
