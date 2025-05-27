@@ -11,7 +11,7 @@ use tracing::{debug, info};
 #[derive(Debug, Clone, Hash, Copy, Ord, Eq, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct TabKey(usize);
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct Tabs<TabKind, Context> {
     next_id: usize,
     pub(crate) tabs: BTreeMap<TabKey, TabKind>,

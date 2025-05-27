@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
@@ -7,7 +8,7 @@ use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct PcbTabs {
     tabs: Value<Tabs<PcbTabKind, PcbTabContext>>,
     tree: Value<DockState<TabKey>>,
@@ -27,6 +28,7 @@ impl Default for PcbTabs {
 }
 
 // Not to be confused with the other one...
+#[derive(Debug)]
 pub struct PcbTabContext {
     pub state: Value<PcbUiState>,
 }

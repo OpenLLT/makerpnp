@@ -356,7 +356,7 @@ impl UiComponent for PhaseUi {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct PhaseTab {
-    phase: Reference,
+    pub phase: Reference,
 }
 
 impl PhaseTab {
@@ -377,7 +377,10 @@ impl Tab for PhaseTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let phase_ui = state.phases.get(&self.phase).unwrap();
+        let Some(phase_ui) = state.phases.get(&self.phase) else {
+            ui.spinner();
+            return;
+        };
         UiComponent::ui(phase_ui, ui, &mut PhaseUiContext::default());
     }
 

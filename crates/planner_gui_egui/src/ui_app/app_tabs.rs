@@ -1,3 +1,4 @@
+use std::mem;
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
@@ -26,13 +27,14 @@ pub mod new_project;
 pub mod pcb;
 pub mod project;
 
+#[derive(Debug)]
 pub struct TabKindContext {
     pub config: Value<Config>,
     pub projects: Value<SlotMap<ProjectKey, Project>>,
     pub pcbs: Value<SlotMap<PcbKey, Pcb>>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub enum TabKind {
     Home(HomeTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
     NewProject(NewProjectTab, #[serde(skip)] ComponentState<TabKindUiCommand>),
@@ -254,7 +256,7 @@ impl UiComponent for TabKind {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct AppTabs {
     tabs: Value<Tabs<TabKind, TabKindContext>>,
 
@@ -284,6 +286,12 @@ macro_rules! tabs_impl {
         //
         // methods common to all tab kinds
         //
+        pub fn restore(&mut self, other: &mut Self) {
+            tracing::debug!("Restoring tabs. self: {:?}, other: {:?}", self, other);
+
+            std::mem::swap(&mut self.tabs, &mut other.tabs);
+            std::mem::swap(&mut self.tree, &mut other.tree);
+        }
 
         #[allow(dead_code)]
         pub fn close_all_tabs(&mut self) {

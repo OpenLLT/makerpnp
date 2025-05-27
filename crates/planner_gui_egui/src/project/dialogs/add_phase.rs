@@ -26,7 +26,6 @@ pub struct AddPhaseModal {
     processes: Vec<ProcessReference>,
     path: PathBuf,
 
-    #[derivative(Debug = "ignore")]
     file_picker: Value<Picker>,
 
     pub component: ComponentState<AddPhaseModalUiCommand>,

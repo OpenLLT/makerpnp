@@ -6,12 +6,12 @@ use std::sync::{Arc, Mutex};
 /// * provides an API convenient for UI usage (see `is_picking` and `picked`)
 ///
 /// Currently only picks files, but the API could be expanded.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Picker {
     state: PickerState,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 enum PickerState {
     #[default]
     Pending,

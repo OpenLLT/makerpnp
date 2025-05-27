@@ -169,7 +169,7 @@ impl UiComponent for PcbUi {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct PcbTab {
-    pcb_index: u16,
+    pub pcb_index: u16,
 }
 
 impl PcbTab {

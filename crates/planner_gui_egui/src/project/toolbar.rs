@@ -22,7 +22,7 @@ pub enum ProjectToolbarAction {
     RemoveUnusedPlacements,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ProjectToolbar {
     pub component: ComponentState<ProjectToolbarUiCommand>,
 }

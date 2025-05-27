@@ -1161,7 +1161,7 @@ impl UiComponent for UnitAssignmentsUi {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct UnitAssignmentsTab {
-    pcb_index: u16,
+    pub pcb_index: u16,
 }
 
 impl UnitAssignmentsTab {
@@ -1182,10 +1182,14 @@ impl Tab for UnitAssignmentsTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let unit_assignments_ui = state
+        let Some(unit_assignments_ui) = state
             .unit_assignments
             .get(&(self.pcb_index as usize))
-            .unwrap();
+        else {
+            ui.spinner();
+            return;
+        };
+
         UiComponent::ui(unit_assignments_ui, ui, &mut UnitAssignmentsUiContext::default());
     }
 

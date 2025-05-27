@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
 
+use crate::project::tabs::ProjectTabs;
 use crate::project::{Project, ProjectAction, ProjectContext, ProjectKey, ProjectUiCommand};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
@@ -25,6 +26,8 @@ pub struct ProjectTab {
 
     #[serde(skip)]
     pub component: ComponentState<ProjectTabUiCommand>,
+
+    pub project_tabs: Value<ProjectTabs>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,7 +49,7 @@ pub struct ProjectTabContext {
 }
 
 impl ProjectTab {
-    pub fn new(label: String, path: PathBuf, project_key: ProjectKey) -> Self {
+    pub fn new(label: String, path: PathBuf, project_key: ProjectKey, project_tabs: Value<ProjectTabs>) -> Self {
         debug!(
             "Creating project tab. key: {:?}, path: {}",
             &project_key,
@@ -54,6 +57,7 @@ impl ProjectTab {
         );
         Self {
             project_key,
+            project_tabs,
             path,
             label,
             modified: false,

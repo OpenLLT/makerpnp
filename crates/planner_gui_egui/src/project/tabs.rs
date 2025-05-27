@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
@@ -7,8 +8,10 @@ use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Derivative, serde::Deserialize, serde::Serialize)]
+#[derivative(Debug)]
 pub struct ProjectTabs {
+    #[derivative(Debug = "ignore")]
     tabs: Value<Tabs<ProjectTabKind, ProjectTabContext>>,
     tree: Value<DockState<TabKey>>,
 

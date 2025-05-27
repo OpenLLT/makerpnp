@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use derivative::Derivative;
 use egui::{Button, TextEdit, Ui, Widget, WidgetText};
 use egui_i18n::tr;
 use egui_mobius::types::Value;
@@ -15,7 +16,8 @@ use crate::forms::transforms::no_transform;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Default, Deserialize, Serialize, Derivative)]
+#[derivative(Debug)]
 pub struct NewProjectTab {
     fields: Value<NewProjectFields>,
 

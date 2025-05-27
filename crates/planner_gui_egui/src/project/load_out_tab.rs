@@ -172,18 +172,20 @@ impl UiComponent for LoadOutUi {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct LoadOutTab {
-    load_out_source: LoadOutSource,
+    pub phase: Reference,
+    pub load_out_source: LoadOutSource,
 
     tab_label: String,
 }
 
 impl LoadOutTab {
-    pub fn new(project_directory: PathBuf, load_out_source: LoadOutSource) -> Self {
+    pub fn new(project_directory: PathBuf, phase: Reference, load_out_source: LoadOutSource) -> Self {
         let load_out_source_path = PathBuf::from(load_out_source.to_string());
 
         let clipped_load_out_source = clip_path(project_directory, load_out_source_path, None);
 
         Self {
+            phase,
             load_out_source,
             tab_label: clipped_load_out_source,
         }

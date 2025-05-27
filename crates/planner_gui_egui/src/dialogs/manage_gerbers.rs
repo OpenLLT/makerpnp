@@ -17,7 +17,6 @@ pub struct ManageGerbersModal {
     title: String,
     gerbers: Vec<PcbGerberItem>,
 
-    #[derivative(Debug = "ignore")]
     file_picker: Value<Picker>,
 
     pub component: ComponentState<ManagerGerbersModalUiCommand>,
