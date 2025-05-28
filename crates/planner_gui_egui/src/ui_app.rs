@@ -723,8 +723,13 @@ impl eframe::App for UiApp {
                         .show_home_tab_on_startup,
                 );
             }
-            self.remove_new_project_tabs_on_startup();
-            self.remove_new_pcb_tabs_on_startup();
+            // FIXME due to a bug in egui_dock with `Tree::retain_tabs, we can't do this right now
+            //       it's not ideal, but it's better to have new project/pcb tabs instead of a panic or broken UI.
+            //       See: https://github.com/Adanos020/egui_dock/issues/264#issuecomment-2916873095
+            if false {
+                self.remove_new_project_tabs_on_startup();
+                self.remove_new_pcb_tabs_on_startup();
+            }
             self.restore_documents_on_startup();
         }
 
