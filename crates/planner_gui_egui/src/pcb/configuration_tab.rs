@@ -631,7 +631,7 @@ impl ConfigurationUi {
             .as_ref()
             .map(|pcb_overview| {
                 let design_name = pcb_overview.designs[design_index].clone();
-                let gerbers = pcb_overview.gerbers[design_index].clone();
+                let gerbers = pcb_overview.design_gerbers[design_index].clone();
                 (design_name, gerbers)
             })
         else {
@@ -663,7 +663,7 @@ impl ConfigurationUi {
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         if let Some(modal) = &mut self.manage_gerbers_modal {
-            modal.update_gerbers(&pcb_overview.gerbers)
+            modal.update_gerbers(&pcb_overview.design_gerbers)
         }
 
         let mut fields = self.fields.lock().unwrap();

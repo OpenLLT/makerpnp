@@ -27,7 +27,7 @@ const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct GerberViewerUi {
-    design_index: DesignIndex,
+    args: GerberViewerUiInstanceArgs,
 
     #[derivative(Debug = "ignore")]
     gerber_state: Value<GerberViewState>,
@@ -37,9 +37,9 @@ pub struct GerberViewerUi {
 }
 
 impl GerberViewerUi {
-    pub fn new(design_index: DesignIndex) -> Self {
+    pub fn new(args: GerberViewerUiInstanceArgs) -> Self {
         Self {
-            design_index,
+            args,
             gerber_state: Value::default(),
             gerber_ui_state: Value::default(),
             component: Default::default(),
@@ -47,7 +47,10 @@ impl GerberViewerUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
-        let gerber_items = pcb_overview.gerbers[self.design_index].clone();
+        let gerber_items = match self.args.mode {
+            GerberViewerMode::Panel => pcb_overview.pcb_gerbers.clone(),
+            GerberViewerMode::Design(design_index) => pcb_overview.design_gerbers[design_index].clone(),
+        };
 
         // the list of gerber items may contain fewer, more or different entries and/or the same entries in a different
         // order.  for now, reset and reload everything; it would be more optimal only to reparse files that
@@ -364,8 +367,27 @@ impl UiComponent for GerberViewerUi {
     Hash
 )]
 pub struct GerberViewerUiInstanceArgs {
-    pub design_index: DesignIndex,
+    pub mode: GerberViewerMode,
     // TODO add other args, like pcb_side: Option<PcbSide> or tags: Option<Vec<Tag>>
+}
+
+#[derive(
+    Derivative,
+    Debug,
+    serde::Deserialize,
+    serde::Serialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
+#[derivative(Default)]
+pub enum GerberViewerMode {
+    #[derivative(Default)]
+    Panel,
+    Design(DesignIndex),
 }
 
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
@@ -385,8 +407,11 @@ impl Tab for GerberViewerTab {
     type Context = PcbTabContext;
 
     fn label(&self) -> WidgetText {
-        // TODO improve the tab title
-        let title = format!("{}", self.args.design_index);
+        let title = match self.args.mode {
+            GerberViewerMode::Panel => "Panel".to_string(),
+            // TODO improve the tab title
+            GerberViewerMode::Design(design_index) => format!("Design ({})", design_index),
+        };
 
         egui::widget_text::WidgetText::from(title)
     }

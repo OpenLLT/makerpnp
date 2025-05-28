@@ -13,6 +13,7 @@ use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
+use planning::gerber::GerberFile;
 pub use planning::gerber::GerberPurpose;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::phase::PhaseReference;
@@ -240,8 +241,11 @@ pub struct PcbOverview {
     /// The name of the design can be obtained by looking indexing into `designs` with the `DesignIndex`
     pub unit_map: HashMap<PcbUnitIndex, DesignIndex>,
 
-    /// each design can have multiple gerbers
-    pub gerbers: Vec<Vec<PcbGerberItem>>,
+    /// The pcb itself can have gerbers
+    pub pcb_gerbers: Vec<PcbGerberItem>,
+
+    /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
+    pub design_gerbers: Vec<Vec<PcbGerberItem>>,
     // FUTURE add dimensions (per design)
 }
 
@@ -1325,7 +1329,7 @@ impl Planner {
                     .cloned()
                     .collect::<Vec<_>>();
 
-                let gerbers = designs
+                let design_gerbers = designs
                     .iter()
                     .enumerate()
                     .map(|(index, _design_name)| {
@@ -1336,19 +1340,18 @@ impl Planner {
                             .get(&design_index)
                             .map_or(Vec::new(), |v| {
                                 v.iter()
-                                    .map(|gerber_file| {
-                                        // convert from project type to view type
-                                        PcbGerberItem {
-                                            path: gerber_file.file.clone(),
-                                            pcb_side: gerber_file.pcb_side.clone(),
-                                            purpose: gerber_file.purpose,
-                                        }
-                                    })
+                                    .map(Self::gerber_file_to_pcb_gerber_item)
                                     .collect::<Vec<_>>()
                             });
 
                         design_gerbers
                     })
+                    .collect::<Vec<_>>();
+
+                let pcb_gerbers = pcb
+                    .pcb_gerbers
+                    .iter()
+                    .map(Self::gerber_file_to_pcb_gerber_item)
                     .collect::<Vec<_>>();
 
                 let unit_map = pcb
@@ -1363,7 +1366,8 @@ impl Planner {
                     units: pcb.units,
                     designs,
                     unit_map,
-                    gerbers,
+                    pcb_gerbers,
+                    design_gerbers,
                 };
 
                 Ok(pcb_view_renderer::view(PcbView::PcbOverview(pcb_overview)))
@@ -1859,6 +1863,15 @@ impl Planner {
 
                 Ok(project_view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
+        }
+    }
+
+    fn gerber_file_to_pcb_gerber_item(gerber_file: &GerberFile) -> PcbGerberItem {
+        // convert from project type to view type
+        PcbGerberItem {
+            path: gerber_file.file.clone(),
+            pcb_side: gerber_file.pcb_side.clone(),
+            purpose: gerber_file.purpose,
         }
     }
 

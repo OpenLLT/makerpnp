@@ -16,8 +16,8 @@ use crate::pcb::configuration_tab::{
 use crate::pcb::core_helper::PcbCoreHelper;
 use crate::pcb::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiCommand, ExplorerUiContext};
 use crate::pcb::gerber_viewer_tab::{
-    GerberViewerTab, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
-    GerberViewerUiInstanceArgs,
+    GerberViewerMode, GerberViewerTab, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand,
+    GerberViewerUiContext, GerberViewerUiInstanceArgs,
 };
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
@@ -170,7 +170,7 @@ impl Pcb {
             .or_insert_with(|| {
                 created = true;
                 debug!("ensuring gerber_viewer ui. args: {:?}", args);
-                let mut gerber_viewer_ui = GerberViewerUi::new(args.design_index);
+                let mut gerber_viewer_ui = GerberViewerUi::new(args.clone());
                 gerber_viewer_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
@@ -238,6 +238,22 @@ impl Pcb {
         }
 
         #[must_use]
+        fn handle_pcb(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
+            if navigation_path.eq(&"/pcb/pcb".into()) {
+                let args = GerberViewerUiInstanceArgs {
+                    mode: GerberViewerMode::Panel,
+                };
+
+                Some(PcbAction::Task(
+                    *key,
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowGerberViewer(args))),
+                ))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
         fn handle_pcb_design(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
             let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}$").unwrap();
             if let Some(captures) = design_pattern.captures(&navigation_path) {
@@ -250,7 +266,7 @@ impl Pcb {
                 debug!("design_index: {}", design_index);
 
                 let args = GerberViewerUiInstanceArgs {
-                    design_index,
+                    mode: GerberViewerMode::Design(design_index),
                 };
 
                 Some(PcbAction::Task(
@@ -262,7 +278,7 @@ impl Pcb {
             }
         }
 
-        let handlers = [handle_root, handle_configuration, handle_pcb_design];
+        let handlers = [handle_root, handle_configuration, handle_pcb, handle_pcb_design];
 
         handlers
             .iter()
