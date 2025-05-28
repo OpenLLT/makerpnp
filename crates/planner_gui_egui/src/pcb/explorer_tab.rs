@@ -190,6 +190,9 @@ impl ExplorerUi {
                             self.component
                                 .send(ExplorerUiCommand::Navigate(navigation_path.clone()));
                         }
+
+                        // HACK: tree-view-dir-activate-expand-hack
+                        tree_view_state.expand_node(node_id);
                     }
                 }
             }
@@ -197,7 +200,17 @@ impl ExplorerUi {
     }
 
     pub fn select_path(&mut self, navigation_path: &NavigationPath) {
-        // TODO navigate to path
+        if let Some((node_id, _navigation_path)) = self
+            .navigation_paths
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(_k, v)| (*v).eq(navigation_path))
+        {
+            let mut tree_view_state = self.tree_view_state.lock().unwrap();
+
+            tree_view_state.set_selected(vec![*node_id]);
+        }
     }
 }
 

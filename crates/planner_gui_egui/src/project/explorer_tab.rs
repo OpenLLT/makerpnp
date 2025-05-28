@@ -58,12 +58,15 @@ impl ExplorerUi {
             }) = action
             {
                 let _ = modifiers;
-                for &node in &selected {
-                    let item = &graph[NodeIndex::new(node)];
+                for &node_id in &selected {
+                    let item = &graph[NodeIndex::new(node_id)];
                     let path = project_path_from_view_path(&item.path);
 
                     self.component
                         .send(ExplorerUiCommand::Navigate(path));
+
+                    // HACK: tree-view-dir-activate-expand-hack
+                    tree_view_state.expand_node(node_id);
                 }
             }
         }
@@ -207,7 +210,6 @@ impl ExplorerUi {
             }
 
             tree_view_state.set_selected(selection);
-            tree_view_state.expand_node(node_index);
         } else {
             unreachable!()
         }

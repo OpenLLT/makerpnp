@@ -29,3 +29,35 @@ Resize::default()
             });
     });
 ```
+
+## tree-view-dir-activate-expand-hack
+
+```
+HACK: tree-view-dir-activate-expand-hack - force-expand directories that are 'activated'
+```
+
+When double clicking on a directory in an egui_ltreeview the directory state is expanded or collapsed
+this hack forces the node to be open.
+
+Use inside the block that handles `Action::Activate`.
+
+example:
+
+```rust
+let (_response, actions) = TreeView::new(...)
+   // ...
+
+for action in actions {
+    match action {
+        Action::Activate(activation) => {
+            for node_id in activation.selected {
+                // ... handle 'activation'
+
+                // HACK: tree-view-dir-activate-expand-hack
+                tree_view_state.expand_node(node_id);
+            }
+
+        }
+    }
+}
+```
