@@ -14,9 +14,8 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 regex = { workspace = true }
 time = { workspace = true, features = ["serde", "serde-well-known"] }
-
 rust_decimal = { workspace = true }
-rust_decimal_macros = { workspace = true }
+
 serde = { workspace = true,  features = ["derive"] }
 serde_json = { workspace = true,  features = ["preserve_order"] }
 serde_with = { workspace = true }
@@ -33,7 +32,6 @@ indexmap = { workspace = true, features = ["serde"] }
 heck = { workspace = true }
 csv = { workspace = true }
 
-lexical-sort = { workspace = true }
 itertools = { workspace = true }
 
 [dev-dependencies]

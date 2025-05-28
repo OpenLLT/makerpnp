@@ -18,8 +18,6 @@ tracing = { workspace = true }
 egui-i18n = { workspace = true }
 
 # i18n
-unic-langid = { workspace = true, features = ["macros"]}
-fluent = { workspace = true }
 fluent-bundle = { workspace = true }
 
 # Required for form validation (!)

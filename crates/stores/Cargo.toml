@@ -8,7 +8,6 @@ assembly = { path = "../assembly"}
 criteria = { path = "../criteria"}
 pnp = { path = "../pnp"}
 eda = { path = "../eda"}
-util = { path = "../util"}
 planning = { path = "../planning"}
 part_mapper = { path = "../part_mapper"}
 
@@ -17,7 +16,6 @@ regex = { workspace = true }
 thiserror = { workspace = true }
 
 rust_decimal = { workspace = true }
-rust_decimal_macros = { workspace = true }
 
 csv = { workspace = true }
 
