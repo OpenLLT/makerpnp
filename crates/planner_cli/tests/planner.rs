@@ -5,7 +5,6 @@ pub mod common;
 
 mod operation_sequence_1 {
     use std::collections::BTreeMap;
-    use std::fmt::format;
     use std::fs::{read_to_string, File};
     use std::io::Write;
     use std::path::{Path, PathBuf};

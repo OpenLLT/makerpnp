@@ -3,8 +3,7 @@ use std::sync::Arc;
 use anyhow::bail;
 use clap::Parser;
 use crossbeam_channel::unbounded;
-use planner_app::effects::pcb_view_renderer::PcbViewRendererOperation;
-use planner_app::{Effect, Event, PcbView};
+use planner_app::{Effect, Event};
 use tracing::trace;
 
 use crate::core::Core;
@@ -75,7 +74,7 @@ fn run_loop(core: &Core, event: Event) -> Result<(), anyhow::Error> {
                 // Currently, the CLI app should not cause these effects.
                 unreachable!()
             }
-            Effect::PcbView(view) => {
+            Effect::PcbView(_) => {
                 // Currently, the CLI app should not cause these effects.
                 unreachable!()
             }
