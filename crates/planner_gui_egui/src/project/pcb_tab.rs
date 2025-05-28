@@ -190,10 +190,14 @@ impl Tab for PcbTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let pcb_ui = state
+        let Some(pcb_ui) = state
             .pcbs
             .get(&(self.pcb_index as usize))
-            .unwrap();
+        else {
+            ui.spinner();
+            return;
+        };
+
         UiComponent::ui(pcb_ui, ui, &mut PcbUiContext::default());
     }
 
