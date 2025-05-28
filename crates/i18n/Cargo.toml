@@ -17,8 +17,5 @@ tracing = { workspace = true }
 # gui
 egui-i18n = { workspace = true }
 
-# i18n
-fluent-bundle = { workspace = true }
-
 # Required for form validation (!)
 serde_json = { workspace = true, optional = true }

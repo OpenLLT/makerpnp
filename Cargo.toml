@@ -26,30 +26,30 @@ members = [
 ]
 
 [workspace.dependencies]
-thiserror = { version = "2.0.7" }
-anyhow = { version = "1.0.86" }
-regex = { version = "1.10.6" }
-time = { version = "0.3.36" }
-indexmap = { version = "2.4.0" }
+thiserror = { version = "2.0.12" }
+anyhow = { version = "1.0.98" }
+regex = { version = "1.11.1" }
+time = { version = "0.3.41" }
+indexmap = { version = "2.9.0" }
 slotmap = { version = "1.0.7" }
 heck = { version = "0.5.0" }
 futures = {  version = "0.3.31" }
-async-std = {  version = "1.13.0" }
-petgraph = { version = "0.6.5"}
-csv = { version = "1.3.0" }
+async-std = {  version = "1.13.1" }
+petgraph = { version = "0.8.1"}
+csv = { version = "1.3.1" }
 termtree = { version = "0.5.1"}
-rust_decimal = { version = "1.35.0"}
-rust_decimal_macros = { version = "1.35"}
+rust_decimal = { version = "1.37.1"}
+rust_decimal_macros = { version = "1.37.1"}
 derivative = { version = "2.2.0" }
 lexical-sort = { version = "0.3.1"}
 
 # time
 # Note: using `chrono`, because it has 13k dependents vs `time`'s 3k dependents (as of 2025/04/04) 
-chrono = { version = "0.4.40"}
+chrono = { version = "0.4.41"}
 
 # cli
-clap = { version = "4.5.8" }
-clap-verbosity-flag = { version = "3.0.2" }
+clap = { version = "4.5.39" }
+clap-verbosity-flag = { version = "3.0.3" }
 argfile = { version = "0.2.1" }
 
 # logging
@@ -57,8 +57,8 @@ log = { version = "0.4.27" }
 env_logger = { version = "0.11.8" }
 
 # tracing
-tracing = { version = "0.1.40"}
-tracing-subscriber = { version = "0.3.18" }
+tracing = { version = "0.1.41"}
+tracing-subscriber = { version = "0.3.19" }
 # only for `as_trace`
 tracing-log = { version = "0.2.0" }
 
@@ -66,9 +66,9 @@ tracing-log = { version = "0.2.0" }
 itertools = { version = "0.14.0" }
 
 # serialization
-serde = { version = "1.0.203" }
-serde_json = { version = "1.0.127" }
-serde_with = { version = "3.9.0" }
+serde = { version = "1.0.219" }
+serde_json = { version = "1.0.140" }
+serde_with = { version = "3.12.0" }
 serde_regex = { version = "1.1.0" }
 json2markdown = { version = "0.2.1" }
 typetag = { version = "0.2.20" }
@@ -77,7 +77,7 @@ dyn-clone = {  version = "1.0.19" }
 as-any = { version = "0.3.2" }
 
 # crux app
-crux_core = { version = "0.14.0" }
+crux_core = { version = "0.15.0" }
 
 # gui (egui)
 egui = { version = "0.31.1", features = ["serde"]}
@@ -85,14 +85,13 @@ epaint = { version = "0.31.1"}
 egui_extras = { version = "0.31.1", default-features = false }
 eframe = { version = "0.31.1", default-features = false }
 egui_taffy = "0.7.0"
-egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d545a715529ac80415f49d675756", features = ["fluent"] }
 egui_mobius = "0.3.0-alpha.23"
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.8.0" }
 egui_ltreeview = { version = "0.2.0" }
 egui-data-table = { version = "0.6.2" }
-egui_double_slider = { version = "0.7.0"}
+egui_double_slider = { version = "0.7.1"}
 
-rfd = { version = "0.15.2" }
+rfd = { version = "0.15.3" }
 
 # images
 image = { version = "0.25.6" }
@@ -101,25 +100,25 @@ image = { version = "0.25.6" }
 validator = { version = "0.20.0", features = ["derive"] }
 
 # i18n
-unic-langid = { version = "0.9.5" }
-fluent-bundle = { version = "0.15.3" }
+#egui-i18n = { git = "https://github.com/fewensa/egui-i18n", rev = "3be4d89e6328d545a715529ac80415f49d675756", features = ["fluent"] }
+egui-i18n = { git = "https://github.com/makerpnp/egui-i18n", rev = "087c62591d8027b51641bf4bcf556106d17ea799", features = ["fluent"] }
 
 # testing
-rstest = { version = "0.23.0" }
-assert_cmd = { version = "2.0.14" }
-assert_fs = { version = "1.1.1" }
+rstest = { version = "0.25.0" }
+assert_cmd = { version = "2.0.17" }
+assert_fs = { version = "1.1.3" }
 tempfile = { version = "3.10.1" }
-indoc = { version = "2.0.5" }
-predicates = { version = "3.1.0" }
-predicates-tree = { version = "1.0.11" }
+indoc = { version = "2.0.6" }
+predicates = { version = "3.1.3" }
+predicates-tree = { version = "1.0.12" }
 
 # profiling
 profiling = { version = "1.0.16" }
 puffin_http = { version = "0.16.1" }
 
 # tasks/async
-tokio = { version = "1.43.0", features = ["full"]}
-crossbeam-channel = { version = "0.5.13" }
+tokio = { version = "1.45.1", features = ["full"]}
+crossbeam-channel = { version = "0.5.15" }
 
 # Gerber rendering, types and parser
 gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "93e54dd2f973748f5e705ea1111c4b4f3772c416" }

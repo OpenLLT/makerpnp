@@ -43,12 +43,12 @@ pub mod fluent_argument_helpers {
         use std::borrow::Cow;
         use std::collections::HashMap;
 
-        use fluent_bundle::types::{FluentNumber, FluentNumberOptions};
-        use fluent_bundle::{FluentArgs, FluentValue};
+        use egui_i18n::fluent_bundle::types::{FluentNumber, FluentNumberOptions};
+        use egui_i18n::fluent_bundle::{FluentArgs, FluentValue};
         use serde_json::Value;
 
         pub fn build_fluent_args<'a>(params: &'a HashMap<Cow<'_, str>, Value>) -> FluentArgs<'a> {
-            let mut args = egui_i18n::fluent::FluentArgs::new();
+            let mut args = FluentArgs::new();
             for (key, value) in params.iter() {
                 match value {
                     Value::Null => {
@@ -101,7 +101,7 @@ pub mod fluent_argument_helpers {
     pub mod planner_app {
         use std::collections::HashMap;
 
-        use fluent_bundle::{FluentArgs, FluentValue};
+        use egui_i18n::fluent_bundle::{FluentArgs, FluentValue};
         use planner_app::Arg;
 
         pub fn build_fluent_args(args: &HashMap<String, Arg>) -> FluentArgs {
