@@ -350,15 +350,34 @@ impl UiComponent for GerberViewerUi {
     }
 }
 
+/// The arguments required to create a new instance or reference an existing instance of the UI component.
+/// Value object
+#[derive(
+    Default,
+    Debug,
+    serde::Deserialize,
+    serde::Serialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash
+)]
+pub struct GerberViewerUiInstanceArgs {
+    pub design_index: DesignIndex,
+    // TODO add other args, like pcb_side: Option<PcbSide> or tags: Option<Vec<Tag>>
+}
+
 #[derive(Default, Debug, serde::Deserialize, serde::Serialize)]
 pub struct GerberViewerTab {
-    pub(crate) navigation_path: NavigationPath,
+    pub(crate) args: GerberViewerUiInstanceArgs,
 }
 
 impl GerberViewerTab {
-    pub fn new(navigation_path: NavigationPath) -> Self {
+    pub fn new(args: GerberViewerUiInstanceArgs) -> Self {
         Self {
-            navigation_path,
+            args,
         }
     }
 }
@@ -368,17 +387,17 @@ impl Tab for GerberViewerTab {
 
     fn label(&self) -> WidgetText {
         // TODO improve the tab title
-        let title = format!("{}", self.navigation_path);
+        let title = format!("{}", self.args.design_index);
 
         egui::widget_text::WidgetText::from(title)
     }
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let instance = state
-            .gerber_viewer_ui
-            .get(&self.navigation_path)
-            .unwrap();
+        let Some(instance) = state.gerber_viewer_ui.get(&self.args) else {
+            ui.spinner();
+            return;
+        };
 
         UiComponent::ui(instance, ui, &mut GerberViewerUiContext::default());
     }

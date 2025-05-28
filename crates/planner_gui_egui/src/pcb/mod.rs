@@ -17,6 +17,7 @@ use crate::pcb::core_helper::PcbCoreHelper;
 use crate::pcb::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiCommand, ExplorerUiContext};
 use crate::pcb::gerber_viewer_tab::{
     GerberViewerTab, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
+    GerberViewerUiInstanceArgs,
 };
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
@@ -27,7 +28,7 @@ use crate::ui_util::NavigationPath;
 mod configuration_tab;
 mod explorer_tab;
 mod gerber_viewer_tab;
-mod tabs;
+pub mod tabs;
 
 new_key_type! {
     /// A key for a pcb
@@ -53,29 +54,37 @@ pub struct Pcb {
     path: PathBuf,
     modified: bool,
 
-    // FIXME actually persist this, currently it should be treated as 'persistable_state'.
-    #[derivative(Debug = "ignore")]
-    pcb_tabs: Value<tabs::PcbTabs>,
+    pcb_tabs: Value<PcbTabs>,
 
     pub component: ComponentState<(PcbKey, PcbUiCommand)>,
 }
 
 impl Pcb {
-    pub fn from_path(path: PathBuf, key: PcbKey) -> (Self, PcbUiCommand) {
-        let instance = Self::new_inner(path, key, None);
-        (instance, PcbUiCommand::Load)
+    pub fn from_path(path: PathBuf, key: PcbKey, pcb_tabs: Value<PcbTabs>) -> (Self, Vec<PcbUiCommand>) {
+        Self::new_inner(path, key, None, pcb_tabs, PcbUiCommand::Load)
     }
 
-    pub fn new(path: PathBuf, key: PcbKey, name: String, units: u16) -> (Self, PcbUiCommand) {
-        let instance = Self::new_inner(path.clone(), key, None);
-        (instance, PcbUiCommand::Create {
+    pub fn new(
+        path: PathBuf,
+        key: PcbKey,
+        name: String,
+        units: u16,
+        pcb_tabs: Value<PcbTabs>,
+    ) -> (Self, Vec<PcbUiCommand>) {
+        Self::new_inner(path.clone(), key, None, pcb_tabs, PcbUiCommand::Create {
             path,
             name,
             units,
         })
     }
 
-    fn new_inner(path: PathBuf, key: PcbKey, name: Option<String>) -> Self {
+    fn new_inner(
+        path: PathBuf,
+        key: PcbKey,
+        name: Option<String>,
+        pcb_tabs: Value<PcbTabs>,
+        initial_command: PcbUiCommand,
+    ) -> (Self, Vec<PcbUiCommand>) {
         debug!("Creating pcb instance from path. path: {:?}", path);
 
         let component: ComponentState<(PcbKey, PcbUiCommand)> = ComponentState::default();
@@ -83,28 +92,45 @@ impl Pcb {
 
         let pcb_ui_state = Value::new(PcbUiState::new(key, name, component_sender.clone()));
 
-        let pcb_tabs = Value::new(PcbTabs::default());
-        {
-            let mut pcb_tabs = pcb_tabs.lock().unwrap();
-            pcb_tabs
-                .component
-                .configure_mapper(component_sender, move |command| {
-                    trace!("pcb inner-tab mapper. command: {:?}", command);
-                    (key, PcbUiCommand::TabCommand(command))
-                });
-            pcb_tabs.add_tab(PcbTabKind::Explorer(ExplorerTab::default()));
-        }
+        //let pcb_tabs = Value::new(PcbTabs::default());
 
         let core_service = PlannerCoreService::new();
 
-        Self {
+        let mut instance = Self {
             planner_core_service: core_service,
             pcb_ui_state,
             path,
             modified: false,
             component,
             pcb_tabs,
-        }
+        };
+
+        let mut commands = instance.configure_tabs(key);
+        commands.insert(0, initial_command);
+
+        (instance, commands)
+    }
+
+    fn configure_tabs(&mut self, key: PcbKey) -> Vec<PcbUiCommand> {
+        let component_sender = self.component.sender.clone();
+        let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+
+        pcb_tabs
+            .component
+            .configure_mapper(component_sender, move |command| {
+                trace!("pcb inner-tab mapper. command: {:?}", command);
+                (key, PcbUiCommand::TabCommand(command))
+            });
+
+        pcb_tabs.filter_map(|(key, tab)| {
+            let command = match tab {
+                PcbTabKind::Explorer(_tab) => PcbUiCommand::ShowExplorer,
+                PcbTabKind::Configuration(_) => PcbUiCommand::ShowConfiguration,
+                PcbTabKind::GerberViewer(tab) => PcbUiCommand::ShowGerberViewer(tab.args.clone()),
+            };
+
+            Some(command)
+        })
     }
 
     pub fn show_explorer(&mut self, path: PathBuf) -> Task<PcbAction> {
@@ -135,22 +161,23 @@ impl Pcb {
         )))
     }
 
-    fn ensure_gerber_viewer(&self, key: PcbKey, navigation_path: &NavigationPath, design_index: DesignIndex) {
-        let navigation_path = navigation_path.clone();
+    fn ensure_gerber_viewer(&self, key: PcbKey, args: GerberViewerUiInstanceArgs) -> bool {
         let mut state = self.pcb_ui_state.lock().unwrap();
-        let _navigation_path_state = state
+        let mut created = false;
+        let _gerber_viewer_ui_state = state
             .gerber_viewer_ui
-            .entry(navigation_path.clone())
+            .entry(args.clone())
             .or_insert_with(|| {
-                debug!("ensuring gerber_viewer ui. phase: {:?}", navigation_path);
-                let mut gerber_viewer_ui = GerberViewerUi::new(design_index);
+                created = true;
+                debug!("ensuring gerber_viewer ui. args: {:?}", args);
+                let mut gerber_viewer_ui = GerberViewerUi::new(args.design_index);
                 gerber_viewer_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
                             trace!("gerber_viewer ui mapper. command: {:?}", command);
-                            (key, PcbUiCommand::GerberViewerUiUiCommand {
-                                navigation_path: navigation_path.clone(),
+                            (key, PcbUiCommand::GerberViewerUiCommand {
+                                args: args.clone(),
                                 command,
                             })
                         }
@@ -158,25 +185,27 @@ impl Pcb {
 
                 gerber_viewer_ui
             });
+
+        created
     }
 
-    pub fn show_gerber_viewer(
-        &mut self,
-        key: &PcbKey,
-        navigation_path: NavigationPath,
-        design_index: DesignIndex,
-    ) -> Task<PcbAction> {
+    pub fn show_gerber_viewer(&mut self, key: PcbKey, args: GerberViewerUiInstanceArgs) -> Option<Task<PcbAction>> {
         let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
-        let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::GerberViewer(tab) if tab.navigation_path.eq(&navigation_path)));
-        if result.is_err() {
-            self.ensure_gerber_viewer(*key, &navigation_path, design_index);
-            pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(navigation_path)));
+        pcb_tabs
+            .show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::GerberViewer(tab) if tab.args.eq(&args)))
+            .inspect_err(|_| {
+                pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(args.clone())));
+            })
+            .ok();
+
+        match self.ensure_gerber_viewer(key, args) {
+            false => None,
+            true => Some(Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                PcbViewRequest::Overview {
+                    path: self.path.clone(),
+                },
+            )))),
         }
-        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
-            PcbViewRequest::Overview {
-                path: self.path.clone(),
-            },
-        )))
     }
 
     fn navigate(&mut self, key: &PcbKey, navigation_path: NavigationPath) -> Option<PcbAction> {
@@ -216,8 +245,14 @@ impl Pcb {
                     .unwrap();
                 debug!("design_index: {}", design_index);
 
-                let task = pcb.show_gerber_viewer(key, navigation_path.clone(), design_index);
-                Some(PcbAction::Task(*key, task))
+                let args = GerberViewerUiInstanceArgs {
+                    design_index,
+                };
+
+                Some(PcbAction::Task(
+                    *key,
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowGerberViewer(args))),
+                ))
             } else {
                 None
             }
@@ -240,7 +275,7 @@ pub struct PcbUiState {
     key: PcbKey,
     explorer_ui: ExplorerUi,
     configuration_ui: ConfigurationUi,
-    gerber_viewer_ui: HashMap<NavigationPath, GerberViewerUi>,
+    gerber_viewer_ui: HashMap<GerberViewerUiInstanceArgs, GerberViewerUi>,
 }
 
 impl PcbUiState {
@@ -289,7 +324,7 @@ pub enum PcbUiCommand {
     Save,
     Error(PlannerError),
     PcbView(PcbView),
-    // FIXME don't care about projects, don't care ablout all pcbs, care about *this* PCB.
+    // FIXME don't care about projects, don't care about /all/ pcbs, care about *this* PCB.
     SetModifiedState {
         project_modified: bool,
         pcbs_modified: bool,
@@ -308,10 +343,14 @@ pub enum PcbUiCommand {
     Created {
         path: PathBuf,
     },
-    GerberViewerUiUiCommand {
-        navigation_path: NavigationPath,
+    GerberViewerUiCommand {
+        args: GerberViewerUiInstanceArgs,
         command: GerberViewerUiCommand,
     },
+
+    ShowExplorer,
+    ShowConfiguration,
+    ShowGerberViewer(GerberViewerUiInstanceArgs),
 }
 
 pub struct PcbContext {
@@ -469,6 +508,24 @@ impl UiComponent for Pcb {
                     .update(event)
                     .when_ok(key, |_| None)
             }
+
+            //
+            // tabs
+            //
+            PcbUiCommand::ShowExplorer => {
+                let task = self.show_explorer(self.path.clone());
+                Some(PcbAction::Task(key, task))
+            }
+            PcbUiCommand::ShowConfiguration => {
+                let task = self.show_configuration(self.path.clone());
+                Some(PcbAction::Task(key, task))
+            }
+            PcbUiCommand::ShowGerberViewer(args) => {
+                let task = self.show_gerber_viewer(key, args);
+
+                task.map(|task| PcbAction::Task(key, task))
+            }
+
             PcbUiCommand::TabCommand(tab_command) => {
                 let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
 
@@ -602,8 +659,8 @@ impl UiComponent for Pcb {
                     }
                 }
             }
-            PcbUiCommand::GerberViewerUiUiCommand {
-                navigation_path,
+            PcbUiCommand::GerberViewerUiCommand {
+                args,
                 command,
             } => {
                 let context = &mut GerberViewerUiContext::default();
@@ -613,7 +670,7 @@ impl UiComponent for Pcb {
                     .lock()
                     .unwrap()
                     .gerber_viewer_ui
-                    .get_mut(&navigation_path)
+                    .get_mut(&args)
                     .unwrap()
                     .update(command, context);
 
@@ -714,4 +771,10 @@ mod core_helper {
             when_ok_inner(self, project_key, f)
         }
     }
+}
+
+pub(crate) fn make_tabs(key: PcbKey) -> Value<PcbTabs> {
+    debug!("Initializing pcb tabs for tab. key: {:?}", key);
+
+    Value::new(PcbTabs::default())
 }

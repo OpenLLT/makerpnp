@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
 
+use crate::pcb::tabs::PcbTabs;
 use crate::pcb::{Pcb, PcbAction, PcbContext, PcbKey, PcbUiCommand};
 use crate::tabs::{Tab, TabKey};
 use crate::task::Task;
@@ -25,6 +26,8 @@ pub struct PcbTab {
 
     #[serde(skip)]
     pub component: ComponentState<PcbTabUiCommand>,
+
+    pub pcb_tabs: Value<PcbTabs>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,10 +48,11 @@ pub struct PcbTabContext {
 }
 
 impl PcbTab {
-    pub fn new(label: String, path: PathBuf, pcb_key: PcbKey) -> Self {
+    pub fn new(label: String, path: PathBuf, pcb_key: PcbKey, pcb_tabs: Value<PcbTabs>) -> Self {
         debug!("Creating pcb tab. key: {:?}, path: {:?}", &pcb_key, &path);
         Self {
             pcb_key,
+            pcb_tabs,
             path,
             label,
             modified: false,
