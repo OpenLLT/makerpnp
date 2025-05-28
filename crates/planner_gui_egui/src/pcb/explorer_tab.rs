@@ -39,6 +39,7 @@ impl ExplorerUi {
         self.pcb_overview.replace(pcb_overview);
     }
 
+    // FUTURE consider extracting the tree and navigation path creation into the planner_app, similar to `Event::RequestProjectTreeView`
     fn show_pcb_tree(&self, ui: &mut Ui) {
         let Some(pcb_overview) = self.pcb_overview.as_ref() else {
             return;
@@ -71,6 +72,7 @@ impl ExplorerUi {
 
                 node_id += 1;
                 tree_builder.leaf(node_id, tr!("pcb-explorer-node-configuration"));
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/configuration".to_string()));
 
                 //
                 // Views

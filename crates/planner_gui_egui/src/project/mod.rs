@@ -516,7 +516,6 @@ impl Project {
 
     fn navigate(&mut self, key: ProjectKey, path: NavigationPath) -> Option<ProjectAction> {
         // if the path starts with `/project/` then show/hide UI elements based on the path,
-        // e.g. update a dynamic that controls a per-project-tab-bar dynamic selector
         info!("project::navigate. path: {}", path);
 
         #[must_use]

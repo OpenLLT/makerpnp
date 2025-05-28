@@ -210,15 +210,27 @@ impl Pcb {
 
     fn navigate(&mut self, key: &PcbKey, navigation_path: NavigationPath) -> Option<PcbAction> {
         // if the path starts with `/pcb/` then show/hide UI elements based on the path,
-        // e.g. update a dynamic that controls a per-pcb-tab-bar dynamic selector
         info!("pcb::navigate. navigation_path: {}", navigation_path);
 
         #[must_use]
         fn handle_root(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
             if navigation_path.eq(&"/pcb/".into()) {
+                // Show the configuration, in lieu of anything else.
                 Some(PcbAction::Task(
                     *key,
-                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowExplorer)),
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowConfiguration)),
+                ))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
+        fn handle_configuration(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
+            if navigation_path.eq(&"/pcb/configuration".into()) {
+                Some(PcbAction::Task(
+                    *key,
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowConfiguration)),
                 ))
             } else {
                 None
@@ -250,7 +262,7 @@ impl Pcb {
             }
         }
 
-        let handlers = [handle_root, handle_pcb_design];
+        let handlers = [handle_root, handle_configuration, handle_pcb_design];
 
         handlers
             .iter()
