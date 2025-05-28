@@ -57,6 +57,7 @@ pub enum PcbUiCommand {
     None,
     CreateUnitAssignmentClicked,
     RequestPcbOverview(PathBuf),
+    ShowPcbClicked,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,7 @@ pub enum PcbUiAction {
     None,
     ShowUnitAssignments(u16),
     RequestPcbOverview(PathBuf),
+    ShowPcb(PathBuf),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -86,13 +88,23 @@ impl UiComponent for PcbUi {
         // toolbar
         //
 
-        if ui
-            .button(tr!("project-toolbar-button-create-unit-assignment"))
-            .clicked()
-        {
-            self.component
-                .send(PcbUiCommand::CreateUnitAssignmentClicked)
-        }
+        ui.horizontal(|ui| {
+            if ui
+                .button(tr!("project-pcb-toolbar-button-show-pcb"))
+                .clicked()
+            {
+                self.component
+                    .send(PcbUiCommand::ShowPcbClicked)
+            }
+
+            if ui
+                .button(tr!("project-pcb-toolbar-button-create-unit-assignment"))
+                .clicked()
+            {
+                self.component
+                    .send(PcbUiCommand::CreateUnitAssignmentClicked)
+            }
+        });
 
         ui.separator();
 
@@ -163,6 +175,10 @@ impl UiComponent for PcbUi {
                 }
             }
             PcbUiCommand::RequestPcbOverview(path) => Some(PcbUiAction::RequestPcbOverview(path)),
+            PcbUiCommand::ShowPcbClicked => self
+                .project_pcb_overview
+                .as_ref()
+                .map(|project_pcb_overview| PcbUiAction::ShowPcb(project_pcb_overview.pcb_path.clone())),
         }
     }
 }

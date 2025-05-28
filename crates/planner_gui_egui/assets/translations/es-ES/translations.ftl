@@ -33,7 +33,9 @@ project-toolbar-button-refresh-from-variants = Actualizar desde variantes
 project-toolbar-button-remove-unused-placements = Eliminar ubicaciones no utilizadas
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-add-phase = Añadir fase
-project-toolbar-button-create-unit-assignment = Crear asignacion de unidad
+
+project-pcb-toolbar-button-create-unit-assignment = Crear asignacion de unidad
+project-pcb-toolbar-button-show-pcb = Mostrar PCB
 
 tab-label-home = Inicio
 tab-label-new-project = Nuevo proyecto

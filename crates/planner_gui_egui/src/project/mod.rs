@@ -1177,24 +1177,21 @@ impl UiComponent for Project {
                     .update(event)
                     .when_ok(key, |_| None)
             }
-            ProjectUiCommand::PcbView(view) => {
-                match view {
-                    PcbView::PcbOverview(pcb_overview) => {
-                        let mut state = self.project_ui_state.lock().unwrap();
+            ProjectUiCommand::PcbView(view) => match view {
+                PcbView::PcbOverview(pcb_overview) => {
+                    let mut state = self.project_ui_state.lock().unwrap();
 
-                        for (_index, pcb_ui) in state.pcbs.iter_mut() {
-                            pcb_ui.update_pcb_overview(&pcb_overview);
-                        }
-
-                        for (_index, unit_assignments_ui) in state.unit_assignments.iter_mut() {
-                            unit_assignments_ui.update_pcb_overview(&pcb_overview);
-                        }
-
-                        // TODO don't do this when there's some other means of UI navigation.
-                        Some(ProjectAction::ShowPcb(pcb_overview.path))
+                    for (_index, pcb_ui) in state.pcbs.iter_mut() {
+                        pcb_ui.update_pcb_overview(&pcb_overview);
                     }
+
+                    for (_index, unit_assignments_ui) in state.unit_assignments.iter_mut() {
+                        unit_assignments_ui.update_pcb_overview(&pcb_overview);
+                    }
+
+                    None
                 }
-            }
+            },
 
             //
             // toolbar
@@ -1665,6 +1662,7 @@ impl UiComponent for Project {
                             },
                         ))),
                     )),
+                    Some(PcbUiAction::ShowPcb(pcb_path)) => Some(ProjectAction::ShowPcb(pcb_path)),
                 }
             }
             ProjectUiCommand::UnitAssignmentsUiCommand {
