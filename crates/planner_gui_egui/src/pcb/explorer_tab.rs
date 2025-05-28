@@ -86,11 +86,14 @@ impl ExplorerUi {
                             ui.add(egui::Label::new(tr!("pcb-explorer-node-pcb-view")).selectable(false));
                         }),
                 );
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/pcb".to_string()));
 
                 node_id += 1;
                 tree_builder.leaf(node_id, tr!("pcb-side-top"));
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/pcb/top".to_string()));
                 node_id += 1;
                 tree_builder.leaf(node_id, tr!("pcb-side-bottom"));
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/pcb/bottom".to_string()));
 
                 // views
                 tree_builder.close_dir();
