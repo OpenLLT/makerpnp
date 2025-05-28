@@ -257,11 +257,11 @@ impl UiComponent for TabKind {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct AppTabs {
-    tabs: Value<Tabs<TabKind, TabKindContext>>,
+    pub tabs: Value<Tabs<TabKind, TabKindContext>>,
 
     // Note: `tree` is wrapped in a value because `ui()` only gives us `&self`
     //       but dockstate needs a mutable tree.
-    tree: Value<DockState<TabKey>>,
+    pub tree: Value<DockState<TabKey>>,
 
     #[serde(skip)]
     pub component: ComponentState<(TabKey, TabUiCommand)>,
@@ -311,6 +311,8 @@ macro_rules! tabs_impl {
                 .iter_all_tabs()
                 .map(|(_surface_and_node, tab_key)| tab_key.clone())
                 .collect::<Vec<_>>();
+            
+            tracing::debug!("known_tab_keys: {:?}", known_tab_keys);
 
             let mut tabs = self.tabs.lock().unwrap();
 
@@ -408,9 +410,15 @@ macro_rules! tabs_impl {
                     false => None,
                 })
                 .collect::<Vec<_>>();
+            
+            tracing::debug!("tab_keys_to_retain: {:?}", tab_keys_to_retain);
 
             let mut tree = self.tree.lock().unwrap();
-            tree.retain_tabs(|tab_key| tab_keys_to_retain.contains(&tab_key));
+            tree.retain_tabs(|tab_key| {
+                tracing::debug!("tab_key: {:?}", tab_key);
+                tracing::debug!("tab_key in tab_keys_to_retain: {:?}", tab_keys_to_retain.contains(&tab_key));
+                tab_keys_to_retain.contains(&tab_key)
+            });
         }
 
         #[allow(dead_code)]

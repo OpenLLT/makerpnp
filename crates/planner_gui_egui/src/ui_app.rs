@@ -451,6 +451,8 @@ impl UiApp {
             let should_retain = !matches!(tab_kind, TabKind::NewProject(_, _));
             if !should_retain {
                 debug!("removing 'new project' tab, tab_key: {:?}", tab_key);
+            } else {
+                trace!("retaining other tab, tab_key: {:?}", tab_key);
             }
             should_retain
         });
@@ -465,6 +467,8 @@ impl UiApp {
             let should_retain = !matches!(tab_kind, TabKind::NewPcb(_, _));
             if !should_retain {
                 debug!("removing 'new pcb' tab, tab_key: {:?}", tab_key);
+            } else {
+                trace!("retaining other tab, tab_key: {:?}", tab_key);
             }
             should_retain
         });
@@ -595,6 +599,16 @@ impl UiApp {
             }
         }
     }
+
+    fn dump_tabs(&self, message: &str) {
+        let mut app_tabs = self.app_tabs.lock().unwrap();
+        let tree = app_tabs.tree.lock().unwrap();
+        trace!("dumping tabs. message: '{}'", message);
+        for (si, ni) in tree.iter_all_tabs() {
+            trace!("si: {:?}, ni: {:?}", si, ni);
+        }
+        trace!("dumping tabs complete.");
+    }
 }
 
 impl eframe::App for UiApp {
@@ -604,6 +618,7 @@ impl eframe::App for UiApp {
 
     #[profiling::function]
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             profiling::scope!("ui::top_panel");
             // The top panel is often a good place for a menu bar:
@@ -714,6 +729,7 @@ impl eframe::App for UiApp {
         if !self.app_state().startup_done {
             self.app_state().startup_done = true;
 
+            self.dump_tabs("startup");
             {
                 let mut app_tabs = self.app_tabs.lock().unwrap();
                 app_tabs.show_home_tab_on_startup(
@@ -723,9 +739,13 @@ impl eframe::App for UiApp {
                         .show_home_tab_on_startup,
                 );
             }
+            self.dump_tabs("after home tab");
             self.remove_new_project_tabs_on_startup();
+            self.dump_tabs("after removing any 'new project' tabs");
             self.remove_new_pcb_tabs_on_startup();
+            self.dump_tabs("after removing any 'new pcb' tabs");
             self.restore_documents_on_startup();
+            self.dump_tabs("after restoring documents.");
         }
 
         // in a block to limit the scope of the `app_tabs` borrow/guard
