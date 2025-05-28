@@ -21,7 +21,6 @@ use tracing::{debug, error, info};
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
-use crate::ui_util::NavigationPath;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 

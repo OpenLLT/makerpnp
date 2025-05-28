@@ -194,7 +194,7 @@ impl Project {
         // state, so issue commands to restore the state
         //
 
-        project_tabs.filter_map(|(key, tab)| {
+        project_tabs.filter_map(|(_key, tab)| {
             let command = match tab {
                 ProjectTabKind::Explorer(_tab) => ProjectUiCommand::ShowExplorer,
                 ProjectTabKind::Overview(_tab) => ProjectUiCommand::ShowOverview,
@@ -1835,7 +1835,7 @@ impl ProjectUiState {
 
 // these should not contain state
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-enum ProjectTabKind {
+pub enum ProjectTabKind {
     Explorer(ExplorerTab),
     Overview(OverviewTab),
     Phase(PhaseTab),

@@ -122,7 +122,7 @@ impl Pcb {
                 (key, PcbUiCommand::TabCommand(command))
             });
 
-        pcb_tabs.filter_map(|(key, tab)| {
+        pcb_tabs.filter_map(|(_key, tab)| {
             let command = match tab {
                 PcbTabKind::Explorer(_tab) => PcbUiCommand::ShowExplorer,
                 PcbTabKind::Configuration(_) => PcbUiCommand::ShowConfiguration,
@@ -214,27 +214,19 @@ impl Pcb {
         info!("pcb::navigate. navigation_path: {}", navigation_path);
 
         #[must_use]
-        fn handle_root(
-            pcb: &mut Pcb,
-            key: &PcbKey,
-            navigation_path: &NavigationPath,
-            path: &PathBuf,
-        ) -> Option<PcbAction> {
+        fn handle_root(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
             if navigation_path.eq(&"/pcb/".into()) {
-                let task = pcb.show_configuration(path.clone());
-                Some(PcbAction::Task(*key, task))
+                Some(PcbAction::Task(
+                    *key,
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowExplorer)),
+                ))
             } else {
                 None
             }
         }
 
         #[must_use]
-        fn handle_pcb_design(
-            pcb: &mut Pcb,
-            key: &PcbKey,
-            navigation_path: &NavigationPath,
-            _path: &PathBuf,
-        ) -> Option<PcbAction> {
+        fn handle_pcb_design(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
             let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}$").unwrap();
             if let Some(captures) = design_pattern.captures(&navigation_path) {
                 let design_index: DesignIndex = captures
@@ -260,10 +252,9 @@ impl Pcb {
 
         let handlers = [handle_root, handle_pcb_design];
 
-        let path = &self.path.clone();
         handlers
             .iter()
-            .find_map(|handler| handler(self, key, &navigation_path, &path))
+            .find_map(|handler| handler(key, &navigation_path))
     }
 }
 
@@ -310,7 +301,7 @@ impl PcbUiState {
 
 // these should not contain state
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-enum PcbTabKind {
+pub enum PcbTabKind {
     Explorer(ExplorerTab),
     Configuration(ConfigurationTab),
     GerberViewer(GerberViewerTab),
@@ -363,15 +354,11 @@ impl UiComponent for Pcb {
     type UiAction = PcbAction;
 
     #[profiling::function]
-    fn ui<'context>(&self, ui: &mut Ui, context: &mut Self::UiContext<'context>) {
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.ctx().style_mut(|style| {
             // if this is not done, text in labels/checkboxes/etc wraps when using taffy
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
-
-        let PcbContext {
-            key,
-        } = context;
 
         //
         // Tabs
@@ -489,8 +476,7 @@ impl UiComponent for Pcb {
                 None
             }
             PcbUiCommand::SetModifiedState {
-                project_modified,
-                pcbs_modified,
+                pcbs_modified, ..
             } => {
                 // FIXME we want to know if *THIS* pcb is modified, not any pcb.
                 self.modified = pcbs_modified;

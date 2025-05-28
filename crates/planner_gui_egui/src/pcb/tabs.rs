@@ -1,9 +1,7 @@
-use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
 use egui_mobius::types::Value;
 
-use crate::pcb::gerber_viewer_tab::GerberViewerUiInstanceArgs;
 use crate::pcb::{PcbTabKind, PcbUiState};
 use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;

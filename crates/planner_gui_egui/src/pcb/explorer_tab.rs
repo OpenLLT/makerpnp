@@ -173,10 +173,10 @@ impl ExplorerUi {
 
                     // TODO handle selection
                 }
-                Action::Move(dd) => {
+                Action::Move(_dd) => {
                     unreachable!();
                 }
-                Action::Drag(dd) => {
+                Action::Drag(_dd) => {
                     unreachable!()
                 }
                 Action::Activate(activation) => {

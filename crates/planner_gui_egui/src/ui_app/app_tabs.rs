@@ -1,4 +1,3 @@
-use std::mem;
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};

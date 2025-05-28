@@ -1,5 +1,3 @@
-use tracing::{error, info};
-
 pub fn init() {
     #[cfg(feature = "profile-with-puffin")]
     {
@@ -9,6 +7,8 @@ pub fn init() {
 
 #[cfg(feature = "profile-with-puffin")]
 fn start_puffin_server() {
+    use tracing::{error, info};
+
     profiling::puffin::set_scopes_on(true); // tell puffin to collect data
 
     match puffin_http::Server::new("127.0.0.1:8585") {

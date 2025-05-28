@@ -11,7 +11,6 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Derivative, serde::Deserialize, serde::Serialize)]
 #[derivative(Debug)]
 pub struct ProjectTabs {
-    #[derivative(Debug = "ignore")]
     tabs: Value<Tabs<ProjectTabKind, ProjectTabContext>>,
     tree: Value<DockState<TabKey>>,
 
@@ -30,6 +29,7 @@ impl Default for ProjectTabs {
 }
 
 // Not to be confused with the other one...
+#[derive(Debug)]
 pub struct ProjectTabContext {
     pub state: Value<ProjectUiState>,
 }
