@@ -9,7 +9,7 @@ use planner_app::Part;
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
-use crate::project::load_out_tab::LoadOutUiCommand;
+use crate::project::load_out_tab::LoadOutTabUiCommand;
 
 #[derive(Debug, Clone)]
 pub struct LoadOutRow {
@@ -18,19 +18,19 @@ pub struct LoadOutRow {
 }
 
 pub struct LoadOutRowViewer {
-    sender: Enqueue<LoadOutUiCommand>,
+    sender: Enqueue<LoadOutTabUiCommand>,
 
     pub(crate) filter: Filter,
 }
 
 impl LoadOutRowViewer {
-    pub fn new(sender: Enqueue<LoadOutUiCommand>) -> Self {
+    pub fn new(sender: Enqueue<LoadOutTabUiCommand>) -> Self {
         let mut filter = Filter::default();
         filter
             .component_state
             .configure_mapper(sender.clone(), |filter_ui_command| {
                 trace!("filter ui mapper. command: {:?}", filter_ui_command);
-                LoadOutUiCommand::FilterCommand(filter_ui_command)
+                LoadOutTabUiCommand::FilterCommand(filter_ui_command)
             });
 
         Self {
@@ -180,7 +180,7 @@ impl RowViewer<LoadOutRow> for LoadOutRowViewer {
             row_index, new_row, old_row
         );
         self.sender
-            .send(LoadOutUiCommand::RowUpdated {
+            .send(LoadOutTabUiCommand::RowUpdated {
                 index: row_index,
                 new_row: new_row.clone(),
                 old_row: old_row.clone(),

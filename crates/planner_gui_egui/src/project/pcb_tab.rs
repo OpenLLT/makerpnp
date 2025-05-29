@@ -13,17 +13,17 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct PcbUi {
+pub struct PcbTabUi {
     project_path: PathBuf,
     /// the link to the pcb
     project_pcb_overview: Option<ProjectPcbOverview>,
     /// the actual pcb
     pcb_overview: Option<PcbOverview>,
 
-    pub component: ComponentState<PcbUiCommand>,
+    pub component: ComponentState<PcbTabUiCommand>,
 }
 
-impl PcbUi {
+impl PcbTabUi {
     pub fn new(path: PathBuf) -> Self {
         Self {
             project_path: path,
@@ -35,7 +35,9 @@ impl PcbUi {
 
     pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
         self.component
-            .send(PcbUiCommand::RequestPcbOverview(project_pcb_overview.pcb_path.clone()));
+            .send(PcbTabUiCommand::RequestPcbOverview(
+                project_pcb_overview.pcb_path.clone(),
+            ));
         self.project_pcb_overview = Some(project_pcb_overview);
     }
 
@@ -53,7 +55,7 @@ impl PcbUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum PcbUiCommand {
+pub enum PcbTabUiCommand {
     None,
     CreateUnitAssignmentClicked,
     RequestPcbOverview(PathBuf),
@@ -61,7 +63,7 @@ pub enum PcbUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum PcbUiAction {
+pub enum PcbTabUiAction {
     None,
     ShowUnitAssignments(u16),
     RequestPcbOverview(PathBuf),
@@ -69,12 +71,12 @@ pub enum PcbUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PcbUiContext {}
+pub struct PcbTabUiContext {}
 
-impl UiComponent for PcbUi {
-    type UiContext<'context> = PcbUiContext;
-    type UiCommand = PcbUiCommand;
-    type UiAction = PcbUiAction;
+impl UiComponent for PcbTabUi {
+    type UiContext<'context> = PcbTabUiContext;
+    type UiCommand = PcbTabUiCommand;
+    type UiAction = PcbTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -94,7 +96,7 @@ impl UiComponent for PcbUi {
                 .clicked()
             {
                 self.component
-                    .send(PcbUiCommand::ShowPcbClicked)
+                    .send(PcbTabUiCommand::ShowPcbClicked)
             }
 
             if ui
@@ -102,7 +104,7 @@ impl UiComponent for PcbUi {
                 .clicked()
             {
                 self.component
-                    .send(PcbUiCommand::CreateUnitAssignmentClicked)
+                    .send(PcbTabUiCommand::CreateUnitAssignmentClicked)
             }
         });
 
@@ -166,19 +168,19 @@ impl UiComponent for PcbUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            PcbUiCommand::None => Some(PcbUiAction::None),
-            PcbUiCommand::CreateUnitAssignmentClicked => {
+            PcbTabUiCommand::None => Some(PcbTabUiAction::None),
+            PcbTabUiCommand::CreateUnitAssignmentClicked => {
                 if let Some(project_pcb_overview) = &self.project_pcb_overview {
-                    Some(PcbUiAction::ShowUnitAssignments(project_pcb_overview.index))
+                    Some(PcbTabUiAction::ShowUnitAssignments(project_pcb_overview.index))
                 } else {
                     None
                 }
             }
-            PcbUiCommand::RequestPcbOverview(path) => Some(PcbUiAction::RequestPcbOverview(path)),
-            PcbUiCommand::ShowPcbClicked => self
+            PcbTabUiCommand::RequestPcbOverview(path) => Some(PcbTabUiAction::RequestPcbOverview(path)),
+            PcbTabUiCommand::ShowPcbClicked => self
                 .project_pcb_overview
                 .as_ref()
-                .map(|project_pcb_overview| PcbUiAction::ShowPcb(project_pcb_overview.pcb_path.clone())),
+                .map(|project_pcb_overview| PcbTabUiAction::ShowPcb(project_pcb_overview.pcb_path.clone())),
         }
     }
 }
@@ -207,20 +209,20 @@ impl Tab for PcbTab {
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
         let Some(pcb_ui) = state
-            .pcbs
+            .pcb_tab_uis
             .get(&(self.pcb_index as usize))
         else {
             ui.spinner();
             return;
         };
 
-        UiComponent::ui(pcb_ui, ui, &mut PcbUiContext::default());
+        UiComponent::ui(pcb_ui, ui, &mut PcbTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
         if let Some(_pcb_ui) = state
-            .pcbs
+            .pcb_tab_uis
             .remove(&(self.pcb_index as usize))
         {
             debug!("removed orphaned pcb ui. pcb_index: {}", self.pcb_index);

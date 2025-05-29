@@ -19,14 +19,14 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct PartsUi {
+pub struct PartsTabUi {
     #[derivative(Debug = "ignore")]
     part_states_table: Value<Option<(PartStatesRowViewer, DataTable<PartStatesRow>)>>,
 
-    pub component: ComponentState<PartsUiCommand>,
+    pub component: ComponentState<PartsTabUiCommand>,
 }
 
-impl PartsUi {
+impl PartsTabUi {
     pub fn new() -> Self {
         Self {
             part_states_table: Value::default(),
@@ -68,7 +68,7 @@ impl PartsUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum PartsUiCommand {
+pub enum PartsTabUiCommand {
     None,
 
     // internal
@@ -81,7 +81,7 @@ pub enum PartsUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum PartsUiAction {
+pub enum PartsTabUiAction {
     None,
     UpdateProcessesForPart {
         part: Part,
@@ -91,12 +91,12 @@ pub enum PartsUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PartsUiContext {}
+pub struct PartsTabUiContext {}
 
-impl UiComponent for PartsUi {
-    type UiContext<'context> = PartsUiContext;
-    type UiCommand = PartsUiCommand;
-    type UiAction = PartsUiAction;
+impl UiComponent for PartsTabUi {
+    type UiContext<'context> = PartsTabUiContext;
+    type UiCommand = PartsTabUiCommand;
+    type UiAction = PartsTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -132,8 +132,8 @@ impl UiComponent for PartsUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            PartsUiCommand::None => Some(PartsUiAction::None),
-            PartsUiCommand::RowUpdated {
+            PartsTabUiCommand::None => Some(PartsTabUiAction::None),
+            PartsTabUiCommand::RowUpdated {
                 index,
                 new_row,
                 old_row,
@@ -144,12 +144,12 @@ impl UiComponent for PartsUi {
                     .into_iter()
                     .collect();
 
-                Some(PartsUiAction::UpdateProcessesForPart {
+                Some(PartsTabUiAction::UpdateProcessesForPart {
                     part: new_row.part,
                     processes,
                 })
             }
-            PartsUiCommand::FilterCommand(command) => {
+            PartsTabUiCommand::FilterCommand(command) => {
                 let mut table = self.part_states_table.lock().unwrap();
                 if let Some((viewer, _table)) = &mut *table {
                     let action = viewer
@@ -157,7 +157,7 @@ impl UiComponent for PartsUi {
                         .update(command, &mut FilterUiContext::default());
                     debug!("filter action: {:?}", action);
                     match action {
-                        Some(FilterUiAction::ApplyFilter) => Some(PartsUiAction::RequestRepaint),
+                        Some(FilterUiAction::ApplyFilter) => Some(PartsTabUiAction::RequestRepaint),
                         None => None,
                     }
                 } else {
@@ -180,7 +180,7 @@ impl Tab for PartsTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.parts_ui, ui, &mut PartsUiContext::default());
+        UiComponent::ui(&state.parts_tab_ui, ui, &mut PartsTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

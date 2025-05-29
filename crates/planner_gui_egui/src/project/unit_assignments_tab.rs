@@ -35,7 +35,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct UnitAssignmentsUi {
+pub struct UnitAssignmentsTabUi {
     project_path: PathBuf,
 
     /// Not to be confused with [`PcbUnitIndex`], this is the index of the PCB in the project
@@ -48,10 +48,10 @@ pub struct UnitAssignmentsUi {
 
     fields: Value<UnitAssignmentsFields>,
 
-    pub component: ComponentState<UnitAssignmentsUiCommand>,
+    pub component: ComponentState<UnitAssignmentsTabUiCommand>,
 }
 
-impl UnitAssignmentsUi {
+impl UnitAssignmentsTabUi {
     // TODO turn this debug flag into a cargo feature
     const TABLE_DEBUG_MODE: bool = false;
 
@@ -81,7 +81,7 @@ impl UnitAssignmentsUi {
 
     pub fn update_project_pcb_overview(&mut self, project_pcb_overview: ProjectPcbOverview) {
         self.component
-            .send(UnitAssignmentsUiCommand::RequestPcbOverview(
+            .send(UnitAssignmentsTabUiCommand::RequestPcbOverview(
                 project_pcb_overview.pcb_path.clone(),
             ));
         self.project_pcb_overview = Some(project_pcb_overview);
@@ -178,7 +178,7 @@ impl UnitAssignmentsUi {
     fn show_form(
         &self,
         ui: &mut Ui,
-        form: &Form<UnitAssignmentsFields, UnitAssignmentsUiCommand>,
+        form: &Form<UnitAssignmentsFields, UnitAssignmentsTabUiCommand>,
         pcb_overview: &PcbOverview,
     ) {
         let default_style = || Style {
@@ -284,7 +284,7 @@ impl UnitAssignmentsUi {
                                                     .clicked()
                                                 {
                                                     sender
-                                                        .send(UnitAssignmentsUiCommand::DesignNameChanged(
+                                                        .send(UnitAssignmentsTabUiCommand::DesignNameChanged(
                                                             available_design_name.clone(),
                                                         ))
                                                         .expect("sent");
@@ -323,7 +323,7 @@ impl UnitAssignmentsUi {
                                         .eq(&variant_name_clone)
                                     {
                                         sender
-                                            .send(UnitAssignmentsUiCommand::VariantNameChanged(variant_name_clone))
+                                            .send(UnitAssignmentsTabUiCommand::VariantNameChanged(variant_name_clone))
                                             .expect("sent")
                                     }
                                 });
@@ -343,7 +343,7 @@ impl UnitAssignmentsUi {
                                     .clicked()
                                 {
                                     self.component
-                                        .send(UnitAssignmentsUiCommand::AddDesignVariantClicked);
+                                        .send(UnitAssignmentsTabUiCommand::AddDesignVariantClicked);
                                 }
                             });
 
@@ -451,7 +451,7 @@ impl UnitAssignmentsUi {
                                                             });
                                                         }
                                                         if fields.design_variant_selected_index != design_variant_selected_index {
-                                                            self.component.send(UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
+                                                            self.component.send(UnitAssignmentsTabUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
                                                         }
                                                     });
                                                 if Self::TABLE_DEBUG_MODE {
@@ -538,7 +538,7 @@ impl UnitAssignmentsUi {
 
                                     if fields.pcb_unit_range != pcb_unit_range {
                                         sender
-                                            .send(UnitAssignmentsUiCommand::PcbUnitRangeChanged(pcb_unit_range.clone()))
+                                            .send(UnitAssignmentsTabUiCommand::PcbUnitRangeChanged(pcb_unit_range.clone()))
                                             .expect("sent")
                                     }
 
@@ -557,7 +557,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::ApplyRangeClicked(
+                                            .send(UnitAssignmentsTabUiCommand::ApplyRangeClicked(
                                                 fields.design_variant_selected_index.unwrap(),
                                             ));
                                     }
@@ -572,7 +572,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::ApplyAllClicked(
+                                            .send(UnitAssignmentsTabUiCommand::ApplyAllClicked(
                                                 fields.design_variant_selected_index.unwrap(),
                                             ));
                                     }
@@ -587,7 +587,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignFromRange(
+                                            .send(UnitAssignmentsTabUiCommand::UnassignFromRange(
                                                 fields.design_variant_selected_index.unwrap(),
                                             ));
                                     }
@@ -604,7 +604,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignRange);
+                                            .send(UnitAssignmentsTabUiCommand::UnassignRange);
                                     }
                                 }
                             },
@@ -748,7 +748,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::AssignSelection(
+                                            .send(UnitAssignmentsTabUiCommand::AssignSelection(
                                                 fields.design_variant_selected_index.unwrap(),
                                                 fields.variant_map_selected_indexes.clone(),
                                             ));
@@ -768,7 +768,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignSelection(
+                                            .send(UnitAssignmentsTabUiCommand::UnassignSelection(
                                                 fields.variant_map_selected_indexes.clone(),
                                             ));
                                     }
@@ -784,7 +784,7 @@ impl UnitAssignmentsUi {
                                         .clicked()
                                     {
                                         self.component
-                                            .send(UnitAssignmentsUiCommand::UnassignAllClicked);
+                                            .send(UnitAssignmentsTabUiCommand::UnassignAllClicked);
                                     }
 
                                 });
@@ -796,7 +796,10 @@ impl UnitAssignmentsUi {
         });
     }
 
-    fn apply_variant_map(fields: ValueGuard<UnitAssignmentsFields>, pcb_index: u16) -> Option<UnitAssignmentsUiAction> {
+    fn apply_variant_map(
+        fields: ValueGuard<UnitAssignmentsFields>,
+        pcb_index: u16,
+    ) -> Option<UnitAssignmentsTabUiAction> {
         let variant_map = fields
             .variant_map
             .iter()
@@ -810,7 +813,7 @@ impl UnitAssignmentsUi {
         };
 
         debug!("update unit assignments. args: {:?}", args);
-        Some(UnitAssignmentsUiAction::UpdateUnitAssignments(args))
+        Some(UnitAssignmentsTabUiAction::UpdateUnitAssignments(args))
     }
 }
 
@@ -890,7 +893,7 @@ pub struct UpdateUnitAssignmentsArgs {
 }
 
 #[derive(Debug, Clone)]
-pub enum UnitAssignmentsUiCommand {
+pub enum UnitAssignmentsTabUiCommand {
     None,
 
     DesignNameChanged(DesignName),
@@ -916,19 +919,19 @@ pub enum UnitAssignmentsUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum UnitAssignmentsUiAction {
+pub enum UnitAssignmentsTabUiAction {
     None,
     UpdateUnitAssignments(UpdateUnitAssignmentsArgs),
     RequestPcbOverview(PathBuf),
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct UnitAssignmentsUiContext {}
+pub struct UnitAssignmentsTabUiContext {}
 
-impl UiComponent for UnitAssignmentsUi {
-    type UiContext<'context> = UnitAssignmentsUiContext;
-    type UiCommand = UnitAssignmentsUiCommand;
-    type UiAction = UnitAssignmentsUiAction;
+impl UiComponent for UnitAssignmentsTabUi {
+    type UiContext<'context> = UnitAssignmentsTabUiContext;
+    type UiCommand = UnitAssignmentsTabUiCommand;
+    type UiAction = UnitAssignmentsTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -954,8 +957,8 @@ impl UiComponent for UnitAssignmentsUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            UnitAssignmentsUiCommand::None => Some(UnitAssignmentsUiAction::None),
-            UnitAssignmentsUiCommand::AddDesignVariantClicked => {
+            UnitAssignmentsTabUiCommand::None => Some(UnitAssignmentsTabUiAction::None),
+            UnitAssignmentsTabUiCommand::AddDesignVariantClicked => {
                 let mut fields = self.fields.lock().unwrap();
                 let variant_name = VariantName::from_str(&fields.variant_name).unwrap();
 
@@ -973,13 +976,13 @@ impl UiComponent for UnitAssignmentsUi {
 
                 None
             }
-            UnitAssignmentsUiCommand::VariantNameChanged(value) => {
+            UnitAssignmentsTabUiCommand::VariantNameChanged(value) => {
                 let mut fields = self.fields.lock().unwrap();
                 fields.variant_name = value;
                 fields.update_placements_filename();
                 None
             }
-            UnitAssignmentsUiCommand::PcbUnitRangeChanged(value) => {
+            UnitAssignmentsTabUiCommand::PcbUnitRangeChanged(value) => {
                 self.fields
                     .lock()
                     .unwrap()
@@ -987,14 +990,14 @@ impl UiComponent for UnitAssignmentsUi {
                 None
             }
 
-            UnitAssignmentsUiCommand::DesignNameChanged(design_name) => {
+            UnitAssignmentsTabUiCommand::DesignNameChanged(design_name) => {
                 let mut fields = self.fields.lock().unwrap();
                 fields.design_name = Some(design_name);
                 fields.update_placements_filename();
                 None
             }
 
-            UnitAssignmentsUiCommand::DesignVariantSelectionChanged(design_variant_selected_index) => {
+            UnitAssignmentsTabUiCommand::DesignVariantSelectionChanged(design_variant_selected_index) => {
                 let mut fields = self.fields.lock().unwrap();
                 fields.design_variant_selected_index = design_variant_selected_index;
 
@@ -1009,7 +1012,7 @@ impl UiComponent for UnitAssignmentsUi {
                 None
             }
 
-            UnitAssignmentsUiCommand::ApplyRangeClicked(design_variant_index) => {
+            UnitAssignmentsTabUiCommand::ApplyRangeClicked(design_variant_index) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
@@ -1038,7 +1041,7 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-            UnitAssignmentsUiCommand::UnassignFromRange(design_variant_index) => {
+            UnitAssignmentsTabUiCommand::UnassignFromRange(design_variant_index) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let pcb_unit_range = fields.pcb_unit_range.clone();
@@ -1065,7 +1068,7 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-            UnitAssignmentsUiCommand::UnassignRange => {
+            UnitAssignmentsTabUiCommand::UnassignRange => {
                 let mut fields = self.fields.lock().unwrap();
                 let pcb_unit_range = fields.pcb_unit_range.clone();
 
@@ -1079,7 +1082,7 @@ impl UiComponent for UnitAssignmentsUi {
                 }
                 Self::apply_variant_map(fields, self.pcb_index)
             }
-            UnitAssignmentsUiCommand::ApplyAllClicked(design_variant_index) => {
+            UnitAssignmentsTabUiCommand::ApplyAllClicked(design_variant_index) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
                     let design_variant = fields.design_variants[design_variant_index].clone();
@@ -1104,7 +1107,7 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-            UnitAssignmentsUiCommand::UnassignAllClicked => {
+            UnitAssignmentsTabUiCommand::UnassignAllClicked => {
                 let mut fields = self.fields.lock().unwrap();
                 for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
                     *assigned_variant_name = None;
@@ -1112,7 +1115,7 @@ impl UiComponent for UnitAssignmentsUi {
 
                 Self::apply_variant_map(fields, self.pcb_index)
             }
-            UnitAssignmentsUiCommand::AssignSelection(design_variant_index, variant_map_selected_indexes) => {
+            UnitAssignmentsTabUiCommand::AssignSelection(design_variant_index, variant_map_selected_indexes) => {
                 if let Some(pcb_overview) = &self.pcb_overview {
                     let mut fields = self.fields.lock().unwrap();
 
@@ -1139,7 +1142,7 @@ impl UiComponent for UnitAssignmentsUi {
                     None
                 }
             }
-            UnitAssignmentsUiCommand::UnassignSelection(variant_map_selected_indexes) => {
+            UnitAssignmentsTabUiCommand::UnassignSelection(variant_map_selected_indexes) => {
                 let mut fields = self.fields.lock().unwrap();
                 for (_index, (_design_index, assigned_variant_name)) in fields
                     .variant_map
@@ -1152,8 +1155,8 @@ impl UiComponent for UnitAssignmentsUi {
 
                 Self::apply_variant_map(fields, self.pcb_index)
             }
-            UnitAssignmentsUiCommand::RequestPcbOverview(path) => {
-                Some(UnitAssignmentsUiAction::RequestPcbOverview(path))
+            UnitAssignmentsTabUiCommand::RequestPcbOverview(path) => {
+                Some(UnitAssignmentsTabUiAction::RequestPcbOverview(path))
             }
         }
     }
@@ -1183,20 +1186,20 @@ impl Tab for UnitAssignmentsTab {
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
         let Some(unit_assignments_ui) = state
-            .unit_assignments
+            .unit_assignment_tab_uis
             .get(&(self.pcb_index as usize))
         else {
             ui.spinner();
             return;
         };
 
-        UiComponent::ui(unit_assignments_ui, ui, &mut UnitAssignmentsUiContext::default());
+        UiComponent::ui(unit_assignments_ui, ui, &mut UnitAssignmentsTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
         if let Some(_unit_assignments_ui) = state
-            .unit_assignments
+            .unit_assignment_tab_uis
             .remove(&(self.pcb_index as usize))
         {
             debug!("removed orphaned unit assignments ui. pcb_index: {}", self.pcb_index);

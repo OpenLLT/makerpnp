@@ -10,7 +10,7 @@ use planner_app::{Part, ProcessReference, RefDes};
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
-use crate::project::parts_tab::PartsUiCommand;
+use crate::project::parts_tab::PartsTabUiCommand;
 
 #[derive(Debug, Clone)]
 pub struct PartStatesRow {
@@ -22,13 +22,13 @@ pub struct PartStatesRow {
 
 pub struct PartStatesRowViewer {
     processes: Vec<ProcessReference>,
-    sender: Enqueue<PartsUiCommand>,
+    sender: Enqueue<PartsTabUiCommand>,
 
     pub(crate) filter: Filter,
 }
 
 impl PartStatesRowViewer {
-    pub fn new(sender: Enqueue<PartsUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
+    pub fn new(sender: Enqueue<PartsTabUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
         // sorting the processes here helps to ensure that the view vs edit list of processes has the same
         // ordering.
         processes.sort();
@@ -38,7 +38,7 @@ impl PartStatesRowViewer {
             .component_state
             .configure_mapper(sender.clone(), |filter_ui_command| {
                 trace!("filter ui mapper. command: {:?}", filter_ui_command);
-                PartsUiCommand::FilterCommand(filter_ui_command)
+                PartsTabUiCommand::FilterCommand(filter_ui_command)
             });
 
         Self {
@@ -243,7 +243,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             row_index, new_row, old_row
         );
         self.sender
-            .send(PartsUiCommand::RowUpdated {
+            .send(PartsTabUiCommand::RowUpdated {
                 index: row_index,
                 new_row: new_row.clone(),
                 old_row: old_row.clone(),

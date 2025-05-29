@@ -18,20 +18,26 @@ use crate::file_picker::Picker;
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
-use crate::project::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiAction, ExplorerUiCommand, ExplorerUiContext};
-use crate::project::load_out_tab::{LoadOutTab, LoadOutUi, LoadOutUiAction, LoadOutUiCommand, LoadOutUiContext};
-use crate::project::overview_tab::{OverviewTab, OverviewUi, OverviewUiAction, OverviewUiCommand, OverviewUiContext};
-use crate::project::parts_tab::{PartsTab, PartsUi, PartsUiAction, PartsUiCommand, PartsUiContext};
-use crate::project::pcb_tab::{PcbTab, PcbUi, PcbUiAction, PcbUiCommand, PcbUiContext};
-use crate::project::phase_tab::{PhaseTab, PhaseUi, PhaseUiAction, PhaseUiCommand, PhaseUiContext};
+use crate::project::explorer_tab::{
+    ExplorerTab, ExplorerTabUi, ExplorerTabUiAction, ExplorerTabUiCommand, ExplorerTabUiContext,
+};
+use crate::project::load_out_tab::{
+    LoadOutTab, LoadOutTabUi, LoadOutTabUiAction, LoadOutTabUiCommand, LoadOutTabUiContext,
+};
+use crate::project::overview_tab::{
+    OverviewTab, OverviewTabUi, OverviewTabUiAction, OverviewTabUiCommand, OverviewTabUiContext,
+};
+use crate::project::parts_tab::{PartsTab, PartsTabUi, PartsTabUiAction, PartsTabUiCommand, PartsTabUiContext};
+use crate::project::pcb_tab::{PcbTab, PcbTabUi, PcbTabUiAction, PcbTabUiCommand, PcbTabUiContext};
+use crate::project::phase_tab::{PhaseTab, PhaseTabUi, PhaseTabUiAction, PhaseTabUiCommand, PhaseTabUiContext};
 use crate::project::placements_tab::{
-    PlacementsTab, PlacementsUi, PlacementsUiAction, PlacementsUiCommand, PlacementsUiContext,
+    PlacementsTab, PlacementsTabUi, PlacementsTabUiAction, PlacementsTabUiCommand, PlacementsTabUiContext,
 };
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::project::unit_assignments_tab::{
-    UnitAssignmentsTab, UnitAssignmentsUi, UnitAssignmentsUiAction, UnitAssignmentsUiCommand, UnitAssignmentsUiContext,
-    UpdateUnitAssignmentsArgs,
+    UnitAssignmentsTab, UnitAssignmentsTabUi, UnitAssignmentsTabUiAction, UnitAssignmentsTabUiCommand,
+    UnitAssignmentsTabUiContext, UpdateUnitAssignmentsArgs,
 };
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
@@ -401,18 +407,18 @@ impl Project {
         let mut state = self.project_ui_state.lock().unwrap();
         let mut created = false;
         let _phase_state = state
-            .phases
+            .phases_tab_uis
             .entry(phase.clone())
             .or_insert_with(|| {
                 created = true;
                 debug!("ensuring phase ui. phase: {:?}", phase);
-                let mut phase_ui = PhaseUi::new();
+                let mut phase_ui = PhaseTabUi::new();
                 phase_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
                             trace!("phase ui mapper. command: {:?}", command);
-                            (key, ProjectUiCommand::PhaseUiCommand {
+                            (key, ProjectUiCommand::PhaseTabUiCommand {
                                 phase: phase.clone(),
                                 command,
                             })
@@ -431,18 +437,18 @@ impl Project {
         let mut created = false;
 
         let _load_out_ui = state
-            .load_outs
+            .load_out_tab_uis
             .entry(load_out_source.clone())
             .or_insert_with(|| {
                 created = true;
                 debug!("ensuring load out ui. source: {:?}", load_out_source);
-                let mut load_out_ui = LoadOutUi::new(phase);
+                let mut load_out_ui = LoadOutTabUi::new(phase);
                 load_out_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
                             trace!("load out ui mapper. command: {:?}", command);
-                            (key, ProjectUiCommand::LoadOutUiCommand {
+                            (key, ProjectUiCommand::LoadOutTabUiCommand {
                                 load_out_source: load_out_source.clone(),
                                 command,
                             })
@@ -460,18 +466,18 @@ impl Project {
         let mut created = false;
 
         let _pcb_ui = state
-            .pcbs
+            .pcb_tab_uis
             .entry(pcb_index as usize)
             .or_insert_with(|| {
                 created = true;
                 debug!("ensuring pcb ui. pcb_index: {:?}", pcb_index);
-                let mut pcb_ui = PcbUi::new(self.path.clone());
+                let mut pcb_ui = PcbTabUi::new(self.path.clone());
                 pcb_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
                             trace!("pcb ui mapper. command: {:?}", command);
-                            (key, ProjectUiCommand::PcbUiCommand {
+                            (key, ProjectUiCommand::PcbTabUiCommand {
                                 pcb_index,
                                 command,
                             })
@@ -490,18 +496,18 @@ impl Project {
         let mut created = false;
 
         let _unit_assignments_ui = state
-            .unit_assignments
+            .unit_assignment_tab_uis
             .entry(pcb_index as usize)
             .or_insert_with(|| {
                 created = true;
                 debug!("ensuring unit assignments ui. pcb_index: {:?}", pcb_index);
-                let mut unit_assignments_ui = UnitAssignmentsUi::new(self.path.clone(), pcb_index as u16);
+                let mut unit_assignments_ui = UnitAssignmentsTabUi::new(self.path.clone(), pcb_index as u16);
                 unit_assignments_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
                             trace!("pcb ui mapper. command: {:?}", command);
-                            (key, ProjectUiCommand::UnitAssignmentsUiCommand {
+                            (key, ProjectUiCommand::UnitAssignmentsTabUiCommand {
                                 pcb_index,
                                 command,
                             })
@@ -1055,7 +1061,7 @@ impl UiComponent for Project {
                         trace!("project tree: {:?}", project_tree);
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
-                            .explorer_ui
+                            .explorer_tab_ui
                             .update_tree(project_tree);
                     }
                     ProjectView::PcbOverview(project_pcb_overview) => {
@@ -1070,14 +1076,14 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         if let Some(pcb_ui) = state
-                            .pcbs
+                            .pcb_tab_uis
                             .get_mut(&(project_pcb_overview.index as usize))
                         {
                             pcb_ui.update_project_pcb_overview(project_pcb_overview.clone());
                         }
 
                         if let Some(unit_assignments_ui) = state
-                            .unit_assignments
+                            .unit_assignment_tab_uis
                             .get_mut(&(project_pcb_overview.index as usize))
                         {
                             unit_assignments_ui.update_project_pcb_overview(project_pcb_overview.clone());
@@ -1089,7 +1095,7 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         if let Some(unit_assignments_ui) = state
-                            .unit_assignments
+                            .unit_assignment_tab_uis
                             .get_mut(&(pcb_unit_assignments.index as usize))
                         {
                             unit_assignments_ui.update_unit_assignments(pcb_unit_assignments);
@@ -1117,7 +1123,10 @@ impl UiComponent for Project {
                         self.ensure_phase(key, &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_ui = state.phases.get_mut(&phase).unwrap();
+                        let phase_ui = state
+                            .phases_tab_uis
+                            .get_mut(&phase)
+                            .unwrap();
 
                         phase_ui.update_overview(phase_overview);
                     }
@@ -1128,7 +1137,10 @@ impl UiComponent for Project {
                         self.ensure_phase(key, &phase);
 
                         let mut state = self.project_ui_state.lock().unwrap();
-                        let phase_ui = state.phases.get_mut(&phase).unwrap();
+                        let phase_ui = state
+                            .phases_tab_uis
+                            .get_mut(&phase)
+                            .unwrap();
 
                         phase_ui.update_placements(phase_placements, self.phases.clone());
                     }
@@ -1140,7 +1152,7 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         state
-                            .parts_ui
+                            .parts_tab_ui
                             .update_part_states(part_states, self.processes.clone())
                     }
                     ProjectView::PhaseLoadOut(load_out) => {
@@ -1151,7 +1163,7 @@ impl UiComponent for Project {
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         let load_out_ui = state
-                            .load_outs
+                            .load_out_tab_uis
                             .get_mut(&load_out_source)
                             .unwrap();
 
@@ -1180,11 +1192,11 @@ impl UiComponent for Project {
                 PcbView::PcbOverview(pcb_overview) => {
                     let mut state = self.project_ui_state.lock().unwrap();
 
-                    for (_index, pcb_ui) in state.pcbs.iter_mut() {
+                    for (_index, pcb_ui) in state.pcb_tab_uis.iter_mut() {
                         pcb_ui.update_pcb_overview(&pcb_overview);
                     }
 
-                    for (_index, unit_assignments_ui) in state.unit_assignments.iter_mut() {
+                    for (_index, unit_assignments_ui) in state.unit_assignment_tab_uis.iter_mut() {
                         unit_assignments_ui.update_pcb_overview(&pcb_overview);
                     }
 
@@ -1420,21 +1432,21 @@ impl UiComponent for Project {
                 tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
             }
 
-            ProjectUiCommand::ExplorerUiCommand(command) => {
-                let context = &mut ExplorerUiContext::default();
+            ProjectUiCommand::ExplorerTabUiCommand(command) => {
+                let context = &mut ExplorerTabUiContext::default();
                 let explorer_ui_action = self
                     .project_ui_state
                     .lock()
                     .unwrap()
-                    .explorer_ui
+                    .explorer_tab_ui
                     .update(command, context);
                 match explorer_ui_action {
-                    Some(ExplorerUiAction::Navigate(path)) => self.navigate(key, path),
+                    Some(ExplorerTabUiAction::Navigate(path)) => self.navigate(key, path),
                     None => None,
                 }
             }
-            ProjectUiCommand::OverviewUiCommand(command) => {
-                let context = &mut OverviewUiContext::default();
+            ProjectUiCommand::OverviewTabUiCommand(command) => {
+                let context = &mut OverviewTabUiContext::default();
                 let overview_ui_action = self
                     .project_ui_state
                     .lock()
@@ -1442,22 +1454,22 @@ impl UiComponent for Project {
                     .overview_ui
                     .update(command, context);
                 match overview_ui_action {
-                    Some(OverviewUiAction::None) => None,
+                    Some(OverviewTabUiAction::None) => None,
                     None => None,
                 }
             }
-            ProjectUiCommand::PartsUiCommand(command) => {
-                let context = &mut PartsUiContext::default();
+            ProjectUiCommand::PartsTabUiCommand(command) => {
+                let context = &mut PartsTabUiContext::default();
                 let parts_ui_action = self
                     .project_ui_state
                     .lock()
                     .unwrap()
-                    .parts_ui
+                    .parts_tab_ui
                     .update(command, context);
                 match parts_ui_action {
-                    Some(PartsUiAction::None) => None,
+                    Some(PartsTabUiAction::None) => None,
                     None => None,
-                    Some(PartsUiAction::UpdateProcessesForPart {
+                    Some(PartsTabUiAction::UpdateProcessesForPart {
                         part,
                         processes,
                     }) => {
@@ -1502,24 +1514,27 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
-                    Some(PartsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    Some(PartsTabUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                 }
             }
-            ProjectUiCommand::PhaseUiCommand {
+            ProjectUiCommand::PhaseTabUiCommand {
                 phase,
                 command,
             } => {
                 let mut state = self.project_ui_state.lock().unwrap();
-                let phase_ui = state.phases.get_mut(&phase).unwrap();
+                let phase_ui = state
+                    .phases_tab_uis
+                    .get_mut(&phase)
+                    .unwrap();
 
-                let context = &mut PhaseUiContext::default();
+                let context = &mut PhaseTabUiContext::default();
                 let phase_ui_action = phase_ui.update(command, context);
 
                 match phase_ui_action {
                     None => None,
-                    Some(PhaseUiAction::None) => None,
-                    Some(PhaseUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
-                    Some(PhaseUiAction::UpdatePlacement {
+                    Some(PhaseTabUiAction::None) => None,
+                    Some(PhaseTabUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    Some(PhaseTabUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
@@ -1535,7 +1550,7 @@ impl UiComponent for Project {
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
-                    Some(PhaseUiAction::AddPartsToLoadout {
+                    Some(PhaseTabUiAction::AddPartsToLoadout {
                         phase,
                         manufacturer_pattern,
                         mpn_pattern,
@@ -1547,14 +1562,14 @@ impl UiComponent for Project {
                             mpn: mpn_pattern,
                         })
                         .when_ok(key, |_| None),
-                    Some(PhaseUiAction::SetPlacementOrderings(args)) => self
+                    Some(PhaseTabUiAction::SetPlacementOrderings(args)) => self
                         .planner_core_service
                         .update(Event::SetPlacementOrdering {
                             phase: phase.clone(),
                             placement_orderings: args.orderings,
                         })
                         .when_ok(key, |_| Some(ProjectUiCommand::RefreshPhase(phase))),
-                    Some(PhaseUiAction::TaskAction {
+                    Some(PhaseTabUiAction::TaskAction {
                         phase,
                         operation,
                         task,
@@ -1570,24 +1585,24 @@ impl UiComponent for Project {
                         .when_ok(key, |_| Some(ProjectUiCommand::RefreshPhase(phase))),
                 }
             }
-            ProjectUiCommand::LoadOutUiCommand {
+            ProjectUiCommand::LoadOutTabUiCommand {
                 load_out_source,
                 command,
             } => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 let load_out_ui = state
-                    .load_outs
+                    .load_out_tab_uis
                     .get_mut(&load_out_source)
                     .unwrap();
 
-                let context = &mut LoadOutUiContext::default();
+                let context = &mut LoadOutTabUiContext::default();
                 let phase_ui_action = load_out_ui.update(command, context);
 
                 match phase_ui_action {
-                    Some(LoadOutUiAction::None) => None,
-                    Some(LoadOutUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    Some(LoadOutTabUiAction::None) => None,
+                    Some(LoadOutTabUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
                     None => None,
-                    Some(LoadOutUiAction::UpdateFeederForPart {
+                    Some(LoadOutTabUiAction::UpdateFeederForPart {
                         phase,
                         part,
                         feeder,
@@ -1607,8 +1622,8 @@ impl UiComponent for Project {
                     }
                 }
             }
-            ProjectUiCommand::PlacementsUiCommand(command) => {
-                let context = &mut PlacementsUiContext::default();
+            ProjectUiCommand::PlacementsTabUiCommand(command) => {
+                let context = &mut PlacementsTabUiContext::default();
                 let placements_ui_action = self
                     .project_ui_state
                     .lock()
@@ -1616,9 +1631,9 @@ impl UiComponent for Project {
                     .placements_ui
                     .update(command, context);
                 match placements_ui_action {
-                    Some(PlacementsUiAction::None) => None,
-                    Some(PlacementsUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
-                    Some(PlacementsUiAction::UpdatePlacement {
+                    Some(PlacementsTabUiAction::None) => None,
+                    Some(PlacementsTabUiAction::RequestRepaint) => Some(ProjectAction::RequestRepaint),
+                    Some(PlacementsTabUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
@@ -1637,28 +1652,28 @@ impl UiComponent for Project {
                     None => None,
                 }
             }
-            ProjectUiCommand::PcbUiCommand {
+            ProjectUiCommand::PcbTabUiCommand {
                 pcb_index,
                 command,
             } => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 let pcb_ui = state
-                    .pcbs
+                    .pcb_tab_uis
                     .get_mut(&(pcb_index as usize))
                     .unwrap();
 
-                let context = &mut PcbUiContext::default();
+                let context = &mut PcbTabUiContext::default();
                 let pcb_ui_action = pcb_ui.update(command, context);
                 match pcb_ui_action {
                     None => None,
-                    Some(PcbUiAction::None) => None,
-                    Some(PcbUiAction::ShowUnitAssignments(pcb_index)) => Some(ProjectAction::Task(
+                    Some(PcbTabUiAction::None) => None,
+                    Some(PcbTabUiAction::ShowUnitAssignments(pcb_index)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPcbUnitAssignments(
                             pcb_index,
                         ))),
                     )),
-                    Some(PcbUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
+                    Some(PcbTabUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
                             PcbViewRequest::Overview {
@@ -1666,25 +1681,25 @@ impl UiComponent for Project {
                             },
                         ))),
                     )),
-                    Some(PcbUiAction::ShowPcb(pcb_path)) => Some(ProjectAction::ShowPcb(pcb_path)),
+                    Some(PcbTabUiAction::ShowPcb(pcb_path)) => Some(ProjectAction::ShowPcb(pcb_path)),
                 }
             }
-            ProjectUiCommand::UnitAssignmentsUiCommand {
+            ProjectUiCommand::UnitAssignmentsTabUiCommand {
                 pcb_index,
                 command,
             } => {
                 let mut state = self.project_ui_state.lock().unwrap();
                 let unit_assignment_ui = state
-                    .unit_assignments
+                    .unit_assignment_tab_uis
                     .get_mut(&(pcb_index as usize))
                     .unwrap();
 
-                let context = &mut UnitAssignmentsUiContext::default();
+                let context = &mut UnitAssignmentsTabUiContext::default();
                 let unit_assignment_ui_action = unit_assignment_ui.update(command, context);
                 match unit_assignment_ui_action {
                     None => None,
-                    Some(UnitAssignmentsUiAction::None) => None,
-                    Some(UnitAssignmentsUiAction::UpdateUnitAssignments(UpdateUnitAssignmentsArgs {
+                    Some(UnitAssignmentsTabUiAction::None) => None,
+                    Some(UnitAssignmentsTabUiAction::UpdateUnitAssignments(UpdateUnitAssignmentsArgs {
                         pcb_index,
                         variant_map,
                     })) => {
@@ -1731,7 +1746,7 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
-                    Some(UnitAssignmentsUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
+                    Some(UnitAssignmentsTabUiAction::RequestPcbOverview(path)) => Some(ProjectAction::Task(
                         key,
                         Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestPcbView(
                             PcbViewRequest::Overview {
@@ -1770,14 +1785,14 @@ pub struct ProjectUiState {
     /// always known for newly created projects.
     name: Option<String>,
 
-    explorer_ui: ExplorerUi,
-    load_outs: HashMap<LoadOutSource, LoadOutUi>,
-    parts_ui: PartsUi,
-    pcbs: HashMap<usize, PcbUi>,
-    phases: HashMap<Reference, PhaseUi>,
-    placements_ui: PlacementsUi,
-    overview_ui: OverviewUi,
-    unit_assignments: HashMap<usize, UnitAssignmentsUi>,
+    explorer_tab_ui: ExplorerTabUi,
+    load_out_tab_uis: HashMap<LoadOutSource, LoadOutTabUi>,
+    parts_tab_ui: PartsTabUi,
+    pcb_tab_uis: HashMap<usize, PcbTabUi>,
+    phases_tab_uis: HashMap<Reference, PhaseTabUi>,
+    placements_ui: PlacementsTabUi,
+    overview_ui: OverviewTabUi,
+    unit_assignment_tab_uis: HashMap<usize, UnitAssignmentsTabUi>,
 }
 
 impl ProjectUiState {
@@ -1789,22 +1804,22 @@ impl ProjectUiState {
     ) -> Self {
         let mut instance = Self {
             name,
-            explorer_ui: ExplorerUi::new(project_directory),
-            load_outs: HashMap::default(),
-            parts_ui: PartsUi::new(),
-            pcbs: HashMap::default(),
-            phases: HashMap::default(),
-            placements_ui: PlacementsUi::new(),
-            overview_ui: OverviewUi::new(),
-            unit_assignments: HashMap::default(),
+            explorer_tab_ui: ExplorerTabUi::new(project_directory),
+            load_out_tab_uis: HashMap::default(),
+            parts_tab_ui: PartsTabUi::new(),
+            pcb_tab_uis: HashMap::default(),
+            phases_tab_uis: HashMap::default(),
+            placements_ui: PlacementsTabUi::new(),
+            overview_ui: OverviewTabUi::new(),
+            unit_assignment_tab_uis: HashMap::default(),
         };
 
         instance
-            .explorer_ui
+            .explorer_tab_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("explorer ui mapper. command: {:?}", command);
-                (key, ProjectUiCommand::ExplorerUiCommand(command))
+                (key, ProjectUiCommand::ExplorerTabUiCommand(command))
             });
 
         instance
@@ -1812,15 +1827,15 @@ impl ProjectUiState {
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("overview ui mapper. command: {:?}", command);
-                (key, ProjectUiCommand::OverviewUiCommand(command))
+                (key, ProjectUiCommand::OverviewTabUiCommand(command))
             });
 
         instance
-            .parts_ui
+            .parts_tab_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("parts ui mapper. command: {:?}", command);
-                (key, ProjectUiCommand::PartsUiCommand(command))
+                (key, ProjectUiCommand::PartsTabUiCommand(command))
             });
 
         instance
@@ -1828,7 +1843,7 @@ impl ProjectUiState {
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("placements ui mapper. command: {:?}", command);
-                (key, ProjectUiCommand::PlacementsUiCommand(command))
+                (key, ProjectUiCommand::PlacementsTabUiCommand(command))
             });
 
         instance
@@ -1851,62 +1866,98 @@ pub enum ProjectTabKind {
 #[derive(Debug, Clone)]
 pub enum ProjectUiCommand {
     None,
-    Load,
-    Loaded,
-    Save,
-    Saved,
-    ProjectView(ProjectView),
-    PcbView(PcbView),
-    Error(PlannerError),
+
     SetModifiedState {
         project_modified: bool,
         pcbs_modified: bool,
     },
-    RequestProjectView(ProjectViewRequest),
+
+    //
+    // errors
+    //
+    Error(PlannerError),
     ClearErrors,
-    ToolbarCommand(ProjectToolbarUiCommand),
-    TabCommand(ProjectTabUiCommand),
-    AddPhaseModalCommand(AddPhaseModalUiCommand),
+
+    //
+    // projects
+    //
     Create,
     Created,
+    Load,
+    Loaded,
+    Save,
+    Saved,
+    RequestProjectView(ProjectViewRequest),
+    ProjectView(ProjectView),
     ProjectRefreshed,
-    ExplorerUiCommand(ExplorerUiCommand),
-    PartsUiCommand(PartsUiCommand),
-    OverviewUiCommand(OverviewUiCommand),
-    PlacementsUiCommand(PlacementsUiCommand),
-    PhaseUiCommand {
-        phase: Reference,
-        command: PhaseUiCommand,
+
+    //
+    // phases
+    //
+    RefreshPhases,
+    RefreshPhase(Reference),
+
+    //
+    // pcbs
+    //
+    RequestPcbView(PcbViewRequest),
+    PcbView(PcbView),
+    PcbFilePicked(PathBuf),
+
+    //
+    // toolbar
+    //
+    ToolbarCommand(ProjectToolbarUiCommand),
+
+    //
+    // modals
+    //
+    AddPhaseModalCommand(AddPhaseModalUiCommand),
+
+    //
+    // tabs
+    //
+    TabCommand(ProjectTabUiCommand),
+    ShowExplorer,
+    ExplorerTabUiCommand(ExplorerTabUiCommand),
+
+    ShowOverview,
+    OverviewTabUiCommand(OverviewTabUiCommand),
+
+    ShowParts,
+    PartsTabUiCommand(PartsTabUiCommand),
+
+    ShowPlacements,
+    PlacementsTabUiCommand(PlacementsTabUiCommand),
+
+    ShowPcb(PcbUnitIndex),
+    PcbTabUiCommand {
+        pcb_index: u16,
+        command: PcbTabUiCommand,
     },
+
+    ShowPhase(Reference),
+    PhaseTabUiCommand {
+        phase: Reference,
+        command: PhaseTabUiCommand,
+    },
+
     ShowPhaseLoadout {
         phase: Reference,
     },
     ContinueShowPhaseLoadout {
         phase: Reference,
     },
-    LoadOutUiCommand {
+    LoadOutTabUiCommand {
         load_out_source: LoadOutSource,
-        command: LoadOutUiCommand,
+        command: LoadOutTabUiCommand,
     },
-    PcbUiCommand {
-        pcb_index: u16,
-        command: PcbUiCommand,
-    },
-    RefreshPhase(Reference),
-    UnitAssignmentsUiCommand {
-        pcb_index: u16,
-        command: UnitAssignmentsUiCommand,
-    },
+
     ShowPcbUnitAssignments(u16),
-    PcbFilePicked(PathBuf),
-    RequestPcbView(PcbViewRequest),
-    ShowParts,
-    RefreshPhases,
-    ShowExplorer,
-    ShowOverview,
-    ShowPlacements,
-    ShowPhase(Reference),
-    ShowPcb(PcbUnitIndex),
+    UnitAssignmentsTabUiCommand {
+        pcb_index: u16,
+        command: UnitAssignmentsTabUiCommand,
+    },
 }
 
 fn project_path_from_view_path(view_path: &String) -> NavigationPath {

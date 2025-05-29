@@ -7,13 +7,13 @@ use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
-pub struct OverviewUi {
+pub struct OverviewTabUi {
     overview: Option<ProjectOverview>,
 
-    pub component: ComponentState<OverviewUiCommand>,
+    pub component: ComponentState<OverviewTabUiCommand>,
 }
 
-impl OverviewUi {
+impl OverviewTabUi {
     pub fn new() -> Self {
         Self {
             overview: None,
@@ -27,22 +27,22 @@ impl OverviewUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum OverviewUiCommand {
+pub enum OverviewTabUiCommand {
     None,
 }
 
 #[derive(Debug, Clone)]
-pub enum OverviewUiAction {
+pub enum OverviewTabUiAction {
     None,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct OverviewUiContext {}
+pub struct OverviewTabUiContext {}
 
-impl UiComponent for OverviewUi {
-    type UiContext<'context> = OverviewUiContext;
-    type UiCommand = OverviewUiCommand;
-    type UiAction = OverviewUiAction;
+impl UiComponent for OverviewTabUi {
+    type UiContext<'context> = OverviewTabUiContext;
+    type UiCommand = OverviewTabUiCommand;
+    type UiAction = OverviewTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -59,7 +59,7 @@ impl UiComponent for OverviewUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            OverviewUiCommand::None => Some(OverviewUiAction::None),
+            OverviewTabUiCommand::None => Some(OverviewTabUiAction::None),
         }
     }
 }
@@ -76,7 +76,7 @@ impl Tab for OverviewTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.overview_ui, ui, &mut OverviewUiContext::default());
+        UiComponent::ui(&state.overview_ui, ui, &mut OverviewTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

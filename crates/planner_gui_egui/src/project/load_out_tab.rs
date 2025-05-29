@@ -20,15 +20,15 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct LoadOutUi {
+pub struct LoadOutTabUi {
     phase: Reference,
     #[derivative(Debug = "ignore")]
     load_out_table: Value<Option<(LoadOutRowViewer, DataTable<LoadOutRow>)>>,
 
-    pub component: ComponentState<LoadOutUiCommand>,
+    pub component: ComponentState<LoadOutTabUiCommand>,
 }
 
-impl LoadOutUi {
+impl LoadOutTabUi {
     pub fn new(phase: Reference) -> Self {
         Self {
             phase,
@@ -64,7 +64,7 @@ impl LoadOutUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum LoadOutUiCommand {
+pub enum LoadOutTabUiCommand {
     None,
 
     // internal
@@ -77,7 +77,7 @@ pub enum LoadOutUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum LoadOutUiAction {
+pub enum LoadOutTabUiAction {
     None,
     UpdateFeederForPart {
         phase: Reference,
@@ -88,12 +88,12 @@ pub enum LoadOutUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct LoadOutUiContext {}
+pub struct LoadOutTabUiContext {}
 
-impl UiComponent for LoadOutUi {
-    type UiContext<'context> = LoadOutUiContext;
-    type UiCommand = LoadOutUiCommand;
-    type UiAction = LoadOutUiAction;
+impl UiComponent for LoadOutTabUi {
+    type UiContext<'context> = LoadOutTabUiContext;
+    type UiCommand = LoadOutTabUiCommand;
+    type UiAction = LoadOutTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -129,8 +129,8 @@ impl UiComponent for LoadOutUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            LoadOutUiCommand::None => Some(LoadOutUiAction::None),
-            LoadOutUiCommand::RowUpdated {
+            LoadOutTabUiCommand::None => Some(LoadOutTabUiAction::None),
+            LoadOutTabUiCommand::RowUpdated {
                 index,
                 new_row,
                 old_row,
@@ -142,7 +142,7 @@ impl UiComponent for LoadOutUi {
                 if let Ok(feeder_reference) = Reference::try_from(new_row.feeder)
                     .inspect_err(|err| error!("Invalid feeder reference. cause: {:?}", err))
                 {
-                    Some(LoadOutUiAction::UpdateFeederForPart {
+                    Some(LoadOutTabUiAction::UpdateFeederForPart {
                         phase: self.phase.clone(),
                         part: new_row.part,
                         feeder: feeder_reference,
@@ -151,7 +151,7 @@ impl UiComponent for LoadOutUi {
                     None
                 }
             }
-            LoadOutUiCommand::FilterCommand(command) => {
+            LoadOutTabUiCommand::FilterCommand(command) => {
                 let mut table = self.load_out_table.lock().unwrap();
                 if let Some((viewer, _table)) = &mut *table {
                     let action = viewer
@@ -159,7 +159,7 @@ impl UiComponent for LoadOutUi {
                         .update(command, &mut FilterUiContext::default());
                     debug!("filter action: {:?}", action);
                     match action {
-                        Some(FilterUiAction::ApplyFilter) => Some(LoadOutUiAction::RequestRepaint),
+                        Some(FilterUiAction::ApplyFilter) => Some(LoadOutTabUiAction::RequestRepaint),
                         None => None,
                     }
                 } else {
@@ -202,19 +202,19 @@ impl Tab for LoadOutTab {
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
         let Some(load_out_ui) = state
-            .load_outs
+            .load_out_tab_uis
             .get(&self.load_out_source)
         else {
             ui.spinner();
             return;
         };
-        UiComponent::ui(load_out_ui, ui, &mut LoadOutUiContext::default());
+        UiComponent::ui(load_out_ui, ui, &mut LoadOutTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
         if let Some(_load_out_ui) = state
-            .load_outs
+            .load_out_tab_uis
             .remove(&self.load_out_source)
         {
             debug!(

@@ -13,23 +13,23 @@ use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct PlacementsUi {
+pub struct PlacementsTabUi {
     #[derivative(Debug = "ignore")]
     placements_table_ui: PlacementsTableUi,
 
-    pub component: ComponentState<PlacementsUiCommand>,
+    pub component: ComponentState<PlacementsTabUiCommand>,
 }
 
-impl PlacementsUi {
+impl PlacementsTabUi {
     pub fn new() -> Self {
-        let component: ComponentState<PlacementsUiCommand> = Default::default();
+        let component: ComponentState<PlacementsTabUiCommand> = Default::default();
 
         let mut placements_table_ui = PlacementsTableUi::new();
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
                 trace!("placements table mapper. command: {:?}", placements_table_command);
-                PlacementsUiCommand::PlacementsTableUiCommand(placements_table_command)
+                PlacementsTabUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 
         Self {
@@ -49,13 +49,13 @@ impl PlacementsUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum PlacementsUiCommand {
+pub enum PlacementsTabUiCommand {
     None,
     PlacementsTableUiCommand(PlacementsTableUiCommand),
 }
 
 #[derive(Debug, Clone)]
-pub enum PlacementsUiAction {
+pub enum PlacementsTabUiAction {
     None,
     RequestRepaint,
     UpdatePlacement {
@@ -66,12 +66,12 @@ pub enum PlacementsUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PlacementsUiContext {}
+pub struct PlacementsTabUiContext {}
 
-impl UiComponent for PlacementsUi {
-    type UiContext<'context> = PlacementsUiContext;
-    type UiCommand = PlacementsUiCommand;
-    type UiAction = PlacementsUiAction;
+impl UiComponent for PlacementsTabUi {
+    type UiContext<'context> = PlacementsTabUiContext;
+    type UiCommand = PlacementsTabUiCommand;
+    type UiAction = PlacementsTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -87,19 +87,19 @@ impl UiComponent for PlacementsUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            PlacementsUiCommand::None => Some(PlacementsUiAction::None),
-            PlacementsUiCommand::PlacementsTableUiCommand(command) => {
+            PlacementsTabUiCommand::None => Some(PlacementsTabUiAction::None),
+            PlacementsTabUiCommand::PlacementsTableUiCommand(command) => {
                 let action = self
                     .placements_table_ui
                     .update(command, &mut PlacementsTableUiContext::default());
                 match action {
                     Some(PlacementsTableUiAction::None) => None,
-                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsUiAction::RequestRepaint),
+                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsTabUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
-                    }) => Some(PlacementsUiAction::UpdatePlacement {
+                    }) => Some(PlacementsTabUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
@@ -123,7 +123,7 @@ impl Tab for PlacementsTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.placements_ui, ui, &mut PlacementsUiContext::default());
+        UiComponent::ui(&state.placements_ui, ui, &mut PlacementsTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

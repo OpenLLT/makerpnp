@@ -23,26 +23,26 @@ use crate::ui_util::green_orange_red_grey_from_style;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct PhaseUi {
+pub struct PhaseTabUi {
     overview: Option<PhaseOverview>,
     #[derivative(Debug = "ignore")]
     placements_table_ui: PlacementsTableUi,
 
     placement_orderings_modal: Option<PlacementOrderingsModal>,
 
-    pub component: ComponentState<PhaseUiCommand>,
+    pub component: ComponentState<PhaseTabUiCommand>,
 }
 
-impl PhaseUi {
+impl PhaseTabUi {
     pub fn new() -> Self {
-        let component: ComponentState<PhaseUiCommand> = Default::default();
+        let component: ComponentState<PhaseTabUiCommand> = Default::default();
 
         let mut placements_table_ui = PlacementsTableUi::new();
         placements_table_ui
             .component
             .configure_mapper(component.sender.clone(), |placements_table_command| {
                 trace!("phase placements table mapper. command: {:?}", placements_table_command);
-                PhaseUiCommand::PlacementsTableUiCommand(placements_table_command)
+                PhaseTabUiCommand::PlacementsTableUiCommand(placements_table_command)
             });
 
         Self {
@@ -64,7 +64,7 @@ impl PhaseUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum PhaseUiCommand {
+pub enum PhaseTabUiCommand {
     None,
     PlacementsTableUiCommand(PlacementsTableUiCommand),
     AddPartsToLoadout {
@@ -82,7 +82,7 @@ pub enum PhaseUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum PhaseUiAction {
+pub enum PhaseTabUiAction {
     None,
     RequestRepaint,
     UpdatePlacement {
@@ -105,12 +105,12 @@ pub enum PhaseUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct PhaseUiContext {}
+pub struct PhaseTabUiContext {}
 
-impl UiComponent for PhaseUi {
-    type UiContext<'context> = PhaseUiContext;
-    type UiCommand = PhaseUiCommand;
-    type UiAction = PhaseUiAction;
+impl UiComponent for PhaseTabUi {
+    type UiContext<'context> = PhaseTabUiContext;
+    type UiCommand = PhaseTabUiCommand;
+    type UiAction = PhaseTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -130,7 +130,7 @@ impl UiComponent for PhaseUi {
                 // FUTURE disable the button if there are no visible parts.
                 if let Some(overview) = &self.overview {
                     self.component
-                        .send(PhaseUiCommand::AddPartsToLoadout {
+                        .send(PhaseTabUiCommand::AddPartsToLoadout {
                             phase: overview.phase_reference.clone(),
                             manufacturer_pattern: Regex::new("^.*$").unwrap(),
                             mpn_pattern: Regex::new("^.*$").unwrap(),
@@ -143,7 +143,7 @@ impl UiComponent for PhaseUi {
                 .clicked()
             {
                 self.component
-                    .send(PhaseUiCommand::PhasePlacementsOrderingsClicked)
+                    .send(PhaseTabUiCommand::PhasePlacementsOrderingsClicked)
             }
         });
 
@@ -216,7 +216,7 @@ impl UiComponent for PhaseUi {
                                             {
                                                 debug!("clicked: {:?}", action);
                                                 self.component
-                                                    .send(PhaseUiCommand::TaskAction {
+                                                    .send(PhaseTabUiCommand::TaskAction {
                                                         operation: operation_state.reference.clone(),
                                                         task: task_reference.clone(),
                                                         action,
@@ -268,19 +268,19 @@ impl UiComponent for PhaseUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            PhaseUiCommand::None => Some(PhaseUiAction::None),
-            PhaseUiCommand::PlacementsTableUiCommand(command) => {
+            PhaseTabUiCommand::None => Some(PhaseTabUiAction::None),
+            PhaseTabUiCommand::PlacementsTableUiCommand(command) => {
                 let action = self
                     .placements_table_ui
                     .update(command, &mut PlacementsTableUiContext::default());
                 match action {
                     Some(PlacementsTableUiAction::None) => None,
-                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PhaseUiAction::RequestRepaint),
+                    Some(PlacementsTableUiAction::RequestRepaint) => Some(PhaseTabUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
-                    }) => Some(PhaseUiAction::UpdatePlacement {
+                    }) => Some(PhaseTabUiAction::UpdatePlacement {
                         object_path,
                         new_placement,
                         old_placement,
@@ -288,16 +288,16 @@ impl UiComponent for PhaseUi {
                     None => None,
                 }
             }
-            PhaseUiCommand::AddPartsToLoadout {
+            PhaseTabUiCommand::AddPartsToLoadout {
                 phase,
                 manufacturer_pattern,
                 mpn_pattern,
-            } => Some(PhaseUiAction::AddPartsToLoadout {
+            } => Some(PhaseTabUiAction::AddPartsToLoadout {
                 phase,
                 manufacturer_pattern,
                 mpn_pattern,
             }),
-            PhaseUiCommand::PhasePlacementsOrderingsClicked => {
+            PhaseTabUiCommand::PhasePlacementsOrderingsClicked => {
                 if let Some(overview) = &self.overview {
                     let mut modal = PlacementOrderingsModal::new(
                         overview.phase_reference.clone(),
@@ -307,7 +307,7 @@ impl UiComponent for PhaseUi {
                         .component
                         .configure_mapper(self.component.sender.clone(), move |command| {
                             trace!("placement orderings modal mapper. command: {:?}", command);
-                            PhaseUiCommand::PlacementOrderingsModalUiCommand(command)
+                            PhaseTabUiCommand::PlacementOrderingsModalUiCommand(command)
                         });
 
                     self.placement_orderings_modal = Some(modal);
@@ -316,7 +316,7 @@ impl UiComponent for PhaseUi {
                     None
                 }
             }
-            PhaseUiCommand::PlacementOrderingsModalUiCommand(command) => {
+            PhaseTabUiCommand::PlacementOrderingsModalUiCommand(command) => {
                 if let Some(modal) = self.placement_orderings_modal.as_mut() {
                     let action = modal.update(command, &mut ());
                     trace!("placement ordering model action: {:?}", action);
@@ -324,7 +324,7 @@ impl UiComponent for PhaseUi {
                         None => None,
                         Some(PlacementOrderingsModalAction::Submit(args)) => {
                             self.placement_orderings_modal.take();
-                            Some(PhaseUiAction::SetPlacementOrderings(args))
+                            Some(PhaseTabUiAction::SetPlacementOrderings(args))
                         }
                         Some(PlacementOrderingsModalAction::CloseDialog) => {
                             self.placement_orderings_modal.take();
@@ -335,11 +335,11 @@ impl UiComponent for PhaseUi {
                     None
                 }
             }
-            PhaseUiCommand::TaskAction {
+            PhaseTabUiCommand::TaskAction {
                 operation,
                 task,
                 action,
-            } => Some(PhaseUiAction::TaskAction {
+            } => Some(PhaseTabUiAction::TaskAction {
                 phase: self
                     .overview
                     .as_ref()
@@ -377,16 +377,16 @@ impl Tab for PhaseTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let Some(phase_ui) = state.phases.get(&self.phase) else {
+        let Some(phase_ui) = state.phases_tab_uis.get(&self.phase) else {
             ui.spinner();
             return;
         };
-        UiComponent::ui(phase_ui, ui, &mut PhaseUiContext::default());
+        UiComponent::ui(phase_ui, ui, &mut PhaseTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
         let mut state = context.state.lock().unwrap();
-        if let Some(_phase_ui) = state.phases.remove(&self.phase) {
+        if let Some(_phase_ui) = state.phases_tab_uis.remove(&self.phase) {
             debug!("removed orphaned phase ui. phase: {:?}", &self.phase);
         }
         true
