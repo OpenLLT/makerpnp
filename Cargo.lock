@@ -2363,7 +2363,7 @@ dependencies = [
 [[package]]
 name = "gerber_parser"
 version = "0.2.0"
-source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=57bc652fce7265ceb00d197b180bcef31d701e3b#57bc652fce7265ceb00d197b180bcef31d701e3b"
+source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=43c7d853504a0a19aa32ec8208ba886929eb4694#43c7d853504a0a19aa32ec8208ba886929eb4694"
 dependencies = [
  "gerber-types",
  "lazy-regex",
@@ -2375,7 +2375,7 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=93e54dd2f973748f5e705ea1111c4b4f3772c416#93e54dd2f973748f5e705ea1111c4b4f3772c416"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=2011e358005ab796e5705298a582da175205ad3c#2011e358005ab796e5705298a582da175205ad3c"
 dependencies = [
  "egui",
  "gerber-types",
