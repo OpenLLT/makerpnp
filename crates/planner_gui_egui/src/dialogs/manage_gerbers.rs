@@ -13,7 +13,6 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ManageGerbersModal {
-    design_index: usize,
     title: String,
     gerbers: Vec<PcbGerberItem>,
 
@@ -23,9 +22,8 @@ pub struct ManageGerbersModal {
 }
 
 impl ManageGerbersModal {
-    pub fn new(design_index: usize, title: String, gerbers: Vec<PcbGerberItem>) -> Self {
+    pub fn new(title: String, gerbers: Vec<PcbGerberItem>) -> Self {
         Self {
-            design_index,
             title,
             gerbers,
             component: Default::default(),
@@ -33,10 +31,8 @@ impl ManageGerbersModal {
         }
     }
 
-    // the first vector is the designs, the second is the gerbers for the design
-    pub fn update_gerbers(&mut self, gerbers: &[Vec<PcbGerberItem>]) {
-        let design_gerbers = &gerbers[self.design_index];
-        self.gerbers = design_gerbers.clone();
+    pub fn update_gerbers(&mut self, gerbers: Vec<PcbGerberItem>) {
+        self.gerbers = gerbers.clone();
     }
 }
 
@@ -51,8 +47,8 @@ pub enum ManagerGerbersModalUiCommand {
 #[derive(Debug, Clone)]
 pub enum ManagerGerberModalAction {
     CloseDialog,
-    RemoveGerberFiles { design_index: usize, files: Vec<PathBuf> },
-    AddGerberFiles { design_index: usize, files: Vec<PathBuf> },
+    RemoveGerberFiles { files: Vec<PathBuf> },
+    AddGerberFiles { files: Vec<PathBuf> },
 }
 
 impl UiComponent for ManageGerbersModal {
@@ -212,7 +208,6 @@ impl UiComponent for ManageGerbersModal {
             } => {
                 let files = vec![self.gerbers[index].path.clone()];
                 Some(ManagerGerberModalAction::RemoveGerberFiles {
-                    design_index: self.design_index,
                     files,
                 })
             }
@@ -226,7 +221,6 @@ impl UiComponent for ManageGerbersModal {
             ManagerGerbersModalUiCommand::GerberFilesPicked {
                 picked_files,
             } => Some(ManagerGerberModalAction::AddGerberFiles {
-                design_index: self.design_index,
                 files: picked_files,
             }),
         }

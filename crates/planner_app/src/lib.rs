@@ -577,13 +577,13 @@ pub enum Event {
     },
     AddGerberFiles {
         path: PathBuf,
-        design: DesignName,
+        design: Option<DesignName>,
         // TODO use FileReferences, not paths?
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
         path: PathBuf,
-        design: DesignName,
+        design: Option<DesignName>,
         files: Vec<PathBuf>,
     },
 
@@ -1224,7 +1224,7 @@ impl Planner {
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 debug!(
-                    "Adding gerbers to pcb. pcb_file: {:?}, design: {} files: {:?}",
+                    "Adding gerbers to pcb. pcb_file: {:?}, design: {:?} files: {:?}",
                     pcb_path, design, files
                 );
 
@@ -1249,7 +1249,7 @@ impl Planner {
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
                 debug!(
-                    "Removing gerbers from pcb. pcb_file: {:?}, design: {} files: {:?}",
+                    "Removing gerbers from pcb. pcb_file: {:?}, design: {:?} files: {:?}",
                     pcb_path, design, files
                 );
                 let (was_modified, unremoved_files) = pcb

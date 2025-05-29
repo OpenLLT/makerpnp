@@ -26,13 +26,19 @@ use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Debug)]
+enum ManagerGerbersModalMode {
+    Panel,
+    Design(DesignIndex),
+}
+
+#[derive(Debug)]
 pub struct ConfigurationUi {
     pcb_overview: Option<PcbOverview>,
 
     fields: Value<DesignAssignmentsFields>,
     initial_args: PcbUnitConfigurationArgs,
 
-    manage_gerbers_modal: Option<ManageGerbersModal>,
+    manage_gerbers_modal: Option<(ManagerGerbersModalMode, ManageGerbersModal)>,
 
     pub component: ComponentState<ConfigurationUiCommand>,
 }
@@ -252,7 +258,7 @@ impl ConfigurationUi {
                                                                                     .clicked()
                                                                                 {
                                                                                     self.component
-                                                                                        .send(ConfigurationUiCommand::ManageGerbersClicked {
+                                                                                        .send(ConfigurationUiCommand::ManageDesignGerbersClicked {
                                                                                             design_index: row_index,
                                                                                         });
                                                                                 }
@@ -625,20 +631,19 @@ impl ConfigurationUi {
             });
     }
 
-    fn show_manage_gerbers_modal(&mut self, design_index: usize) {
-        let Some((design_name, design_gerbers)) = self
-            .pcb_overview
-            .as_ref()
-            .map(|pcb_overview| {
+    fn show_manage_gerbers_modal(&mut self, mode: ManagerGerbersModalMode) {
+        let Some(pcb_overview) = &self.pcb_overview else { return };
+
+        let (title, gerbers) = match mode {
+            ManagerGerbersModalMode::Panel => ("Panel".to_string(), pcb_overview.pcb_gerbers.clone()),
+            ManagerGerbersModalMode::Design(design_index) => {
                 let design_name = pcb_overview.designs[design_index].clone();
                 let gerbers = pcb_overview.design_gerbers[design_index].clone();
-                (design_name, gerbers)
-            })
-        else {
-            return;
+                (design_name.to_string(), gerbers)
+            }
         };
 
-        let mut modal = ManageGerbersModal::new(design_index, design_name.to_string(), design_gerbers);
+        let mut modal = ManageGerbersModal::new(title, gerbers);
         modal
             .component
             .configure_mapper(self.component.sender.clone(), move |command| {
@@ -646,7 +651,7 @@ impl ConfigurationUi {
                 ConfigurationUiCommand::ManageGerbersModalUiCommand(command)
             });
 
-        self.manage_gerbers_modal = Some(modal);
+        self.manage_gerbers_modal = Some((mode, modal));
     }
 }
 
@@ -662,8 +667,14 @@ impl ConfigurationUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
-        if let Some(modal) = &mut self.manage_gerbers_modal {
-            modal.update_gerbers(&pcb_overview.design_gerbers)
+        match &mut self.manage_gerbers_modal {
+            None => {}
+            Some((ManagerGerbersModalMode::Panel, modal)) => {
+                modal.update_gerbers(pcb_overview.pcb_gerbers.clone());
+            }
+            Some((ManagerGerbersModalMode::Design(design_index), modal)) => {
+                modal.update_gerbers(pcb_overview.design_gerbers[*design_index].clone());
+            }
         }
 
         let mut fields = self.fields.lock().unwrap();
@@ -814,7 +825,7 @@ impl DesignAssignmentsFields {
 #[derive(Debug, Clone)]
 pub enum ConfigurationUiCommand {
     None,
-    ManageGerbersClicked {
+    ManageDesignGerbersClicked {
         design_index: usize,
     },
     ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
@@ -839,6 +850,7 @@ pub enum ConfigurationUiCommand {
     UnassignRange,
     Reset,
     Apply,
+    ManagePcbGerbersClicked,
 }
 
 #[derive(Debug, Clone)]
@@ -846,12 +858,12 @@ pub enum ConfigurationUiAction {
     None,
     AddGerberFiles {
         path: PathBuf,
-        design: DesignName,
+        design: Option<DesignName>,
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     },
     RemoveGerberFiles {
         path: PathBuf,
-        design: DesignName,
+        design: Option<DesignName>,
         files: Vec<PathBuf>,
     },
     Reset,
@@ -890,6 +902,20 @@ impl UiComponent for ConfigurationUi {
         ui.label(tr!("pcb-configuration-detail-name", { name: &pcb_overview.name }));
 
         ui.separator();
+
+        //
+        // toolbar
+        //
+
+        ui.horizontal(|ui| {
+            if ui
+                .button(tr!("form-configure-pcb-designs-button-gerbers"))
+                .clicked()
+            {
+                self.component
+                    .send(ConfigurationUiCommand::ManagePcbGerbersClicked);
+            }
+        });
 
         //
         // form
@@ -933,8 +959,8 @@ impl UiComponent for ConfigurationUi {
         //
         // Modals
         //
-        if let Some(dialog) = &self.manage_gerbers_modal {
-            dialog.ui(ui, &mut ());
+        if let Some((_mode, modal)) = &self.manage_gerbers_modal {
+            modal.ui(ui, &mut ());
         }
     }
 
@@ -1088,14 +1114,29 @@ impl UiComponent for ConfigurationUi {
             //
             // gerber management
             //
-            ConfigurationUiCommand::ManageGerbersClicked {
+            ConfigurationUiCommand::ManageDesignGerbersClicked {
                 design_index,
             } => {
-                self.show_manage_gerbers_modal(design_index);
+                let mode = ManagerGerbersModalMode::Design(design_index);
+                self.show_manage_gerbers_modal(mode);
+                None
+            }
+            ConfigurationUiCommand::ManagePcbGerbersClicked => {
+                let mode = ManagerGerbersModalMode::Panel;
+                self.show_manage_gerbers_modal(mode);
                 None
             }
             ConfigurationUiCommand::ManageGerbersModalUiCommand(command) => {
-                if let Some(modal) = &mut self.manage_gerbers_modal {
+                if let (Some((mode, modal)), Some(pcb_overview)) = (&mut self.manage_gerbers_modal, &self.pcb_overview)
+                {
+                    let design = match mode {
+                        ManagerGerbersModalMode::Panel => None,
+                        ManagerGerbersModalMode::Design(design_index) => {
+                            let design = pcb_overview.designs[*design_index].clone();
+                            Some(design)
+                        }
+                    };
+
                     match modal.update(command, &mut ()) {
                         None => None,
                         Some(ManagerGerberModalAction::CloseDialog) => {
@@ -1103,46 +1144,28 @@ impl UiComponent for ConfigurationUi {
                             None
                         }
                         Some(ManagerGerberModalAction::RemoveGerberFiles {
-                            design_index,
                             files,
                         }) => {
-                            debug!(
-                                "removing gerber file. design_index: {}, files: {:?}",
-                                design_index, files
-                            );
-                            if let Some(pcb_overview) = &mut self.pcb_overview {
-                                let design = pcb_overview.designs[design_index].clone();
-                                Some(ConfigurationUiAction::RemoveGerberFiles {
-                                    path: pcb_overview.path.clone(),
-                                    design,
-                                    files,
-                                })
-                            } else {
-                                None
-                            }
+                            debug!("removing gerber file. mode: {:?}, files: {:?}", mode, files);
+                            Some(ConfigurationUiAction::RemoveGerberFiles {
+                                path: pcb_overview.path.clone(),
+                                design,
+                                files,
+                            })
                         }
                         Some(ManagerGerberModalAction::AddGerberFiles {
-                            design_index,
                             files,
                         }) => {
-                            debug!(
-                                "gerber files picked. design_index: {}, picked: {:?}",
-                                design_index, files
-                            );
-                            if let Some(pcb_overview) = &mut self.pcb_overview {
-                                let design = pcb_overview.designs[design_index].clone();
-                                let files = files
-                                    .into_iter()
-                                    .map(|file| (file, None, GerberPurpose::Other))
-                                    .collect();
-                                Some(ConfigurationUiAction::AddGerberFiles {
-                                    path: pcb_overview.path.clone(),
-                                    design,
-                                    files,
-                                })
-                            } else {
-                                None
-                            }
+                            debug!("gerber files picked. mode: {:?}, picked: {:?}", mode, files);
+                            let files = files
+                                .into_iter()
+                                .map(|file| (file, None, GerberPurpose::Other))
+                                .collect();
+                            Some(ConfigurationUiAction::AddGerberFiles {
+                                path: pcb_overview.path.clone(),
+                                design,
+                                files,
+                            })
                         }
                     }
                 } else {

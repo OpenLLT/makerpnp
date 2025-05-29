@@ -129,21 +129,15 @@ impl Pcb {
         self.design_names.iter()
     }
 
+    /// If `design` is None, then the changers are applied to the PCB, otherwise they are applied to the design.
     /// returns a [`Result`] containing the modified state of the PCB, or an error.
     pub fn add_gerbers(
         &mut self,
-        design: DesignName,
+        design: Option<DesignName>,
         files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
     ) -> Result<bool, PcbError> {
-        let design_index = self
-            .design_index(&design)
-            .ok_or(PcbError::UnknownDesign(design))?;
-
+        let gerbers = self.gerbers_for_pcb_or_design(design)?;
         let mut modified = false;
-        let gerbers = self
-            .design_gerbers
-            .entry(design_index)
-            .or_insert(vec![]);
 
         for (file, pcb_side, purpose) in files {
             if let Some(existing_gerber) = gerbers
@@ -168,23 +162,17 @@ impl Pcb {
         Ok(modified)
     }
 
+    /// If `design` is None, then the changers are applied to the PCB, otherwise they are applied to the design.
+    /// returns a [`Result`] containing the modified state of the PCB, or an error.
     // FUTURE currently this silently ignore paths that were not in the list, but perhaps we should return a result to
     //        allow the user to be informed which files could not be removed.
     pub fn remove_gerbers(
         &mut self,
-        design: DesignName,
+        design: Option<DesignName>,
         files: Vec<PathBuf>,
     ) -> Result<(bool, Vec<PathBuf>), PcbError> {
-        let design_index = self
-            .design_index(&design)
-            .ok_or(PcbError::UnknownDesign(design))?;
-
+        let gerbers = self.gerbers_for_pcb_or_design(design)?;
         let mut modified = false;
-        let gerbers = self
-            .design_gerbers
-            .entry(design_index)
-            .or_insert(vec![]);
-
         let mut unremoved_files = files;
 
         unremoved_files.retain(|file| {
@@ -204,6 +192,22 @@ impl Pcb {
         });
 
         Ok((modified, unremoved_files))
+    }
+
+    fn gerbers_for_pcb_or_design(&mut self, design: Option<DesignName>) -> Result<&mut Vec<GerberFile>, PcbError> {
+        let gerbers = match design {
+            Some(design_name) => {
+                let design_index = self
+                    .design_index(&design_name)
+                    .ok_or(PcbError::UnknownDesign(design_name))?;
+
+                self.design_gerbers
+                    .entry(design_index)
+                    .or_default()
+            }
+            None => &mut self.pcb_gerbers,
+        };
+        Ok(gerbers)
     }
 }
 
