@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::hash::Hash;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -15,6 +16,7 @@ use gerber_viewer::{
     generate_pastel_color,
 };
 use indexmap::IndexMap;
+use indexmap::map::Entry;
 use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -53,43 +55,100 @@ impl GerberViewerUi {
             GerberViewerMode::Design(design_index) => pcb_overview.design_gerbers[design_index].clone(),
         };
 
-        // the list of gerber items may contain fewer, more or different entries and/or the same entries in a different
-        // order.  for now, reset and reload everything; it would be more optimal only to reparse files that
-        // need reparsing. e.g., by storing the existing gerberdoc and gerberlayer and re-using them instead of
-        // regenerating them.
-        self.gerber_state
-            .set(GerberViewState::default());
-        self.gerber_ui_state
-            .set(UiState::default());
+        // The new list of gerber items may contain fewer, more or different entries and/or the same entries in a different
+        // order.  Only to reparse files that need reparsing, use the layer order defined by the gerber items collection.
 
-        for gerber_item in gerber_items {
-            let path = gerber_item.path.clone();
-            info!("Adding gerber layer: {}", path.to_str().unwrap());
-            self.add_gerber_layer_from_file(path)
-                .inspect_err(|e| {
-                    error!("Error adding gerber layer: {}", e);
-                })
-                .ok();
+        let mut gerber_state = self.gerber_state.lock().unwrap();
+
+        // FUTURE move this, e.g. `GerberLayerState::sync_layers` and give it the `FBuild` and `FKey` closures as arguments.
+        {
+            let design_origin = gerber_state.design_origin;
+            let design_offset = gerber_state.design_offset;
+
+            let mut layers = gerber_state.layers.split_off(0);
+
+            let errors = sync_indexmap(
+                &mut layers,
+                &gerber_items,
+                |index, key, _content| Self::build_gerber_layer_from_file(index, key, design_origin, design_offset),
+                |content| content.path.clone(),
+                |_existing_entry, _gerber_item| true,
+            );
+
+            for (index, error) in errors {
+                error!(
+                    "Error adding gerber layer. path: {:?}, error: {}",
+                    gerber_items[index].path, error
+                );
+            }
+
+            gerber_state.layers = layers;
+            gerber_state.request_center_view();
+        }
+
+        /// Synchronizes an index map with a source-of-truth vector using a fallible builder.
+        /// Removes old items if not present in the vector.
+        /// index map entry ordering will match the ordering of items in the vector.
+        pub fn sync_indexmap<K, T, S, E, FBuild, FKey, FReuse>(
+            map: &mut IndexMap<K, T>,
+            source: &[S],
+            build_fn: FBuild,
+            extract_key: FKey,
+            reuse_check: FReuse,
+        ) -> Vec<(usize, E)>
+        where
+            K: Eq + Hash + Clone,
+            // build the new entry
+            FBuild: Fn(usize, &K, &S) -> Result<T, E>,
+            // return the key to use for the new entry
+            FKey: Fn(&S) -> K,
+            // return true to keep the existing entry, false to replace it with the new one
+            FReuse: Fn(&T, &S) -> bool,
+        {
+            let mut new_map: IndexMap<K, T> = IndexMap::with_capacity(source.len());
+            let mut errors = Vec::new();
+
+            for (i, item) in source.iter().enumerate() {
+                let key = extract_key(item);
+                match map.entry(key.clone()) {
+                    Entry::Occupied(entry) if reuse_check(entry.get(), &item) => {
+                        let existing_entry = entry.shift_remove();
+                        new_map.insert(key, existing_entry);
+                    }
+                    _ => match build_fn(new_map.len(), &key, item) {
+                        Ok(new_val) => {
+                            new_map.insert(key, new_val);
+                        }
+                        Err(err) => {
+                            errors.push((i, err));
+                        }
+                    },
+                }
+            }
+
+            *map = new_map;
+
+            errors
         }
     }
 
-    fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), GerberViewerUiError> {
-        let (gerber_doc, commands) = Self::parse_gerber(&path)?;
+    fn build_gerber_layer_from_file(
+        index: usize,
+        path: &PathBuf,
+        design_origin: Vector,
+        design_offset: Vector,
+    ) -> Result<(LayerViewState, GerberLayer, GerberDoc), GerberViewerUiError> {
+        let (gerber_doc, commands) = Self::parse_gerber(path)?;
 
-        let mut state = self.gerber_state.lock().unwrap();
-
-        let layer_count = state.layers.len();
-        let color = generate_pastel_color(layer_count as u64);
+        let color = generate_pastel_color(index as u64);
 
         let layer = GerberLayer::new(commands);
         let mut layer_view_state = LayerViewState::new(color);
 
-        layer_view_state.design_offset = state.design_offset;
-        layer_view_state.design_origin = state.design_origin;
+        layer_view_state.design_offset = design_offset;
+        layer_view_state.design_origin = design_origin;
 
-        state.add_layer(path, layer_view_state, layer, gerber_doc);
-
-        Ok(())
+        Ok((layer_view_state, layer, gerber_doc))
     }
 
     fn parse_gerber(
