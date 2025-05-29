@@ -11,23 +11,24 @@ use slotmap::new_key_type;
 use tracing::{debug, error, info, trace};
 
 use crate::pcb::configuration_tab::{
-    ConfigurationTab, ConfigurationUi, ConfigurationUiAction, ConfigurationUiCommand, ConfigurationUiContext,
+    ConfigurationTab, ConfigurationTabUiAction, ConfigurationTabUiCommand, ConfigurationTabUiContext, ConfigurationUi,
 };
 use crate::pcb::core_helper::PcbCoreHelper;
-use crate::pcb::explorer_tab::{ExplorerTab, ExplorerUi, ExplorerUiCommand, ExplorerUiContext};
+use crate::pcb::explorer_tab::{ExplorerTab, ExplorerTabUiCommand, ExplorerTabUiContext, ExplorerUi};
 use crate::pcb::gerber_viewer_tab::{
-    GerberViewerMode, GerberViewerTab, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand,
-    GerberViewerUiContext, GerberViewerUiInstanceArgs,
+    GerberViewerTab, GerberViewerTabUi, GerberViewerTabUiAction, GerberViewerTabUiCommand, GerberViewerTabUiContext,
 };
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_components::gerber_viewer_ui::{GerberViewerMode, GerberViewerUiInstanceArgs};
 use crate::ui_util::NavigationPath;
 
 mod configuration_tab;
 mod explorer_tab;
 mod gerber_viewer_tab;
+
 pub mod tabs;
 
 new_key_type! {
@@ -169,14 +170,14 @@ impl Pcb {
             .entry(args.clone())
             .or_insert_with(|| {
                 created = true;
-                debug!("ensuring gerber_viewer ui. args: {:?}", args);
-                let mut gerber_viewer_ui = GerberViewerUi::new(args.clone());
+                debug!("ensuring gerber viewer tab ui. args: {:?}", args);
+                let mut gerber_viewer_ui = GerberViewerTabUi::new(args.clone());
                 gerber_viewer_ui
                     .component
                     .configure_mapper(self.component.sender.clone(), {
                         move |command| {
-                            trace!("gerber_viewer ui mapper. command: {:?}", command);
-                            (key, PcbUiCommand::GerberViewerUiCommand {
+                            trace!("gerber viewer tab ui mapper. command: {:?}", command);
+                            (key, PcbUiCommand::GerberViewerTabUiCommand {
                                 args: args.clone(),
                                 command,
                             })
@@ -294,7 +295,7 @@ pub struct PcbUiState {
     key: PcbKey,
     explorer_ui: ExplorerUi,
     configuration_ui: ConfigurationUi,
-    gerber_viewer_ui: HashMap<GerberViewerUiInstanceArgs, GerberViewerUi>,
+    gerber_viewer_ui: HashMap<GerberViewerUiInstanceArgs, GerberViewerTabUi>,
 }
 
 impl PcbUiState {
@@ -312,7 +313,7 @@ impl PcbUiState {
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("explorer ui mapper. command: {:?}", command);
-                (key, PcbUiCommand::ExplorerUiCommand(command))
+                (key, PcbUiCommand::ExplorerTabUiCommand(command))
             });
 
         instance
@@ -320,7 +321,7 @@ impl PcbUiState {
             .component
             .configure_mapper(sender.clone(), move |command| {
                 trace!("configuration ui mapper. command: {:?}", command);
-                (key, PcbUiCommand::ConfigurationUiCommand(command))
+                (key, PcbUiCommand::ConfigurationTabUiCommand(command))
             });
 
         instance
@@ -349,8 +350,8 @@ pub enum PcbUiCommand {
         pcbs_modified: bool,
     },
     Loaded,
-    ExplorerUiCommand(ExplorerUiCommand),
-    ConfigurationUiCommand(ConfigurationUiCommand),
+    ExplorerTabUiCommand(ExplorerTabUiCommand),
+    ConfigurationTabUiCommand(ConfigurationTabUiCommand),
     TabCommand(PcbTabUiCommand),
     RequestPcbView(PcbViewRequest),
     Saved,
@@ -362,9 +363,9 @@ pub enum PcbUiCommand {
     Created {
         path: PathBuf,
     },
-    GerberViewerUiCommand {
+    GerberViewerTabUiCommand {
         args: GerberViewerUiInstanceArgs,
-        command: GerberViewerUiCommand,
+        command: GerberViewerTabUiCommand,
     },
 
     ShowExplorer,
@@ -556,8 +557,8 @@ impl UiComponent for Pcb {
                 }
                 None
             }
-            PcbUiCommand::ExplorerUiCommand(command) => {
-                let context = &mut ExplorerUiContext::default();
+            PcbUiCommand::ExplorerTabUiCommand(command) => {
+                let context = &mut ExplorerTabUiContext::default();
                 let explorer_ui_action = self
                     .pcb_ui_state
                     .lock()
@@ -565,12 +566,12 @@ impl UiComponent for Pcb {
                     .explorer_ui
                     .update(command, context);
                 match explorer_ui_action {
-                    Some(explorer_tab::ExplorerUiAction::Navigate(path)) => self.navigate(&key, path),
+                    Some(explorer_tab::ExplorerTabUiAction::Navigate(path)) => self.navigate(&key, path),
                     None => None,
                 }
             }
-            PcbUiCommand::ConfigurationUiCommand(command) => {
-                let context = &mut ConfigurationUiContext::default();
+            PcbUiCommand::ConfigurationTabUiCommand(command) => {
+                let context = &mut ConfigurationTabUiContext::default();
                 let configuration_ui_action = self
                     .pcb_ui_state
                     .lock()
@@ -579,18 +580,18 @@ impl UiComponent for Pcb {
                     .update(command, context);
                 match configuration_ui_action {
                     None => None,
-                    Some(ConfigurationUiAction::None) => None,
+                    Some(ConfigurationTabUiAction::None) => None,
 
                     //
                     // form
                     //
-                    Some(ConfigurationUiAction::Reset) => self
+                    Some(ConfigurationTabUiAction::Reset) => self
                         .planner_core_service
                         .update(Event::RequestPcbOverviewView {
                             path: self.path.clone(),
                         })
                         .when_ok(key, |_| None),
-                    Some(ConfigurationUiAction::Apply(args)) => self
+                    Some(ConfigurationTabUiAction::Apply(args)) => self
                         .planner_core_service
                         .update(Event::ApplyPcbUnitConfiguration {
                             path: self.path.clone(),
@@ -607,7 +608,7 @@ impl UiComponent for Pcb {
                     //
                     // gerber file management
                     //
-                    Some(ConfigurationUiAction::AddGerberFiles {
+                    Some(ConfigurationTabUiAction::AddGerberFiles {
                         path,
                         design,
                         files,
@@ -639,7 +640,7 @@ impl UiComponent for Pcb {
                             Err(error_action) => Some(error_action),
                         }
                     }
-                    Some(ConfigurationUiAction::RemoveGerberFiles {
+                    Some(ConfigurationTabUiAction::RemoveGerberFiles {
                         path,
                         design,
                         files,
@@ -673,11 +674,11 @@ impl UiComponent for Pcb {
                     }
                 }
             }
-            PcbUiCommand::GerberViewerUiCommand {
+            PcbUiCommand::GerberViewerTabUiCommand {
                 args,
                 command,
             } => {
-                let context = &mut GerberViewerUiContext::default();
+                let context = &mut GerberViewerTabUiContext::default();
 
                 let gerber_viewer_ui_action = self
                     .pcb_ui_state
@@ -689,7 +690,7 @@ impl UiComponent for Pcb {
                     .update(command, context);
 
                 match gerber_viewer_ui_action {
-                    Some(GerberViewerUiAction::None) => None,
+                    Some(GerberViewerTabUiAction::None) => None,
                     None => None,
                 }
             }

@@ -22,7 +22,7 @@ pub struct ExplorerUi {
     tree_view_state: Value<TreeViewState<usize>>,
     navigation_paths: Value<BTreeMap<usize, NavigationPath>>,
 
-    pub component: ComponentState<ExplorerUiCommand>,
+    pub component: ComponentState<ExplorerTabUiCommand>,
 }
 
 impl ExplorerUi {
@@ -193,7 +193,7 @@ impl ExplorerUi {
                     for node_id in activation.selected {
                         if let Some(navigation_path) = navigation_paths.get(&node_id) {
                             self.component
-                                .send(ExplorerUiCommand::Navigate(navigation_path.clone()));
+                                .send(ExplorerTabUiCommand::Navigate(navigation_path.clone()));
                         }
 
                         // HACK: tree-view-dir-activate-expand-hack
@@ -220,22 +220,22 @@ impl ExplorerUi {
 }
 
 #[derive(Debug, Clone)]
-pub enum ExplorerUiCommand {
+pub enum ExplorerTabUiCommand {
     Navigate(NavigationPath),
 }
 
 #[derive(Debug, Clone)]
-pub enum ExplorerUiAction {
+pub enum ExplorerTabUiAction {
     Navigate(NavigationPath),
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ExplorerUiContext {}
+pub struct ExplorerTabUiContext {}
 
 impl UiComponent for ExplorerUi {
-    type UiContext<'context> = ExplorerUiContext;
-    type UiCommand = ExplorerUiCommand;
-    type UiAction = ExplorerUiAction;
+    type UiContext<'context> = ExplorerTabUiContext;
+    type UiCommand = ExplorerTabUiCommand;
+    type UiAction = ExplorerTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -257,10 +257,10 @@ impl UiComponent for ExplorerUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            ExplorerUiCommand::Navigate(path) => {
+            ExplorerTabUiCommand::Navigate(path) => {
                 self.select_path(&path);
 
-                Some(ExplorerUiAction::Navigate(path))
+                Some(ExplorerTabUiAction::Navigate(path))
             }
         }
     }
@@ -280,7 +280,7 @@ impl Tab for ExplorerTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.explorer_ui, ui, &mut ExplorerUiContext::default());
+        UiComponent::ui(&state.explorer_ui, ui, &mut ExplorerTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

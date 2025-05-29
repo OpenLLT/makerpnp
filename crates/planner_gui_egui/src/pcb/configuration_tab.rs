@@ -40,7 +40,7 @@ pub struct ConfigurationUi {
 
     manage_gerbers_modal: Option<(ManagerGerbersModalMode, ManageGerbersModal)>,
 
-    pub component: ComponentState<ConfigurationUiCommand>,
+    pub component: ComponentState<ConfigurationTabUiCommand>,
 }
 
 impl ConfigurationUi {
@@ -54,7 +54,7 @@ impl ConfigurationUi {
     fn show_form(
         &self,
         ui: &mut Ui,
-        form: &Form<DesignAssignmentsFields, ConfigurationUiCommand>,
+        form: &Form<DesignAssignmentsFields, ConfigurationTabUiCommand>,
         pcb_overview: &PcbOverview,
     ) {
         let default_style = || Style {
@@ -96,7 +96,7 @@ impl ConfigurationUi {
 
                             if units != fields.units {
                                 sender
-                                    .send(ConfigurationUiCommand::UnitsChanged(units))
+                                    .send(ConfigurationTabUiCommand::UnitsChanged(units))
                                     .expect("sent");
                             }
 
@@ -152,7 +152,7 @@ impl ConfigurationUi {
                                                     .eq(&design_name_clone)
                                                 {
                                                     sender
-                                                        .send(ConfigurationUiCommand::DesignNameChanged(design_name_clone))
+                                                        .send(ConfigurationTabUiCommand::DesignNameChanged(design_name_clone))
                                                         .expect("sent")
                                                 }
                                             });
@@ -169,7 +169,7 @@ impl ConfigurationUi {
                                             .clicked()
                                         {
                                             self.component
-                                                .send(ConfigurationUiCommand::AddDesignClicked);
+                                                .send(ConfigurationTabUiCommand::AddDesignClicked);
                                         }
                                     });
 
@@ -258,7 +258,7 @@ impl ConfigurationUi {
                                                                                     .clicked()
                                                                                 {
                                                                                     self.component
-                                                                                        .send(ConfigurationUiCommand::ManageDesignGerbersClicked {
+                                                                                        .send(ConfigurationTabUiCommand::ManageDesignGerbersClicked {
                                                                                             design_index: row_index,
                                                                                         });
                                                                                 }
@@ -278,7 +278,7 @@ impl ConfigurationUi {
                                                                     });
                                                                 }
                                                                 if fields.designs_selected_index != designs_selected_index {
-                                                                    self.component.send(ConfigurationUiCommand::DesignVariantSelectionChanged(designs_selected_index));
+                                                                    self.component.send(ConfigurationTabUiCommand::DesignVariantSelectionChanged(designs_selected_index));
                                                                 }
                                                             });
                                                         if Self::TABLE_DEBUG_MODE {
@@ -370,7 +370,7 @@ impl ConfigurationUi {
 
                                         if fields.pcb_unit_range != pcb_unit_range {
                                             sender
-                                                .send(ConfigurationUiCommand::PcbUnitRangeChanged(pcb_unit_range.clone()))
+                                                .send(ConfigurationTabUiCommand::PcbUnitRangeChanged(pcb_unit_range.clone()))
                                                 .expect("sent")
                                         }
 
@@ -389,7 +389,7 @@ impl ConfigurationUi {
                                             .clicked()
                                         {
                                             self.component
-                                                .send(ConfigurationUiCommand::ApplyRangeClicked(
+                                                .send(ConfigurationTabUiCommand::ApplyRangeClicked(
                                                     fields.designs_selected_index.unwrap(),
                                                 ));
                                         }
@@ -404,7 +404,7 @@ impl ConfigurationUi {
                                             .clicked()
                                         {
                                             self.component
-                                                .send(ConfigurationUiCommand::ApplyAllClicked(
+                                                .send(ConfigurationTabUiCommand::ApplyAllClicked(
                                                     fields.designs_selected_index.unwrap(),
                                                 ));
                                         }
@@ -419,7 +419,7 @@ impl ConfigurationUi {
                                             .clicked()
                                         {
                                             self.component
-                                                .send(ConfigurationUiCommand::UnassignFromRange(
+                                                .send(ConfigurationTabUiCommand::UnassignFromRange(
                                                     fields.designs_selected_index.unwrap(),
                                                 ));
                                         }
@@ -436,7 +436,7 @@ impl ConfigurationUi {
                                             .clicked()
                                         {
                                             self.component
-                                                .send(ConfigurationUiCommand::UnassignRange);
+                                                .send(ConfigurationTabUiCommand::UnassignRange);
                                         }
                                     }
                                 },
@@ -583,7 +583,7 @@ impl ConfigurationUi {
                                                     .clicked()
                                                 {
                                                     self.component
-                                                        .send(ConfigurationUiCommand::AssignSelection(
+                                                        .send(ConfigurationTabUiCommand::AssignSelection(
                                                             fields.designs_selected_index.unwrap(),
                                                             unit_map_visible_selected_indexes.clone(),
                                                         ));
@@ -603,7 +603,7 @@ impl ConfigurationUi {
                                                     .clicked()
                                                 {
                                                     self.component
-                                                        .send(ConfigurationUiCommand::UnassignSelection(
+                                                        .send(ConfigurationTabUiCommand::UnassignSelection(
                                                             unit_map_visible_selected_indexes.clone(),
                                                         ));
                                                 }
@@ -619,7 +619,7 @@ impl ConfigurationUi {
                                                     .clicked()
                                                 {
                                                     self.component
-                                                        .send(ConfigurationUiCommand::UnassignAllClicked);
+                                                        .send(ConfigurationTabUiCommand::UnassignAllClicked);
                                                 }
 
                                             });
@@ -648,7 +648,7 @@ impl ConfigurationUi {
             .component
             .configure_mapper(self.component.sender.clone(), move |command| {
                 trace!("manage gerbers modal mapper. command: {:?}", command);
-                ConfigurationUiCommand::ManageGerbersModalUiCommand(command)
+                ConfigurationTabUiCommand::ManageGerbersModalUiCommand(command)
             });
 
         self.manage_gerbers_modal = Some((mode, modal));
@@ -823,7 +823,7 @@ impl DesignAssignmentsFields {
 }
 
 #[derive(Debug, Clone)]
-pub enum ConfigurationUiCommand {
+pub enum ConfigurationTabUiCommand {
     None,
     ManageDesignGerbersClicked {
         design_index: usize,
@@ -854,7 +854,7 @@ pub enum ConfigurationUiCommand {
 }
 
 #[derive(Debug, Clone)]
-pub enum ConfigurationUiAction {
+pub enum ConfigurationTabUiAction {
     None,
     AddGerberFiles {
         path: PathBuf,
@@ -871,7 +871,7 @@ pub enum ConfigurationUiAction {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ConfigurationUiContext {}
+pub struct ConfigurationTabUiContext {}
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PcbUnitConfigurationArgs {
@@ -881,9 +881,9 @@ pub struct PcbUnitConfigurationArgs {
 }
 
 impl UiComponent for ConfigurationUi {
-    type UiContext<'context> = ConfigurationUiContext;
-    type UiCommand = ConfigurationUiCommand;
-    type UiAction = ConfigurationUiAction;
+    type UiContext<'context> = ConfigurationTabUiContext;
+    type UiCommand = ConfigurationTabUiCommand;
+    type UiAction = ConfigurationTabUiAction;
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
@@ -913,7 +913,7 @@ impl UiComponent for ConfigurationUi {
                 .clicked()
             {
                 self.component
-                    .send(ConfigurationUiCommand::ManagePcbGerbersClicked);
+                    .send(ConfigurationTabUiCommand::ManagePcbGerbersClicked);
             }
         });
 
@@ -939,7 +939,7 @@ impl UiComponent for ConfigurationUi {
                     .clicked()
                 {
                     self.component
-                        .send(ConfigurationUiCommand::Reset);
+                        .send(ConfigurationTabUiCommand::Reset);
                 }
 
                 if ui
@@ -950,7 +950,7 @@ impl UiComponent for ConfigurationUi {
                     .clicked()
                 {
                     self.component
-                        .send(ConfigurationUiCommand::Apply);
+                        .send(ConfigurationTabUiCommand::Apply);
                 }
             },
             |_ui| {},
@@ -971,24 +971,24 @@ impl UiComponent for ConfigurationUi {
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
-            ConfigurationUiCommand::None => Some(ConfigurationUiAction::None),
+            ConfigurationTabUiCommand::None => Some(ConfigurationTabUiAction::None),
 
             //
             // fields
             //
-            ConfigurationUiCommand::UnitsChanged(units) => {
+            ConfigurationTabUiCommand::UnitsChanged(units) => {
                 let mut fields = self.fields.lock().unwrap();
 
                 fields.update_units(units);
 
                 None
             }
-            ConfigurationUiCommand::DesignNameChanged(name) => {
+            ConfigurationTabUiCommand::DesignNameChanged(name) => {
                 self.fields.lock().unwrap().design_name = name;
                 None
             }
 
-            ConfigurationUiCommand::PcbUnitRangeChanged(value) => {
+            ConfigurationTabUiCommand::PcbUnitRangeChanged(value) => {
                 self.fields
                     .lock()
                     .unwrap()
@@ -999,7 +999,7 @@ impl UiComponent for ConfigurationUi {
             //
             // design assignments
             //
-            ConfigurationUiCommand::DesignVariantSelectionChanged(designs_selected_index) => {
+            ConfigurationTabUiCommand::DesignVariantSelectionChanged(designs_selected_index) => {
                 let mut fields = self.fields.lock().unwrap();
                 fields.designs_selected_index = designs_selected_index;
 
@@ -1012,7 +1012,7 @@ impl UiComponent for ConfigurationUi {
                 None
             }
 
-            ConfigurationUiCommand::ApplyRangeClicked(design_index) => {
+            ConfigurationTabUiCommand::ApplyRangeClicked(design_index) => {
                 let mut fields = self.fields.lock().unwrap();
                 let assignment_range_1_based = fields.pcb_unit_range.to_usize_range();
                 let assignment_range = (assignment_range_1_based.start() - 1)..=(assignment_range_1_based.end() - 1);
@@ -1022,7 +1022,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::UnassignFromRange(design_index) => {
+            ConfigurationTabUiCommand::UnassignFromRange(design_index) => {
                 let mut fields = self.fields.lock().unwrap();
                 let assignment_range_1_based = fields.pcb_unit_range.to_usize_range();
                 let assignment_range = (assignment_range_1_based.start() - 1)..=(assignment_range_1_based.end() - 1);
@@ -1037,7 +1037,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::UnassignRange => {
+            ConfigurationTabUiCommand::UnassignRange => {
                 let mut fields = self.fields.lock().unwrap();
                 let assignment_range_1_based = fields.pcb_unit_range.to_usize_range();
                 let assignment_range = (assignment_range_1_based.start() - 1)..=(assignment_range_1_based.end() - 1);
@@ -1047,7 +1047,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::ApplyAllClicked(design_index) => {
+            ConfigurationTabUiCommand::ApplyAllClicked(design_index) => {
                 let mut fields = self.fields.lock().unwrap();
 
                 for assigned_design_index in fields.unit_map.iter_mut() {
@@ -1055,7 +1055,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::UnassignAllClicked => {
+            ConfigurationTabUiCommand::UnassignAllClicked => {
                 let mut fields = self.fields.lock().unwrap();
 
                 for assigned_design_index in fields.unit_map.iter_mut() {
@@ -1063,7 +1063,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::UnassignSelection(unit_map_selected_indexes) => {
+            ConfigurationTabUiCommand::UnassignSelection(unit_map_selected_indexes) => {
                 let mut fields = self.fields.lock().unwrap();
 
                 for (_pcb_unit_index, assigned_design_index) in fields
@@ -1076,7 +1076,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::AssignSelection(design_index, unit_map_selected_indexes) => {
+            ConfigurationTabUiCommand::AssignSelection(design_index, unit_map_selected_indexes) => {
                 let mut fields = self.fields.lock().unwrap();
 
                 for (_pcb_unit_index, assigned_design_index) in fields
@@ -1089,7 +1089,7 @@ impl UiComponent for ConfigurationUi {
                 }
                 None
             }
-            ConfigurationUiCommand::AddDesignClicked => {
+            ConfigurationTabUiCommand::AddDesignClicked => {
                 let mut fields = self.fields.lock().unwrap();
 
                 let design_name = DesignName::from(fields.design_name.clone().trim());
@@ -1102,31 +1102,31 @@ impl UiComponent for ConfigurationUi {
             //
             // form submission
             //
-            ConfigurationUiCommand::Apply => {
+            ConfigurationTabUiCommand::Apply => {
                 let fields = self.fields.lock().unwrap();
 
                 let args = fields.as_args();
 
-                Some(ConfigurationUiAction::Apply(args))
+                Some(ConfigurationTabUiAction::Apply(args))
             }
-            ConfigurationUiCommand::Reset => Some(ConfigurationUiAction::Reset),
+            ConfigurationTabUiCommand::Reset => Some(ConfigurationTabUiAction::Reset),
 
             //
             // gerber management
             //
-            ConfigurationUiCommand::ManageDesignGerbersClicked {
+            ConfigurationTabUiCommand::ManageDesignGerbersClicked {
                 design_index,
             } => {
                 let mode = ManagerGerbersModalMode::Design(design_index);
                 self.show_manage_gerbers_modal(mode);
                 None
             }
-            ConfigurationUiCommand::ManagePcbGerbersClicked => {
+            ConfigurationTabUiCommand::ManagePcbGerbersClicked => {
                 let mode = ManagerGerbersModalMode::Panel;
                 self.show_manage_gerbers_modal(mode);
                 None
             }
-            ConfigurationUiCommand::ManageGerbersModalUiCommand(command) => {
+            ConfigurationTabUiCommand::ManageGerbersModalUiCommand(command) => {
                 if let (Some((mode, modal)), Some(pcb_overview)) = (&mut self.manage_gerbers_modal, &self.pcb_overview)
                 {
                     let design = match mode {
@@ -1147,7 +1147,7 @@ impl UiComponent for ConfigurationUi {
                             files,
                         }) => {
                             debug!("removing gerber file. mode: {:?}, files: {:?}", mode, files);
-                            Some(ConfigurationUiAction::RemoveGerberFiles {
+                            Some(ConfigurationTabUiAction::RemoveGerberFiles {
                                 path: pcb_overview.path.clone(),
                                 design,
                                 files,
@@ -1161,7 +1161,7 @@ impl UiComponent for ConfigurationUi {
                                 .into_iter()
                                 .map(|file| (file, None, GerberPurpose::Other))
                                 .collect();
-                            Some(ConfigurationUiAction::AddGerberFiles {
+                            Some(ConfigurationTabUiAction::AddGerberFiles {
                                 path: pcb_overview.path.clone(),
                                 design,
                                 files,
@@ -1188,7 +1188,7 @@ impl Tab for ConfigurationTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.configuration_ui, ui, &mut ConfigurationUiContext::default());
+        UiComponent::ui(&state.configuration_ui, ui, &mut ConfigurationTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
