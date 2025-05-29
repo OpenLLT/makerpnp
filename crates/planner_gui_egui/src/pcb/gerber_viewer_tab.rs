@@ -14,6 +14,7 @@ use gerber_viewer::{
     BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
     generate_pastel_color,
 };
+use indexmap::IndexMap;
 use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -139,7 +140,7 @@ struct GerberViewState {
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
-    layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
+    layers: IndexMap<PathBuf, (LayerViewState, GerberLayer, GerberDoc)>,
     // used for mirroring and rotation, in gerber coordinates
     design_origin: Vector,
 
@@ -159,7 +160,7 @@ impl Default for GerberViewState {
             needs_view_centering: true,
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
-            layers: vec![],
+            layers: Default::default(),
             //design_origin: Vector::new(14.75, 6.0),
             //design_offset: Vector::new(-10.0, -10.0),
             design_origin: Vector::ZERO,
@@ -179,7 +180,7 @@ impl GerberViewState {
         gerber_doc: GerberDoc,
     ) {
         self.layers
-            .push((path, layer_view_state, layer, gerber_doc));
+            .insert(path, (layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_center_view();
     }
@@ -187,11 +188,11 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (layer_index, (_, layer_view_state, layer, _)) in self
+        for (layer_index, (_path, (layer_view_state, layer, _))) in self
             .layers
             .iter()
             .enumerate()
-            .filter(|(_, (_, _, layer, _))| !layer.is_empty())
+            .filter(|(_, (_path, (_, layer, _)))| !layer.is_empty())
         {
             let layer_bbox = &layer.bounding_box();
 
@@ -320,7 +321,7 @@ impl UiComponent for GerberViewerUi {
         ui_state.update(ui, &viewport, &response, &mut state.view);
 
         let painter = ui.painter().with_clip_rect(viewport);
-        for (_, layer_state, layer, _doc) in state.layers.iter() {
+        for (_path, (layer_state, layer, _doc)) in state.layers.iter() {
             GerberRenderer::default().paint_layer(
                 &painter,
                 state.view,
