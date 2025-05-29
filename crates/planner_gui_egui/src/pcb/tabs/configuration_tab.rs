@@ -1188,7 +1188,11 @@ impl Tab for ConfigurationTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.configuration_ui, ui, &mut ConfigurationTabUiContext::default());
+        UiComponent::ui(
+            &state.configuration_tab_ui,
+            ui,
+            &mut ConfigurationTabUiContext::default(),
+        );
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

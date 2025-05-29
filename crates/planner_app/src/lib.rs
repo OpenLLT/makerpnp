@@ -426,6 +426,7 @@ pub enum PcbView {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum PcbViewRequest {
     Overview { path: PathBuf },
+    Panel { path: PathBuf },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, PartialEq, Debug)]

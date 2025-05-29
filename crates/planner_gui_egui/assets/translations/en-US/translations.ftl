@@ -121,9 +121,12 @@ pcb-configuration-tab-label = Configuration
 pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
 
+pcb-panel-tab-label = Panel
+
 pcb-explorer-tab-label = PCB Explorer
 pcb-explorer-node-root = { $name }
 pcb-explorer-node-configuration = Configuration
+pcb-explorer-node-panel = Panel
 pcb-explorer-node-pcb-view = PCB
 pcb-explorer-node-designs = Designs
 pcb-explorer-node-units = Unit
