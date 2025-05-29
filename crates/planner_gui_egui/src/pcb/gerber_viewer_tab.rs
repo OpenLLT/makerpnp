@@ -170,14 +170,6 @@ impl GerberViewerUi {
         let gerber_doc: GerberDoc =
             parse(reader).map_err(|(_partial_doc, error)| GerberViewerUiError::ParserError(error))?;
 
-        gerber_doc
-            .commands
-            .iter()
-            .for_each(|c| match c {
-                Ok(_command) => {},
-                Err(error) => error!("{:?}", error),
-            });
-
         let message = format!("Gerber file parsed successfully. path: {}", path.to_str().unwrap());
         info!("{}", message);
 
