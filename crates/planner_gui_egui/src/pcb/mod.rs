@@ -8,26 +8,23 @@ use egui_mobius::types::Enqueue;
 use planner_app::{DesignIndex, Event, PcbView, PcbViewRequest};
 use regex::Regex;
 use slotmap::new_key_type;
-use tracing::{debug, error, info, trace};
-
-use crate::pcb::configuration_tab::{
+use tabs::configuration_tab::{
     ConfigurationTab, ConfigurationTabUiAction, ConfigurationTabUiCommand, ConfigurationTabUiContext, ConfigurationUi,
 };
-use crate::pcb::core_helper::PcbCoreHelper;
-use crate::pcb::explorer_tab::{ExplorerTab, ExplorerTabUiCommand, ExplorerTabUiContext, ExplorerUi};
-use crate::pcb::gerber_viewer_tab::{
+use tabs::explorer_tab;
+use tabs::explorer_tab::{ExplorerTab, ExplorerTabUiCommand, ExplorerTabUiContext, ExplorerUi};
+use tabs::gerber_viewer_tab::{
     GerberViewerTab, GerberViewerTabUi, GerberViewerTabUiAction, GerberViewerTabUiCommand, GerberViewerTabUiContext,
 };
+use tracing::{debug, error, info, trace};
+
+use crate::pcb::core_helper::PcbCoreHelper;
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{GerberViewerMode, GerberViewerUiInstanceArgs};
 use crate::ui_util::NavigationPath;
-
-mod configuration_tab;
-mod explorer_tab;
-mod gerber_viewer_tab;
 
 pub mod tabs;
 

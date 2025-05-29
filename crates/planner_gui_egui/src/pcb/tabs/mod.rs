@@ -7,6 +7,10 @@ use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
 
+pub mod configuration_tab;
+pub mod explorer_tab;
+pub mod gerber_viewer_tab;
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct PcbTabs {
     tabs: Value<Tabs<PcbTabKind, PcbTabContext>>,

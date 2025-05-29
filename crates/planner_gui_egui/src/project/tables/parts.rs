@@ -10,7 +10,7 @@ use planner_app::{Part, ProcessReference, RefDes};
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
-use crate::project::parts_tab::PartsTabUiCommand;
+use crate::project::tabs::parts_tab::PartsTabUiCommand;
 
 #[derive(Debug, Clone)]
 pub struct PartStatesRow {

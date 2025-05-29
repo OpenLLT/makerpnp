@@ -12,48 +12,30 @@ use planner_app::{
 };
 use regex::Regex;
 use slotmap::new_key_type;
+use tabs::explorer_tab::{ExplorerTab, ExplorerTabUi, ExplorerTabUiAction, ExplorerTabUiCommand, ExplorerTabUiContext};
+use tabs::load_out_tab::{LoadOutTab, LoadOutTabUi, LoadOutTabUiAction, LoadOutTabUiCommand, LoadOutTabUiContext};
+use tabs::overview_tab::{OverviewTab, OverviewTabUi, OverviewTabUiAction, OverviewTabUiCommand, OverviewTabUiContext};
+use tabs::parts_tab::{PartsTab, PartsTabUi, PartsTabUiAction, PartsTabUiCommand, PartsTabUiContext};
+use tabs::pcb_tab::{PcbTab, PcbTabUi, PcbTabUiAction, PcbTabUiCommand, PcbTabUiContext};
+use tabs::phase_tab::{PhaseTab, PhaseTabUi, PhaseTabUiAction, PhaseTabUiCommand, PhaseTabUiContext};
+use tabs::placements_tab::{
+    PlacementsTab, PlacementsTabUi, PlacementsTabUiAction, PlacementsTabUiCommand, PlacementsTabUiContext,
+};
+use tabs::unit_assignments_tab::{
+    UnitAssignmentsTab, UnitAssignmentsTabUi, UnitAssignmentsTabUiAction, UnitAssignmentsTabUiCommand,
+    UnitAssignmentsTabUiContext, UpdateUnitAssignmentsArgs,
+};
 use tracing::{debug, error, info, trace};
 
 use crate::file_picker::Picker;
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
-use crate::project::explorer_tab::{
-    ExplorerTab, ExplorerTabUi, ExplorerTabUiAction, ExplorerTabUiCommand, ExplorerTabUiContext,
-};
-use crate::project::load_out_tab::{
-    LoadOutTab, LoadOutTabUi, LoadOutTabUiAction, LoadOutTabUiCommand, LoadOutTabUiContext,
-};
-use crate::project::overview_tab::{
-    OverviewTab, OverviewTabUi, OverviewTabUiAction, OverviewTabUiCommand, OverviewTabUiContext,
-};
-use crate::project::parts_tab::{PartsTab, PartsTabUi, PartsTabUiAction, PartsTabUiCommand, PartsTabUiContext};
-use crate::project::pcb_tab::{PcbTab, PcbTabUi, PcbTabUiAction, PcbTabUiCommand, PcbTabUiContext};
-use crate::project::phase_tab::{PhaseTab, PhaseTabUi, PhaseTabUiAction, PhaseTabUiCommand, PhaseTabUiContext};
-use crate::project::placements_tab::{
-    PlacementsTab, PlacementsTabUi, PlacementsTabUiAction, PlacementsTabUiCommand, PlacementsTabUiContext,
-};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
-use crate::project::unit_assignments_tab::{
-    UnitAssignmentsTab, UnitAssignmentsTabUi, UnitAssignmentsTabUiAction, UnitAssignmentsTabUiCommand,
-    UnitAssignmentsTabUiContext, UpdateUnitAssignmentsArgs,
-};
 use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_util::NavigationPath;
-
-//
-// tabs
-//
-mod explorer_tab;
-mod load_out_tab;
-mod overview_tab;
-mod parts_tab;
-mod pcb_tab;
-mod phase_tab;
-mod placements_tab;
-mod unit_assignments_tab;
 
 //
 // other modules

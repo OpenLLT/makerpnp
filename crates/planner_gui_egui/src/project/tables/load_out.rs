@@ -9,7 +9,7 @@ use planner_app::Part;
 use tracing::{debug, trace};
 
 use crate::filter::Filter;
-use crate::project::load_out_tab::LoadOutTabUiCommand;
+use crate::project::tabs::load_out_tab::LoadOutTabUiCommand;
 
 #[derive(Debug, Clone)]
 pub struct LoadOutRow {

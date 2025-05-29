@@ -8,6 +8,18 @@ use crate::tabs::{AppTabViewer, Tab, TabKey, Tabs};
 use crate::tabs_impl;
 use crate::ui_component::{ComponentState, UiComponent};
 
+//
+// tabs
+//
+pub mod explorer_tab;
+pub mod load_out_tab;
+pub mod overview_tab;
+pub mod parts_tab;
+pub mod pcb_tab;
+pub mod phase_tab;
+pub mod placements_tab;
+pub mod unit_assignments_tab;
+
 #[derive(Derivative, serde::Deserialize, serde::Serialize)]
 #[derivative(Debug)]
 pub struct ProjectTabs {
