@@ -301,6 +301,7 @@ impl GerberViewer {
     fn open_gerber_file_inner(&mut self) -> Result<(), AppError> {
         let paths = FileDialog::new()
             .add_filter("Gerber Files", &["gbr", "gbl", "gbo", "gbs", "gko", "gko", "gto"])
+            .add_filter("All Files", &["*"])
             .pick_files()
             .ok_or(AppError::NoFileSelected)?;
 
