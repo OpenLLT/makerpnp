@@ -174,7 +174,7 @@ impl GerberViewerUi {
             .commands
             .iter()
             .for_each(|c| match c {
-                Ok(command) => info!("{:?}", command),
+                Ok(_command) => {},
                 Err(error) => error!("{:?}", error),
             });
 
