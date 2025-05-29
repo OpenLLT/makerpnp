@@ -1347,6 +1347,11 @@ impl UiComponent for Project {
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::Phases,
                     ))),
+                    // FIXME there is no current way to know when to continue
+                    //       since there is no mechanism to know if `ProjectViewRequest::Phases` completed and all the
+                    //       effects have ALSO completed.
+                    //       currently the ProjectUiCommand::ContinueShowPhaseLoadout is called before the handler for
+                    //       ProjectUiCommand::ProjectView is called.
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::ContinueShowPhaseLoadout {
                         phase,
                     })),

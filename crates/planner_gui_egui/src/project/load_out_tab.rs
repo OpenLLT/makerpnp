@@ -201,10 +201,13 @@ impl Tab for LoadOutTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let load_out_ui = state
+        let Some(load_out_ui) = state
             .load_outs
             .get(&self.load_out_source)
-            .unwrap();
+        else {
+            ui.spinner();
+            return;
+        };
         UiComponent::ui(load_out_ui, ui, &mut LoadOutUiContext::default());
     }
 
