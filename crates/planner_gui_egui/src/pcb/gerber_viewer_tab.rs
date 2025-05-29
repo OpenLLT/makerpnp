@@ -61,6 +61,7 @@ impl GerberViewerUi {
         let mut gerber_state = self.gerber_state.lock().unwrap();
 
         // FUTURE move this, e.g. `GerberLayerState::sync_layers` and give it the `FBuild` and `FKey` closures as arguments.
+        // FUTURE load each layer in a background thead, don't block the UI thread.
         {
             let design_origin = gerber_state.design_origin;
             let design_offset = gerber_state.design_offset;
