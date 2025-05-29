@@ -238,11 +238,11 @@ impl UiComponent for TabKind {
                     command,
                 },
             ) => {
-                let mut project_tab_context = pcb::PcbTabContext {
+                let mut pcb_tab_context = pcb::PcbTabContext {
                     tab_key,
                     pcbs: context.pcbs.clone(),
                 };
-                tab.update(command, &mut project_tab_context)
+                tab.update(command, &mut pcb_tab_context)
                     .map(|action| TabKindAction::PcbTabAction {
                         action,
                     })
