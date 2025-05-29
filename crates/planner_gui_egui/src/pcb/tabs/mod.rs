@@ -11,6 +11,8 @@ pub mod configuration_tab;
 pub mod explorer_tab;
 pub mod gerber_viewer_tab;
 
+pub mod panel_tab;
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct PcbTabs {
     tabs: Value<Tabs<PcbTabKind, PcbTabContext>>,
@@ -90,6 +92,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.label(),
             PcbTabKind::Configuration(tab) => tab.label(),
+            PcbTabKind::Panel(tab) => tab.label(),
             PcbTabKind::GerberViewer(tab) => tab.label(),
         }
     }
@@ -98,6 +101,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
             PcbTabKind::Configuration(tab) => tab.ui(ui, tab_key, context),
+            PcbTabKind::Panel(tab) => tab.ui(ui, tab_key, context),
             PcbTabKind::GerberViewer(tab) => tab.ui(ui, tab_key, context),
         }
     }
@@ -106,6 +110,7 @@ impl Tab for PcbTabKind {
         match self {
             PcbTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             PcbTabKind::Configuration(tab) => tab.on_close(tab_key, context),
+            PcbTabKind::Panel(tab) => tab.on_close(tab_key, context),
             PcbTabKind::GerberViewer(tab) => tab.on_close(tab_key, context),
         }
     }

@@ -74,6 +74,10 @@ impl ExplorerUi {
                 tree_builder.leaf(node_id, tr!("pcb-explorer-node-configuration"));
                 navigation_paths.insert(node_id, NavigationPath::new("/pcb/configuration".to_string()));
 
+                node_id += 1;
+                tree_builder.leaf(node_id, tr!("pcb-explorer-node-panel"));
+                navigation_paths.insert(node_id, NavigationPath::new("/pcb/panel".to_string()));
+
                 //
                 // Views
                 //
@@ -280,7 +284,7 @@ impl Tab for ExplorerTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        UiComponent::ui(&state.explorer_ui, ui, &mut ExplorerTabUiContext::default());
+        UiComponent::ui(&state.explorer_tab_ui, ui, &mut ExplorerTabUiContext::default());
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {

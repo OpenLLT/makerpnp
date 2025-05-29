@@ -11,7 +11,6 @@ use slotmap::new_key_type;
 use tabs::configuration_tab::{
     ConfigurationTab, ConfigurationTabUiAction, ConfigurationTabUiCommand, ConfigurationTabUiContext, ConfigurationUi,
 };
-use tabs::explorer_tab;
 use tabs::explorer_tab::{ExplorerTab, ExplorerTabUiCommand, ExplorerTabUiContext, ExplorerUi};
 use tabs::gerber_viewer_tab::{
     GerberViewerTab, GerberViewerTabUi, GerberViewerTabUiAction, GerberViewerTabUiCommand, GerberViewerTabUiContext,
@@ -19,6 +18,8 @@ use tabs::gerber_viewer_tab::{
 use tracing::{debug, error, info, trace};
 
 use crate::pcb::core_helper::PcbCoreHelper;
+use crate::pcb::tabs::explorer_tab::ExplorerTabUiAction;
+use crate::pcb::tabs::panel_tab::{PanelTab, PanelTabUi, PanelTabUiAction, PanelTabUiCommand, PanelTabUiContext};
 use crate::pcb::tabs::{PcbTabAction, PcbTabContext, PcbTabUiCommand, PcbTabs};
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::task::Task;
@@ -124,6 +125,7 @@ impl Pcb {
             let command = match tab {
                 PcbTabKind::Explorer(_tab) => PcbUiCommand::ShowExplorer,
                 PcbTabKind::Configuration(_) => PcbUiCommand::ShowConfiguration,
+                PcbTabKind::Panel(_tab) => PcbUiCommand::ShowPanel,
                 PcbTabKind::GerberViewer(tab) => PcbUiCommand::ShowGerberViewer(tab.args.clone()),
             };
 
@@ -159,11 +161,25 @@ impl Pcb {
         )))
     }
 
+    pub fn show_panel(&mut self, path: PathBuf) -> Task<PcbAction> {
+        let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
+        let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Panel(_)));
+        if result.is_err() {
+            pcb_tabs.add_tab(PcbTabKind::Panel(PanelTab::default()));
+        }
+
+        Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+            PcbViewRequest::Panel {
+                path,
+            },
+        )))
+    }
+
     fn ensure_gerber_viewer(&self, key: PcbKey, args: GerberViewerUiInstanceArgs) -> bool {
         let mut state = self.pcb_ui_state.lock().unwrap();
         let mut created = false;
         let _gerber_viewer_ui_state = state
-            .gerber_viewer_ui
+            .gerber_viewer_tab_uis
             .entry(args.clone())
             .or_insert_with(|| {
                 created = true;
@@ -236,6 +252,18 @@ impl Pcb {
         }
 
         #[must_use]
+        fn handle_panel(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
+            if navigation_path.eq(&"/pcb/panel".into()) {
+                Some(PcbAction::Task(
+                    *key,
+                    Task::done(PcbAction::UiCommand(PcbUiCommand::ShowPanel)),
+                ))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
         fn handle_pcb(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
             if navigation_path.eq(&"/pcb/pcb".into()) {
                 let args = GerberViewerUiInstanceArgs {
@@ -276,7 +304,13 @@ impl Pcb {
             }
         }
 
-        let handlers = [handle_root, handle_configuration, handle_pcb, handle_pcb_design];
+        let handlers = [
+            handle_root,
+            handle_configuration,
+            handle_panel,
+            handle_pcb,
+            handle_pcb_design,
+        ];
 
         handlers
             .iter()
@@ -290,9 +324,10 @@ pub struct PcbUiState {
     name: Option<String>,
 
     key: PcbKey,
-    explorer_ui: ExplorerUi,
-    configuration_ui: ConfigurationUi,
-    gerber_viewer_ui: HashMap<GerberViewerUiInstanceArgs, GerberViewerTabUi>,
+    explorer_tab_ui: ExplorerUi,
+    configuration_tab_ui: ConfigurationUi,
+    gerber_viewer_tab_uis: HashMap<GerberViewerUiInstanceArgs, GerberViewerTabUi>,
+    panel_tab_ui: PanelTabUi,
 }
 
 impl PcbUiState {
@@ -300,25 +335,34 @@ impl PcbUiState {
         let mut instance = Self {
             name,
             key,
-            explorer_ui: ExplorerUi::new(),
-            configuration_ui: ConfigurationUi::new(),
-            gerber_viewer_ui: HashMap::new(),
+            explorer_tab_ui: ExplorerUi::new(),
+            configuration_tab_ui: ConfigurationUi::new(),
+            gerber_viewer_tab_uis: HashMap::new(),
+            panel_tab_ui: PanelTabUi::new(),
         };
 
         instance
-            .explorer_ui
+            .explorer_tab_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                trace!("explorer ui mapper. command: {:?}", command);
+                trace!("explorer tab ui mapper. command: {:?}", command);
                 (key, PcbUiCommand::ExplorerTabUiCommand(command))
             });
 
         instance
-            .configuration_ui
+            .configuration_tab_ui
             .component
             .configure_mapper(sender.clone(), move |command| {
-                trace!("configuration ui mapper. command: {:?}", command);
+                trace!("configuration tab ui mapper. command: {:?}", command);
                 (key, PcbUiCommand::ConfigurationTabUiCommand(command))
+            });
+
+        instance
+            .panel_tab_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                trace!("panel tab ui mapper. command: {:?}", command);
+                (key, PcbUiCommand::PanelTabUiCommand(command))
             });
 
         instance
@@ -331,27 +375,20 @@ pub enum PcbTabKind {
     Explorer(ExplorerTab),
     Configuration(ConfigurationTab),
     GerberViewer(GerberViewerTab),
+    Panel(PanelTab),
 }
 
 #[derive(Debug, Clone)]
 pub enum PcbUiCommand {
     None,
+
     DebugMarkModified,
-    Load,
-    Save,
-    Error(PlannerError),
-    PcbView(PcbView),
     // FIXME don't care about projects, don't care about /all/ pcbs, care about *this* PCB.
     SetModifiedState {
         project_modified: bool,
         pcbs_modified: bool,
     },
-    Loaded,
-    ExplorerTabUiCommand(ExplorerTabUiCommand),
-    ConfigurationTabUiCommand(ConfigurationTabUiCommand),
-    TabCommand(PcbTabUiCommand),
-    RequestPcbView(PcbViewRequest),
-    Saved,
+
     Create {
         path: PathBuf,
         name: String,
@@ -360,14 +397,41 @@ pub enum PcbUiCommand {
     Created {
         path: PathBuf,
     },
+    Load,
+    Loaded,
+    Save,
+    Saved,
+
+    //
+    // errors
+    //
+    Error(PlannerError),
+
+    //
+    // views
+    //
+    PcbView(PcbView),
+    RequestPcbView(PcbViewRequest),
+
+    //
+    // tabs
+    //
+    TabCommand(PcbTabUiCommand),
+
+    ShowExplorer,
+    ExplorerTabUiCommand(ExplorerTabUiCommand),
+
+    ShowConfiguration,
+    ConfigurationTabUiCommand(ConfigurationTabUiCommand),
+
+    ShowGerberViewer(GerberViewerUiInstanceArgs),
     GerberViewerTabUiCommand {
         args: GerberViewerUiInstanceArgs,
         command: GerberViewerTabUiCommand,
     },
 
-    ShowExplorer,
-    ShowConfiguration,
-    ShowGerberViewer(GerberViewerUiInstanceArgs),
+    ShowPanel,
+    PanelTabUiCommand(PanelTabUiCommand),
 }
 
 pub struct PcbContext {
@@ -485,17 +549,17 @@ impl UiComponent for Pcb {
                         let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
 
                         for gerber_viewer_ui in pcb_ui_state
-                            .gerber_viewer_ui
+                            .gerber_viewer_tab_uis
                             .values_mut()
                         {
                             gerber_viewer_ui.update_pcb_overview(pcb_overview.clone());
                         }
 
                         pcb_ui_state
-                            .configuration_ui
+                            .configuration_tab_ui
                             .update_pcb_overview(pcb_overview.clone());
                         pcb_ui_state
-                            .explorer_ui
+                            .explorer_tab_ui
                             .update_pcb_overview(pcb_overview);
                     }
                 }
@@ -512,13 +576,25 @@ impl UiComponent for Pcb {
                 let event = match view_request {
                     PcbViewRequest::Overview {
                         path,
-                    } => Event::RequestPcbOverviewView {
+                    } => Some(Event::RequestPcbOverviewView {
                         path,
-                    },
+                    }),
+                    PcbViewRequest::Panel {
+                        ..
+                    } => {
+                        // TODO add a core event
+                        None
+                    }
                 };
-                self.planner_core_service
-                    .update(event)
-                    .when_ok(key, |_| None)
+
+                // TODO remove the 'if let'
+                if let Some(event) = event {
+                    self.planner_core_service
+                        .update(event)
+                        .when_ok(key, |_| None)
+                } else {
+                    None
+                }
             }
 
             //
@@ -537,7 +613,10 @@ impl UiComponent for Pcb {
 
                 task.map(|task| PcbAction::Task(key, task))
             }
-
+            PcbUiCommand::ShowPanel => {
+                let task = self.show_panel(self.path.clone());
+                Some(PcbAction::Task(key, task))
+            }
             PcbUiCommand::TabCommand(tab_command) => {
                 let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
 
@@ -560,10 +639,10 @@ impl UiComponent for Pcb {
                     .pcb_ui_state
                     .lock()
                     .unwrap()
-                    .explorer_ui
+                    .explorer_tab_ui
                     .update(command, context);
                 match explorer_ui_action {
-                    Some(explorer_tab::ExplorerTabUiAction::Navigate(path)) => self.navigate(&key, path),
+                    Some(ExplorerTabUiAction::Navigate(path)) => self.navigate(&key, path),
                     None => None,
                 }
             }
@@ -573,7 +652,7 @@ impl UiComponent for Pcb {
                     .pcb_ui_state
                     .lock()
                     .unwrap()
-                    .configuration_ui
+                    .configuration_tab_ui
                     .update(command, context);
                 match configuration_ui_action {
                     None => None,
@@ -671,6 +750,19 @@ impl UiComponent for Pcb {
                     }
                 }
             }
+            PcbUiCommand::PanelTabUiCommand(command) => {
+                let context = &mut PanelTabUiContext::default();
+                let panel_tab_ui_action = self
+                    .pcb_ui_state
+                    .lock()
+                    .unwrap()
+                    .panel_tab_ui
+                    .update(command, context);
+                match panel_tab_ui_action {
+                    Some(PanelTabUiAction::None) => None,
+                    None => None,
+                }
+            }
             PcbUiCommand::GerberViewerTabUiCommand {
                 args,
                 command,
@@ -681,7 +773,7 @@ impl UiComponent for Pcb {
                     .pcb_ui_state
                     .lock()
                     .unwrap()
-                    .gerber_viewer_ui
+                    .gerber_viewer_tab_uis
                     .get_mut(&args)
                     .unwrap()
                     .update(command, context);

@@ -128,7 +128,10 @@ impl Tab for GerberViewerTab {
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
         let state = context.state.lock().unwrap();
-        let Some(instance) = state.gerber_viewer_ui.get(&self.args) else {
+        let Some(instance) = state
+            .gerber_viewer_tab_uis
+            .get(&self.args)
+        else {
             ui.spinner();
             return;
         };

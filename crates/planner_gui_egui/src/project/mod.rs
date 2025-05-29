@@ -1162,13 +1162,24 @@ impl UiComponent for Project {
                 let event = match view_request {
                     PcbViewRequest::Overview {
                         path,
-                    } => Event::RequestPcbOverviewView {
+                    } => Some(Event::RequestPcbOverviewView {
                         path,
-                    },
+                    }),
+                    PcbViewRequest::Panel {
+                        ..
+                    } => {
+                        // TODO add/use a suitable core event
+                        None
+                    }
                 };
-                self.planner_core_service
-                    .update(event)
-                    .when_ok(key, |_| None)
+                // TODO remove the `if let`
+                if let Some(event) = event {
+                    self.planner_core_service
+                        .update(event)
+                        .when_ok(key, |_| None)
+                } else {
+                    None
+                }
             }
             ProjectUiCommand::PcbView(view) => match view {
                 PcbView::PcbOverview(pcb_overview) => {
