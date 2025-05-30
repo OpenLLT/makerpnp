@@ -1,17 +1,33 @@
 use std::fmt::Debug;
+use std::io::BufWriter;
+use std::sync::mpsc::Sender;
 
 use derivative::Derivative;
+use eframe::emath::Vec2;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
+use egui_mobius::types::ValueGuard;
+use gerber_viewer::GerberLayer;
+use gerber_viewer::gerber_types::{
+    Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode,
+    ExtendedCode, FunctionCode, GCode, GerberCode, InterpolationMode, Operation, Unit,
+};
 use gerber_viewer::position::Position;
 use planner_app::{PcbOverview, PcbSide};
+use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
+use crate::pcb::tabs::gerber_viewer_tab::GerberViewerTabUiCommand;
+use crate::pcb::tabs::panel_tab::gerber_util::{gerber_rectangle_commands, x_y_to_gerber};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_components::gerber_viewer_ui::{
+    GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
+    GerberViewerUiInstanceArgs,
+};
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
@@ -29,11 +45,21 @@ pub struct PanelSizing {
     fiducials: Vec<Position>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+// TODO move this to the gerber_viewer crate
+#[derive(Default, Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct GerberSize {
     // not using terms like length/width/height because they are ambiguous
     x: f64,
     y: f64,
+}
+
+impl GerberSize {
+    pub fn new(x: f64, y: f64) -> Self {
+        Self {
+            x,
+            y,
+        }
+    }
 }
 
 #[derive(Derivative, Debug)]
@@ -45,13 +71,17 @@ struct PanelTabUiState {
     new_fiducial_y: f64,
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PanelTabUi {
     pcb_overview: Option<PcbOverview>,
     panel_sizing: Option<PanelSizing>,
 
     // TODO don't use a value unless we need to
     panel_tab_ui_state: Value<PanelTabUiState>,
+
+    #[derivative(Debug = "ignore")]
+    gerber_viewer_ui: Value<GerberViewerUi>,
 
     pub component: ComponentState<PanelTabUiCommand>,
 }
@@ -61,13 +91,28 @@ impl PanelTabUi {
     const TABLE_SCROLL_HEIGHT_MIN: f32 = 30.0;
 
     pub fn new() -> Self {
+        let component: ComponentState<PanelTabUiCommand> = Default::default();
+
+        // FIXME probably the gerber viewer UI needs different args now
+        let args = GerberViewerUiInstanceArgs {
+            mode: GerberViewerMode::Panel,
+        };
+
+        let mut gerber_viewer_ui = GerberViewerUi::new(args);
+        gerber_viewer_ui
+            .component
+            .configure_mapper(component.sender.clone(), |gerber_viewer_command| {
+                trace!("gerber_viewer mapper. command: {:?}", gerber_viewer_command);
+                PanelTabUiCommand::GerberViewerUiCommand(gerber_viewer_command)
+            });
+
         Self {
             // TODO default this to none, wait for it to be given
             panel_sizing: Some(Default::default()),
             pcb_overview: None,
             panel_tab_ui_state: Value::default(),
-
-            component: Default::default(),
+            gerber_viewer_ui: Value::new(gerber_viewer_ui),
+            component,
         }
     }
 
@@ -77,6 +122,508 @@ impl PanelTabUi {
 
     pub fn update_panel(&mut self, panel_sizing: PanelSizing) {
         self.panel_sizing.replace(panel_sizing);
+    }
+
+    fn left_panel_content(
+        ui: &mut Ui,
+        panel_sizing: &&PanelSizing,
+        state: ValueGuard<PanelTabUiState>,
+        sender: Sender<PanelTabUiCommand>,
+        pcb_overview: &&PcbOverview,
+    ) {
+        let text_height = egui::TextStyle::Body
+            .resolve(ui.style())
+            .size
+            .max(ui.spacing().interact_size.y);
+
+        egui::ScrollArea::both().show(ui, |ui| {
+            Self::top_bottom_controls(&state, &sender, ui);
+            ui.separator();
+            Self::panel_size_controls(&panel_sizing, &sender, ui);
+            ui.separator();
+            Self::edge_rails_controls(&panel_sizing, &sender, ui);
+            ui.separator();
+            Self::fiducials_controls(panel_sizing, state, sender, text_height, ui);
+            ui.separator();
+            Self::design_configuation_controls(pcb_overview, text_height, ui);
+            ui.separator();
+            Self::unit_positions_controls(&pcb_overview, text_height, ui);
+        });
+    }
+
+    /// show top/bottom selector
+    fn top_bottom_controls(state: &ValueGuard<PanelTabUiState>, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            ui.label(tr!("pcb-panel-tab-input-show-top-bottom"));
+
+            egui::ComboBox::from_id_salt(ui.id().with("pcb_side"))
+                .width(ui.available_width())
+                .selected_text(match state.pcb_side {
+                    PcbSide::Top => tr!("form-common-choice-pcb-side-top"),
+                    PcbSide::Bottom => tr!("form-common-choice-pcb-side-bottom"),
+                })
+                .show_ui(ui, |ui| {
+                    if ui
+                        .add(egui::SelectableLabel::new(
+                            state.pcb_side == PcbSide::Top,
+                            tr!("form-common-choice-pcb-side-top"),
+                        ))
+                        .clicked()
+                    {
+                        sender
+                            .send(PanelTabUiCommand::PcbSideChanged(PcbSide::Top))
+                            .expect("sent");
+                    }
+                    if ui
+                        .add(egui::SelectableLabel::new(
+                            state.pcb_side == PcbSide::Bottom,
+                            tr!("form-common-choice-pcb-side-bottom"),
+                        ))
+                        .clicked()
+                    {
+                        sender
+                            .send(PanelTabUiCommand::PcbSideChanged(PcbSide::Bottom))
+                            .expect("sent");
+                    }
+                });
+
+            // TODO add mirroring vertical/horizontal dropdown for top/bottom
+            // TODO add rotation for panel?
+        });
+    }
+
+    fn panel_size_controls(panel_sizing: &&&PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+        ui.label(tr!("pcb-panel-tab-panel-size-header"));
+
+        let mut size = panel_sizing.size.clone();
+
+        ui.horizontal(|ui| {
+            ui.label(tr!("form-common-input-x"));
+            ui.add(
+                egui::DragValue::new(&mut size.x)
+                    .range(0.0..=f64::MAX)
+                    .max_decimals(4),
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr!("form-common-input-y"));
+            ui.add(
+                egui::DragValue::new(&mut size.y)
+                    .range(0.0..=f64::MAX)
+                    .max_decimals(4),
+            );
+        });
+
+        if !size.eq(&panel_sizing.size) {
+            sender
+                .send(PanelTabUiCommand::SizeChanged(size))
+                .expect("sent");
+        }
+    }
+
+    fn edge_rails_controls(panel_sizing: &&&PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+        let mut edge_rails = panel_sizing.edge_rails.clone();
+
+        ui.label(tr!("pcb-panel-tab-panel-edge-rails-header"));
+
+        egui::Grid::new("edge_rails_grid")
+            .num_columns(3)
+            .show(ui, |ui| {
+                ui.label(""); // placeholder
+                ui.horizontal(|ui| {
+                    ui.label(tr!("form-common-input-top"));
+                    ui.add(
+                        egui::DragValue::new(&mut edge_rails.top)
+                            .range(0.0..=f64::MAX)
+                            .max_decimals(4),
+                    );
+                });
+                ui.label(""); // placeholder
+                ui.end_row();
+
+                ui.horizontal(|ui| {
+                    ui.label(tr!("form-common-input-left"));
+                    ui.add(
+                        egui::DragValue::new(&mut edge_rails.left)
+                            .range(0.0..=f64::MAX)
+                            .max_decimals(4),
+                    );
+                });
+                ui.label(""); // placeholder
+                ui.horizontal(|ui| {
+                    ui.label(tr!("form-common-input-right"));
+                    ui.add(
+                        egui::DragValue::new(&mut edge_rails.right)
+                            .range(0.0..=f64::MAX)
+                            .max_decimals(4),
+                    );
+                });
+                ui.end_row();
+
+                ui.label(""); // placeholder
+                ui.horizontal(|ui| {
+                    ui.label(tr!("form-common-input-bottom"));
+                    ui.add(
+                        egui::DragValue::new(&mut edge_rails.bottom)
+                            .range(0.0..=f64::MAX)
+                            .max_decimals(4),
+                    );
+                });
+                ui.label(""); // placeholder
+                ui.end_row();
+            });
+
+        if !edge_rails.eq(&panel_sizing.edge_rails) {
+            sender
+                .send(PanelTabUiCommand::EdgeRailsChanged(edge_rails))
+                .expect("sent");
+        }
+    }
+
+    fn fiducials_controls(
+        panel_sizing: &&PanelSizing,
+        state: ValueGuard<PanelTabUiState>,
+        sender: Sender<PanelTabUiCommand>,
+        text_height: f32,
+        ui: &mut Ui,
+    ) {
+        ui.label(tr!("pcb-panel-tab-panel-fiducials-header"));
+
+        ui.horizontal(|ui| {
+            let mut new_fiducial_x = state.new_fiducial_x;
+            let mut new_fiducial_y = state.new_fiducial_y;
+
+            ui.label(tr!("form-common-input-x"));
+            ui.add(
+                egui::DragValue::new(&mut new_fiducial_x)
+                    .range(0.0..=f64::MAX)
+                    .max_decimals(4),
+            );
+            ui.label(tr!("form-common-input-y"));
+            ui.add(
+                egui::DragValue::new(&mut new_fiducial_y)
+                    .range(0.0..=f64::MAX)
+                    .max_decimals(4),
+            );
+
+            if new_fiducial_x != state.new_fiducial_x || new_fiducial_y != state.new_fiducial_y {
+                sender
+                    .send(PanelTabUiCommand::NewFiducialChanged(new_fiducial_x, new_fiducial_y))
+                    .expect("sent");
+            }
+
+            if ui
+                .button(tr!("form-common-button-add"))
+                .clicked()
+            {
+                sender
+                    .send(PanelTabUiCommand::AddFiducial(new_fiducial_x, new_fiducial_y))
+                    .expect("sent");
+            }
+        });
+
+        ui.push_id("fiducials", |ui| {
+            let initial_size = calculate_initial_table_height(panel_sizing.fiducials.len(), text_height, ui);
+
+            Resize::default()
+                .resizable([false, true])
+                .default_size(initial_size)
+                .min_width(ui.available_width())
+                .max_width(ui.available_width())
+                .max_height(Self::TABLE_HEIGHT_MAX)
+                .show(ui, |ui| {
+                    // HACK: search codebase for 'HACK: table-resize-hack' for details
+                    egui::Frame::new()
+                        .outer_margin(4.0)
+                        .show(ui, |ui| {
+                            ui.style_mut()
+                                .interaction
+                                .selectable_labels = false;
+
+                            TableBuilder::new(ui)
+                                .striped(true)
+                                .resizable(true)
+                                .auto_shrink([false, false])
+                                .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                .sense(egui::Sense::click())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .header(20.0, |mut header| {
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-index"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-x"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-y"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-actions"));
+                                    });
+                                })
+                                .body(|mut body| {
+                                    for (fiducial_index, position) in panel_sizing
+                                        .fiducials
+                                        .iter()
+                                        .enumerate()
+                                    {
+                                        let mut new_position = position.clone();
+
+                                        body.row(text_height, |mut row| {
+                                            row.col(|ui| {
+                                                ui.label((fiducial_index + 1).to_string());
+                                            });
+
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut new_position.x)
+                                                        .range(0.0..=f64::MAX)
+                                                        .max_decimals(4),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut new_position.y)
+                                                        .range(0.0..=f64::MAX)
+                                                        .max_decimals(4),
+                                                );
+                                            });
+
+                                            row.col(|ui| {
+                                                if ui
+                                                    .button(tr!("form-common-button-delete"))
+                                                    .clicked()
+                                                {
+                                                    sender
+                                                        .send(PanelTabUiCommand::DeleteFiducial(fiducial_index))
+                                                        .expect("sent");
+                                                }
+                                            });
+                                        });
+
+                                        if !new_position.eq(position) {
+                                            sender
+                                                .send(PanelTabUiCommand::UpdateFiducial {
+                                                    index: fiducial_index,
+                                                    position: new_position,
+                                                })
+                                                .expect("sent");
+                                        }
+                                    }
+                                });
+                        });
+                });
+        });
+    }
+
+    fn design_configuation_controls(pcb_overview: &&PcbOverview, text_height: f32, ui: &mut Ui) {
+        ui.label(tr!("pcb-panel-tab-panel-design-configuration-header"));
+
+        ui.push_id("design_configuration", |ui| {
+            let initial_size = calculate_initial_table_height(pcb_overview.designs.len(), text_height, ui);
+
+            Resize::default()
+                .resizable([false, true])
+                .default_size(initial_size)
+                .min_width(ui.available_width())
+                .max_width(ui.available_width())
+                .max_height(Self::TABLE_HEIGHT_MAX)
+                .show(ui, |ui| {
+                    // HACK: search codebase for 'HACK: table-resize-hack' for details
+                    egui::Frame::new()
+                        .outer_margin(4.0)
+                        .show(ui, |ui| {
+                            ui.style_mut()
+                                .interaction
+                                .selectable_labels = false;
+
+                            TableBuilder::new(ui)
+                                .striped(true)
+                                .resizable(true)
+                                .auto_shrink([false, false])
+                                .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                .sense(egui::Sense::click())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .header(20.0, |mut header| {
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-index"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-x-offset"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-y-offset"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-x-origin"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-y-origin"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-design-name"));
+                                    });
+
+                                    // TODO maybe add per-design mirroring?
+                                })
+                                .body(|mut body| {
+                                    for (design_index, design_name) in pcb_overview.designs.iter().enumerate() {
+                                        let design_number = design_index + 1;
+
+                                        body.row(text_height, |mut row| {
+                                            row.col(|ui| {
+                                                ui.label(design_number.to_string());
+                                            });
+
+                                            row.col(|ui| {
+                                                // TODO X offset
+                                            });
+                                            row.col(|ui| {
+                                                // TODO Y offset
+                                            });
+                                            row.col(|ui| {
+                                                // TODO X origin
+                                            });
+                                            row.col(|ui| {
+                                                // TODO Y origin
+                                            });
+
+                                            row.col(|ui| {
+                                                ui.label(design_name.to_string());
+                                            });
+                                        });
+                                    }
+                                });
+                        });
+                });
+        });
+    }
+
+    fn unit_positions_controls(pcb_overview: &&&PcbOverview, text_height: f32, ui: &mut Ui) {
+        ui.label(tr!("pcb-panel-tab-panel-unit-positions-header"));
+
+        ui.push_id("unit_positions", |ui| {
+            let initial_size = calculate_initial_table_height(pcb_overview.units as usize, text_height, ui);
+
+            Resize::default()
+                .resizable([false, true])
+                .default_size(initial_size)
+                .min_width(ui.available_width())
+                .max_width(ui.available_width())
+                .max_height(Self::TABLE_HEIGHT_MAX)
+                .show(ui, |ui| {
+                    // HACK: search codebase for 'HACK: table-resize-hack' for details
+                    egui::Frame::new()
+                        .outer_margin(4.0)
+                        .show(ui, |ui| {
+                            ui.style_mut()
+                                .interaction
+                                .selectable_labels = false;
+
+                            TableBuilder::new(ui)
+                                .striped(true)
+                                .resizable(true)
+                                .auto_shrink([false, false])
+                                .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                .sense(egui::Sense::click())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::remainder())
+                                .header(20.0, |mut header| {
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-unit-positions-column-index"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-unit-positions-column-x"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-unit-positions-column-y"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-unit-positions-column-rotation"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-unit-positions-column-design-name"));
+                                    });
+                                })
+                                .body(|mut body| {
+                                    for pcb_unit_index in 0..pcb_overview.units {
+                                        if let Some(assigned_design_index) = pcb_overview
+                                            .unit_map
+                                            .get(&pcb_unit_index)
+                                        {
+                                            let design_name = &pcb_overview.designs[*assigned_design_index];
+
+                                            body.row(text_height, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.label((pcb_unit_index + 1).to_string());
+                                                });
+
+                                                row.col(|ui| {
+                                                    // TODO X
+                                                });
+                                                row.col(|ui| {
+                                                    // TODO Y
+                                                });
+                                                row.col(|ui| {
+                                                    // TODO Rotation
+                                                });
+
+                                                row.col(|ui| {
+                                                    ui.label(design_name.to_string());
+                                                });
+                                            });
+                                        } else {
+                                            body.row(text_height, |mut row| {
+                                                row.col(|ui| {
+                                                    ui.label((pcb_unit_index + 1).to_string());
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(tr!("common-value-not-available"));
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(tr!("common-value-not-available"));
+                                                });
+                                                row.col(|ui| {
+                                                    ui.label(tr!("common-value-not-available"));
+                                                });
+                                            })
+                                        }
+                                    }
+                                });
+                        });
+                });
+        });
+    }
+
+    fn central_panel_content(ui: &mut Ui, gerber_viewer_ui: &mut GerberViewerUi) {
+        gerber_viewer_ui.ui(ui, &mut GerberViewerUiContext::default());
+    }
+
+    fn update_panel_preview(&mut self) {
+        let Some(panel_sizing) = &self.panel_sizing else {
+            return;
+        };
+
+        let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
+
+        let commands = build_panel_preview_commands(panel_sizing);
+        dump_gerber_source(&commands);
+
+        gerber_viewer_ui.use_single_layer(commands);
     }
 }
 
@@ -90,6 +637,7 @@ pub enum PanelTabUiCommand {
     UpdateFiducial { index: usize, position: Position },
     SizeChanged(GerberSize),
     EdgeRailsChanged(Dimensions<f64>),
+    GerberViewerUiCommand(GerberViewerUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -111,505 +659,22 @@ impl UiComponent for PanelTabUi {
             return;
         };
 
-        // specifically NON-mutable state here
-        let state = self.panel_tab_ui_state.lock().unwrap();
-
-        let sender = self.component.sender.clone();
-
-        let text_height = egui::TextStyle::Body
-            .resolve(ui.style())
-            .size
-            .max(ui.spacing().interact_size.y);
-
         egui::SidePanel::left(ui.id().with("left_panel"))
             .resizable(true)
             .show_inside(ui, |ui| {
-                egui::ScrollArea::both().show(ui, |ui| {
-                    //
-                    // show top/bottom
-                    //
+                // specifically NON-mutable state here
+                let state = self.panel_tab_ui_state.lock().unwrap();
+                let sender = self.component.sender.clone();
 
-                    ui.horizontal(|ui| {
-                        ui.label(tr!("pcb-panel-tab-input-show-top-bottom"));
-
-                        egui::ComboBox::from_id_salt(ui.id().with("pcb_side"))
-                            .width(ui.available_width())
-                            .selected_text(match state.pcb_side {
-                                PcbSide::Top => tr!("form-common-choice-pcb-side-top"),
-                                PcbSide::Bottom => tr!("form-common-choice-pcb-side-bottom"),
-                            })
-                            .show_ui(ui, |ui| {
-                                if ui
-                                    .add(egui::SelectableLabel::new(
-                                        state.pcb_side == PcbSide::Top,
-                                        tr!("form-common-choice-pcb-side-top"),
-                                    ))
-                                    .clicked()
-                                {
-                                    sender
-                                        .send(PanelTabUiCommand::PcbSideChanged(PcbSide::Top))
-                                        .expect("sent");
-                                }
-                                if ui
-                                    .add(egui::SelectableLabel::new(
-                                        state.pcb_side == PcbSide::Bottom,
-                                        tr!("form-common-choice-pcb-side-bottom"),
-                                    ))
-                                    .clicked()
-                                {
-                                    sender
-                                        .send(PanelTabUiCommand::PcbSideChanged(PcbSide::Bottom))
-                                        .expect("sent");
-                                }
-                            });
-                    });
-
-                    ui.separator();
-
-                    // TODO add mirroring vertical/horizontal dropdown for top/bottom
-                    // TODO add rotation for panel?
-
-                    //
-                    // panel size
-                    //
-                    ui.label(tr!("pcb-panel-tab-panel-size-header"));
-
-                    let mut size = panel_sizing.size.clone();
-
-                    ui.horizontal(|ui| {
-                        ui.label(tr!("form-common-input-x"));
-                        ui.add(
-                            egui::DragValue::new(&mut size.x)
-                                .range(0.0..=f64::MAX)
-                                .max_decimals(4),
-                        );
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label(tr!("form-common-input-y"));
-                        ui.add(
-                            egui::DragValue::new(&mut size.y)
-                                .range(0.0..=f64::MAX)
-                                .max_decimals(4),
-                        );
-                    });
-
-                    if !size.eq(&panel_sizing.size) {
-                        sender
-                            .send(PanelTabUiCommand::SizeChanged(size))
-                            .expect("sent");
-                    }
-
-                    ui.separator();
-
-                    //
-                    // edge rails
-                    //
-                    let mut edge_rails = panel_sizing.edge_rails.clone();
-
-                    ui.label(tr!("pcb-panel-tab-panel-edge-rails-header"));
-
-                    egui::Grid::new("edge_rails_grid").show(ui, |ui| {
-                        ui.label(""); // placeholder
-                        ui.horizontal(|ui| {
-                            ui.label(tr!("form-common-input-top"));
-                            ui.add(
-                                egui::DragValue::new(&mut edge_rails.top)
-                                    .range(0.0..=f64::MAX)
-                                    .max_decimals(4),
-                            );
-                        });
-                        ui.label(""); // placeholder
-                        ui.end_row();
-
-                        ui.horizontal(|ui| {
-                            ui.label(tr!("form-common-input-left"));
-                            ui.add(
-                                egui::DragValue::new(&mut edge_rails.left)
-                                    .range(0.0..=f64::MAX)
-                                    .max_decimals(4),
-                            );
-                        });
-                        ui.label(""); // placeholder
-                        ui.horizontal(|ui| {
-                            ui.label(tr!("form-common-input-right"));
-                            ui.add(
-                                egui::DragValue::new(&mut edge_rails.right)
-                                    .range(0.0..=f64::MAX)
-                                    .max_decimals(4),
-                            );
-                        });
-                        ui.end_row();
-
-                        ui.label(""); // placeholder
-                        ui.horizontal(|ui| {
-                            ui.label(tr!("form-common-input-bottom"));
-                            ui.add(
-                                egui::DragValue::new(&mut edge_rails.bottom)
-                                    .range(0.0..=f64::MAX)
-                                    .max_decimals(4),
-                            );
-                        });
-                        ui.label(""); // placeholder
-                        ui.end_row();
-                    });
-
-                    if !edge_rails.eq(&panel_sizing.edge_rails) {
-                        sender
-                            .send(PanelTabUiCommand::EdgeRailsChanged(edge_rails))
-                            .expect("sent");
-                    }
-
-                    ui.separator();
-
-                    //
-                    // Fiducials
-                    //
-                    ui.label(tr!("pcb-panel-tab-panel-fiducials-header"));
-
-                    ui.horizontal(|ui| {
-                        let mut new_fiducial_x = state.new_fiducial_x;
-                        let mut new_fiducial_y = state.new_fiducial_y;
-
-                        ui.label(tr!("form-common-input-x"));
-                        ui.add(
-                            egui::DragValue::new(&mut new_fiducial_x)
-                                .range(0.0..=f64::MAX)
-                                .max_decimals(4),
-                        );
-                        ui.label(tr!("form-common-input-y"));
-                        ui.add(
-                            egui::DragValue::new(&mut new_fiducial_y)
-                                .range(0.0..=f64::MAX)
-                                .max_decimals(4),
-                        );
-
-                        if new_fiducial_x != state.new_fiducial_x || new_fiducial_y != state.new_fiducial_y {
-                            sender
-                                .send(PanelTabUiCommand::NewFiducialChanged(new_fiducial_x, new_fiducial_y))
-                                .expect("sent");
-                        }
-
-                        if ui
-                            .button(tr!("form-common-button-add"))
-                            .clicked()
-                        {
-                            sender
-                                .send(PanelTabUiCommand::AddFiducial(new_fiducial_x, new_fiducial_y))
-                                .expect("sent");
-                        }
-                    });
-
-                    ui.push_id("fiducials", |ui| {
-                        // FIXME this calculation isn't exact, but it's close enough for now
-                        //       the size the resize widget so it contains the table precisely.
-                        let initial_height =
-                            (text_height * 8.0) + ((text_height + 6.0) * panel_sizing.fiducials.len() as f32);
-                        let initial_width = ui.available_width();
-                        let initial_size = egui::Vec2::new(initial_width, initial_height);
-
-                        Resize::default()
-                            .resizable([false, true])
-                            .default_size(initial_size)
-                            .min_width(ui.available_width())
-                            .max_width(ui.available_width())
-                            .max_height(Self::TABLE_HEIGHT_MAX)
-                            .show(ui, |ui| {
-                                // HACK: search codebase for 'HACK: table-resize-hack' for details
-                                egui::Frame::new()
-                                    .outer_margin(4.0)
-                                    .show(ui, |ui| {
-                                        ui.style_mut()
-                                            .interaction
-                                            .selectable_labels = false;
-
-                                        TableBuilder::new(ui)
-                                            .striped(true)
-                                            .resizable(true)
-                                            .auto_shrink([false, false])
-                                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                            .sense(egui::Sense::click())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::remainder())
-                                            .header(20.0, |mut header| {
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-fiducials-column-index"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-fiducials-column-x"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-fiducials-column-y"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-fiducials-column-actions"));
-                                                });
-                                            })
-                                            .body(|mut body| {
-                                                for (fiducial_index, position) in panel_sizing
-                                                    .fiducials
-                                                    .iter()
-                                                    .enumerate()
-                                                {
-                                                    let mut new_position = position.clone();
-
-                                                    body.row(text_height, |mut row| {
-                                                        row.col(|ui| {
-                                                            ui.label((fiducial_index + 1).to_string());
-                                                        });
-
-                                                        row.col(|ui| {
-                                                            ui.add(
-                                                                egui::DragValue::new(&mut new_position.x)
-                                                                    .range(0.0..=f64::MAX)
-                                                                    .max_decimals(4),
-                                                            );
-                                                        });
-                                                        row.col(|ui| {
-                                                            ui.add(
-                                                                egui::DragValue::new(&mut new_position.y)
-                                                                    .range(0.0..=f64::MAX)
-                                                                    .max_decimals(4),
-                                                            );
-                                                        });
-
-                                                        row.col(|ui| {
-                                                            if ui
-                                                                .button(tr!("form-common-button-delete"))
-                                                                .clicked()
-                                                            {
-                                                                sender
-                                                                    .send(PanelTabUiCommand::DeleteFiducial(
-                                                                        fiducial_index,
-                                                                    ))
-                                                                    .expect("sent");
-                                                            }
-                                                        });
-                                                    });
-
-                                                    if !new_position.eq(position) {
-                                                        sender
-                                                            .send(PanelTabUiCommand::UpdateFiducial {
-                                                                index: fiducial_index,
-                                                                position: new_position,
-                                                            })
-                                                            .expect("sent");
-                                                    }
-                                                }
-                                            });
-                                    });
-                            });
-                    });
-
-                    ui.separator();
-
-                    //
-                    // design configuration
-                    //
-                    ui.label(tr!("pcb-panel-tab-panel-design-configuration-header"));
-
-                    ui.push_id("design_configuration", |ui| {
-                        // FIXME this calculation isn't exact, but it's close enough for now
-                        //       the size the resize widget so it contains the table precisely.
-                        let initial_height =
-                            (text_height + 10.0) + ((text_height + 5.0) * pcb_overview.designs.len() as f32);
-                        let initial_width = ui.available_width();
-                        let initial_size = egui::Vec2::new(initial_width, initial_height);
-
-                        Resize::default()
-                            .resizable([false, true])
-                            .default_size(initial_size)
-                            .min_width(ui.available_width())
-                            .max_width(ui.available_width())
-                            .max_height(Self::TABLE_HEIGHT_MAX)
-                            .show(ui, |ui| {
-                                // HACK: search codebase for 'HACK: table-resize-hack' for details
-                                egui::Frame::new()
-                                    .outer_margin(4.0)
-                                    .show(ui, |ui| {
-                                        ui.style_mut()
-                                            .interaction
-                                            .selectable_labels = false;
-
-                                        TableBuilder::new(ui)
-                                            .striped(true)
-                                            .resizable(true)
-                                            .auto_shrink([false, false])
-                                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                            .sense(egui::Sense::click())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::remainder())
-                                            .header(20.0, |mut header| {
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-index"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-x-offset"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-y-offset"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-x-origin"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-y-origin"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-design-layout-column-design-name"));
-                                                });
-
-                                                // TODO maybe add per-design mirroring?
-                                            })
-                                            .body(|mut body| {
-                                                for (design_index, design_name) in
-                                                    pcb_overview.designs.iter().enumerate()
-                                                {
-                                                    let design_number = design_index + 1;
-
-                                                    body.row(text_height, |mut row| {
-                                                        row.col(|ui| {
-                                                            ui.label(design_number.to_string());
-                                                        });
-
-                                                        row.col(|ui| {
-                                                            // TODO X offset
-                                                        });
-                                                        row.col(|ui| {
-                                                            // TODO Y offset
-                                                        });
-                                                        row.col(|ui| {
-                                                            // TODO X origin
-                                                        });
-                                                        row.col(|ui| {
-                                                            // TODO Y origin
-                                                        });
-
-                                                        row.col(|ui| {
-                                                            ui.label(design_name.to_string());
-                                                        });
-                                                    });
-                                                }
-                                            });
-                                    });
-                            });
-                    });
-
-                    ui.separator();
-
-                    //
-                    // unit positions
-                    //
-                    ui.label(tr!("pcb-panel-tab-panel-unit-positions-header"));
-
-                    ui.push_id("unit_positions", |ui| {
-                        // FIXME this calculation isn't exact, but it's close enough for now
-                        //       the size the resize widget so it contains the table precisely.
-                        let initial_height = (text_height * 8.0) + ((text_height + 6.0) * pcb_overview.units as f32);
-                        let initial_width = ui.available_width();
-                        let initial_size = egui::Vec2::new(initial_width, initial_height);
-
-                        Resize::default()
-                            .resizable([false, true])
-                            .default_size(initial_size)
-                            .min_width(ui.available_width())
-                            .max_width(ui.available_width())
-                            .max_height(Self::TABLE_HEIGHT_MAX)
-                            .show(ui, |ui| {
-                                // HACK: search codebase for 'HACK: table-resize-hack' for details
-                                egui::Frame::new()
-                                    .outer_margin(4.0)
-                                    .show(ui, |ui| {
-                                        ui.style_mut()
-                                            .interaction
-                                            .selectable_labels = false;
-
-                                        TableBuilder::new(ui)
-                                            .striped(true)
-                                            .resizable(true)
-                                            .auto_shrink([false, false])
-                                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                            .sense(egui::Sense::click())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::auto())
-                                            .column(Column::remainder())
-                                            .header(20.0, |mut header| {
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-unit-positions-column-index"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-unit-positions-column-x"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-unit-positions-column-y"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-unit-positions-column-rotation"));
-                                                });
-                                                header.col(|ui| {
-                                                    ui.strong(tr!("table-unit-positions-column-design-name"));
-                                                });
-                                            })
-                                            .body(|mut body| {
-                                                for pcb_unit_index in 0..pcb_overview.units {
-                                                    if let Some(assigned_design_index) = pcb_overview
-                                                        .unit_map
-                                                        .get(&pcb_unit_index)
-                                                    {
-                                                        let design_name = &pcb_overview.designs[*assigned_design_index];
-
-                                                        body.row(text_height, |mut row| {
-                                                            row.col(|ui| {
-                                                                ui.label((pcb_unit_index + 1).to_string());
-                                                            });
-
-                                                            row.col(|ui| {
-                                                                // TODO X
-                                                            });
-                                                            row.col(|ui| {
-                                                                // TODO Y
-                                                            });
-                                                            row.col(|ui| {
-                                                                // TODO Rotation
-                                                            });
-
-                                                            row.col(|ui| {
-                                                                ui.label(design_name.to_string());
-                                                            });
-                                                        });
-                                                    } else {
-                                                        body.row(text_height, |mut row| {
-                                                            row.col(|ui| {
-                                                                ui.label((pcb_unit_index + 1).to_string());
-                                                            });
-                                                            row.col(|ui| {
-                                                                ui.label(tr!("common-value-not-available"));
-                                                            });
-                                                            row.col(|ui| {
-                                                                ui.label(tr!("common-value-not-available"));
-                                                            });
-                                                            row.col(|ui| {
-                                                                ui.label(tr!("common-value-not-available"));
-                                                            });
-                                                        })
-                                                    }
-                                                }
-                                            });
-                                    });
-                            });
-                    });
-                });
+                Self::left_panel_content(ui, &panel_sizing, state, sender, &pcb_overview);
             });
+
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            // specifically NON-mutable state here
+            let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
+
+            Self::central_panel_content(ui, &mut gerber_viewer_ui);
+        });
     }
 
     fn update<'context>(
@@ -617,22 +682,26 @@ impl UiComponent for PanelTabUi {
         command: Self::UiCommand,
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
-        match command {
+        let mut update_panel_preview = false;
+        let action = match command {
             PanelTabUiCommand::None => Some(PanelTabUiAction::None),
             PanelTabUiCommand::PcbSideChanged(pcb_side) => {
                 let mut state = self.panel_tab_ui_state.lock().unwrap();
                 state.pcb_side = pcb_side;
+                update_panel_preview = true;
                 None
             }
             PanelTabUiCommand::SizeChanged(size) => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
                     panel_sizing.size = size;
+                    update_panel_preview = true;
                 }
                 None
             }
             PanelTabUiCommand::EdgeRailsChanged(edge_rails) => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
                     panel_sizing.edge_rails = edge_rails;
+                    update_panel_preview = true;
                 }
                 None
             }
@@ -640,6 +709,7 @@ impl UiComponent for PanelTabUi {
                 let mut state = self.panel_tab_ui_state.lock().unwrap();
                 state.new_fiducial_x = x;
                 state.new_fiducial_y = y;
+                update_panel_preview = true;
                 None
             }
             PanelTabUiCommand::AddFiducial(x, y) => {
@@ -647,12 +717,14 @@ impl UiComponent for PanelTabUi {
                     panel_sizing
                         .fiducials
                         .push(Position::new(x, y));
+                    update_panel_preview = true;
                 }
                 None
             }
             PanelTabUiCommand::DeleteFiducial(index) => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
                     panel_sizing.fiducials.remove(index);
+                    update_panel_preview = true;
                 }
                 None
             }
@@ -662,10 +734,25 @@ impl UiComponent for PanelTabUi {
             } => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
                     panel_sizing.fiducials[index] = position;
+                    update_panel_preview = true;
                 }
                 None
             }
+            PanelTabUiCommand::GerberViewerUiCommand(command) => {
+                let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
+                let action = gerber_viewer_ui.update(command, &mut GerberViewerUiContext::default());
+                match action {
+                    None => None,
+                    Some(GerberViewerUiAction::None) => None,
+                }
+            }
+        };
+
+        if update_panel_preview {
+            self.update_panel_preview();
         }
+
+        action
     }
 }
 
@@ -688,5 +775,146 @@ impl Tab for PanelTab {
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
         true
+    }
+}
+
+fn calculate_initial_table_height(item_count: usize, text_height: f32, ui: &mut Ui) -> Vec2 {
+    // FIXME this calculation isn't exact, but it's close enough for now
+    //       the size the resize widget so it contains the table precisely.
+    let initial_height = (text_height + 11.0) + ((text_height + 3.0) * item_count as f32);
+    let initial_width = ui.available_width();
+    let initial_size = egui::Vec2::new(initial_width, initial_height);
+    initial_size
+}
+
+fn dump_gerber_source(commands: &Vec<Command>) {
+    let gerber_source = gerber_commands_to_source(commands);
+
+    debug!("Gerber source:\n{}", gerber_source);
+}
+
+fn gerber_commands_to_source(commands: &Vec<Command>) -> String {
+    let mut buf = BufWriter::new(Vec::new());
+    commands
+        .serialize(&mut buf)
+        .expect("Could not generate Gerber code");
+    let bytes = buf.into_inner().unwrap();
+    let gerber_source = String::from_utf8(bytes).unwrap();
+    gerber_source
+}
+
+fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Vec<Command> {
+    let coordinate_format = CoordinateFormat::new(4, 6);
+    let units = Unit::Millimeters;
+
+    let mut commands: Vec<Command> = vec![
+        Command::ExtendedCode(ExtendedCode::CoordinateFormat(coordinate_format)),
+        Command::ExtendedCode(ExtendedCode::Unit(units)),
+        Command::ExtendedCode(ExtendedCode::ApertureDefinition(ApertureDefinition {
+            code: 10,
+            aperture: Aperture::Circle(Circle {
+                diameter: 0.1,
+                hole_diameter: None,
+            }),
+        })),
+        Command::FunctionCode(FunctionCode::GCode(GCode::InterpolationMode(InterpolationMode::Linear))),
+    ];
+
+    let origin = Position::new(0.0, 0.0);
+
+    commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(10))));
+    commands.extend(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size));
+
+    commands
+}
+
+mod gerber_util {
+    use gerber_viewer::gerber_types::{
+        Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, Operation,
+    };
+    use gerber_viewer::position::Position;
+
+    use crate::pcb::tabs::panel_tab::GerberSize;
+
+    pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Coordinates {
+        Coordinates {
+            x: Some(CoordinateNumber::try_from(x).unwrap()),
+            y: Some(CoordinateNumber::try_from(y).unwrap()),
+            format,
+        }
+    }
+
+    pub fn gerber_rectangle_commands(
+        coordinate_format: CoordinateFormat,
+        origin: Position,
+        size: GerberSize,
+    ) -> Vec<Command> {
+        vec![
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
+                origin.x,
+                origin.y,
+                coordinate_format,
+            ))))),
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                x_y_to_gerber(origin.x + size.x, origin.y, coordinate_format),
+                None,
+            )))),
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                x_y_to_gerber(origin.x + size.x, origin.y + size.y, coordinate_format),
+                None,
+            )))),
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                x_y_to_gerber(origin.x, origin.y + size.y, coordinate_format),
+                None,
+            )))),
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                x_y_to_gerber(origin.x, origin.y, coordinate_format),
+                None,
+            )))),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use indoc::indoc;
+
+    use crate::pcb::tabs::panel_tab::{
+        GerberSize, PanelSizing, build_panel_preview_commands, gerber_commands_to_source,
+    };
+
+    #[test]
+    pub fn test_build_panel_preview_layer() {
+        // given
+        let mut panel_sizing = PanelSizing::default();
+        panel_sizing.size = GerberSize {
+            x: 10.0,
+            y: 10.0,
+        };
+
+        // and
+        let expected_source = indoc!(
+            r#"
+            %FSLAX24Y24*%
+            %MOMM*%
+            %ADD10C,0.1*%
+            G01*
+            D10*
+            X0Y0D02*
+            X100000Y0D01*
+            X100000Y100000D01*
+            X0Y100000D01*
+            X0Y0D01*
+        "#
+        );
+
+        // when
+        let commands = build_panel_preview_commands(&panel_sizing);
+
+        // then
+        let source = gerber_commands_to_source(&commands);
+        println!("{}", source);
+
+        assert_eq!(source, expected_source);
     }
 }

@@ -10,6 +10,7 @@ use eframe::epaint::Color32;
 use egui::Ui;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
+use gerber_viewer::gerber_types::Command;
 use gerber_viewer::position::Vector;
 use gerber_viewer::{
     BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
@@ -85,6 +86,17 @@ impl GerberViewerUi {
         }
     }
 
+    pub fn use_single_layer(&mut self, commands: Vec<Command>) {
+        let mut gerber_state = self.gerber_state.lock().unwrap();
+
+        gerber_state.layers.clear();
+
+        let (state, layer) =
+            Self::build_gerber_layer_from_commands(0, commands, gerber_state.design_origin, gerber_state.design_offset);
+
+        gerber_state.add_layer(None, state, layer, None);
+    }
+
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         let gerber_items = match self.args.mode {
             GerberViewerMode::Panel => pcb_overview.pcb_gerbers.clone(),
@@ -107,8 +119,11 @@ impl GerberViewerUi {
             let errors = sync_indexmap(
                 &mut layers,
                 &gerber_items,
-                |index, key, _content| Self::build_gerber_layer_from_file(index, key, design_origin, design_offset),
-                |content| content.path.clone(),
+                |index, key, _content| {
+                    Self::build_gerber_layer_from_file(index, key.as_ref().unwrap(), design_origin, design_offset)
+                        .map(|(layer_view_state, layer, gerber_doc)| (layer_view_state, layer, Some(gerber_doc)))
+                },
+                |content| Some(content.path.clone()),
                 |_existing_entry, _gerber_item| true,
             );
 
@@ -176,7 +191,17 @@ impl GerberViewerUi {
         design_offset: Vector,
     ) -> Result<(LayerViewState, GerberLayer, GerberDoc), GerberViewerUiError> {
         let (gerber_doc, commands) = Self::parse_gerber(path)?;
+        let (state, layer) = Self::build_gerber_layer_from_commands(index, commands, design_origin, design_offset);
 
+        Ok((state, layer, gerber_doc))
+    }
+
+    fn build_gerber_layer_from_commands(
+        index: usize,
+        commands: Vec<Command>,
+        design_origin: Vector,
+        design_offset: Vector,
+    ) -> (LayerViewState, GerberLayer) {
         let color = generate_pastel_color(index as u64);
 
         let layer = GerberLayer::new(commands);
@@ -185,7 +210,7 @@ impl GerberViewerUi {
         layer_view_state.design_offset = design_offset;
         layer_view_state.design_origin = design_origin;
 
-        Ok((layer_view_state, layer, gerber_doc))
+        (layer_view_state, layer)
     }
 
     fn parse_gerber(
@@ -228,7 +253,7 @@ struct GerberViewState {
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
-    layers: IndexMap<PathBuf, (LayerViewState, GerberLayer, GerberDoc)>,
+    layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
     // used for mirroring and rotation, in gerber coordinates
     design_origin: Vector,
 
@@ -262,10 +287,10 @@ impl Default for GerberViewState {
 impl GerberViewState {
     pub fn add_layer(
         &mut self,
-        path: PathBuf,
+        path: Option<PathBuf>,
         layer_view_state: LayerViewState,
         layer: GerberLayer,
-        gerber_doc: GerberDoc,
+        gerber_doc: Option<GerberDoc>,
     ) {
         self.layers
             .insert(path, (layer_view_state, layer, gerber_doc));
