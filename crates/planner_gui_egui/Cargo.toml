@@ -73,3 +73,6 @@ derivative = { workspace = true }
 chrono = { workspace = true }
 indexmap = { workspace = true }
 image = { workspace = true }
+
+[dev-dependencies]
+indoc = { workspace = true }
