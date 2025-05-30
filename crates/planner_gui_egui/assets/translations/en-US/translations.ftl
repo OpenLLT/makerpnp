@@ -122,6 +122,11 @@ pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
 
 pcb-panel-tab-label = Panel
+pcb-panel-tab-panel-size-header = Panel size
+pcb-panel-tab-panel-edge-rails-header = Edge rails
+pcb-panel-tab-panel-fiducials-header = Fiducials
+pcb-panel-tab-panel-design-configuration-header = Design configuration
+pcb-panel-tab-panel-unit-positions-header = Unit positions
 
 pcb-explorer-tab-label = PCB Explorer
 pcb-explorer-node-root = { $name }
@@ -174,9 +179,16 @@ form-common-choice-pcb-side = PCB Side
 form-common-choice-pcb-side-top = Top
 form-common-choice-pcb-side-bottom = Bottom
 
+form-common-choice-process = Process
+
 form-common-input-load-out-source = Loadout source
 form-common-input-phase-reference = Phase reference
-form-common-choice-process = Process
+form-common-input-x = X
+form-common-input-y = Y
+form-common-input-top = Top
+form-common-input-bottom = Bottom
+form-common-input-left = Left
+form-common-input-right = Right
 
 form-common-button-assign-selected = Assign selected
 form-common-button-unassign-selected = Unassign selected
@@ -278,6 +290,26 @@ table-design-variants-column-variant = Variant name
 table-unit-assignments-column-pcb-unit = PCB Unit
 table-unit-assignments-column-design = Design name
 table-unit-assignments-column-variant = Variant name
+
+table-design-layout-column-index = #
+table-design-layout-column-x-offset = X offset
+table-design-layout-column-y-offset = Y offset
+table-design-layout-column-x-origin = X origin
+table-design-layout-column-y-origin = Y origin
+table-design-layout-column-design-name = Design name
+
+table-unit-positions-column-index = #
+table-unit-positions-column-x = X
+table-unit-positions-column-y = Y
+table-unit-positions-column-rotation = Rotation
+table-unit-positions-column-design-name = Design name
+
+table-fiducials-column-index = #
+table-fiducials-column-x = X
+table-fiducials-column-y = Y
+table-fiducials-column-actions = Actions
+
+common-value-not-available = N/A
 
 filter-expression = Search...
 

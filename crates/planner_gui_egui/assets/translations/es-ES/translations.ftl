@@ -117,11 +117,16 @@ form-new-pcb-input-name-placeholder = (por ejemplo, el número de referencia del
 form-new-pcb-input-directory = Directorio
 form-new-pcb-input-units = Unidades
 
+pcb-configuration-tab-label = Configuración
 pcb-configuration-header = Configuración
 pcb-configuration-detail-name = Nombre: { $name }
-pcb-configuration-tab-label = Configuración
 
 pcb-panel-tab-label = Panel
+pcb-panel-tab-panel-size-header = Tamaño del panel
+pcb-panel-tab-panel-edge-rails-header = Raíles de borde
+pcb-panel-tab-panel-fiducials-header = Fiduciales
+pcb-panel-tab-panel-design-configuration-header = Configuración de diseño
+pcb-panel-tab-panel-unit-positions-header = Posiciones de la unidad
 
 pcb-explorer-tab-label = Explorador de PCB
 pcb-explorer-node-root = { $name }
@@ -174,9 +179,16 @@ form-common-choice-pcb-side = Lado PCB
 form-common-choice-pcb-side-top = Alto
 form-common-choice-pcb-side-bottom = Bajo
 
+form-common-choice-process = Proceso
+
 form-common-input-load-out-source = Fuente de carga
 form-common-input-phase-reference = Referencia de fase
-form-common-choice-process = Proceso
+form-common-input-x = X
+form-common-input-y = Y
+form-common-input-top = Arriba
+form-common-input-bottom = Abajo
+form-common-input-left = Izquierda
+form-common-input-right = Derecha
 
 form-common-button-assign-selected = Asignar seleccionado
 form-common-button-unassign-selected = Desasignar seleccionado
@@ -278,6 +290,26 @@ table-design-variants-column-variant = Nombre de la variante
 table-unit-assignments-column-pcb-unit = Unidad PCB
 table-unit-assignments-column-design = Design name
 table-unit-assignments-column-variant = Variant name
+
+table-design-layout-column-index = #
+table-design-layout-column-x-offset = X despl.
+table-design-layout-column-y-offset = Y despl.
+table-design-layout-column-x-origin = X origen
+table-design-layout-column-y-origin = Y origen
+table-design-layout-column-design-name = Nombre del diseño
+
+table-unit-positions-column-index = #
+table-unit-positions-column-x = X
+table-unit-positions-column-y = Y
+table-unit-positions-column-rotation = Rotación
+table-unit-positions-column-design-name = Nombre del diseño
+
+table-fiducials-column-index = #
+table-fiducials-column-x = X
+table-fiducials-column-y = Y
+table-fiducials-column-actions = Acciones
+
+common-value-not-available = N/A
 
 filter-expression = Buscar...
 
