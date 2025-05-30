@@ -560,6 +560,9 @@ impl UiComponent for Pcb {
                             .update_pcb_overview(pcb_overview.clone());
                         pcb_ui_state
                             .explorer_tab_ui
+                            .update_pcb_overview(pcb_overview.clone());
+                        pcb_ui_state
+                            .panel_tab_ui
                             .update_pcb_overview(pcb_overview);
                     }
                 }
