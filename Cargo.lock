@@ -2359,6 +2359,7 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=68eb71f1653b811582674517bc83ac10ee16ee74#68eb71f1653b811582674517bc83ac10ee16ee74"
 dependencies = [
  "egui",
  "gerber-types",
@@ -4184,6 +4185,7 @@ dependencies = [
  "regex",
  "rfd",
  "rstest",
+ "rust_decimal",
  "serde",
  "slotmap",
  "thiserror 2.0.12",
