@@ -2359,7 +2359,6 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=49fe5867ff52e03b4a7360c96b3acfba0f81f8b8#49fe5867ff52e03b4a7360c96b3acfba0f81f8b8"
 dependencies = [
  "egui",
  "gerber-types",
