@@ -38,8 +38,6 @@ async-std = {  version = "1.13.1" }
 petgraph = { version = "0.8.1"}
 csv = { version = "1.3.1" }
 termtree = { version = "0.5.1"}
-rust_decimal = { version = "1.37.1"}
-rust_decimal_macros = { version = "1.37.1"}
 derivative = { version = "2.2.0" }
 lexical-sort = { version = "0.3.1"}
 
@@ -121,12 +119,14 @@ tokio = { version = "1.45.1", features = ["full"]}
 crossbeam-channel = { version = "0.5.15" }
 
 # Gerber rendering, types and parser
-#gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "49fe5867ff52e03b4a7360c96b3acfba0f81f8b8" }
-gerber_viewer = { path = "../gerber_viewer" }
+gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "68eb71f1653b811582674517bc83ac10ee16ee74" }
+#gerber_viewer = { path = "../gerber_viewer" }
 
 # math
 num-rational = "0.4.2"
 num-traits = "0.2.19"
+rust_decimal = { version = "1.37.1"}
+rust_decimal_macros = { version = "1.37.1"}
 
 
 [patch.crates-io]

@@ -10,14 +10,19 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
-use gerber_viewer::gerber_types::{Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, DCode, ExtendedCode, FunctionCode, GCode, GerberCode, GerberError, InterpolationMode, Unit};
+use gerber_viewer::gerber_types::{
+    Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode, Unit,
+};
 use gerber_viewer::position::Position;
 use num_rational::Ratio;
 use planner_app::{PcbOverview, PcbSide};
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
-use crate::pcb::tabs::panel_tab::gerber_util::{gerber_line_commands, gerber_rectangle_commands};
+use crate::pcb::tabs::panel_tab::gerber_builder::GerberBuilder;
+use crate::pcb::tabs::panel_tab::gerber_util::{
+    gerber_line_commands, gerber_point_commands, gerber_rectangle_commands,
+};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{
@@ -70,7 +75,7 @@ pub struct PanelSizing {
 
     #[derivative(Default(value = "GerberSize::new(100.0, 100.0)"))]
     size: GerberSize,
-    
+
     #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
     edge_rails: Dimensions<f64>,
 
@@ -161,10 +166,10 @@ impl PanelTabUi {
             gerber_viewer_ui: Value::new(gerber_viewer_ui),
             component,
         };
-        
+
         // TODO remove this and wait for the panel_sizing to be given
         instance.update_panel_preview();
-        
+
         instance
     }
 
@@ -383,7 +388,7 @@ impl PanelTabUi {
                     .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                     .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
             );
-            
+
             if let Some(ratio) = new_fiducial.copper_to_mask_ratio() {
                 ui.label(tr!("ratio", {numerator: ratio.numer(), denominator: ratio.denom() }));
             } else {
@@ -925,64 +930,74 @@ fn gerber_commands_to_source(commands: &Vec<Command>) -> String {
 }
 
 fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Result<Vec<Command>, GerberError> {
-    let coordinate_format = CoordinateFormat::new(4, 6);
-    let units = Unit::Millimeters;
+    // FUTURE generate multiple, real, gerber layers instead of a 'preview' layer
+    //        i.e. 'board outline, top mask, top copper layers, bottom mask, bottom copper layer, v-score/cut (rails)'
 
-    let mut commands: Vec<Command> = vec![
-        Command::ExtendedCode(ExtendedCode::CoordinateFormat(coordinate_format)),
-        Command::ExtendedCode(ExtendedCode::Unit(units)),
-        Command::ExtendedCode(ExtendedCode::ApertureDefinition(ApertureDefinition {
-            code: 10,
-            aperture: Aperture::Circle(Circle {
-                diameter: 0.1,
-                hole_diameter: None,
-            }),
-        })),
-        Command::FunctionCode(FunctionCode::GCode(GCode::InterpolationMode(InterpolationMode::Linear))),
-    ];
-    
+    let coordinate_format = CoordinateFormat::new(4, 6);
+
+    let mut gerber_builder = GerberBuilder::new()
+        .with_units(panel_sizing.units)
+        .with_coordinate_format(coordinate_format);
+
+    gerber_builder.set_interpolation_mode(InterpolationMode::Linear);
+    let drawing_aperture_code = gerber_builder.define_aperture(Aperture::Circle(Circle {
+        diameter: 0.1,
+        hole_diameter: None,
+    }));
+
+    gerber_builder.select_aperture(drawing_aperture_code);
     let origin = Position::new(0.0, 0.0);
 
-    commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(10))));
-    commands.extend(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
-    
+    gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
+
     //
     // rails
     //
     if panel_sizing.edge_rails.left > 0.0 {
         let start = origin.add_x(panel_sizing.edge_rails.left);
         let end = start.add_y(panel_sizing.size.y);
-        let rail_commands = gerber_line_commands(coordinate_format, start, end)?; 
-        commands.extend(rail_commands);
+        let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
+        gerber_builder.push_commands(rail_commands);
     }
     if panel_sizing.edge_rails.right > 0.0 {
         let start = origin.add_x(panel_sizing.size.x - panel_sizing.edge_rails.right);
         let end = start.add_y(panel_sizing.size.y);
         let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
-        commands.extend(rail_commands);
+        gerber_builder.push_commands(rail_commands);
     }
 
     if panel_sizing.edge_rails.bottom > 0.0 {
         let start = origin.add_y(panel_sizing.edge_rails.bottom);
         let end = start.add_x(panel_sizing.size.x);
         let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
-        commands.extend(rail_commands);
+        gerber_builder.push_commands(rail_commands);
     }
 
     if panel_sizing.edge_rails.top > 0.0 {
         let start = origin.add_y(panel_sizing.size.y - panel_sizing.edge_rails.top);
         let end = start.add_x(panel_sizing.size.x);
         let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
-        commands.extend(rail_commands);
-        
+        gerber_builder.push_commands(rail_commands);
     }
 
-    Ok(commands)
+    //
+    // fiducials
+    //
+
+    for fiducial in &panel_sizing.fiducials {
+        let aperture_code = gerber_builder.define_circle_with_hole(fiducial.mask_diameter, fiducial.copper_diameter);
+        gerber_builder.select_aperture(aperture_code);
+        gerber_builder.push_commands(gerber_point_commands(coordinate_format, fiducial.position)?);
+    }
+
+    Ok(gerber_builder.as_commands())
 }
 
 mod gerber_util {
-    use gerber_viewer::gerber_types::{Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation};
-    use gerber_viewer::position::{Position, Vector};
+    use gerber_viewer::gerber_types::{
+        Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation,
+    };
+    use gerber_viewer::position::Position;
 
     use crate::pcb::tabs::panel_tab::GerberSize;
 
@@ -1057,6 +1072,15 @@ mod gerber_util {
             )))),
         ])
     }
+
+    pub fn gerber_point_commands(
+        coordinate_format: CoordinateFormat,
+        origin: Position,
+    ) -> Result<Vec<Command>, GerberError> {
+        Ok(vec![Command::FunctionCode(FunctionCode::DCode(DCode::Operation(
+            Operation::Flash(x_y_to_gerber(origin.x, origin.y, coordinate_format)?),
+        )))])
+    }
 }
 
 #[cfg(test)]
@@ -1100,5 +1124,117 @@ mod test {
         println!("{}", source);
 
         assert_eq!(source, expected_source);
+    }
+}
+
+#[allow(dead_code)]
+mod gerber_builder {
+    use std::collections::HashMap;
+
+    use gerber_viewer::gerber_types::{
+        Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, DCode, ExtendedCode, FunctionCode, GCode,
+        InterpolationMode, Unit,
+    };
+    use num_traits::FromPrimitive;
+    use rust_decimal::Decimal;
+
+    pub struct GerberBuilder {
+        commands: Vec<Command>,
+
+        next_aperture_code: i32,
+        current_aperture_code: Option<i32>,
+
+        circle_apertures: HashMap<(Decimal, Decimal), i32>,
+    }
+
+    impl GerberBuilder {
+        pub fn new() -> Self {
+            Self {
+                commands: Vec::new(),
+                current_aperture_code: None,
+                next_aperture_code: 10,
+                circle_apertures: HashMap::new(),
+            }
+        }
+
+        pub fn next_aperture_code(&mut self) -> i32 {
+            let result = self.next_aperture_code;
+            self.next_aperture_code += 1;
+            result
+        }
+
+        pub fn push_commands(&mut self, commands: Vec<Command>) {
+            self.commands.extend(commands);
+        }
+
+        pub fn push_command(&mut self, command: Command) {
+            self.commands.push(command);
+        }
+
+        pub fn with_units(mut self, units: Unit) -> Self {
+            self.commands
+                .push(Command::ExtendedCode(ExtendedCode::Unit(units)));
+            self
+        }
+
+        pub fn with_coordinate_format(mut self, coordinate_format: CoordinateFormat) -> Self {
+            self.commands
+                .push(Command::ExtendedCode(ExtendedCode::CoordinateFormat(coordinate_format)));
+            self
+        }
+
+        pub fn set_interpolation_mode(&mut self, interpolation_mode: InterpolationMode) {
+            self.commands
+                .push(Command::FunctionCode(FunctionCode::GCode(GCode::InterpolationMode(
+                    interpolation_mode,
+                ))))
+        }
+
+        pub fn define_aperture(&mut self, aperture: Aperture) -> i32 {
+            let code = self.next_aperture_code();
+            let definition = ApertureDefinition {
+                code,
+                aperture,
+            };
+            self.commands
+                .push(Command::ExtendedCode(ExtendedCode::ApertureDefinition(definition)));
+            code
+        }
+
+        pub fn select_aperture(&mut self, code: i32) {
+            match self.current_aperture_code {
+                Some(current_code) if code == current_code => {}
+                _ => {
+                    self.current_aperture_code.replace(code);
+                    self.commands
+                        .push(Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(code))))
+                }
+            }
+        }
+
+        /// defines a circle with a hole
+        /// if the circle is already defined, the previously allocated aperture code is returned
+        pub fn define_circle_with_hole(&mut self, outer_diameter: f64, inner_diameter: f64) -> i32 {
+            let key = (
+                Decimal::from_f64(outer_diameter).unwrap(),
+                Decimal::from_f64(inner_diameter).unwrap(),
+            );
+
+            if let Some(&code) = self.circle_apertures.get(&key) {
+                return code;
+            }
+
+            let code = self.define_aperture(Aperture::Circle(Circle {
+                diameter: outer_diameter,
+                hole_diameter: Some(inner_diameter),
+            }));
+
+            self.circle_apertures.insert(key, code);
+            code
+        }
+
+        pub fn as_commands(self) -> Vec<Command> {
+            self.commands
+        }
     }
 }
