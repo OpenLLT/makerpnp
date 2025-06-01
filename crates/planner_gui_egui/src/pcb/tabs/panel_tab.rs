@@ -13,12 +13,11 @@ use egui_mobius::types::ValueGuard;
 use gerber_viewer::gerber_types::{Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, DCode, ExtendedCode, FunctionCode, GCode, GerberCode, GerberError, InterpolationMode, Unit};
 use gerber_viewer::position::Position;
 use num_rational::Ratio;
-use num_traits::ToPrimitive;
 use planner_app::{PcbOverview, PcbSide};
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
-use crate::pcb::tabs::panel_tab::gerber_util::{gerber_rectangle_commands};
+use crate::pcb::tabs::panel_tab::gerber_util::{gerber_line_commands, gerber_rectangle_commands};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{
@@ -71,6 +70,8 @@ pub struct PanelSizing {
 
     #[derivative(Default(value = "GerberSize::new(100.0, 100.0)"))]
     size: GerberSize,
+    
+    #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
     edge_rails: Dimensions<f64>,
 
     fiducials: Vec<FiducialParameters>,
@@ -939,23 +940,54 @@ fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Result<Vec<Comman
         })),
         Command::FunctionCode(FunctionCode::GCode(GCode::InterpolationMode(InterpolationMode::Linear))),
     ];
-
+    
     let origin = Position::new(0.0, 0.0);
 
     commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(10))));
     commands.extend(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
+    
+    //
+    // rails
+    //
+    if panel_sizing.edge_rails.left > 0.0 {
+        let start = origin.add_x(panel_sizing.edge_rails.left);
+        let end = start.add_y(panel_sizing.size.y);
+        let rail_commands = gerber_line_commands(coordinate_format, start, end)?; 
+        commands.extend(rail_commands);
+    }
+    if panel_sizing.edge_rails.right > 0.0 {
+        let start = origin.add_x(panel_sizing.size.x - panel_sizing.edge_rails.right);
+        let end = start.add_y(panel_sizing.size.y);
+        let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
+        commands.extend(rail_commands);
+    }
+
+    if panel_sizing.edge_rails.bottom > 0.0 {
+        let start = origin.add_y(panel_sizing.edge_rails.bottom);
+        let end = start.add_x(panel_sizing.size.x);
+        let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
+        commands.extend(rail_commands);
+    }
+
+    if panel_sizing.edge_rails.top > 0.0 {
+        let start = origin.add_y(panel_sizing.size.y - panel_sizing.edge_rails.top);
+        let end = start.add_x(panel_sizing.size.x);
+        let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
+        commands.extend(rail_commands);
+        
+    }
 
     Ok(commands)
 }
 
 mod gerber_util {
     use gerber_viewer::gerber_types::{Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation};
-    use gerber_viewer::position::Position;
+    use gerber_viewer::position::{Position, Vector};
 
     use crate::pcb::tabs::panel_tab::GerberSize;
 
+    #[allow(dead_code)]
     pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Coordinates, GerberError> {
-
         let x = CoordinateNumber::try_from(x)?;
         let y = CoordinateNumber::try_from(y)?;
 
@@ -969,6 +1001,7 @@ mod gerber_util {
         })
     }
 
+    #[allow(dead_code)]
     pub fn is_valid(value: f64, format: &CoordinateFormat) -> bool {
         let Ok(value) = CoordinateNumber::try_from(value) else {
             return false;
@@ -1002,6 +1035,24 @@ mod gerber_util {
             )))),
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
                 x_y_to_gerber(origin.x, origin.y, coordinate_format)?,
+                None,
+            )))),
+        ])
+    }
+
+    pub fn gerber_line_commands(
+        coordinate_format: CoordinateFormat,
+        origin: Position,
+        end: Position,
+    ) -> Result<Vec<Command>, GerberError> {
+        Ok(vec![
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
+                origin.x,
+                origin.y,
+                coordinate_format,
+            )?)))),
+            Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
+                x_y_to_gerber(end.x, end.y, coordinate_format)?,
                 None,
             )))),
         ])
