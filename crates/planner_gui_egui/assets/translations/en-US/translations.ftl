@@ -189,6 +189,9 @@ form-common-input-top = Top
 form-common-input-bottom = Bottom
 form-common-input-left = Left
 form-common-input-right = Right
+form-common-input-mask-diameter = Mask ⌀
+form-common-input-copper-diameter = Copper ⌀
+
 
 form-common-button-assign-selected = Assign selected
 form-common-button-unassign-selected = Unassign selected
@@ -307,9 +310,14 @@ table-unit-positions-column-design-name = Design name
 table-fiducials-column-index = #
 table-fiducials-column-x = X
 table-fiducials-column-y = Y
+table-fiducials-column-mask-diameter = Mask ⌀
+table-fiducials-column-copper-diameter = Copper ⌀
 table-fiducials-column-actions = Actions
 
 common-value-not-available = N/A
+
+ratio = Ratio: { $numerator }: { $denominator }
+ratio-error = Ratio: N/A
 
 filter-expression = Search...
 

@@ -10,24 +10,50 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
-use gerber_viewer::GerberLayer;
-use gerber_viewer::gerber_types::{
-    Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode,
-    ExtendedCode, FunctionCode, GCode, GerberCode, InterpolationMode, Operation, Unit,
-};
+use gerber_viewer::gerber_types::{Aperture, ApertureDefinition, Circle, Command, CoordinateFormat, DCode, ExtendedCode, FunctionCode, GCode, GerberCode, GerberError, InterpolationMode, Unit};
 use gerber_viewer::position::Position;
+use num_rational::Ratio;
+use num_traits::ToPrimitive;
 use planner_app::{PcbOverview, PcbSide};
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
-use crate::pcb::tabs::gerber_viewer_tab::GerberViewerTabUiCommand;
-use crate::pcb::tabs::panel_tab::gerber_util::{gerber_rectangle_commands, x_y_to_gerber};
+use crate::pcb::tabs::panel_tab::gerber_util::{gerber_rectangle_commands};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
     GerberViewerUiInstanceArgs,
 };
+use crate::ui_util::ratio_of_f64;
+
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DragSliderParameters {
+    pub speed: f64,
+    pub fixed_decimals: usize,
+}
+
+pub mod defaults {
+    use std::sync::LazyLock;
+
+    use egui::ahash::HashMap;
+    use gerber_viewer::gerber_types::Unit;
+
+    use super::DragSliderParameters;
+
+    pub static DRAG_SLIDER: LazyLock<HashMap<Unit, DragSliderParameters>> = LazyLock::new(|| {
+        HashMap::from_iter([
+            (Unit::Millimeters, DragSliderParameters {
+                speed: 0.1,
+                fixed_decimals: 3,
+            }),
+            (Unit::Inches, DragSliderParameters {
+                speed: 0.1,
+                fixed_decimals: 4,
+            }),
+        ])
+    });
+}
 
 #[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
 pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
@@ -37,12 +63,17 @@ pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
     bottom: T,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Derivative, Debug, Clone, PartialEq)]
+#[derivative(Default)]
 pub struct PanelSizing {
+    #[derivative(Default(value = "Unit::Millimeters"))]
+    units: Unit,
+
+    #[derivative(Default(value = "GerberSize::new(100.0, 100.0)"))]
     size: GerberSize,
     edge_rails: Dimensions<f64>,
 
-    fiducials: Vec<Position>,
+    fiducials: Vec<FiducialParameters>,
 }
 
 // TODO move this to the gerber_viewer crate
@@ -67,8 +98,23 @@ impl GerberSize {
 struct PanelTabUiState {
     #[derivative(Default(value = "PcbSide::Top"))]
     pcb_side: PcbSide,
-    new_fiducial_x: f64,
-    new_fiducial_y: f64,
+    new_fiducial: FiducialParameters,
+}
+
+#[derive(Debug, Derivative, Copy, Clone, PartialEq, PartialOrd)]
+#[derivative(Default)]
+pub struct FiducialParameters {
+    position: Position,
+    #[derivative(Default(value = "2.0"))]
+    mask_diameter: f64,
+    #[derivative(Default(value = "1.0"))]
+    copper_diameter: f64,
+}
+
+impl FiducialParameters {
+    pub fn copper_to_mask_ratio(&self) -> Option<Ratio<i64>> {
+        ratio_of_f64(self.copper_diameter, self.mask_diameter)
+    }
 }
 
 #[derive(Derivative)]
@@ -106,14 +152,19 @@ impl PanelTabUi {
                 PanelTabUiCommand::GerberViewerUiCommand(gerber_viewer_command)
             });
 
-        Self {
+        let mut instance = Self {
             // TODO default this to none, wait for it to be given
             panel_sizing: Some(Default::default()),
             pcb_overview: None,
             panel_tab_ui_state: Value::default(),
             gerber_viewer_ui: Value::new(gerber_viewer_ui),
             component,
-        }
+        };
+        
+        // TODO remove this and wait for the panel_sizing to be given
+        instance.update_panel_preview();
+        
+        instance
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
@@ -122,14 +173,15 @@ impl PanelTabUi {
 
     pub fn update_panel(&mut self, panel_sizing: PanelSizing) {
         self.panel_sizing.replace(panel_sizing);
+        self.update_panel_preview();
     }
 
     fn left_panel_content(
         ui: &mut Ui,
-        panel_sizing: &&PanelSizing,
+        panel_sizing: &PanelSizing,
         state: ValueGuard<PanelTabUiState>,
         sender: Sender<PanelTabUiCommand>,
-        pcb_overview: &&PcbOverview,
+        pcb_overview: &PcbOverview,
     ) {
         let text_height = egui::TextStyle::Body
             .resolve(ui.style())
@@ -137,6 +189,8 @@ impl PanelTabUi {
             .max(ui.spacing().interact_size.y);
 
         egui::ScrollArea::both().show(ui, |ui| {
+            // TODO let the user choose units
+
             Self::top_bottom_controls(&state, &sender, ui);
             ui.separator();
             Self::panel_size_controls(&panel_sizing, &sender, ui);
@@ -192,17 +246,18 @@ impl PanelTabUi {
         });
     }
 
-    fn panel_size_controls(panel_sizing: &&&PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+    fn panel_size_controls(panel_sizing: &PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
         ui.label(tr!("pcb-panel-tab-panel-size-header"));
 
-        let mut size = panel_sizing.size.clone();
+        let mut size = panel_sizing.size;
 
         ui.horizontal(|ui| {
             ui.label(tr!("form-common-input-x"));
             ui.add(
                 egui::DragValue::new(&mut size.x)
                     .range(0.0..=f64::MAX)
-                    .max_decimals(4),
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
             );
         });
         ui.horizontal(|ui| {
@@ -210,7 +265,8 @@ impl PanelTabUi {
             ui.add(
                 egui::DragValue::new(&mut size.y)
                     .range(0.0..=f64::MAX)
-                    .max_decimals(4),
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
             );
         });
 
@@ -221,7 +277,7 @@ impl PanelTabUi {
         }
     }
 
-    fn edge_rails_controls(panel_sizing: &&&PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+    fn edge_rails_controls(panel_sizing: &PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
         let mut edge_rails = panel_sizing.edge_rails.clone();
 
         ui.label(tr!("pcb-panel-tab-panel-edge-rails-header"));
@@ -235,7 +291,8 @@ impl PanelTabUi {
                     ui.add(
                         egui::DragValue::new(&mut edge_rails.top)
                             .range(0.0..=f64::MAX)
-                            .max_decimals(4),
+                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                            .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
                     );
                 });
                 ui.label(""); // placeholder
@@ -246,7 +303,8 @@ impl PanelTabUi {
                     ui.add(
                         egui::DragValue::new(&mut edge_rails.left)
                             .range(0.0..=f64::MAX)
-                            .max_decimals(4),
+                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                            .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
                     );
                 });
                 ui.label(""); // placeholder
@@ -255,7 +313,8 @@ impl PanelTabUi {
                     ui.add(
                         egui::DragValue::new(&mut edge_rails.right)
                             .range(0.0..=f64::MAX)
-                            .max_decimals(4),
+                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                            .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
                     );
                 });
                 ui.end_row();
@@ -266,7 +325,8 @@ impl PanelTabUi {
                     ui.add(
                         egui::DragValue::new(&mut edge_rails.bottom)
                             .range(0.0..=f64::MAX)
-                            .max_decimals(4),
+                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                            .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
                     );
                 });
                 ui.label(""); // placeholder
@@ -281,7 +341,7 @@ impl PanelTabUi {
     }
 
     fn fiducials_controls(
-        panel_sizing: &&PanelSizing,
+        panel_sizing: &PanelSizing,
         state: ValueGuard<PanelTabUiState>,
         sender: Sender<PanelTabUiCommand>,
         text_height: f32,
@@ -290,25 +350,48 @@ impl PanelTabUi {
         ui.label(tr!("pcb-panel-tab-panel-fiducials-header"));
 
         ui.horizontal(|ui| {
-            let mut new_fiducial_x = state.new_fiducial_x;
-            let mut new_fiducial_y = state.new_fiducial_y;
+            let mut new_fiducial = state.new_fiducial;
 
             ui.label(tr!("form-common-input-x"));
             ui.add(
-                egui::DragValue::new(&mut new_fiducial_x)
+                egui::DragValue::new(&mut new_fiducial.position.x)
                     .range(0.0..=f64::MAX)
-                    .max_decimals(4),
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
             );
             ui.label(tr!("form-common-input-y"));
             ui.add(
-                egui::DragValue::new(&mut new_fiducial_y)
+                egui::DragValue::new(&mut new_fiducial.position.y)
                     .range(0.0..=f64::MAX)
-                    .max_decimals(4),
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
             );
 
-            if new_fiducial_x != state.new_fiducial_x || new_fiducial_y != state.new_fiducial_y {
+            ui.label(tr!("form-common-input-copper-diameter"));
+            ui.add(
+                egui::DragValue::new(&mut new_fiducial.copper_diameter)
+                    .range(0.0..=f64::MAX)
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
+            );
+
+            ui.label(tr!("form-common-input-mask-diameter"));
+            ui.add(
+                egui::DragValue::new(&mut new_fiducial.mask_diameter)
+                    .range(0.0..=f64::MAX)
+                    .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                    .fixed_decimals(defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals),
+            );
+            
+            if let Some(ratio) = new_fiducial.copper_to_mask_ratio() {
+                ui.label(tr!("ratio", {numerator: ratio.numer(), denominator: ratio.denom() }));
+            } else {
+                ui.label(tr!("ratio-error"));
+            }
+
+            if !new_fiducial.eq(&state.new_fiducial) {
                 sender
-                    .send(PanelTabUiCommand::NewFiducialChanged(new_fiducial_x, new_fiducial_y))
+                    .send(PanelTabUiCommand::NewFiducialChanged(new_fiducial))
                     .expect("sent");
             }
 
@@ -317,7 +400,7 @@ impl PanelTabUi {
                 .clicked()
             {
                 sender
-                    .send(PanelTabUiCommand::AddFiducial(new_fiducial_x, new_fiducial_y))
+                    .send(PanelTabUiCommand::AddFiducial(new_fiducial))
                     .expect("sent");
             }
         });
@@ -350,6 +433,8 @@ impl PanelTabUi {
                                 .column(Column::auto())
                                 .column(Column::auto())
                                 .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
                                 .column(Column::remainder())
                                 .header(20.0, |mut header| {
                                     header.col(|ui| {
@@ -362,16 +447,22 @@ impl PanelTabUi {
                                         ui.strong(tr!("table-fiducials-column-y"));
                                     });
                                     header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-mask-diameter"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-fiducials-column-copper-diameter"));
+                                    });
+                                    header.col(|ui| {
                                         ui.strong(tr!("table-fiducials-column-actions"));
                                     });
                                 })
                                 .body(|mut body| {
-                                    for (fiducial_index, position) in panel_sizing
+                                    for (fiducial_index, parameters) in panel_sizing
                                         .fiducials
                                         .iter()
                                         .enumerate()
                                     {
-                                        let mut new_position = position.clone();
+                                        let mut new_parameters = parameters.clone();
 
                                         body.row(text_height, |mut row| {
                                             row.col(|ui| {
@@ -380,16 +471,42 @@ impl PanelTabUi {
 
                                             row.col(|ui| {
                                                 ui.add(
-                                                    egui::DragValue::new(&mut new_position.x)
+                                                    egui::DragValue::new(&mut new_parameters.position.x)
                                                         .range(0.0..=f64::MAX)
-                                                        .max_decimals(4),
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
                                                 );
                                             });
                                             row.col(|ui| {
                                                 ui.add(
-                                                    egui::DragValue::new(&mut new_position.y)
+                                                    egui::DragValue::new(&mut new_parameters.position.y)
                                                         .range(0.0..=f64::MAX)
-                                                        .max_decimals(4),
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut new_parameters.mask_diameter)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut new_parameters.copper_diameter)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
                                                 );
                                             });
 
@@ -405,11 +522,11 @@ impl PanelTabUi {
                                             });
                                         });
 
-                                        if !new_position.eq(position) {
+                                        if !new_parameters.eq(parameters) {
                                             sender
                                                 .send(PanelTabUiCommand::UpdateFiducial {
                                                     index: fiducial_index,
-                                                    position: new_position,
+                                                    parameters: new_parameters,
                                                 })
                                                 .expect("sent");
                                         }
@@ -420,7 +537,7 @@ impl PanelTabUi {
         });
     }
 
-    fn design_configuation_controls(pcb_overview: &&PcbOverview, text_height: f32, ui: &mut Ui) {
+    fn design_configuation_controls(pcb_overview: &PcbOverview, text_height: f32, ui: &mut Ui) {
         ui.label(tr!("pcb-panel-tab-panel-design-configuration-header"));
 
         ui.push_id("design_configuration", |ui| {
@@ -509,7 +626,7 @@ impl PanelTabUi {
         });
     }
 
-    fn unit_positions_controls(pcb_overview: &&&PcbOverview, text_height: f32, ui: &mut Ui) {
+    fn unit_positions_controls(pcb_overview: &PcbOverview, text_height: f32, ui: &mut Ui) {
         ui.label(tr!("pcb-panel-tab-panel-unit-positions-header"));
 
         ui.push_id("unit_positions", |ui| {
@@ -620,10 +737,12 @@ impl PanelTabUi {
 
         let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
 
-        let commands = build_panel_preview_commands(panel_sizing);
-        dump_gerber_source(&commands);
-
-        gerber_viewer_ui.use_single_layer(commands);
+        if let Ok(commands) = build_panel_preview_commands(panel_sizing) {
+            dump_gerber_source(&commands);
+            gerber_viewer_ui.use_single_layer(commands);
+        } else {
+            // TODO show an error message if the gerber preview could not be generated
+        }
     }
 }
 
@@ -631,10 +750,13 @@ impl PanelTabUi {
 pub enum PanelTabUiCommand {
     None,
     PcbSideChanged(PcbSide),
-    NewFiducialChanged(f64, f64),
-    AddFiducial(f64, f64),
+    NewFiducialChanged(FiducialParameters),
+    AddFiducial(FiducialParameters),
     DeleteFiducial(usize),
-    UpdateFiducial { index: usize, position: Position },
+    UpdateFiducial {
+        index: usize,
+        parameters: FiducialParameters,
+    },
     SizeChanged(GerberSize),
     EdgeRailsChanged(Dimensions<f64>),
     GerberViewerUiCommand(GerberViewerUiCommand),
@@ -682,6 +804,7 @@ impl UiComponent for PanelTabUi {
         command: Self::UiCommand,
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
+        debug!("PanelTabUi::update, command: {:?}", command);
         let mut update_panel_preview = false;
         let action = match command {
             PanelTabUiCommand::None => Some(PanelTabUiAction::None),
@@ -705,18 +828,15 @@ impl UiComponent for PanelTabUi {
                 }
                 None
             }
-            PanelTabUiCommand::NewFiducialChanged(x, y) => {
+            PanelTabUiCommand::NewFiducialChanged(parameters) => {
                 let mut state = self.panel_tab_ui_state.lock().unwrap();
-                state.new_fiducial_x = x;
-                state.new_fiducial_y = y;
+                state.new_fiducial = parameters;
                 update_panel_preview = true;
                 None
             }
-            PanelTabUiCommand::AddFiducial(x, y) => {
+            PanelTabUiCommand::AddFiducial(parameters) => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
-                    panel_sizing
-                        .fiducials
-                        .push(Position::new(x, y));
+                    panel_sizing.fiducials.push(parameters);
                     update_panel_preview = true;
                 }
                 None
@@ -730,10 +850,10 @@ impl UiComponent for PanelTabUi {
             }
             PanelTabUiCommand::UpdateFiducial {
                 index,
-                position,
+                parameters,
             } => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
-                    panel_sizing.fiducials[index] = position;
+                    panel_sizing.fiducials[index] = parameters;
                     update_panel_preview = true;
                 }
                 None
@@ -803,7 +923,7 @@ fn gerber_commands_to_source(commands: &Vec<Command>) -> String {
     gerber_source
 }
 
-fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Vec<Command> {
+fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Result<Vec<Command>, GerberError> {
     let coordinate_format = CoordinateFormat::new(4, 6);
     let units = Unit::Millimeters;
 
@@ -823,55 +943,68 @@ fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Vec<Command> {
     let origin = Position::new(0.0, 0.0);
 
     commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::SelectAperture(10))));
-    commands.extend(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size));
+    commands.extend(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
 
-    commands
+    Ok(commands)
 }
 
 mod gerber_util {
-    use gerber_viewer::gerber_types::{
-        Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, Operation,
-    };
+    use gerber_viewer::gerber_types::{Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation};
     use gerber_viewer::position::Position;
 
     use crate::pcb::tabs::panel_tab::GerberSize;
 
-    pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Coordinates {
-        Coordinates {
-            x: Some(CoordinateNumber::try_from(x).unwrap()),
-            y: Some(CoordinateNumber::try_from(y).unwrap()),
+    pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Coordinates, GerberError> {
+
+        let x = CoordinateNumber::try_from(x)?;
+        let y = CoordinateNumber::try_from(y)?;
+
+        x.gerber(&format)?;
+        y.gerber(&format)?;
+
+        Ok(Coordinates {
+            x: Some(x),
+            y: Some(y),
             format,
-        }
+        })
+    }
+
+    pub fn is_valid(value: f64, format: &CoordinateFormat) -> bool {
+        let Ok(value) = CoordinateNumber::try_from(value) else {
+            return false;
+        };
+
+        value.gerber(format).is_ok()
     }
 
     pub fn gerber_rectangle_commands(
         coordinate_format: CoordinateFormat,
         origin: Position,
         size: GerberSize,
-    ) -> Vec<Command> {
-        vec![
+    ) -> Result<Vec<Command>, GerberError> {
+        Ok(vec![
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
                 origin.x,
                 origin.y,
                 coordinate_format,
-            ))))),
+            )?)))),
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                x_y_to_gerber(origin.x + size.x, origin.y, coordinate_format),
+                x_y_to_gerber(origin.x + size.x, origin.y, coordinate_format)?,
                 None,
             )))),
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                x_y_to_gerber(origin.x + size.x, origin.y + size.y, coordinate_format),
+                x_y_to_gerber(origin.x + size.x, origin.y + size.y, coordinate_format)?,
                 None,
             )))),
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                x_y_to_gerber(origin.x, origin.y + size.y, coordinate_format),
+                x_y_to_gerber(origin.x, origin.y + size.y, coordinate_format)?,
                 None,
             )))),
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Interpolate(
-                x_y_to_gerber(origin.x, origin.y, coordinate_format),
+                x_y_to_gerber(origin.x, origin.y, coordinate_format)?,
                 None,
             )))),
-        ]
+        ])
     }
 }
 
@@ -909,7 +1042,7 @@ mod test {
         );
 
         // when
-        let commands = build_panel_preview_commands(&panel_sizing);
+        let commands = build_panel_preview_commands(&panel_sizing).unwrap();
 
         // then
         let source = gerber_commands_to_source(&commands);

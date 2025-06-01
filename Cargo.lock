@@ -2336,7 +2336,7 @@ dependencies = [
 [[package]]
 name = "gerber-types"
 version = "0.4.0"
-source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=e48e1653e581f8ab66cd860f0c0e401764c95cc2#e48e1653e581f8ab66cd860f0c0e401764c95cc2"
+source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=7a312f81f82e743ff44eca2d5153c6a1fa9befb0#7a312f81f82e743ff44eca2d5153c6a1fa9befb0"
 dependencies = [
  "chrono",
  "num-rational",
@@ -2347,7 +2347,7 @@ dependencies = [
 [[package]]
 name = "gerber_parser"
 version = "0.2.0"
-source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=6edd83b11114d9bdf0276020e965ab2d25c2bbe5#6edd83b11114d9bdf0276020e965ab2d25c2bbe5"
+source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=e4c0f05a246d23efd3ddf163d6a559cbb9cf4b99#e4c0f05a246d23efd3ddf163d6a559cbb9cf4b99"
 dependencies = [
  "gerber-types",
  "lazy-regex",
@@ -2359,7 +2359,7 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=6736d3d59b8b6406838e8104e64891db1d5aa9ce#6736d3d59b8b6406838e8104e64891db1d5aa9ce"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=49fe5867ff52e03b4a7360c96b3acfba0f81f8b8#49fe5867ff52e03b4a7360c96b3acfba0f81f8b8"
 dependencies = [
  "egui",
  "gerber-types",
@@ -4176,12 +4176,15 @@ dependencies = [
  "image",
  "indexmap 2.9.0",
  "indoc",
+ "num-rational",
+ "num-traits",
  "petgraph",
  "planner_app",
  "profiling",
  "puffin_http",
  "regex",
  "rfd",
+ "rstest",
  "serde",
  "slotmap",
  "thiserror 2.0.12",
