@@ -1,5 +1,8 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::BufWriter;
+use std::mem;
+use std::ops::Add;
 use std::sync::mpsc::Sender;
 
 use derivative::Derivative;
@@ -13,9 +16,9 @@ use egui_mobius::types::ValueGuard;
 use gerber_viewer::gerber_types::{
     Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode, Unit,
 };
-use gerber_viewer::position::Position;
+use gerber_viewer::position::{Position, Vector};
 use num_rational::Ratio;
-use planner_app::{PcbOverview, PcbSide};
+use planner_app::{PcbOverview, PcbSide, PcbUnitIndex};
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
@@ -67,6 +70,20 @@ pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
     bottom: T,
 }
 
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct DesignSizing {
+    origin: Vector,
+    offset: Vector,
+    size: GerberSize,
+}
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct UnitConfiguration {
+    offset: Vector,
+    /// clockwise positive radians
+    rotation: f64,
+}
+
 #[derive(Derivative, Debug, Clone, PartialEq)]
 #[derivative(Default)]
 pub struct PanelSizing {
@@ -80,6 +97,20 @@ pub struct PanelSizing {
     edge_rails: Dimensions<f64>,
 
     fiducials: Vec<FiducialParameters>,
+    design_sizings: Vec<DesignSizing>,
+    unit_configurations: Vec<UnitConfiguration>,
+}
+
+impl PanelSizing {
+    pub fn ensure_design_sizings(&mut self, design_count: usize) {
+        self.design_sizings
+            .resize_with(design_count, Default::default);
+    }
+
+    pub fn ensure_unit_configurations(&mut self, unit_count: u16) {
+        self.unit_configurations
+            .resize_with(unit_count as usize, Default::default);
+    }
 }
 
 // TODO move this to the gerber_viewer crate
@@ -159,21 +190,26 @@ impl PanelTabUi {
             });
 
         let mut instance = Self {
-            // TODO default this to none, wait for it to be given
-            panel_sizing: Some(Default::default()),
+            panel_sizing: None,
             pcb_overview: None,
             panel_tab_ui_state: Value::default(),
             gerber_viewer_ui: Value::new(gerber_viewer_ui),
             component,
         };
 
-        // TODO remove this and wait for the panel_sizing to be given
-        instance.update_panel_preview();
+        // TODO remove this
+        let panel_sizing = Default::default();
+        instance.update_panel(panel_sizing);
 
         instance
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
+        if let Some(panel_sizing) = &mut self.panel_sizing {
+            panel_sizing.ensure_design_sizings(pcb_overview.designs.len());
+            panel_sizing.ensure_unit_configurations(pcb_overview.units);
+        }
+
         self.pcb_overview.replace(pcb_overview);
     }
 
@@ -203,11 +239,11 @@ impl PanelTabUi {
             ui.separator();
             Self::edge_rails_controls(&panel_sizing, &sender, ui);
             ui.separator();
-            Self::fiducials_controls(panel_sizing, state, sender, text_height, ui);
+            Self::fiducials_controls(panel_sizing, state, &sender, text_height, ui);
             ui.separator();
-            Self::design_configuation_controls(pcb_overview, text_height, ui);
+            Self::design_configuration_controls(&panel_sizing, pcb_overview, &sender, text_height, ui);
             ui.separator();
-            Self::unit_positions_controls(&pcb_overview, text_height, ui);
+            Self::unit_positions_controls(&panel_sizing, &pcb_overview, &sender, text_height, ui);
         });
     }
 
@@ -349,7 +385,7 @@ impl PanelTabUi {
     fn fiducials_controls(
         panel_sizing: &PanelSizing,
         state: ValueGuard<PanelTabUiState>,
-        sender: Sender<PanelTabUiCommand>,
+        sender: &Sender<PanelTabUiCommand>,
         text_height: f32,
         ui: &mut Ui,
     ) {
@@ -543,7 +579,13 @@ impl PanelTabUi {
         });
     }
 
-    fn design_configuation_controls(pcb_overview: &PcbOverview, text_height: f32, ui: &mut Ui) {
+    fn design_configuration_controls(
+        panel_sizing: &PanelSizing,
+        pcb_overview: &PcbOverview,
+        sender: &Sender<PanelTabUiCommand>,
+        text_height: f32,
+        ui: &mut Ui,
+    ) {
         ui.label(tr!("pcb-panel-tab-panel-design-configuration-header"));
 
         ui.push_id("design_configuration", |ui| {
@@ -576,6 +618,8 @@ impl PanelTabUi {
                                 .column(Column::auto())
                                 .column(Column::auto())
                                 .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
                                 .column(Column::remainder())
                                 .header(20.0, |mut header| {
                                     header.col(|ui| {
@@ -594,6 +638,12 @@ impl PanelTabUi {
                                         ui.strong(tr!("table-design-layout-column-y-origin"));
                                     });
                                     header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-x-size"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-y-size"));
+                                    });
+                                    header.col(|ui| {
                                         ui.strong(tr!("table-design-layout-column-design-name"));
                                     });
 
@@ -603,28 +653,93 @@ impl PanelTabUi {
                                     for (design_index, design_name) in pcb_overview.designs.iter().enumerate() {
                                         let design_number = design_index + 1;
 
+                                        let Some(mut design_sizing) = panel_sizing
+                                            .design_sizings
+                                            .get(design_index)
+                                            .cloned()
+                                        else {
+                                            continue;
+                                        };
+
                                         body.row(text_height, |mut row| {
                                             row.col(|ui| {
                                                 ui.label(design_number.to_string());
                                             });
 
                                             row.col(|ui| {
-                                                // TODO X offset
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.offset.x)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
                                             });
                                             row.col(|ui| {
-                                                // TODO Y offset
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.offset.y)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
                                             });
                                             row.col(|ui| {
-                                                // TODO X origin
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.origin.x)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
                                             });
                                             row.col(|ui| {
-                                                // TODO Y origin
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.origin.y)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.size.x)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.size.y)
+                                                        .range(0.0..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
                                             });
 
                                             row.col(|ui| {
                                                 ui.label(design_name.to_string());
                                             });
                                         });
+
+                                        if design_sizing != panel_sizing.design_sizings[design_index] {
+                                            sender
+                                                .send(PanelTabUiCommand::DesignSizingChanged {
+                                                    design_index,
+                                                    design_sizing,
+                                                })
+                                                .expect("sent");
+                                        }
                                     }
                                 });
                         });
@@ -632,7 +747,13 @@ impl PanelTabUi {
         });
     }
 
-    fn unit_positions_controls(pcb_overview: &PcbOverview, text_height: f32, ui: &mut Ui) {
+    fn unit_positions_controls(
+        panel_sizing: &PanelSizing,
+        pcb_overview: &PcbOverview,
+        sender: &Sender<PanelTabUiCommand>,
+        text_height: f32,
+        ui: &mut Ui,
+    ) {
         ui.label(tr!("pcb-panel-tab-panel-unit-positions-header"));
 
         ui.push_id("unit_positions", |ui| {
@@ -688,6 +809,14 @@ impl PanelTabUi {
                                             .unit_map
                                             .get(&pcb_unit_index)
                                         {
+                                            let Some(mut unit_configuration) = panel_sizing
+                                                .unit_configurations
+                                                .get(pcb_unit_index as usize)
+                                                .cloned()
+                                            else {
+                                                continue;
+                                            };
+
                                             let design_name = &pcb_overview.designs[*assigned_design_index];
 
                                             body.row(text_height, |mut row| {
@@ -696,10 +825,26 @@ impl PanelTabUi {
                                                 });
 
                                                 row.col(|ui| {
-                                                    // TODO X
+                                                    ui.add(
+                                                        egui::DragValue::new(&mut unit_configuration.offset.x)
+                                                            .range(0.0..=f64::MAX)
+                                                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                            .fixed_decimals(
+                                                                defaults::DRAG_SLIDER[&panel_sizing.units]
+                                                                    .fixed_decimals,
+                                                            ),
+                                                    );
                                                 });
                                                 row.col(|ui| {
-                                                    // TODO Y
+                                                    ui.add(
+                                                        egui::DragValue::new(&mut unit_configuration.offset.y)
+                                                            .range(0.0..=f64::MAX)
+                                                            .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                            .fixed_decimals(
+                                                                defaults::DRAG_SLIDER[&panel_sizing.units]
+                                                                    .fixed_decimals,
+                                                            ),
+                                                    );
                                                 });
                                                 row.col(|ui| {
                                                     // TODO Rotation
@@ -709,6 +854,17 @@ impl PanelTabUi {
                                                     ui.label(design_name.to_string());
                                                 });
                                             });
+
+                                            if !unit_configuration
+                                                .eq(&panel_sizing.unit_configurations[pcb_unit_index as usize])
+                                            {
+                                                sender
+                                                    .send(PanelTabUiCommand::UnitConfigurationChanged {
+                                                        pcb_unit_index,
+                                                        unit_configuration,
+                                                    })
+                                                    .expect("sent");
+                                            }
                                         } else {
                                             body.row(text_height, |mut row| {
                                                 row.col(|ui| {
@@ -737,13 +893,13 @@ impl PanelTabUi {
     }
 
     fn update_panel_preview(&mut self) {
-        let Some(panel_sizing) = &self.panel_sizing else {
+        let (Some(panel_sizing), Some(pcb_overview)) = (&self.panel_sizing, &self.pcb_overview) else {
             return;
         };
 
         let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
 
-        if let Ok(commands) = build_panel_preview_commands(panel_sizing) {
+        if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview) {
             dump_gerber_source(&commands);
             gerber_viewer_ui.use_single_layer(commands);
         } else {
@@ -766,6 +922,14 @@ pub enum PanelTabUiCommand {
     SizeChanged(GerberSize),
     EdgeRailsChanged(Dimensions<f64>),
     GerberViewerUiCommand(GerberViewerUiCommand),
+    DesignSizingChanged {
+        design_index: usize,
+        design_sizing: DesignSizing,
+    },
+    UnitConfigurationChanged {
+        pcb_unit_index: PcbUnitIndex,
+        unit_configuration: UnitConfiguration,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -864,6 +1028,26 @@ impl UiComponent for PanelTabUi {
                 }
                 None
             }
+            PanelTabUiCommand::DesignSizingChanged {
+                design_index,
+                design_sizing,
+            } => {
+                if let Some(panel_sizing) = &mut self.panel_sizing {
+                    panel_sizing.design_sizings[design_index] = design_sizing;
+                    update_panel_preview = true;
+                }
+                None
+            }
+            PanelTabUiCommand::UnitConfigurationChanged {
+                pcb_unit_index,
+                unit_configuration,
+            } => {
+                if let Some(panel_sizing) = &mut self.panel_sizing {
+                    panel_sizing.unit_configurations[pcb_unit_index as usize] = unit_configuration;
+                    update_panel_preview = true;
+                }
+                None
+            }
             PanelTabUiCommand::GerberViewerUiCommand(command) => {
                 let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
                 let action = gerber_viewer_ui.update(command, &mut GerberViewerUiContext::default());
@@ -929,7 +1113,10 @@ fn gerber_commands_to_source(commands: &Vec<Command>) -> String {
     gerber_source
 }
 
-fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Result<Vec<Command>, GerberError> {
+fn build_panel_preview_commands(
+    panel_sizing: &PanelSizing,
+    pcb_overview: &PcbOverview,
+) -> Result<Vec<Command>, GerberError> {
     // FUTURE generate multiple, real, gerber layers instead of a 'preview' layer
     //        i.e. 'board outline, top mask, top copper layers, bottom mask, bottom copper layer, v-score/cut (rails)'
 
@@ -978,6 +1165,34 @@ fn build_panel_preview_commands(panel_sizing: &PanelSizing) -> Result<Vec<Comman
         let end = start.add_x(panel_sizing.size.x);
         let rail_commands = gerber_line_commands(coordinate_format, start, end)?;
         gerber_builder.push_commands(rail_commands);
+    }
+
+    //
+    // units
+    //
+    for (pcb_unit_index, unit_configuration) in panel_sizing
+        .unit_configurations
+        .iter()
+        .enumerate()
+    {
+        let Some(design_index) = pcb_overview
+            .unit_map
+            .get(&(pcb_unit_index as PcbUnitIndex))
+        else {
+            continue;
+        };
+
+        let design_sizing = &panel_sizing.design_sizings[*design_index];
+
+        let unit_origin = origin
+            .add_x(unit_configuration.offset.x)
+            .add_y(unit_configuration.offset.y);
+        let unit_size = design_sizing.size;
+
+        // TODO support rotation
+        let unit_rotation = unit_configuration.rotation;
+
+        gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, unit_origin, unit_size)?);
     }
 
     //
@@ -1085,19 +1300,98 @@ mod gerber_util {
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
+
+    use gerber_viewer::gerber_types::Unit;
+    use gerber_viewer::position::{Position, Vector};
     use indoc::indoc;
+    use planner_app::PcbOverview;
 
     use crate::pcb::tabs::panel_tab::{
-        GerberSize, PanelSizing, build_panel_preview_commands, gerber_commands_to_source,
+        DesignSizing, Dimensions, FiducialParameters, GerberSize, PanelSizing, UnitConfiguration,
+        build_panel_preview_commands, gerber_commands_to_source,
     };
 
     #[test]
     pub fn test_build_panel_preview_layer() {
         // given
-        let mut panel_sizing = PanelSizing::default();
-        panel_sizing.size = GerberSize {
-            x: 10.0,
-            y: 10.0,
+        let panel_sizing = PanelSizing {
+            size: GerberSize {
+                x: 100.0,
+                y: 80.0,
+            },
+            edge_rails: Dimensions {
+                left: 5.0,
+                right: 10.0,
+                top: 6.0,
+                bottom: 12.0,
+            },
+            unit_configurations: vec![
+                UnitConfiguration {
+                    offset: Vector::new(5.0, 12.0),
+                    rotation: 0.0,
+                },
+                UnitConfiguration {
+                    offset: Vector::new(55.0, 12.0),
+                    rotation: 0.0,
+                },
+                UnitConfiguration {
+                    offset: Vector::new(5.0, 40.0),
+                    rotation: 0.0,
+                },
+                UnitConfiguration {
+                    offset: Vector::new(55.0, 40.0),
+                    rotation: 0.0,
+                },
+            ],
+            design_sizings: vec![
+                DesignSizing {
+                    origin: Default::default(),
+                    offset: Default::default(),
+                    size: GerberSize::new(30.0, 25.0),
+                },
+                DesignSizing {
+                    origin: Default::default(),
+                    offset: Default::default(),
+                    size: GerberSize::new(40.0, 20.0),
+                },
+            ],
+            fiducials: vec![
+                // bottom row
+                FiducialParameters {
+                    position: Position::new(10.0, 12.0 / 2.0),
+                    mask_diameter: 2.0,
+                    copper_diameter: 1.0,
+                },
+                FiducialParameters {
+                    position: Position::new(90.0, 12.0 / 2.0),
+                    mask_diameter: 2.0,
+                    copper_diameter: 1.0,
+                },
+                // top row
+                FiducialParameters {
+                    position: Position::new(20.0, 80.0 - 3.0),
+                    mask_diameter: 2.0,
+                    copper_diameter: 1.0,
+                },
+                FiducialParameters {
+                    position: Position::new(90.0, 80.0 - 3.0),
+                    mask_diameter: 2.0,
+                    copper_diameter: 1.0,
+                },
+            ],
+            units: Unit::Millimeters,
+        };
+
+        // and
+        let pcb_overview = PcbOverview {
+            path: Default::default(),
+            name: "".to_string(),
+            units: 4,
+            designs: vec!["DESIGN_A".to_string(), "DESIGN_B".to_string()],
+            unit_map: HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]),
+            pcb_gerbers: vec![],
+            design_gerbers: vec![],
         };
 
         // and
@@ -1117,7 +1411,7 @@ mod test {
         );
 
         // when
-        let commands = build_panel_preview_commands(&panel_sizing).unwrap();
+        let commands = build_panel_preview_commands(&panel_sizing, &pcb_overview).unwrap();
 
         // then
         let source = gerber_commands_to_source(&commands);
