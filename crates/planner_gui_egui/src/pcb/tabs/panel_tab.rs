@@ -1388,7 +1388,7 @@ mod test {
             path: Default::default(),
             name: "".to_string(),
             units: 4,
-            designs: vec!["DESIGN_A".to_string(), "DESIGN_B".to_string()],
+            designs: vec!["DESIGN_A".into(), "DESIGN_B".into()],
             unit_map: HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]),
             pcb_gerbers: vec![],
             design_gerbers: vec![],
