@@ -695,6 +695,9 @@ pub enum Event {
     RequestPcbOverviewView {
         path: PathBuf,
     },
+    RequestPcbPanelSizingView {
+        path: PathBuf,
+    },
 }
 
 impl Planner {
@@ -1415,6 +1418,21 @@ impl Planner {
                 };
 
                 Ok(project_view_renderer::view(ProjectView::PcbOverview(pcb_overview)))
+            }),
+            Event::RequestPcbPanelSizingView {
+                path: pcb_path,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    pcb, ..
+                } = &model
+                    .model_pcbs
+                    .get(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+                
+                let panel_sizing = PanelSizing::default();  // TODO
+                
+                let view = pcb_view_renderer::view(PcbView::PanelSizing(panel_sizing));
+                Ok(view)
             }),
             Event::RequestPcbOverviewView {
                 path: pcb_path,
