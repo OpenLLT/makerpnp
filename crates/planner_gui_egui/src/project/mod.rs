@@ -1195,6 +1195,10 @@ impl UiComponent for Project {
 
                     None
                 }
+                PcbView::PanelSizing(_panel_sizing) => {
+                    // nothing requests this view
+                    None
+                }
             },
 
             //

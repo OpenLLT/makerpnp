@@ -1,6 +1,5 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -814,7 +813,7 @@ pub(crate) fn project_report_save_as_json(report: &ProjectReport, report_file_pa
 
 #[cfg(feature = "markdown")]
 pub fn project_report_json_to_markdown(json_report_file_name: &PathBuf) -> anyhow::Result<()> {
-    let json_string = fs::read_to_string(json_report_file_name)?;
+    let json_string = std::fs::read_to_string(json_report_file_name)?;
 
     let json = serde_json::from_str(&json_string)?;
 
@@ -843,7 +842,7 @@ pub fn project_report_json_to_markdown(json_report_file_name: &PathBuf) -> anyho
     }
 
     let markdown_file_name = replace_extension(json_report_file_name.clone(), "md");
-    fs::write(&markdown_file_name, markdown)?;
+    std::fs::write(&markdown_file_name, markdown)?;
 
     info!("Generated Markdown report. path: {:?}", markdown_file_name);
 

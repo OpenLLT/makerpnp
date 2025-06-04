@@ -565,6 +565,15 @@ impl UiComponent for Pcb {
                             .panel_tab_ui
                             .update_pcb_overview(pcb_overview);
                     }
+                    PcbView::PanelSizing(panel_sizing) => {
+                        debug!("Received panel sizing.");
+
+                        let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+
+                        pcb_ui_state
+                            .panel_tab_ui
+                            .update_panel_sizing(panel_sizing);
+                    }
                 }
                 None
             }
