@@ -9,8 +9,8 @@ use eframe::emath::{Rect, Vec2};
 use eframe::epaint::Color32;
 use egui::Ui;
 use egui_mobius::Value;
+use gerber_viewer::Vector;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
-use gerber_viewer::position::Vector;
 use gerber_viewer::{
     BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
     generate_pastel_color,
