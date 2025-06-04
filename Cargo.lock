@@ -2334,9 +2334,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "gerber-types"
+name = "gerber_parser"
+version = "0.2.0"
+source = "git+https://github.com/makerpnp/gerber-parser.git?rev=c8a86362b7cf68964dedce3fb7339d7a5feb9106#c8a86362b7cf68964dedce3fb7339d7a5feb9106"
+dependencies = [
+ "anyhow",
+ "gerber_types",
+ "lazy-regex",
+ "log",
+ "regex",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "gerber_types"
 version = "0.4.0"
-source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=7a312f81f82e743ff44eca2d5153c6a1fa9befb0#7a312f81f82e743ff44eca2d5153c6a1fa9befb0"
+source = "git+https://github.com/MakerPnP/gerber-types.git?rev=7641a4c92482411b6a05a5dc36793151763b40e6#7641a4c92482411b6a05a5dc36793151763b40e6"
 dependencies = [
  "chrono",
  "num-rational",
@@ -2345,29 +2358,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gerber_parser"
-version = "0.2.0"
-source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=e4c0f05a246d23efd3ddf163d6a559cbb9cf4b99#e4c0f05a246d23efd3ddf163d6a559cbb9cf4b99"
-dependencies = [
- "gerber-types",
- "lazy-regex",
- "log",
- "regex",
- "thiserror 2.0.12",
-]
-
-[[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=68eb71f1653b811582674517bc83ac10ee16ee74#68eb71f1653b811582674517bc83ac10ee16ee74"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=452a58f656565657f45fbadd7cbe6046a8adb24e#452a58f656565657f45fbadd7cbe6046a8adb24e"
 dependencies = [
  "egui",
- "gerber-types",
  "gerber_parser",
+ "gerber_types",
  "log",
  "lyon",
+ "profiling",
  "rand 0.9.1",
- "rstest",
  "thiserror 2.0.12",
 ]
 
