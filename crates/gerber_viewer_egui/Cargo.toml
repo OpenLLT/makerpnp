@@ -23,3 +23,6 @@ gerber_viewer = { workspace = true }
 
 # Errors
 thiserror = { workspace = true }
+
+# Math
+nalgebra = { workspace = true }

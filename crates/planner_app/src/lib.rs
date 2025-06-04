@@ -10,8 +10,9 @@ use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use derivative::Derivative;
-use gerber_viewer::{Position, Size, Vector};
 use indexmap::IndexSet;
+use math::ratio::ratio_of_f64;
+use nalgebra::{Point2, Vector2};
 use num_rational::Ratio;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
@@ -48,7 +49,6 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
-use util::ratio::ratio_of_f64;
 
 use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
 use crate::effects::project_view_renderer::ProjectViewRendererOperation;
@@ -263,14 +263,14 @@ pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct DesignSizing {
-    pub origin: Vector,
-    pub offset: Vector,
-    pub size: Size,
+    pub origin: Vector2<f64>,
+    pub offset: Vector2<f64>,
+    pub size: Vector2<f64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct PcbUnitPositioning {
-    pub offset: Vector,
+    pub offset: Vector2<f64>,
     /// clockwise positive radians
     pub rotation: f64,
 }
@@ -301,8 +301,8 @@ pub struct PanelSizing {
     #[derivative(Default(value = "Unit::Millimeters"))]
     pub units: Unit,
 
-    #[derivative(Default(value = "Size::new(100.0, 100.0)"))]
-    pub size: Size,
+    #[derivative(Default(value = "Vector2::new(100.0_f64, 100.0_f64)"))]
+    pub size: Vector2<f64>,
 
     #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
     pub edge_rails: Dimensions<f64>,
@@ -336,7 +336,7 @@ impl PanelSizing {
 )]
 #[derivative(Default)]
 pub struct FiducialParameters {
-    pub position: Position,
+    pub position: Point2<f64>,
     #[derivative(Default(value = "2.0"))]
     pub mask_diameter: f64,
     #[derivative(Default(value = "1.0"))]
@@ -1428,9 +1428,9 @@ impl Planner {
                     .model_pcbs
                     .get(&pcb_path)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
-                
-                let panel_sizing = PanelSizing::default();  // TODO
-                
+
+                let panel_sizing = PanelSizing::default(); // TODO
+
                 let view = pcb_view_renderer::view(PcbView::PanelSizing(panel_sizing));
                 Ok(view)
             }),

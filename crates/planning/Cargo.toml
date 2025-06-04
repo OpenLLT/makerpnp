@@ -15,7 +15,6 @@ thiserror = { workspace = true }
 regex = { workspace = true }
 time = { workspace = true, features = ["serde", "serde-well-known"] }
 rust_decimal = { workspace = true }
-
 serde = { workspace = true,  features = ["derive"] }
 serde_json = { workspace = true,  features = ["preserve_order"] }
 serde_with = { workspace = true }

@@ -13,6 +13,7 @@ profile-with-puffin = [
 planner_app = { path = "../planner_app", features = ["markdown"] }
 
 util = { path = "../util" }
+math = { path = "../math" }
 
 # tasks/async
 tokio = { workspace = true, features = ["full"]}
@@ -75,6 +76,7 @@ indexmap = { workspace = true }
 image = { workspace = true }
 num-rational = { workspace = true }
 num-traits = { workspace = true }
+nalgebra = { workspace = true }
 
 # math
 rust_decimal = { workspace = true }

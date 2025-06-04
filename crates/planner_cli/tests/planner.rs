@@ -236,6 +236,14 @@ mod operation_sequence_1 {
             units: 4,
             design_names: vec!["design_a".into(), "design_b".into()],
             unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+            panel_sizing: project::TestPanelSizing {
+                units: Default::default(),
+                size: Default::default(),
+                edge_rails: Default::default(),
+                fiducials: vec![],
+                design_sizings: vec![],
+                pcb_unit_positionings: vec![],
+            },
         }
         .content();
 

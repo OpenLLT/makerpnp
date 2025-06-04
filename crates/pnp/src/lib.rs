@@ -6,3 +6,5 @@ pub mod object_path;
 
 pub mod pcb;
 pub mod reference;
+
+pub mod panel;

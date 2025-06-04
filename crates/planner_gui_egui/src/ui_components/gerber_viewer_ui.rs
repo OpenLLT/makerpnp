@@ -12,16 +12,19 @@ use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
 use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, Vector, ViewState, draw_crosshair,
+    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
     generate_pastel_color,
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
+use nalgebra::{Vector, Vector2};
 use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::ui_component::{ComponentState, UiComponent};
+
+const VECTOR_ZERO: Vector2<f64> = Vector2::new(0.0, 0.0);
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
@@ -186,8 +189,8 @@ impl GerberViewerUi {
     fn build_gerber_layer_from_file(
         index: usize,
         path: &PathBuf,
-        design_origin: Vector,
-        design_offset: Vector,
+        design_origin: Vector2<f64>,
+        design_offset: Vector2<f64>,
     ) -> Result<(LayerViewState, GerberLayer, GerberDoc), GerberViewerUiError> {
         let (gerber_doc, commands) = Self::parse_gerber(path)?;
         let (state, layer) = Self::build_gerber_layer_from_commands(index, commands, design_origin, design_offset);
@@ -198,8 +201,8 @@ impl GerberViewerUi {
     fn build_gerber_layer_from_commands(
         index: usize,
         commands: Vec<Command>,
-        design_origin: Vector,
-        design_offset: Vector,
+        design_origin: Vector2<f64>,
+        design_offset: Vector2<f64>,
     ) -> (LayerViewState, GerberLayer) {
         let color = generate_pastel_color(index as u64);
 
@@ -254,10 +257,10 @@ struct GerberViewState {
     bounding_box: BoundingBox,
     layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
     // used for mirroring and rotation, in gerber coordinates
-    design_origin: Vector,
+    design_origin: Vector2<f64>,
 
     // used for offsetting the design, in gerber coordinates
-    design_offset: Vector,
+    design_offset: Vector2<f64>,
 
     // global rotation, each layer can be offset from the global rotation
     rotation: f32,
@@ -273,10 +276,10 @@ impl Default for GerberViewState {
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
             layers: Default::default(),
-            //design_origin: Vector::new(14.75, 6.0),
-            //design_offset: Vector::new(-10.0, -10.0),
-            design_origin: Vector::ZERO,
-            design_offset: Vector::ZERO,
+            //design_origin: Vector<f64::new(14.75, 6.0),
+            //design_offset: Vector<f64::new(-10.0, -10.0),
+            design_origin: VECTOR_ZERO,
+            design_offset: VECTOR_ZERO,
             rotation: 0.0_f32.to_radians(),
             mirroring: Mirroring::default(),
         }
@@ -379,9 +382,9 @@ struct LayerViewState {
     rotation: f32,
     mirroring: Mirroring,
     // the center for rotation/mirroring in gerber units
-    design_origin: Vector,
+    design_origin: Vector2<f64>,
     // in gerber units
-    design_offset: Vector,
+    design_offset: Vector2<f64>,
 }
 
 impl LayerViewState {
@@ -390,8 +393,8 @@ impl LayerViewState {
             color,
             mirroring: Mirroring::default(),
             rotation: 0.0_f32.to_radians(),
-            design_origin: Vector::ZERO,
-            design_offset: Vector::ZERO,
+            design_origin: VECTOR_ZERO,
+            design_offset: VECTOR_ZERO,
         }
     }
 }
