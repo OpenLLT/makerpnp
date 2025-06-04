@@ -7,7 +7,7 @@ edition = "2021"
 planning = { path = "../planning" }
 pnp = { path = "../pnp"}
 stores = { path = "../stores"}
-util = { path = "../util"}
+math = { path = "../math"}
 
 thiserror = { workspace = true }
 anyhow = { workspace = true }
@@ -29,8 +29,7 @@ indexmap = { workspace = true }
 derivative = { workspace = true }
 
 num-rational = { workspace = true }
-
-gerber_viewer = { workspace = true, features = ["serde"] }
+nalgebra = { workspace = true }
 
 [features]
 markdown = ["planning/markdown"]

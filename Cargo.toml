@@ -22,7 +22,7 @@ members = [
     "crates/planner_gui_egui",
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
-    "crates/gerber_viewer_egui",
+    "crates/gerber_viewer_egui", "crates/math",
 ]
 
 [workspace.dependencies]
@@ -127,6 +127,7 @@ num-rational = "0.4.2"
 num-traits = "0.2.19"
 rust_decimal = { version = "1.37.1"}
 rust_decimal_macros = { version = "1.37.1"}
+nalgebra = { version = "0.33.2" }
 
 
 [patch.crates-io]

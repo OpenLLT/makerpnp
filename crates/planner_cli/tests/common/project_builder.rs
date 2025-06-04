@@ -3,12 +3,14 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
+use nalgebra::{Point2, Vector2};
 use planning::design::{DesignIndex, DesignName};
 use planning::file::FileReference;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
+use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PcbUnitPositioning, Unit};
 use pnp::pcb::{PcbSide, PcbUnitIndex};
 use pnp::placement::RefDes;
 use pnp::reference::Reference;
@@ -186,6 +188,40 @@ pub struct TestPcb {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
     pub unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
+
+    pub panel_sizing: TestPanelSizing,
+}
+
+#[serde_as]
+#[derive(Debug, serde::Serialize)]
+pub struct TestPanelSizing {
+    pub units: Unit,
+    pub size: Point2<f64>,
+    pub edge_rails: Dimensions<f64>,
+    pub fiducials: Vec<TestFiducialParameters>,
+    pub design_sizings: Vec<TestDesignSizing>,
+    pub pcb_unit_positionings: Vec<TestPcbUnitPositioning>,
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct TestFiducialParameters {
+    pub position: Vector2<f64>,
+    pub mask_diameter: f64,
+    pub copper_diameter: f64,
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct TestDesignSizing {
+    pub origin: Vector2<f64>,
+    pub offset: Vector2<f64>,
+    pub size: Vector2<f64>,
+}
+
+#[derive(serde::Serialize, Debug)]
+pub struct TestPcbUnitPositioning {
+    pub offset: Vector2<f64>,
+    /// clockwise positive radians
+    pub rotation: f64,
 }
 
 #[serde_as]

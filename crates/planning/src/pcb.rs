@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::path::PathBuf;
 
 use indexmap::IndexSet;
 use itertools::Itertools;
+use pnp::panel::PanelSizing;
 use pnp::pcb::{PcbSide, PcbUnitIndex, PcbUnitNumber};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -63,7 +65,9 @@ pub struct Pcb {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
     pub design_gerbers: BTreeMap<DesignIndex, Vec<GerberFile>>,
-    // TODO consider adding fiducials here?  Creates a dependency on the gerber types and requires the gerber units (mil, mm) too.
+
+    #[serde(default)]
+    pub panel_sizing: PanelSizing,
 }
 
 #[derive(Error, Debug)]
@@ -108,6 +112,7 @@ impl Pcb {
             unit_map,
             pcb_gerbers: vec![],
             design_gerbers: Default::default(),
+            panel_sizing: Default::default(),
         }
     }
 

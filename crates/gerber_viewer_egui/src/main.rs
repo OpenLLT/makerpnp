@@ -15,17 +15,22 @@ use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::FontFamily;
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
-use gerber_viewer::position::{Position, Vector};
 use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair, draw_outline,
-    generate_pastel_color,
+    BoundingBox, GerberLayer, GerberRenderer, Invert, Mirroring, ToPos2, ToVector, Transform2D, UiState, ViewState,
+    draw_crosshair, draw_outline, generate_pastel_color,
 };
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
+use nalgebra::{Point2, Vector2};
 use rfd::FileDialog;
 use thiserror::Error;
 
 mod logging;
+
+type Vector = Vector2<f64>;
+type Position = Point2<f64>;
+
+const VECTOR_ZERO: Vector = Vector::new(0.0, 0.0);
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 const DEFAULT_STEP: f64 = 0.05;
@@ -83,8 +88,8 @@ impl LayerViewState {
             color,
             mirroring: Mirroring::default(),
             rotation: 0.0_f32.to_radians(),
-            design_origin: Vector::ZERO,
-            design_offset: Vector::ZERO,
+            design_origin: VECTOR_ZERO,
+            design_offset: VECTOR_ZERO,
         }
     }
 }
@@ -122,8 +127,8 @@ impl Default for GerberViewState {
             layers: vec![],
             //design_origin: Vector::new(14.75, 6.0),
             //design_offset: Vector::new(-10.0, -10.0),
-            design_origin: Vector::ZERO,
-            design_offset: Vector::ZERO,
+            design_origin: VECTOR_ZERO,
+            design_offset: VECTOR_ZERO,
             rotation: 0.0_f32.to_radians(),
             mirroring: Mirroring::default(),
             ui_state: Default::default(),
@@ -133,13 +138,13 @@ impl Default for GerberViewState {
 
 impl GerberViewState {
     pub fn reset(&mut self) {
-        self.design_origin = Vector::ZERO;
-        self.design_offset = Vector::ZERO;
+        self.design_origin = VECTOR_ZERO;
+        self.design_offset = VECTOR_ZERO;
         self.needs_bbox_update = true;
         self.needs_view_centering = true;
         for (_, layer_view_state, _, _) in self.layers.iter_mut() {
-            layer_view_state.design_origin = Vector::ZERO;
-            layer_view_state.design_offset = Vector::ZERO;
+            layer_view_state.design_origin = VECTOR_ZERO;
+            layer_view_state.design_offset = VECTOR_ZERO;
             layer_view_state.enabled = true;
             layer_view_state.rotation = 0.0_f32.to_radians();
             layer_view_state.mirroring = Mirroring::default();
@@ -241,7 +246,7 @@ impl GerberViewState {
     /// Convert from gerber coordinates using view transformation
     pub fn gerber_to_screen_coords(&self, gerber_pos: Position) -> Pos2 {
         let gerber_pos = gerber_pos.invert_y();
-        ((gerber_pos * self.view.scale as f64) + self.view.translation).to_pos2()
+        (gerber_pos * self.view.scale as f64).to_pos2() + self.view.translation
     }
 
     /// X and Y are in GERBER units.
@@ -250,7 +255,7 @@ impl GerberViewState {
         trace!("view translation (before): {:?}", self.view.translation);
 
         let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation.to_pos2());
-        gerber_coords += position;
+        gerber_coords += position.to_vector();
         trace!("gerber_coords: {:?}", self.view.translation);
         let screen_coords = self.gerber_to_screen_coords(gerber_coords);
 
@@ -531,7 +536,7 @@ impl eframe::App for GerberViewer {
                             self.state
                                 .as_mut()
                                 .unwrap()
-                                .move_view((*x, *y).into());
+                                .move_view(Position::new(*x, *y));
                         }
                     });
 
@@ -574,7 +579,7 @@ impl eframe::App for GerberViewer {
                     let mut design_origin = self
                         .state
                         .as_ref()
-                        .map_or(Vector::ZERO, |state| state.design_origin);
+                        .map_or(VECTOR_ZERO, |state| state.design_origin);
                     ui.label("Rotation/Mirror Origin X:");
                     changed |= ui
                         .add(
@@ -604,7 +609,7 @@ impl eframe::App for GerberViewer {
                     let mut design_offset = self
                         .state
                         .as_ref()
-                        .map_or(Vector::ZERO, |state| state.design_offset);
+                        .map_or(VECTOR_ZERO, |state| state.design_offset);
                     ui.label("Design Offset X:");
                     changed |= ui
                         .add(
@@ -808,17 +813,12 @@ impl eframe::App for GerberViewer {
                                         let (x, y) = state
                                             .ui_state
                                             .cursor_gerber_coords
-                                            .map(
-                                                |Position {
-                                                     x,
-                                                     y,
-                                                 }| {
-                                                    fn format_coord(coord: f64) -> String {
-                                                        format!("{:.3}", coord)
-                                                    }
-                                                    (format_coord(x), format_coord(y))
-                                                },
-                                            )
+                                            .map(|position| {
+                                                fn format_coord(coord: f64) -> String {
+                                                    format!("{:.3}", coord)
+                                                }
+                                                (format_coord(position.x), format_coord(position.y))
+                                            })
                                             .unwrap_or(("N/A".to_string(), "N/A".to_string()));
 
                                         ui.label(format!("Cursor: X={} Y={} {}", x, y, unit_text));

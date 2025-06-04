@@ -1,0 +1,10 @@
+[package]
+name = "math"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+num-rational = { workspace = true }
+nalgebra = { workspace = true }
+[dev-dependencies]
+rstest = { workspace = true}

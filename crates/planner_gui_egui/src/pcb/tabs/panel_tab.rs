@@ -13,7 +13,8 @@ use egui_mobius::types::ValueGuard;
 use gerber_viewer::gerber_types::{
     Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode,
 };
-use gerber_viewer::{Position, Size};
+use math::ops::Ops2D;
+use nalgebra::{Point2, Vector2};
 use planner_app::{
     DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbOverview, PcbSide, PcbUnitIndex, PcbUnitPositioning,
     Unit,
@@ -829,7 +830,7 @@ pub enum PanelTabUiCommand {
         index: usize,
         parameters: FiducialParameters,
     },
-    SizeChanged(Size),
+    SizeChanged(Vector2<f64>),
     EdgeRailsChanged(Dimensions<f64>),
     GerberViewerUiCommand(GerberViewerUiCommand),
     DesignSizingChanged {
@@ -1057,7 +1058,7 @@ fn build_panel_preview_commands(
     }));
 
     gerber_builder.select_aperture(drawing_aperture_code);
-    let origin = Position::new(0.0, 0.0);
+    let origin = Point2::new(0.0, 0.0);
 
     gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
 
@@ -1136,7 +1137,7 @@ mod gerber_util {
     use gerber_viewer::gerber_types::{
         Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation,
     };
-    use gerber_viewer::{Position, Size};
+    use nalgebra::{Point2, Vector2};
 
     #[allow(dead_code)]
     pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Coordinates, GerberError> {
@@ -1164,8 +1165,8 @@ mod gerber_util {
 
     pub fn gerber_rectangle_commands(
         coordinate_format: CoordinateFormat,
-        origin: Position,
-        size: Size,
+        origin: Point2<f64>,
+        size: Vector2<f64>,
     ) -> Result<Vec<Command>, GerberError> {
         Ok(vec![
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
@@ -1194,8 +1195,8 @@ mod gerber_util {
 
     pub fn gerber_line_commands(
         coordinate_format: CoordinateFormat,
-        origin: Position,
-        end: Position,
+        origin: Point2<f64>,
+        end: Point2<f64>,
     ) -> Result<Vec<Command>, GerberError> {
         Ok(vec![
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
@@ -1212,7 +1213,7 @@ mod gerber_util {
 
     pub fn gerber_point_commands(
         coordinate_format: CoordinateFormat,
-        origin: Position,
+        origin: Point2<f64>,
     ) -> Result<Vec<Command>, GerberError> {
         Ok(vec![Command::FunctionCode(FunctionCode::DCode(DCode::Operation(
             Operation::Flash(x_y_to_gerber(origin.x, origin.y, coordinate_format)?),
@@ -1224,24 +1225,20 @@ mod gerber_util {
 mod test {
     use std::collections::HashMap;
 
-    use gerber_viewer::gerber_types::Unit;
-    use gerber_viewer::{Position, Vector};
     use indoc::indoc;
-    use planner_app::PcbOverview;
+    use nalgebra::{Point2, Vector2};
+    use planner_app::{PcbOverview, Unit};
 
     use crate::pcb::tabs::panel_tab::{
-        DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Size,
-        build_panel_preview_commands, gerber_commands_to_source,
+        DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, build_panel_preview_commands,
+        gerber_commands_to_source,
     };
 
     #[test]
     pub fn test_build_panel_preview_layer() {
         // given
         let panel_sizing = PanelSizing {
-            size: Size {
-                x: 100.0,
-                y: 80.0,
-            },
+            size: Vector2::new(100.0, 80.0),
             edge_rails: Dimensions {
                 left: 5.0,
                 right: 10.0,
@@ -1250,19 +1247,19 @@ mod test {
             },
             pcb_unit_positionings: vec![
                 PcbUnitPositioning {
-                    offset: Vector::new(5.0, 12.0),
+                    offset: Vector2::new(5.0, 12.0),
                     rotation: 0.0,
                 },
                 PcbUnitPositioning {
-                    offset: Vector::new(55.0, 12.0),
+                    offset: Vector2::new(55.0, 12.0),
                     rotation: 0.0,
                 },
                 PcbUnitPositioning {
-                    offset: Vector::new(5.0, 40.0),
+                    offset: Vector2::new(5.0, 40.0),
                     rotation: 0.0,
                 },
                 PcbUnitPositioning {
-                    offset: Vector::new(55.0, 40.0),
+                    offset: Vector2::new(55.0, 40.0),
                     rotation: 0.0,
                 },
             ],
@@ -1270,34 +1267,34 @@ mod test {
                 DesignSizing {
                     origin: Default::default(),
                     offset: Default::default(),
-                    size: Size::new(30.0, 25.0),
+                    size: Vector2::new(30.0, 25.0),
                 },
                 DesignSizing {
                     origin: Default::default(),
                     offset: Default::default(),
-                    size: Size::new(40.0, 20.0),
+                    size: Vector2::new(40.0, 20.0),
                 },
             ],
             fiducials: vec![
                 // bottom row
                 FiducialParameters {
-                    position: Position::new(10.0, 12.0 / 2.0),
+                    position: Point2::new(10.0, 12.0 / 2.0),
                     mask_diameter: 2.0,
                     copper_diameter: 1.0,
                 },
                 FiducialParameters {
-                    position: Position::new(90.0, 12.0 / 2.0),
+                    position: Point2::new(90.0, 12.0 / 2.0),
                     mask_diameter: 2.0,
                     copper_diameter: 1.0,
                 },
                 // top row
                 FiducialParameters {
-                    position: Position::new(20.0, 80.0 - 3.0),
+                    position: Point2::new(20.0, 80.0 - 3.0),
                     mask_diameter: 2.0,
                     copper_diameter: 1.0,
                 },
                 FiducialParameters {
-                    position: Position::new(90.0, 80.0 - 3.0),
+                    position: Point2::new(90.0, 80.0 - 3.0),
                     mask_diameter: 2.0,
                     copper_diameter: 1.0,
                 },

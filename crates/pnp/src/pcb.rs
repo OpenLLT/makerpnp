@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 /// 0-based
 pub type PcbUnitIndex = u16;
 /// 1-based
