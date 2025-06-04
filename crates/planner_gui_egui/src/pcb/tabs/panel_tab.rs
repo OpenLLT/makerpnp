@@ -78,7 +78,7 @@ pub struct DesignSizing {
 }
 
 #[derive(Default, Debug, Clone, PartialEq)]
-pub struct UnitConfiguration {
+pub struct PcbUnitPositioning {
     offset: Vector,
     /// clockwise positive radians
     rotation: f64,
@@ -98,7 +98,7 @@ pub struct PanelSizing {
 
     fiducials: Vec<FiducialParameters>,
     design_sizings: Vec<DesignSizing>,
-    unit_configurations: Vec<UnitConfiguration>,
+    pcb_unit_positionings: Vec<PcbUnitPositioning>,
 }
 
 impl PanelSizing {
@@ -107,8 +107,8 @@ impl PanelSizing {
             .resize_with(design_count, Default::default);
     }
 
-    pub fn ensure_unit_configurations(&mut self, unit_count: u16) {
-        self.unit_configurations
+    pub fn ensure_unit_positionings(&mut self, unit_count: u16) {
+        self.pcb_unit_positionings
             .resize_with(unit_count as usize, Default::default);
     }
 }
@@ -207,7 +207,7 @@ impl PanelTabUi {
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         if let Some(panel_sizing) = &mut self.panel_sizing {
             panel_sizing.ensure_design_sizings(pcb_overview.designs.len());
-            panel_sizing.ensure_unit_configurations(pcb_overview.units);
+            panel_sizing.ensure_unit_positionings(pcb_overview.units);
         }
 
         self.pcb_overview.replace(pcb_overview);
@@ -809,8 +809,8 @@ impl PanelTabUi {
                                             .unit_map
                                             .get(&pcb_unit_index)
                                         {
-                                            let Some(mut unit_configuration) = panel_sizing
-                                                .unit_configurations
+                                            let Some(mut pcb_unit_positioning) = panel_sizing
+                                                .pcb_unit_positionings
                                                 .get(pcb_unit_index as usize)
                                                 .cloned()
                                             else {
@@ -826,7 +826,7 @@ impl PanelTabUi {
 
                                                 row.col(|ui| {
                                                     ui.add(
-                                                        egui::DragValue::new(&mut unit_configuration.offset.x)
+                                                        egui::DragValue::new(&mut pcb_unit_positioning.offset.x)
                                                             .range(0.0..=f64::MAX)
                                                             .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                             .fixed_decimals(
@@ -837,7 +837,7 @@ impl PanelTabUi {
                                                 });
                                                 row.col(|ui| {
                                                     ui.add(
-                                                        egui::DragValue::new(&mut unit_configuration.offset.y)
+                                                        egui::DragValue::new(&mut pcb_unit_positioning.offset.y)
                                                             .range(0.0..=f64::MAX)
                                                             .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                             .fixed_decimals(
@@ -855,13 +855,13 @@ impl PanelTabUi {
                                                 });
                                             });
 
-                                            if !unit_configuration
-                                                .eq(&panel_sizing.unit_configurations[pcb_unit_index as usize])
+                                            if !pcb_unit_positioning
+                                                .eq(&panel_sizing.pcb_unit_positionings[pcb_unit_index as usize])
                                             {
                                                 sender
-                                                    .send(PanelTabUiCommand::UnitConfigurationChanged {
+                                                    .send(PanelTabUiCommand::UnitPositioningChanged {
                                                         pcb_unit_index,
-                                                        unit_configuration,
+                                                        pcb_unit_positioning,
                                                     })
                                                     .expect("sent");
                                             }
@@ -926,9 +926,9 @@ pub enum PanelTabUiCommand {
         design_index: usize,
         design_sizing: DesignSizing,
     },
-    UnitConfigurationChanged {
+    UnitPositioningChanged {
         pcb_unit_index: PcbUnitIndex,
-        unit_configuration: UnitConfiguration,
+        pcb_unit_positioning: PcbUnitPositioning,
     },
 }
 
@@ -1038,12 +1038,12 @@ impl UiComponent for PanelTabUi {
                 }
                 None
             }
-            PanelTabUiCommand::UnitConfigurationChanged {
+            PanelTabUiCommand::UnitPositioningChanged {
                 pcb_unit_index,
-                unit_configuration,
+                pcb_unit_positioning,
             } => {
                 if let Some(panel_sizing) = &mut self.panel_sizing {
-                    panel_sizing.unit_configurations[pcb_unit_index as usize] = unit_configuration;
+                    panel_sizing.pcb_unit_positionings[pcb_unit_index as usize] = pcb_unit_positioning;
                     update_panel_preview = true;
                 }
                 None
@@ -1170,8 +1170,8 @@ fn build_panel_preview_commands(
     //
     // units
     //
-    for (pcb_unit_index, unit_configuration) in panel_sizing
-        .unit_configurations
+    for (pcb_unit_index, pcb_unit_positioning) in panel_sizing
+        .pcb_unit_positionings
         .iter()
         .enumerate()
     {
@@ -1185,12 +1185,12 @@ fn build_panel_preview_commands(
         let design_sizing = &panel_sizing.design_sizings[*design_index];
 
         let unit_origin = origin
-            .add_x(unit_configuration.offset.x)
-            .add_y(unit_configuration.offset.y);
+            .add_x(pcb_unit_positioning.offset.x)
+            .add_y(pcb_unit_positioning.offset.y);
         let unit_size = design_sizing.size;
 
         // TODO support rotation
-        let unit_rotation = unit_configuration.rotation;
+        let unit_rotation = pcb_unit_positioning.rotation;
 
         gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, unit_origin, unit_size)?);
     }
@@ -1308,7 +1308,7 @@ mod test {
     use planner_app::PcbOverview;
 
     use crate::pcb::tabs::panel_tab::{
-        DesignSizing, Dimensions, FiducialParameters, GerberSize, PanelSizing, UnitConfiguration,
+        DesignSizing, Dimensions, FiducialParameters, GerberSize, PanelSizing, PcbUnitPositioning,
         build_panel_preview_commands, gerber_commands_to_source,
     };
 
@@ -1326,20 +1326,20 @@ mod test {
                 top: 6.0,
                 bottom: 12.0,
             },
-            unit_configurations: vec![
-                UnitConfiguration {
+            pcb_unit_positionings: vec![
+                PcbUnitPositioning {
                     offset: Vector::new(5.0, 12.0),
                     rotation: 0.0,
                 },
-                UnitConfiguration {
+                PcbUnitPositioning {
                     offset: Vector::new(55.0, 12.0),
                     rotation: 0.0,
                 },
-                UnitConfiguration {
+                PcbUnitPositioning {
                     offset: Vector::new(5.0, 40.0),
                     rotation: 0.0,
                 },
-                UnitConfiguration {
+                PcbUnitPositioning {
                     offset: Vector::new(55.0, 40.0),
                     rotation: 0.0,
                 },
