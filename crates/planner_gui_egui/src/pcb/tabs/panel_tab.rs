@@ -111,10 +111,6 @@ impl PanelTabUi {
             component,
         };
 
-        // TODO remove this
-        let panel_sizing = Default::default();
-        instance.update_panel_sizing(panel_sizing);
-
         instance
     }
 

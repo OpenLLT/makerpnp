@@ -592,11 +592,10 @@ impl UiComponent for Pcb {
                         path,
                     }),
                     PcbViewRequest::Panel {
-                        ..
-                    } => {
-                        // TODO add a core event
-                        None
-                    }
+                        path
+                    } => Some(Event::RequestPcbPanelSizingView {
+                        path,
+                    })
                 };
 
                 // TODO remove the 'if let'
