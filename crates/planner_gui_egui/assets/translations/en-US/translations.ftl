@@ -299,6 +299,8 @@ table-design-layout-column-x-offset = X offset
 table-design-layout-column-y-offset = Y offset
 table-design-layout-column-x-origin = X origin
 table-design-layout-column-y-origin = Y origin
+table-design-layout-column-x-size = X size
+table-design-layout-column-y-size = Y size
 table-design-layout-column-design-name = Design name
 
 table-unit-positions-column-index = #
