@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Debug;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -8,7 +9,10 @@ use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
+use derivative::Derivative;
+use gerber_viewer::{Position, Size, Vector};
 use indexmap::IndexSet;
+use num_rational::Ratio;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
@@ -44,6 +48,7 @@ pub use stores::load_out::LoadOutSource;
 use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
+use util::ratio::ratio_of_f64;
 
 use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
 use crate::effects::project_view_renderer::ProjectViewRendererOperation;
@@ -246,7 +251,102 @@ pub struct PcbOverview {
 
     /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
     pub design_gerbers: Vec<Vec<PcbGerberItem>>,
-    // FUTURE add dimensions (per design)
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq, PartialOrd)]
+pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
+    pub left: T,
+    pub right: T,
+    pub top: T,
+    pub bottom: T,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct DesignSizing {
+    pub origin: Vector,
+    pub offset: Vector,
+    pub size: Size,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
+pub struct PcbUnitPositioning {
+    pub offset: Vector,
+    /// clockwise positive radians
+    pub rotation: f64,
+}
+
+/// Note: 'mils' unsupported here, the /storage/ is constrained by the units usable by the gerber spec, which are Inches and Millimeters.
+#[derive(
+    Derivative,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash
+)]
+#[derivative(Default)]
+pub enum Unit {
+    Inches,
+    #[derivative(Default)]
+    Millimeters,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Derivative, Debug, Clone, PartialEq)]
+#[derivative(Default)]
+#[serde_as]
+pub struct PanelSizing {
+    #[derivative(Default(value = "Unit::Millimeters"))]
+    pub units: Unit,
+
+    #[derivative(Default(value = "Size::new(100.0, 100.0)"))]
+    pub size: Size,
+
+    #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
+    pub edge_rails: Dimensions<f64>,
+
+    pub fiducials: Vec<FiducialParameters>,
+    pub design_sizings: Vec<DesignSizing>,
+    pub pcb_unit_positionings: Vec<PcbUnitPositioning>,
+}
+
+impl PanelSizing {
+    pub fn ensure_design_sizings(&mut self, design_count: usize) {
+        self.design_sizings
+            .resize_with(design_count, Default::default);
+    }
+
+    pub fn ensure_unit_positionings(&mut self, unit_count: u16) {
+        self.pcb_unit_positionings
+            .resize_with(unit_count as usize, Default::default);
+    }
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Derivative,
+    Copy,
+    Clone,
+    PartialEq,
+    PartialOrd
+)]
+#[derivative(Default)]
+pub struct FiducialParameters {
+    pub position: Position,
+    #[derivative(Default(value = "2.0"))]
+    pub mask_diameter: f64,
+    #[derivative(Default(value = "1.0"))]
+    pub copper_diameter: f64,
+}
+
+impl FiducialParameters {
+    pub fn copper_to_mask_ratio(&self) -> Option<Ratio<i64>> {
+        ratio_of_f64(self.copper_diameter, self.mask_diameter)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -421,6 +521,7 @@ pub enum ProjectViewRequest {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub enum PcbView {
     PcbOverview(PcbOverview),
+    PanelSizing(PanelSizing),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

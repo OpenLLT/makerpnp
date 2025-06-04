@@ -11,9 +11,8 @@ use egui::Ui;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
-use gerber_viewer::position::Vector;
 use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
+    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, Vector, ViewState, draw_crosshair,
     generate_pastel_color,
 };
 use indexmap::IndexMap;

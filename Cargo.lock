@@ -2360,7 +2360,6 @@ dependencies = [
 [[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=452a58f656565657f45fbadd7cbe6046a8adb24e#452a58f656565657f45fbadd7cbe6046a8adb24e"
 dependencies = [
  "egui",
  "gerber_parser",
@@ -2369,6 +2368,7 @@ dependencies = [
  "lyon",
  "profiling",
  "rand 0.9.1",
+ "serde",
  "thiserror 2.0.12",
 ]
 
@@ -4103,7 +4103,10 @@ dependencies = [
  "anyhow",
  "chrono",
  "crux_core",
+ "derivative",
+ "gerber_viewer",
  "indexmap 2.9.0",
+ "num-rational",
  "petgraph",
  "planning",
  "pnp",
@@ -4114,6 +4117,7 @@ dependencies = [
  "stores",
  "thiserror 2.0.12",
  "tracing",
+ "util",
 ]
 
 [[package]]
@@ -6003,6 +6007,8 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 name = "util"
 version = "0.1.0"
 dependencies = [
+ "num-rational",
+ "num-traits",
  "predicates",
  "rstest",
  "serde",

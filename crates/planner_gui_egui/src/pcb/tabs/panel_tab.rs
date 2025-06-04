@@ -1,8 +1,5 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::BufWriter;
-use std::mem;
-use std::ops::Add;
 use std::sync::mpsc::Sender;
 
 use derivative::Derivative;
@@ -14,11 +11,13 @@ use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::ValueGuard;
 use gerber_viewer::gerber_types::{
-    Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode, Unit,
+    Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode,
 };
-use gerber_viewer::position::{Position, Vector};
-use num_rational::Ratio;
-use planner_app::{PcbOverview, PcbSide, PcbUnitIndex};
+use gerber_viewer::{Position, Size};
+use planner_app::{
+    DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbOverview, PcbSide, PcbUnitIndex, PcbUnitPositioning,
+    Unit,
+};
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
@@ -32,7 +31,6 @@ use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
     GerberViewerUiInstanceArgs,
 };
-use crate::ui_util::ratio_of_f64;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct DragSliderParameters {
@@ -44,7 +42,7 @@ pub mod defaults {
     use std::sync::LazyLock;
 
     use egui::ahash::HashMap;
-    use gerber_viewer::gerber_types::Unit;
+    use planner_app::Unit;
 
     use super::DragSliderParameters;
 
@@ -62,96 +60,12 @@ pub mod defaults {
     });
 }
 
-#[derive(Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
-    left: T,
-    right: T,
-    top: T,
-    bottom: T,
-}
-
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct DesignSizing {
-    origin: Vector,
-    offset: Vector,
-    size: GerberSize,
-}
-
-#[derive(Default, Debug, Clone, PartialEq)]
-pub struct PcbUnitPositioning {
-    offset: Vector,
-    /// clockwise positive radians
-    rotation: f64,
-}
-
-#[derive(Derivative, Debug, Clone, PartialEq)]
-#[derivative(Default)]
-pub struct PanelSizing {
-    #[derivative(Default(value = "Unit::Millimeters"))]
-    units: Unit,
-
-    #[derivative(Default(value = "GerberSize::new(100.0, 100.0)"))]
-    size: GerberSize,
-
-    #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
-    edge_rails: Dimensions<f64>,
-
-    fiducials: Vec<FiducialParameters>,
-    design_sizings: Vec<DesignSizing>,
-    pcb_unit_positionings: Vec<PcbUnitPositioning>,
-}
-
-impl PanelSizing {
-    pub fn ensure_design_sizings(&mut self, design_count: usize) {
-        self.design_sizings
-            .resize_with(design_count, Default::default);
-    }
-
-    pub fn ensure_unit_positionings(&mut self, unit_count: u16) {
-        self.pcb_unit_positionings
-            .resize_with(unit_count as usize, Default::default);
-    }
-}
-
-// TODO move this to the gerber_viewer crate
-#[derive(Default, Debug, Copy, Clone, PartialEq, PartialOrd)]
-pub struct GerberSize {
-    // not using terms like length/width/height because they are ambiguous
-    x: f64,
-    y: f64,
-}
-
-impl GerberSize {
-    pub fn new(x: f64, y: f64) -> Self {
-        Self {
-            x,
-            y,
-        }
-    }
-}
-
 #[derive(Derivative, Debug)]
 #[derivative(Default)]
 struct PanelTabUiState {
     #[derivative(Default(value = "PcbSide::Top"))]
     pcb_side: PcbSide,
     new_fiducial: FiducialParameters,
-}
-
-#[derive(Debug, Derivative, Copy, Clone, PartialEq, PartialOrd)]
-#[derivative(Default)]
-pub struct FiducialParameters {
-    position: Position,
-    #[derivative(Default(value = "2.0"))]
-    mask_diameter: f64,
-    #[derivative(Default(value = "1.0"))]
-    copper_diameter: f64,
-}
-
-impl FiducialParameters {
-    pub fn copper_to_mask_ratio(&self) -> Option<Ratio<i64>> {
-        ratio_of_f64(self.copper_diameter, self.mask_diameter)
-    }
 }
 
 #[derive(Derivative)]
@@ -199,7 +113,7 @@ impl PanelTabUi {
 
         // TODO remove this
         let panel_sizing = Default::default();
-        instance.update_panel(panel_sizing);
+        instance.update_panel_sizing(panel_sizing);
 
         instance
     }
@@ -213,7 +127,7 @@ impl PanelTabUi {
         self.pcb_overview.replace(pcb_overview);
     }
 
-    pub fn update_panel(&mut self, panel_sizing: PanelSizing) {
+    pub fn update_panel_sizing(&mut self, panel_sizing: PanelSizing) {
         self.panel_sizing.replace(panel_sizing);
         self.update_panel_preview();
     }
@@ -919,7 +833,7 @@ pub enum PanelTabUiCommand {
         index: usize,
         parameters: FiducialParameters,
     },
-    SizeChanged(GerberSize),
+    SizeChanged(Size),
     EdgeRailsChanged(Dimensions<f64>),
     GerberViewerUiCommand(GerberViewerUiCommand),
     DesignSizingChanged {
@@ -953,6 +867,7 @@ impl UiComponent for PanelTabUi {
 
         egui::SidePanel::left(ui.id().with("left_panel"))
             .resizable(true)
+            .default_width(300.0)
             .show_inside(ui, |ui| {
                 // specifically NON-mutable state here
                 let state = self.panel_tab_ui_state.lock().unwrap();
@@ -1113,6 +1028,19 @@ fn gerber_commands_to_source(commands: &Vec<Command>) -> String {
     gerber_source
 }
 
+trait IntoGerberUnit {
+    fn into_gerber_unit(&self) -> gerber_viewer::gerber_types::Unit;
+}
+
+impl IntoGerberUnit for Unit {
+    fn into_gerber_unit(&self) -> gerber_viewer::gerber_types::Unit {
+        match self {
+            Unit::Inches => gerber_viewer::gerber_types::Unit::Inches,
+            Unit::Millimeters => gerber_viewer::gerber_types::Unit::Millimeters,
+        }
+    }
+}
+
 fn build_panel_preview_commands(
     panel_sizing: &PanelSizing,
     pcb_overview: &PcbOverview,
@@ -1123,7 +1051,7 @@ fn build_panel_preview_commands(
     let coordinate_format = CoordinateFormat::new(4, 6);
 
     let mut gerber_builder = GerberBuilder::new()
-        .with_units(panel_sizing.units)
+        .with_units(panel_sizing.units.into_gerber_unit())
         .with_coordinate_format(coordinate_format);
 
     gerber_builder.set_interpolation_mode(InterpolationMode::Linear);
@@ -1212,9 +1140,7 @@ mod gerber_util {
     use gerber_viewer::gerber_types::{
         Command, CoordinateFormat, CoordinateNumber, Coordinates, DCode, FunctionCode, GerberError, Operation,
     };
-    use gerber_viewer::position::Position;
-
-    use crate::pcb::tabs::panel_tab::GerberSize;
+    use gerber_viewer::{Position, Size};
 
     #[allow(dead_code)]
     pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Coordinates, GerberError> {
@@ -1243,7 +1169,7 @@ mod gerber_util {
     pub fn gerber_rectangle_commands(
         coordinate_format: CoordinateFormat,
         origin: Position,
-        size: GerberSize,
+        size: Size,
     ) -> Result<Vec<Command>, GerberError> {
         Ok(vec![
             Command::FunctionCode(FunctionCode::DCode(DCode::Operation(Operation::Move(x_y_to_gerber(
@@ -1303,12 +1229,12 @@ mod test {
     use std::collections::HashMap;
 
     use gerber_viewer::gerber_types::Unit;
-    use gerber_viewer::position::{Position, Vector};
+    use gerber_viewer::{Position, Vector};
     use indoc::indoc;
     use planner_app::PcbOverview;
 
     use crate::pcb::tabs::panel_tab::{
-        DesignSizing, Dimensions, FiducialParameters, GerberSize, PanelSizing, PcbUnitPositioning,
+        DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Size,
         build_panel_preview_commands, gerber_commands_to_source,
     };
 
@@ -1316,7 +1242,7 @@ mod test {
     pub fn test_build_panel_preview_layer() {
         // given
         let panel_sizing = PanelSizing {
-            size: GerberSize {
+            size: Size {
                 x: 100.0,
                 y: 80.0,
             },
@@ -1348,12 +1274,12 @@ mod test {
                 DesignSizing {
                     origin: Default::default(),
                     offset: Default::default(),
-                    size: GerberSize::new(30.0, 25.0),
+                    size: Size::new(30.0, 25.0),
                 },
                 DesignSizing {
                     origin: Default::default(),
                     offset: Default::default(),
-                    size: GerberSize::new(40.0, 20.0),
+                    size: Size::new(40.0, 20.0),
                 },
             ],
             fiducials: vec![
@@ -1395,7 +1321,8 @@ mod test {
         };
 
         // and
-        let expected_source = indoc!(r#"
+        let expected_source = indoc!(
+            r#"
             %MOMM*%
             %FSLAX46Y46*%
             G01*
