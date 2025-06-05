@@ -900,7 +900,7 @@ impl Planner {
                 let project_directory = path.parent().unwrap();
                 let pcb_path = pcb_file.build_path(&project_directory.to_path_buf());
 
-                let pcb = load_pcb(path).map_err(AppError::IoError)?;
+                let pcb = load_pcb(&pcb_path).map_err(AppError::IoError)?;
 
                 project::add_pcb(project, &pcb_file).map_err(AppError::PcbOperationError)?;
 
