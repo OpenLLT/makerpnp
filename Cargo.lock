@@ -1242,6 +1242,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "conv"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78ff10625fd0ac447827aa30ea8b861fead473bb60aeb73af6c1c58caf0d1299"
+dependencies = [
+ "custom_derive",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1427,6 +1436,12 @@ name = "cursor-icon"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
+
+[[package]]
+name = "custom_derive"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef8ae57c4978a2acd8b869ce6b9ca1dfe817bff704c220209fdef2c0b75a01b9"
 
 [[package]]
 name = "darling"
@@ -2334,12 +2349,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "gerber-types"
+version = "0.4.0"
+source = "git+https://github.com/makerpnp/gerber-types-rs.git?rev=41b8ab178fb6ee646dfba3f000db1b1b8a9ae167#41b8ab178fb6ee646dfba3f000db1b1b8a9ae167"
+dependencies = [
+ "chrono",
+ "conv",
+ "num-rational",
+ "thiserror 2.0.12",
+ "uuid",
+]
+
+[[package]]
 name = "gerber_parser"
 version = "0.2.0"
-source = "git+https://github.com/makerpnp/gerber-parser.git?rev=c8a86362b7cf68964dedce3fb7339d7a5feb9106#c8a86362b7cf68964dedce3fb7339d7a5feb9106"
+source = "git+https://github.com/makerpnp/gerber-parser-makerpnp.git?rev=43c7d853504a0a19aa32ec8208ba886929eb4694#43c7d853504a0a19aa32ec8208ba886929eb4694"
 dependencies = [
- "anyhow",
- "gerber_types",
+ "gerber-types",
  "lazy-regex",
  "log",
  "regex",
@@ -2347,28 +2373,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gerber_types"
-version = "0.4.0"
-source = "git+https://github.com/MakerPnP/gerber-types.git?rev=7641a4c92482411b6a05a5dc36793151763b40e6#7641a4c92482411b6a05a5dc36793151763b40e6"
-dependencies = [
- "chrono",
- "num-rational",
- "thiserror 2.0.12",
- "uuid",
-]
-
-[[package]]
 name = "gerber_viewer"
 version = "0.1.0"
-source = "git+https://github.com/makerpnp/gerber-viewer.git?rev=acdf73a1d3def20b43462a15a5521e4818bae27e#acdf73a1d3def20b43462a15a5521e4818bae27e"
+source = "git+https://github.com/makerpnp/gerber_viewer.git?rev=2011e358005ab796e5705298a582da175205ad3c#2011e358005ab796e5705298a582da175205ad3c"
 dependencies = [
  "egui",
+ "gerber-types",
  "gerber_parser",
- "gerber_types",
  "log",
  "lyon",
- "profiling",
  "rand 0.9.1",
+ "rstest",
  "thiserror 2.0.12",
 ]
 

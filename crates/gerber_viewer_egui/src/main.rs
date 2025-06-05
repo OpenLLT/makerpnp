@@ -15,11 +15,11 @@ use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::FontFamily;
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
+use gerber_viewer::position::{Position, Vector};
 use gerber_viewer::{
     BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair, draw_outline,
     generate_pastel_color,
 };
-use gerber_viewer::{Position, Vector};
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use rfd::FileDialog;
