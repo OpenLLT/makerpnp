@@ -498,6 +498,11 @@ pub enum PcbOperationError {
 
     #[error("Invalid design set. Entries must be unique.")]
     InvalidDesignSet,
+
+    #[error("Design sizing count mismatch. expected: {expected}, actual: {actual}")]
+    DesignSizingCountMismatch { expected: usize, actual: usize },
+    #[error("Unit sizing count mismatch. expected: {expected}, actual: {actual}")]
+    UnitSizingCountMismatch { expected: u16, actual: u16 },
 }
 
 pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {

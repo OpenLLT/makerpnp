@@ -37,6 +37,7 @@ pub use planning::variant::VariantName;
 use planning::{file, project};
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
+pub use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Unit};
 pub use pnp::part::Part;
 pub use pnp::pcb::PcbSide;
 pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
@@ -184,7 +185,7 @@ impl Model {
 
     /// Load a PCB, no project required.
     fn load_pcb(&mut self, path: &PathBuf) -> Result<(), AppError> {
-        let pcb = file::load::<Pcb>(path).map_err(AppError::IoError)?;
+        let pcb = load_pcb(path).map_err(AppError::IoError)?;
 
         self.model_pcbs
             .insert(path.clone(), ModelPcb {
@@ -251,102 +252,6 @@ pub struct PcbOverview {
 
     /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
     pub design_gerbers: Vec<Vec<PcbGerberItem>>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq, PartialOrd)]
-pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
-    pub left: T,
-    pub right: T,
-    pub top: T,
-    pub bottom: T,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
-pub struct DesignSizing {
-    pub origin: Vector2<f64>,
-    pub offset: Vector2<f64>,
-    pub size: Vector2<f64>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
-pub struct PcbUnitPositioning {
-    pub offset: Vector2<f64>,
-    /// clockwise positive radians
-    pub rotation: f64,
-}
-
-/// Note: 'mils' unsupported here, the /storage/ is constrained by the units usable by the gerber spec, which are Inches and Millimeters.
-#[derive(
-    Derivative,
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash
-)]
-#[derivative(Default)]
-pub enum Unit {
-    Inches,
-    #[derivative(Default)]
-    Millimeters,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Derivative, Debug, Clone, PartialEq)]
-#[derivative(Default)]
-#[serde_as]
-pub struct PanelSizing {
-    #[derivative(Default(value = "Unit::Millimeters"))]
-    pub units: Unit,
-
-    #[derivative(Default(value = "Vector2::new(100.0_f64, 100.0_f64)"))]
-    pub size: Vector2<f64>,
-
-    #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
-    pub edge_rails: Dimensions<f64>,
-
-    pub fiducials: Vec<FiducialParameters>,
-    pub design_sizings: Vec<DesignSizing>,
-    pub pcb_unit_positionings: Vec<PcbUnitPositioning>,
-}
-
-impl PanelSizing {
-    pub fn ensure_design_sizings(&mut self, design_count: usize) {
-        self.design_sizings
-            .resize_with(design_count, Default::default);
-    }
-
-    pub fn ensure_unit_positionings(&mut self, unit_count: u16) {
-        self.pcb_unit_positionings
-            .resize_with(unit_count as usize, Default::default);
-    }
-}
-
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Debug,
-    Derivative,
-    Copy,
-    Clone,
-    PartialEq,
-    PartialOrd
-)]
-#[derivative(Default)]
-pub struct FiducialParameters {
-    pub position: Point2<f64>,
-    #[derivative(Default(value = "2.0"))]
-    pub mask_diameter: f64,
-    #[derivative(Default(value = "1.0"))]
-    pub copper_diameter: f64,
-}
-
-impl FiducialParameters {
-    pub fn copper_to_mask_ratio(&self) -> Option<Ratio<i64>> {
-        ratio_of_f64(self.copper_diameter, self.mask_diameter)
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -677,6 +582,10 @@ pub enum Event {
         designs: Vec<DesignName>,
         unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
     },
+    ApplyPanelSizing {
+        path: PathBuf,
+        panel_sizing: PanelSizing,
+    },
     AddGerberFiles {
         path: PathBuf,
         design: Option<DesignName>,
@@ -811,7 +720,7 @@ impl Planner {
                 units,
                 path,
             } => Box::new(move |model: &mut Model| {
-                let pcb =
+                let mut pcb =
                     planning::pcb::create_pcb(name, units, BTreeMap::default()).map_err(AppError::PcbOperationError)?;
 
                 model
@@ -881,10 +790,61 @@ impl Planner {
                 pcb.unit_map = unit_map;
                 pcb.design_names = design_name_set;
 
+                pcb.panel_sizing
+                    .ensure_design_sizings(designs_length);
+                pcb.panel_sizing
+                    .ensure_unit_positionings(units);
+
                 *modified = true;
 
                 // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
+                Ok(render::render())
+            }),
+            Event::ApplyPanelSizing {
+                path: pcb_path,
+                panel_sizing,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
+                info!(
+                    "Applying panel sizing. pcb_path: {:?}, panel_sizing: {:?}",
+                    pcb_path, panel_sizing
+                );
+
+                let design_count = panel_sizing.design_sizings.len();
+                let expected_design_count = pcb.design_names.len();
+                if design_count != expected_design_count {
+                    return Err(AppError::PcbOperationError(
+                        PcbOperationError::DesignSizingCountMismatch {
+                            expected: expected_design_count,
+                            actual: design_count,
+                        },
+                    ));
+                }
+
+                let pcb_unit_count = panel_sizing.pcb_unit_positionings.len() as u16;
+                let expected_pcb_unit_count = pcb.units;
+                if pcb_unit_count != expected_pcb_unit_count {
+                    return Err(AppError::PcbOperationError(
+                        PcbOperationError::UnitSizingCountMismatch {
+                            expected: expected_pcb_unit_count,
+                            actual: pcb_unit_count,
+                        },
+                    ));
+                }
+
+                pcb.panel_sizing = panel_sizing;
+
+                *modified = true;
+
+                // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
                 Ok(render::render())
             }),
             Event::LoadPcb {
@@ -940,7 +900,7 @@ impl Planner {
                 let project_directory = path.parent().unwrap();
                 let pcb_path = pcb_file.build_path(&project_directory.to_path_buf());
 
-                let pcb = file::load::<Pcb>(&pcb_path).map_err(AppError::IoError)?;
+                let pcb = load_pcb(path).map_err(AppError::IoError)?;
 
                 project::add_pcb(project, &pcb_file).map_err(AppError::PcbOperationError)?;
 
@@ -1429,7 +1389,7 @@ impl Planner {
                     .get(&pcb_path)
                     .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
 
-                let panel_sizing = PanelSizing::default(); // TODO
+                let panel_sizing = pcb.panel_sizing.clone();
 
                 let view = pcb_view_renderer::view(PcbView::PanelSizing(panel_sizing));
                 Ok(view)
@@ -2157,5 +2117,18 @@ fn try_build_phase_overview(
         pcb_side: phase.pcb_side.clone(),
         phase_placement_orderings: phase.placement_orderings.clone(),
         state: state.clone(),
+    })
+}
+
+fn load_pcb(path: &PathBuf) -> Result<Pcb, std::io::Error> {
+    file::load::<Pcb>(path).map(|mut pcb| {
+        // TODO can we somehow integrate this block into the deserialization so we don't have to do it explicitly?
+
+        pcb.panel_sizing
+            .ensure_design_sizings(pcb.design_names.len());
+        pcb.panel_sizing
+            .ensure_unit_positionings(pcb.units);
+
+        pcb
     })
 }

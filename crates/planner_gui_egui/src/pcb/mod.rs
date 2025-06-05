@@ -771,6 +771,15 @@ impl UiComponent for Pcb {
                     .update(command, context);
                 match panel_tab_ui_action {
                     Some(PanelTabUiAction::None) => None,
+                    Some(PanelTabUiAction::Apply(panel_sizing)) => self
+                        .planner_core_service
+                        .update(Event::ApplyPanelSizing {
+                            path: self.path.clone(),
+                            panel_sizing,
+                        })
+                        .when_ok(key, |_| {
+                            Some(PcbUiCommand::PanelTabUiCommand(PanelTabUiCommand::PanelSizingSaved))
+                        }),
                     None => None,
                 }
             }
@@ -869,7 +878,7 @@ mod core_helper {
 
     pub trait PcbCoreHelper {
         fn into_actions(self) -> Result<Vec<PcbAction>, PcbAction>;
-        fn when_ok<F>(self, project_key: PcbKey, f: F) -> Option<PcbAction>
+        fn when_ok<F>(self, pcb_key: PcbKey, f: F) -> Option<PcbAction>
         where
             F: FnOnce(&mut Vec<Task<PcbAction>>) -> Option<PcbUiCommand>;
     }
@@ -879,11 +888,11 @@ mod core_helper {
             into_actions_inner(self)
         }
 
-        fn when_ok<F>(self, project_key: PcbKey, f: F) -> Option<PcbAction>
+        fn when_ok<F>(self, pcb_key: PcbKey, f: F) -> Option<PcbAction>
         where
             F: FnOnce(&mut Vec<Task<PcbAction>>) -> Option<PcbUiCommand>,
         {
-            when_ok_inner(self, project_key, f)
+            when_ok_inner(self, pcb_key, f)
         }
     }
 }
