@@ -225,7 +225,9 @@ pub fn create_pcb(
 
     let (design_names, unit_to_design_index_mapping) = build_unit_to_design_index_mappping(unit_to_design_name_map);
 
-    let pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
+    let mut pcb = Pcb::new(name, units, design_names, unit_to_design_index_mapping);
+    pcb.panel_sizing
+        .ensure_unit_positionings(units);
 
     Ok(pcb)
 }

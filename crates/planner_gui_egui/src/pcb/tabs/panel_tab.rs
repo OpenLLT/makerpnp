@@ -22,6 +22,7 @@ use planner_app::{
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
+use crate::pcb::tabs::configuration_tab::ConfigurationTabUiCommand;
 use crate::pcb::tabs::panel_tab::gerber_builder::GerberBuilder;
 use crate::pcb::tabs::panel_tab::gerber_util::{
     gerber_line_commands, gerber_point_commands, gerber_rectangle_commands,
@@ -73,7 +74,9 @@ struct PanelTabUiState {
 #[derivative(Debug)]
 pub struct PanelTabUi {
     pcb_overview: Option<PcbOverview>,
-    panel_sizing: Option<PanelSizing>,
+
+    // (current, initial)
+    panel_sizing: Option<(PanelSizing, PanelSizing)>,
 
     // TODO don't use a value unless we need to
     panel_tab_ui_state: Value<PanelTabUiState>,
@@ -116,22 +119,19 @@ impl PanelTabUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
-        if let Some(panel_sizing) = &mut self.panel_sizing {
-            panel_sizing.ensure_design_sizings(pcb_overview.designs.len());
-            panel_sizing.ensure_unit_positionings(pcb_overview.units);
-        }
-
         self.pcb_overview.replace(pcb_overview);
     }
 
     pub fn update_panel_sizing(&mut self, panel_sizing: PanelSizing) {
-        self.panel_sizing.replace(panel_sizing);
+        self.panel_sizing
+            .replace((panel_sizing.clone(), panel_sizing));
         self.update_panel_preview();
     }
 
     fn left_panel_content(
         ui: &mut Ui,
         panel_sizing: &PanelSizing,
+        initial_panel_sizing: &PanelSizing,
         state: ValueGuard<PanelTabUiState>,
         sender: Sender<PanelTabUiCommand>,
         pcb_overview: &PcbOverview,
@@ -142,7 +142,34 @@ impl PanelTabUi {
             .max(ui.spacing().interact_size.y);
 
         egui::ScrollArea::both().show(ui, |ui| {
-            // TODO let the user choose units
+            let is_changed = panel_sizing != initial_panel_sizing;
+
+            egui::Sides::new().show(
+                ui,
+                |ui| {
+                    if ui
+                        .add_enabled(is_changed, egui::Button::new(tr!("form-button-reset")))
+                        .clicked()
+                    {
+                        sender
+                            .send(PanelTabUiCommand::Reset)
+                            .expect("sent");
+                    }
+
+                    if ui
+                        .add_enabled(is_changed, egui::Button::new(tr!("form-button-apply")))
+                        .clicked()
+                    {
+                        sender
+                            .send(PanelTabUiCommand::Apply)
+                            .expect("sent");
+                    }
+                },
+                |_ui| {},
+            );
+            ui.separator();
+
+            // TODO let the user choose units (MM, Inches, etc)
 
             Self::top_bottom_controls(&state, &sender, ui);
             ui.separator();
@@ -804,7 +831,7 @@ impl PanelTabUi {
     }
 
     fn update_panel_preview(&mut self) {
-        let (Some(panel_sizing), Some(pcb_overview)) = (&self.panel_sizing, &self.pcb_overview) else {
+        let (Some((panel_sizing, _)), Some(pcb_overview)) = (&self.panel_sizing, &self.pcb_overview) else {
             return;
         };
 
@@ -841,11 +868,15 @@ pub enum PanelTabUiCommand {
         pcb_unit_index: PcbUnitIndex,
         pcb_unit_positioning: PcbUnitPositioning,
     },
+    Apply,
+    Reset,
+    PanelSizingSaved,
 }
 
 #[derive(Debug, Clone)]
 pub enum PanelTabUiAction {
     None,
+    Apply(PanelSizing),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -857,7 +888,8 @@ impl UiComponent for PanelTabUi {
     type UiAction = PanelTabUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let (Some(pcb_overview), Some(panel_sizing)) = (&self.pcb_overview, &self.panel_sizing) else {
+        let (Some(pcb_overview), Some((panel_sizing, initial_panel_sizing))) = (&self.pcb_overview, &self.panel_sizing)
+        else {
             ui.spinner();
             return;
         };
@@ -870,7 +902,7 @@ impl UiComponent for PanelTabUi {
                 let state = self.panel_tab_ui_state.lock().unwrap();
                 let sender = self.component.sender.clone();
 
-                Self::left_panel_content(ui, &panel_sizing, state, sender, &pcb_overview);
+                Self::left_panel_content(ui, &panel_sizing, &initial_panel_sizing, state, sender, &pcb_overview);
             });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -897,14 +929,14 @@ impl UiComponent for PanelTabUi {
                 None
             }
             PanelTabUiCommand::SizeChanged(size) => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.size = size;
                     update_panel_preview = true;
                 }
                 None
             }
             PanelTabUiCommand::EdgeRailsChanged(edge_rails) => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.edge_rails = edge_rails;
                     update_panel_preview = true;
                 }
@@ -917,14 +949,14 @@ impl UiComponent for PanelTabUi {
                 None
             }
             PanelTabUiCommand::AddFiducial(parameters) => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.fiducials.push(parameters);
                     update_panel_preview = true;
                 }
                 None
             }
             PanelTabUiCommand::DeleteFiducial(index) => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.fiducials.remove(index);
                     update_panel_preview = true;
                 }
@@ -934,7 +966,7 @@ impl UiComponent for PanelTabUi {
                 index,
                 parameters,
             } => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.fiducials[index] = parameters;
                     update_panel_preview = true;
                 }
@@ -944,7 +976,7 @@ impl UiComponent for PanelTabUi {
                 design_index,
                 design_sizing,
             } => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.design_sizings[design_index] = design_sizing;
                     update_panel_preview = true;
                 }
@@ -954,7 +986,7 @@ impl UiComponent for PanelTabUi {
                 pcb_unit_index,
                 pcb_unit_positioning,
             } => {
-                if let Some(panel_sizing) = &mut self.panel_sizing {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
                     panel_sizing.pcb_unit_positionings[pcb_unit_index as usize] = pcb_unit_positioning;
                     update_panel_preview = true;
                 }
@@ -967,6 +999,26 @@ impl UiComponent for PanelTabUi {
                     None => None,
                     Some(GerberViewerUiAction::None) => None,
                 }
+            }
+            PanelTabUiCommand::Reset => {
+                if let Some((panel_sizing, initial_panel_sizing)) = &mut self.panel_sizing {
+                    *panel_sizing = initial_panel_sizing.clone();
+                    update_panel_preview = true;
+                }
+                None
+            }
+            PanelTabUiCommand::Apply => {
+                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
+                    Some(PanelTabUiAction::Apply(panel_sizing.clone()))
+                } else {
+                    None
+                }
+            }
+            PanelTabUiCommand::PanelSizingSaved => {
+                if let Some((panel_sizing, initial_panel_sizing)) = &mut self.panel_sizing {
+                    *initial_panel_sizing = panel_sizing.clone();
+                }
+                None
             }
         };
 
