@@ -9,7 +9,6 @@ use egui::{Resize, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
-use egui_mobius::types::ValueGuard;
 use gerber_viewer::gerber_types::{
     Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode,
 };
@@ -22,7 +21,6 @@ use planner_app::{
 use tracing::{debug, trace};
 
 use crate::pcb::tabs::PcbTabContext;
-use crate::pcb::tabs::configuration_tab::ConfigurationTabUiCommand;
 use crate::pcb::tabs::panel_tab::gerber_builder::GerberBuilder;
 use crate::pcb::tabs::panel_tab::gerber_util::{
     gerber_line_commands, gerber_point_commands, gerber_rectangle_commands,
@@ -78,8 +76,7 @@ pub struct PanelTabUi {
     // (current, initial)
     panel_sizing: Option<(PanelSizing, PanelSizing)>,
 
-    // TODO don't use a value unless we need to
-    panel_tab_ui_state: Value<PanelTabUiState>,
+    panel_tab_ui_state: PanelTabUiState,
 
     #[derivative(Debug = "ignore")]
     gerber_viewer_ui: Value<GerberViewerUi>,
@@ -107,15 +104,13 @@ impl PanelTabUi {
                 PanelTabUiCommand::GerberViewerUiCommand(gerber_viewer_command)
             });
 
-        let mut instance = Self {
+        Self {
             panel_sizing: None,
             pcb_overview: None,
-            panel_tab_ui_state: Value::default(),
+            panel_tab_ui_state: Default::default(),
             gerber_viewer_ui: Value::new(gerber_viewer_ui),
             component,
-        };
-
-        instance
+        }
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
@@ -132,7 +127,7 @@ impl PanelTabUi {
         ui: &mut Ui,
         panel_sizing: &PanelSizing,
         initial_panel_sizing: &PanelSizing,
-        state: ValueGuard<PanelTabUiState>,
+        state: &PanelTabUiState,
         sender: Sender<PanelTabUiCommand>,
         pcb_overview: &PcbOverview,
     ) {
@@ -171,7 +166,7 @@ impl PanelTabUi {
 
             // TODO let the user choose units (MM, Inches, etc)
 
-            Self::top_bottom_controls(&state, &sender, ui);
+            Self::top_bottom_controls(state, &sender, ui);
             ui.separator();
             Self::panel_size_controls(&panel_sizing, &sender, ui);
             ui.separator();
@@ -186,7 +181,7 @@ impl PanelTabUi {
     }
 
     /// show top/bottom selector
-    fn top_bottom_controls(state: &ValueGuard<PanelTabUiState>, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
+    fn top_bottom_controls(state: &PanelTabUiState, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.label(tr!("pcb-panel-tab-input-show-top-bottom"));
 
@@ -322,7 +317,7 @@ impl PanelTabUi {
 
     fn fiducials_controls(
         panel_sizing: &PanelSizing,
-        state: ValueGuard<PanelTabUiState>,
+        state: &PanelTabUiState,
         sender: &Sender<PanelTabUiCommand>,
         text_height: f32,
         ui: &mut Ui,
@@ -899,7 +894,7 @@ impl UiComponent for PanelTabUi {
             .default_width(300.0)
             .show_inside(ui, |ui| {
                 // specifically NON-mutable state here
-                let state = self.panel_tab_ui_state.lock().unwrap();
+                let state = &self.panel_tab_ui_state;
                 let sender = self.component.sender.clone();
 
                 Self::left_panel_content(ui, &panel_sizing, &initial_panel_sizing, state, sender, &pcb_overview);
@@ -923,7 +918,7 @@ impl UiComponent for PanelTabUi {
         let action = match command {
             PanelTabUiCommand::None => Some(PanelTabUiAction::None),
             PanelTabUiCommand::PcbSideChanged(pcb_side) => {
-                let mut state = self.panel_tab_ui_state.lock().unwrap();
+                let state = &mut self.panel_tab_ui_state;
                 state.pcb_side = pcb_side;
                 update_panel_preview = true;
                 None
@@ -943,7 +938,7 @@ impl UiComponent for PanelTabUi {
                 None
             }
             PanelTabUiCommand::NewFiducialChanged(parameters) => {
-                let mut state = self.panel_tab_ui_state.lock().unwrap();
+                let state = &mut self.panel_tab_ui_state;
                 state.new_fiducial = parameters;
                 update_panel_preview = true;
                 None

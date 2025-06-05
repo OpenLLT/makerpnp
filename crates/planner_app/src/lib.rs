@@ -9,11 +9,7 @@ use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
-use derivative::Derivative;
 use indexmap::IndexSet;
-use math::ratio::ratio_of_f64;
-use nalgebra::{Point2, Vector2};
-use num_rational::Ratio;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
@@ -700,38 +696,16 @@ impl Planner {
                 let mut pcb_path = project_directory.to_path_buf();
                 pcb_path.push(pcb_file_name.clone());
 
-                let pcb = planning::pcb::create_pcb(name, units, unit_map).map_err(AppError::PcbOperationError)?;
+                Self::create_and_add_pcb(name, units, unit_map, model, &pcb_path)?;
 
-                model
-                    .model_pcbs
-                    .insert(pcb_path.clone(), ModelPcb {
-                        pcb: pcb.clone(),
-                        // not saved, yet
-                        modified: true,
-                    });
-
-                model.save_pcb(&pcb_path)?;
-
-                // TODO tell to UI to navigate to the newly created file, don't use a view
                 Ok(render::render())
             }),
             Event::CreatePcb {
                 name,
                 units,
-                path,
+                path: pcb_path,
             } => Box::new(move |model: &mut Model| {
-                let mut pcb =
-                    planning::pcb::create_pcb(name, units, BTreeMap::default()).map_err(AppError::PcbOperationError)?;
-
-                model
-                    .model_pcbs
-                    .insert(path.clone(), ModelPcb {
-                        pcb: pcb.clone(),
-                        // not saved, yet
-                        modified: true,
-                    });
-
-                model.save_pcb(&path)?;
+                Self::create_and_add_pcb(name, units, BTreeMap::default(), model, &pcb_path)?;
 
                 Ok(render::render())
             }),
@@ -1944,6 +1918,27 @@ impl Planner {
                 Ok(project_view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
         }
+    }
+
+    fn create_and_add_pcb(
+        name: String,
+        units: u16,
+        unit_map: BTreeMap<PcbUnitNumber, DesignName>,
+        model: &mut Model,
+        pcb_path: &PathBuf,
+    ) -> Result<(), AppError> {
+        let pcb = planning::pcb::create_pcb(name, units, unit_map).map_err(AppError::PcbOperationError)?;
+
+        model
+            .model_pcbs
+            .insert(pcb_path.clone(), ModelPcb {
+                pcb: pcb.clone(),
+                // not saved, yet
+                modified: true,
+            });
+
+        model.save_pcb(&pcb_path)?;
+        Ok(())
     }
 
     fn gerber_file_to_pcb_gerber_item(gerber_file: &GerberFile) -> PcbGerberItem {

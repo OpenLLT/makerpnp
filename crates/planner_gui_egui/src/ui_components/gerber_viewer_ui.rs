@@ -17,7 +17,7 @@ use gerber_viewer::{
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
-use nalgebra::{Vector, Vector2};
+use nalgebra::Vector2;
 use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};

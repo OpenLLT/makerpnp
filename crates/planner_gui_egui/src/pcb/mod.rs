@@ -382,7 +382,6 @@ pub enum PcbTabKind {
 pub enum PcbUiCommand {
     None,
 
-    DebugMarkModified,
     // FIXME don't care about projects, don't care about /all/ pcbs, care about *this* PCB.
     SetModifiedState {
         project_modified: bool,
@@ -472,10 +471,6 @@ impl UiComponent for Pcb {
 
         match command {
             PcbUiCommand::None => None,
-            PcbUiCommand::DebugMarkModified => {
-                self.modified = true;
-                Some(PcbAction::SetModifiedState(self.modified))
-            }
             PcbUiCommand::Create {
                 path,
                 name,
@@ -538,7 +533,7 @@ impl UiComponent for Pcb {
             }
             PcbUiCommand::Error(error) => {
                 error!("PCB error. error: {:?}", error);
-                // TODO show a dialog
+                // TODO show a dialog for PCB errors
                 None
             }
             PcbUiCommand::PcbView(view) => {
