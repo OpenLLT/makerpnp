@@ -56,27 +56,26 @@ pub enum Unit {
     Millimeters,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Derivative, Debug, Clone, PartialEq)]
-#[derivative(Default)]
+#[derive(serde::Serialize, serde::Deserialize, Derivative, Default, Debug, Clone, PartialEq)]
 #[serde_as]
 pub struct PanelSizing {
-    #[derivative(Default(value = "Unit::Millimeters"))]
     pub units: Unit,
 
-    #[derivative(Default(value = "Vector2::new(100.0, 100.0)"))]
     pub size: Vector2<f64>,
 
     /// Any value of 0 here means no edge rail.
     /// `Option` is intentionally /not/ used here to simplify offset calculations.
-    #[derivative(Default(value = "Dimensions { left: 5.0, right: 5.0, top: 5.0, bottom: 5.0 }"))]
     pub edge_rails: Dimensions<f64>,
 
     pub fiducials: Vec<FiducialParameters>,
 
+    /// There should be one entry for each design in the PCB.
     ///
     /// See `ensure_design_sizings`
     pub design_sizings: Vec<DesignSizing>,
 
+    /// There should be one entry for each PCB unit.
+    ///
     /// See `ensure_unit_positionings`
     pub pcb_unit_positionings: Vec<PcbUnitPositioning>,
 }
@@ -99,18 +98,15 @@ impl PanelSizing {
     serde::Serialize,
     serde::Deserialize,
     Debug,
-    Derivative,
+    Default,
     Copy,
     Clone,
     PartialEq,
     PartialOrd
 )]
-#[derivative(Default)]
 pub struct FiducialParameters {
     pub position: Point2<f64>,
-    #[derivative(Default(value = "2.0"))]
     pub mask_diameter: f64,
-    #[derivative(Default(value = "1.0"))]
     pub copper_diameter: f64,
 }
 
