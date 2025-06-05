@@ -29,9 +29,9 @@ mod operation_sequence_1 {
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
     use crate::common::project_builder as project;
     use crate::common::project_builder::{
-        TestAutomatedSolderingTaskState, TestLoadPcbsTaskState, TestManualSolderingTaskState, TestOperationState,
-        TestPartState, TestPhase, TestPlacement, TestPlacementState, TestPlacementTaskState,
-        TestProcessOperationStatus, TestProject, TestSerializableTaskState,
+        TestAutomatedSolderingTaskState, TestDesignSizing, TestLoadPcbsTaskState, TestManualSolderingTaskState,
+        TestOperationState, TestPartState, TestPcbUnitPositioning, TestPhase, TestPlacement, TestPlacementState,
+        TestPlacementTaskState, TestProcessOperationStatus, TestProject, TestSerializableTaskState,
     };
     use crate::common::project_report_builder as report;
     use crate::common::project_report_builder::{
@@ -241,8 +241,36 @@ mod operation_sequence_1 {
                 size: Default::default(),
                 edge_rails: Default::default(),
                 fiducials: vec![],
-                design_sizings: vec![],
-                pcb_unit_positionings: vec![],
+                design_sizings: vec![
+                    TestDesignSizing {
+                        origin: Default::default(),
+                        offset: Default::default(),
+                        size: Default::default(),
+                    },
+                    TestDesignSizing {
+                        origin: Default::default(),
+                        offset: Default::default(),
+                        size: Default::default(),
+                    },
+                ],
+                pcb_unit_positionings: vec![
+                    TestPcbUnitPositioning {
+                        offset: Default::default(),
+                        rotation: 0.0,
+                    },
+                    TestPcbUnitPositioning {
+                        offset: Default::default(),
+                        rotation: 0.0,
+                    },
+                    TestPcbUnitPositioning {
+                        offset: Default::default(),
+                        rotation: 0.0,
+                    },
+                    TestPcbUnitPositioning {
+                        offset: Default::default(),
+                        rotation: 0.0,
+                    },
+                ],
             },
         }
         .content();
