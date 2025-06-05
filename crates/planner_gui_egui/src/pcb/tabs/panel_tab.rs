@@ -1181,8 +1181,6 @@ fn build_panel_preview_commands(
 
         let unit_rotation = pcb_unit_positioning.rotation;
 
-        //gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, unit_origin, unit_size)?);
-
         // Create path vectors based on unit_size
         // For example, to create a path that forms a rectangle:
         let path_vectors = vec![
@@ -1192,28 +1190,61 @@ fn build_panel_preview_commands(
             Vector2::new(0.0, -unit_size.y), // Move down, closing the rectangle
         ];
 
-        // Compute the center of the bounding box defined by unit_origin and unit_size
+        // Without 'Translation2':
+        //
+        // // Compute the center of the bounding box defined by unit_origin and unit_size
+        // let center_x = unit_origin.x + unit_size.x / 2.0;
+        // let center_y = unit_origin.y + unit_size.y / 2.0;
+        // let center = Point2::new(center_x, center_y);
+        //
+        // // Create a rotation matrix for the unit_rotation (in radians)
+        // // For clockwise rotation, negate the angle (since nalgebra uses counterclockwise by default)
+        // let clockwise_rotation_angle = -unit_rotation;
+        //
+        // let rotation = nalgebra::Rotation2::new(clockwise_rotation_angle);
+        //
+        // // Rotate the origin point around the center
+        // let origin_vector = Vector2::new(unit_origin.x - center.x, unit_origin.y - center.y);
+        // let rotated_origin_vector = rotation * origin_vector;
+        // let rotated_origin = Point2::new(center.x + rotated_origin_vector.x, center.y + rotated_origin_vector.y);
+        //
+        // // Prepare a Vec of rotated vectors for the path
+        // let mut rotated_vectors = Vec::with_capacity(path_vectors.len());
+        // for vector in path_vectors {
+        //     let rotated_vector = rotation * vector;
+        //     rotated_vectors.push(rotated_vector);
+        // }
+        //
+
+        // Compute the center of the bounding box
         let center_x = unit_origin.x + unit_size.x / 2.0;
         let center_y = unit_origin.y + unit_size.y / 2.0;
         let center = Point2::new(center_x, center_y);
 
-        // Create a rotation matrix for the unit_rotation (in radians)
         // For clockwise rotation, negate the angle (since nalgebra uses counterclockwise by default)
         let clockwise_rotation_angle = -unit_rotation;
 
+        // Create the isometry for rotation around center:
+        // 1. Create a translation from center to origin
+        // 2. Create a rotation
+        // 3. Create a translation back from origin to center
+        let translation_to_origin = nalgebra::Translation2::new(-center_x, -center_y);
         let rotation = nalgebra::Rotation2::new(clockwise_rotation_angle);
+        let translation_from_origin = nalgebra::Translation2::new(center_x, center_y);
 
-        // Rotate the origin point around the center
-        let origin_vector = Vector2::new(unit_origin.x - center.x, unit_origin.y - center.y);
-        let rotated_origin_vector = rotation * origin_vector;
-        let rotated_origin = Point2::new(center.x + rotated_origin_vector.x, center.y + rotated_origin_vector.y);
+        // Combine these transformations into a single isometry
+        // The order is important: first translate to origin, then rotate, then translate back
+        let isometry = translation_from_origin * rotation * translation_to_origin;
 
-        // Prepare a Vec of rotated vectors for the path
-        let mut rotated_vectors = Vec::with_capacity(path_vectors.len());
-        for vector in path_vectors {
-            let rotated_vector = rotation * vector;
-            rotated_vectors.push(rotated_vector);
-        }
+        // Apply the isometry to the origin point to get the rotated origin
+        let rotated_origin = isometry.transform_point(&unit_origin);
+
+        // Apply rotation to the path vectors (direction only, not position)
+        // For vectors, we only apply the rotation part, not the translation
+        let rotated_vectors: Vec<Vector2<f64>> = path_vectors
+            .iter()
+            .map(|vector| rotation * vector)
+            .collect();
 
         // Now call gerber_path_commands with the rotated data
         gerber_builder.push_commands(gerber_path_commands(
