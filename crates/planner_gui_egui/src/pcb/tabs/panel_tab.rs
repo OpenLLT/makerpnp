@@ -23,7 +23,7 @@ use tracing::{debug, trace};
 use crate::pcb::tabs::PcbTabContext;
 use crate::pcb::tabs::panel_tab::gerber_builder::GerberBuilder;
 use crate::pcb::tabs::panel_tab::gerber_util::{
-    gerber_line_commands, gerber_point_commands, gerber_rectangle_commands,
+    gerber_line_commands, gerber_path_commands, gerber_point_commands, gerber_rectangle_commands,
 };
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -58,6 +58,9 @@ pub mod defaults {
             }),
         ])
     });
+
+    pub static DRAG_ANGLE_SPEED: f64 = 0.1;
+    pub static DRAG_ANGLE_FIXED_DECIMALS: usize = 3;
 }
 
 #[derive(Derivative, Debug)]
@@ -780,7 +783,22 @@ impl PanelTabUi {
                                                     );
                                                 });
                                                 row.col(|ui| {
-                                                    // TODO Rotation
+                                                    let mut degrees = pcb_unit_positioning
+                                                        .rotation
+                                                        .to_degrees();
+
+                                                    ui.add(
+                                                        egui::DragValue::new(&mut degrees)
+                                                            .range(0.0..=360.0)
+                                                            .speed(defaults::DRAG_ANGLE_SPEED)
+                                                            .suffix("°")
+                                                            .fixed_decimals(defaults::DRAG_ANGLE_FIXED_DECIMALS),
+                                                    );
+
+                                                    // wrap round to 0 again.
+                                                    degrees = degrees % 360.0;
+
+                                                    pcb_unit_positioning.rotation = degrees.to_radians();
                                                 });
 
                                                 row.col(|ui| {
@@ -1161,10 +1179,48 @@ fn build_panel_preview_commands(
             .add_y(pcb_unit_positioning.offset.y);
         let unit_size = design_sizing.size;
 
-        // TODO support rotation
         let unit_rotation = pcb_unit_positioning.rotation;
 
-        gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, unit_origin, unit_size)?);
+        //gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, unit_origin, unit_size)?);
+
+        // Create path vectors based on unit_size
+        // For example, to create a path that forms a rectangle:
+        let path_vectors = vec![
+            Vector2::new(unit_size.x, 0.0),  // Move right
+            Vector2::new(0.0, unit_size.y),  // Move up
+            Vector2::new(-unit_size.x, 0.0), // Move left
+            Vector2::new(0.0, -unit_size.y), // Move down, closing the rectangle
+        ];
+
+        // Compute the center of the bounding box defined by unit_origin and unit_size
+        let center_x = unit_origin.x + unit_size.x / 2.0;
+        let center_y = unit_origin.y + unit_size.y / 2.0;
+        let center = Point2::new(center_x, center_y);
+
+        // Create a rotation matrix for the unit_rotation (in radians)
+        // For clockwise rotation, negate the angle (since nalgebra uses counterclockwise by default)
+        let clockwise_rotation_angle = -unit_rotation;
+
+        let rotation = nalgebra::Rotation2::new(clockwise_rotation_angle);
+
+        // Rotate the origin point around the center
+        let origin_vector = Vector2::new(unit_origin.x - center.x, unit_origin.y - center.y);
+        let rotated_origin_vector = rotation * origin_vector;
+        let rotated_origin = Point2::new(center.x + rotated_origin_vector.x, center.y + rotated_origin_vector.y);
+
+        // Prepare a Vec of rotated vectors for the path
+        let mut rotated_vectors = Vec::with_capacity(path_vectors.len());
+        for vector in path_vectors {
+            let rotated_vector = rotation * vector;
+            rotated_vectors.push(rotated_vector);
+        }
+
+        // Now call gerber_path_commands with the rotated data
+        gerber_builder.push_commands(gerber_path_commands(
+            coordinate_format,
+            rotated_origin,
+            &rotated_vectors,
+        )?);
     }
 
     //
@@ -1238,6 +1294,35 @@ mod gerber_util {
                 None,
             )))),
         ])
+    }
+
+    pub fn gerber_path_commands(
+        coordinate_format: CoordinateFormat,
+        origin: Point2<f64>,
+        vectors: &[Vector2<f64>],
+    ) -> Result<Vec<Command>, GerberError> {
+        if vectors.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut commands = Vec::with_capacity(vectors.len() + 1);
+
+        // Move to the starting point (origin)
+        commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::Operation(
+            Operation::Move(x_y_to_gerber(origin.x, origin.y, coordinate_format)?),
+        ))));
+
+        // Connect all points with line segments
+        let mut current_point = origin;
+        for vector in vectors {
+            let next_point = Point2::new(current_point.x + vector.x, current_point.y + vector.y);
+            commands.push(Command::FunctionCode(FunctionCode::DCode(DCode::Operation(
+                Operation::Interpolate(x_y_to_gerber(next_point.x, next_point.y, coordinate_format)?, None),
+            ))));
+            current_point = next_point;
+        }
+
+        Ok(commands)
     }
 
     pub fn gerber_line_commands(
