@@ -5,16 +5,13 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use derivative::Derivative;
-use eframe::emath::{Rect, Vec2};
+use eframe::emath::Rect;
 use eframe::epaint::Color32;
 use egui::Ui;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
-use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
-    generate_pastel_color,
-};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair, generate_pastel_color, RenderConfiguration};
 use indexmap::IndexMap;
 use indexmap::map::Entry;
 use nalgebra::Vector2;
@@ -255,6 +252,7 @@ struct GerberViewState {
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
+    render_configuration: RenderConfiguration,
     layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
     // used for mirroring and rotation, in gerber coordinates
     design_origin: Vector2<f64>,
@@ -275,6 +273,7 @@ impl Default for GerberViewState {
             needs_view_centering: true,
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
+            render_configuration: RenderConfiguration::default(),
             layers: Default::default(),
             //design_origin: Vector<f64::new(14.75, 6.0),
             //design_offset: Vector<f64::new(-10.0, -10.0),
@@ -340,29 +339,7 @@ impl GerberViewState {
 
     fn reset_view(&mut self, viewport: Rect) {
         self.update_bbox_from_layers();
-
-        let bbox = &self.bounding_box;
-
-        let content_width = bbox.max.x - bbox.min.x;
-        let content_height = bbox.max.y - bbox.min.y;
-
-        // Calculate scale to fit the content
-        let scale = f32::min(
-            viewport.width() / (content_width as f32),
-            viewport.height() / (content_height as f32),
-        ) * INITIAL_GERBER_AREA_PERCENT;
-
-        // Calculate the content center in mm
-        let content_center_x = (bbox.min.x + bbox.max.x) / 2.0;
-        let content_center_y = (bbox.min.y + bbox.max.y) / 2.0;
-
-        // Offset from viewport center to place content center
-        self.view.translation = Vec2::new(
-            viewport.center().x - (content_center_x as f32 * scale),
-            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
-        );
-
-        self.view.scale = scale;
+        self.view.reset_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT, self.design_origin, self.design_offset, self.rotation, self.mirroring);
         self.needs_view_centering = false;
     }
 }
@@ -442,8 +419,7 @@ impl UiComponent for GerberViewerUi {
                 state.view,
                 layer,
                 layer_state.color,
-                false,
-                false,
+                &state.render_configuration,
                 state.rotation + layer_state.rotation,
                 state.mirroring ^ layer_state.mirroring,
                 layer_state.design_origin,
