@@ -119,7 +119,7 @@ tokio = { version = "1.45.1", features = ["full"]}
 crossbeam-channel = { version = "0.5.15" }
 
 # Gerber rendering, types and parser
-gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "d770729fc5e88602727d6f40fc474b54aeb3f3cf" }
+gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "cbd1b2c8fb27edad6bdec14dbe1a3f2b8f6024e7" }
 #gerber_viewer = { path = "../gerber-viewer" }
 
 # math

@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use derivative::Derivative;
-use eframe::emath::{Rect, Vec2};
+use eframe::emath::Rect;
 use eframe::epaint::Color32;
 use egui::Ui;
 use egui_mobius::Value;
@@ -340,29 +340,7 @@ impl GerberViewState {
 
     fn reset_view(&mut self, viewport: Rect) {
         self.update_bbox_from_layers();
-
-        let bbox = &self.bounding_box;
-
-        let content_width = bbox.max.x - bbox.min.x;
-        let content_height = bbox.max.y - bbox.min.y;
-
-        // Calculate scale to fit the content
-        let scale = f32::min(
-            viewport.width() / (content_width as f32),
-            viewport.height() / (content_height as f32),
-        ) * INITIAL_GERBER_AREA_PERCENT;
-
-        // Calculate the content center in mm
-        let content_center_x = (bbox.min.x + bbox.max.x) / 2.0;
-        let content_center_y = (bbox.min.y + bbox.max.y) / 2.0;
-
-        // Offset from viewport center to place content center
-        self.view.translation = Vec2::new(
-            viewport.center().x - (content_center_x as f32 * scale),
-            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
-        );
-
-        self.view.scale = scale;
+        self.view.reset_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT, self.design_origin, self.design_offset, self.rotation, self.mirroring);
         self.needs_view_centering = false;
     }
 }
@@ -442,6 +420,7 @@ impl UiComponent for GerberViewerUi {
                 state.view,
                 layer,
                 layer_state.color,
+                false,
                 false,
                 false,
                 state.rotation + layer_state.rotation,

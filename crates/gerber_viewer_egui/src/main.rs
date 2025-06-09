@@ -52,7 +52,8 @@ struct GerberViewer {
     coord_input: (String, String),
 
     use_unique_shape_colors: bool,
-    use_polygon_numbering: bool,
+    use_shape_numbering: bool,
+    use_vertex_numbering: bool,
     enable_bounding_box_outline: bool,
 
     is_about_modal_open: bool,
@@ -72,7 +73,7 @@ impl GerberViewer {
 struct LayerViewState {
     enabled: bool,
     color: Color32,
-    // in radians, positive = clockwise
+    // in radians, positive = anti-clockwise
     rotation: f32,
     mirroring: Mirroring,
     // the center for rotation/mirroring in gerber units
@@ -211,29 +212,7 @@ impl GerberViewState {
 
     fn reset_view(&mut self, viewport: Rect) {
         self.update_bbox_from_layers();
-
-        let bbox = &self.bounding_box;
-
-        let content_width = bbox.max.x - bbox.min.x;
-        let content_height = bbox.max.y - bbox.min.y;
-
-        // Calculate scale to fit the content
-        let scale = f32::min(
-            viewport.width() / (content_width as f32),
-            viewport.height() / (content_height as f32),
-        ) * INITIAL_GERBER_AREA_PERCENT;
-
-        // Calculate the content center in mm
-        let content_center_x = (bbox.min.x + bbox.max.x) / 2.0;
-        let content_center_y = (bbox.min.y + bbox.max.y) / 2.0;
-
-        // Offset from viewport center to place content center
-        self.view.translation = Vec2::new(
-            viewport.center().x - (content_center_x as f32 * scale),
-            viewport.center().y + (content_center_y as f32 * scale), // Note the + here since we flip Y
-        );
-
-        self.view.scale = scale;
+        self.view.reset_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT, self.design_origin, self.design_offset, self.rotation, self.mirroring);
         self.needs_view_centering = false;
     }
 
@@ -411,7 +390,8 @@ impl GerberViewer {
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             use_unique_shape_colors: false,
-            use_polygon_numbering: false,
+            use_shape_numbering: false,
+            use_vertex_numbering: false,
             enable_bounding_box_outline: true,
 
             is_about_modal_open: false,
@@ -460,7 +440,8 @@ impl eframe::App for GerberViewer {
                 });
                 ui.menu_button("View", |ui| {
                     ui.checkbox(&mut self.use_unique_shape_colors, "🎉 Unique shape colors");
-                    ui.checkbox(&mut self.use_polygon_numbering, "＃ Polygon numbering");
+                    ui.checkbox(&mut self.use_shape_numbering, "＃ Shape numbering");
+                    ui.checkbox(&mut self.use_vertex_numbering, "＃ Vertex numbering (polygons)");
                     ui.checkbox(&mut self.enable_bounding_box_outline, "☐ Draw bounding box");
                 });
                 ui.menu_button("Help", |ui| {
@@ -484,7 +465,8 @@ impl eframe::App for GerberViewer {
                 ui.separator();
 
                 ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
-                ui.toggle_value(&mut self.use_polygon_numbering, "＃");
+                ui.toggle_value(&mut self.use_shape_numbering, "＃");
+                ui.toggle_value(&mut self.use_vertex_numbering, "＃");
                 ui.toggle_value(&mut self.enable_bounding_box_outline, "☐");
 
                 ui.separator();
@@ -933,7 +915,8 @@ impl eframe::App for GerberViewer {
                             layer,
                             layer_state.color,
                             self.use_unique_shape_colors,
-                            self.use_polygon_numbering,
+                            self.use_shape_numbering,
+                            self.use_vertex_numbering,
                             state.rotation + layer_state.rotation,
                             state.mirroring ^ layer_state.mirroring,
                             layer_state.design_origin,
