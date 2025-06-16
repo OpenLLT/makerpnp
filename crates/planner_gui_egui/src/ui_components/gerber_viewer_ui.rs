@@ -11,17 +11,17 @@ use egui::Ui;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
-use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair, generate_pastel_color, RenderConfiguration};
+use gerber_viewer::{
+    BoundingBox, GerberLayer, GerberRenderer, GerberTransform, RenderConfiguration, UiState, ViewState, draw_crosshair,
+    generate_pastel_color,
+};
 use indexmap::IndexMap;
 use indexmap::map::Entry;
-use nalgebra::Vector2;
 use planner_app::{DesignIndex, PcbOverview};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::ui_component::{ComponentState, UiComponent};
-
-const VECTOR_ZERO: Vector2<f64> = Vector2::new(0.0, 0.0);
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
@@ -90,8 +90,7 @@ impl GerberViewerUi {
 
         gerber_state.layers.clear();
 
-        let (state, layer) =
-            Self::build_gerber_layer_from_commands(0, commands, gerber_state.design_origin, gerber_state.design_offset);
+        let (state, layer) = Self::build_gerber_layer_from_commands(0, commands);
 
         gerber_state.add_layer(None, state, layer, None);
     }
@@ -110,16 +109,13 @@ impl GerberViewerUi {
         // FUTURE move this, e.g. `GerberLayerState::sync_layers` and give it the `FBuild` and `FKey` closures as arguments.
         // FUTURE load each layer in a background thead, don't block the UI thread.
         {
-            let design_origin = gerber_state.design_origin;
-            let design_offset = gerber_state.design_offset;
-
             let mut layers = gerber_state.layers.split_off(0);
 
             let errors = sync_indexmap(
                 &mut layers,
                 &gerber_items,
                 |index, key, _content| {
-                    Self::build_gerber_layer_from_file(index, key.as_ref().unwrap(), design_origin, design_offset)
+                    Self::build_gerber_layer_from_file(index, key.as_ref().unwrap())
                         .map(|(layer_view_state, layer, gerber_doc)| (layer_view_state, layer, Some(gerber_doc)))
                 },
                 |content| Some(content.path.clone()),
@@ -186,28 +182,18 @@ impl GerberViewerUi {
     fn build_gerber_layer_from_file(
         index: usize,
         path: &PathBuf,
-        design_origin: Vector2<f64>,
-        design_offset: Vector2<f64>,
     ) -> Result<(LayerViewState, GerberLayer, GerberDoc), GerberViewerUiError> {
         let (gerber_doc, commands) = Self::parse_gerber(path)?;
-        let (state, layer) = Self::build_gerber_layer_from_commands(index, commands, design_origin, design_offset);
+        let (state, layer) = Self::build_gerber_layer_from_commands(index, commands);
 
         Ok((state, layer, gerber_doc))
     }
 
-    fn build_gerber_layer_from_commands(
-        index: usize,
-        commands: Vec<Command>,
-        design_origin: Vector2<f64>,
-        design_offset: Vector2<f64>,
-    ) -> (LayerViewState, GerberLayer) {
+    fn build_gerber_layer_from_commands(index: usize, commands: Vec<Command>) -> (LayerViewState, GerberLayer) {
         let color = generate_pastel_color(index as u64);
 
         let layer = GerberLayer::new(commands);
-        let mut layer_view_state = LayerViewState::new(color);
-
-        layer_view_state.design_offset = design_offset;
-        layer_view_state.design_origin = design_origin;
+        let layer_view_state = LayerViewState::new(color);
 
         (layer_view_state, layer)
     }
@@ -254,16 +240,7 @@ struct GerberViewState {
     bounding_box: BoundingBox,
     render_configuration: RenderConfiguration,
     layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
-    // used for mirroring and rotation, in gerber coordinates
-    design_origin: Vector2<f64>,
-
-    // used for offsetting the design, in gerber coordinates
-    design_offset: Vector2<f64>,
-
-    // global rotation, each layer can be offset from the global rotation
-    rotation: f32,
-    // global mirroring, each layer can mirrored independently of the global mirroring
-    mirroring: Mirroring,
+    transform: GerberTransform,
 }
 
 impl Default for GerberViewState {
@@ -275,12 +252,7 @@ impl Default for GerberViewState {
             bounding_box: BoundingBox::default(),
             render_configuration: RenderConfiguration::default(),
             layers: Default::default(),
-            //design_origin: Vector<f64::new(14.75, 6.0),
-            //design_offset: Vector<f64::new(-10.0, -10.0),
-            design_origin: VECTOR_ZERO,
-            design_offset: VECTOR_ZERO,
-            rotation: 0.0_f32.to_radians(),
-            mirroring: Mirroring::default(),
+            transform: GerberTransform::default(),
         }
     }
 }
@@ -310,16 +282,11 @@ impl GerberViewState {
         {
             let layer_bbox = &layer.bounding_box();
 
-            let origin = self.design_origin - self.design_offset;
+            let layer_transform = layer_view_state
+                .transform
+                .combine(&self.transform);
 
-            let transform = Transform2D {
-                rotation_radians: self.rotation + layer_view_state.rotation,
-                mirroring: self.mirroring ^ layer_view_state.mirroring,
-                origin,
-                offset: self.design_offset,
-            };
-
-            let layer_bbox = layer_bbox.apply_transform(transform);
+            let layer_bbox = layer_bbox.apply_transform(&layer_transform);
 
             debug!("layer bbox: {:?}", layer_bbox);
             bbox.min.x = f64::min(bbox.min.x, layer_bbox.min.x);
@@ -339,7 +306,8 @@ impl GerberViewState {
 
     fn reset_view(&mut self, viewport: Rect) {
         self.update_bbox_from_layers();
-        self.view.reset_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT, self.design_origin, self.design_offset, self.rotation, self.mirroring);
+        self.view
+            .fit_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT);
         self.needs_view_centering = false;
     }
 }
@@ -355,23 +323,14 @@ enum GerberViewerUiError {
 
 struct LayerViewState {
     color: Color32,
-    // in radians, positive = clockwise
-    rotation: f32,
-    mirroring: Mirroring,
-    // the center for rotation/mirroring in gerber units
-    design_origin: Vector2<f64>,
-    // in gerber units
-    design_offset: Vector2<f64>,
+    transform: GerberTransform,
 }
 
 impl LayerViewState {
     fn new(color: Color32) -> Self {
         Self {
             color,
-            mirroring: Mirroring::default(),
-            rotation: 0.0_f32.to_radians(),
-            design_origin: VECTOR_ZERO,
-            design_offset: VECTOR_ZERO,
+            transform: GerberTransform::default(),
         }
     }
 }
@@ -413,17 +372,18 @@ impl UiComponent for GerberViewerUi {
         ui_state.update(ui, &viewport, &response, &mut state.view);
 
         let painter = ui.painter().with_clip_rect(viewport);
-        for (_path, (layer_state, layer, _doc)) in state.layers.iter() {
+        for (_path, (layer_view_state, layer, _doc)) in state.layers.iter() {
+            let layer_transform = layer_view_state
+                .transform
+                .combine(&state.transform);
+
             GerberRenderer::default().paint_layer(
                 &painter,
                 state.view,
                 layer,
-                layer_state.color,
+                layer_view_state.color,
                 &state.render_configuration,
-                state.rotation + layer_state.rotation,
-                state.mirroring ^ layer_state.mirroring,
-                layer_state.design_origin,
-                layer_state.design_offset,
+                &layer_transform,
             );
         }
 
