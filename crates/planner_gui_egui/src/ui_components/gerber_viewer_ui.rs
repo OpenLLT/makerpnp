@@ -11,10 +11,7 @@ use egui::Ui;
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
-use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair,
-    generate_pastel_color,
-};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Mirroring, Transform2D, UiState, ViewState, draw_crosshair, generate_pastel_color, RenderConfiguration};
 use indexmap::IndexMap;
 use indexmap::map::Entry;
 use nalgebra::Vector2;
@@ -255,6 +252,7 @@ struct GerberViewState {
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
+    render_configuration: RenderConfiguration,
     layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
     // used for mirroring and rotation, in gerber coordinates
     design_origin: Vector2<f64>,
@@ -275,6 +273,7 @@ impl Default for GerberViewState {
             needs_view_centering: true,
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
+            render_configuration: RenderConfiguration::default(),
             layers: Default::default(),
             //design_origin: Vector<f64::new(14.75, 6.0),
             //design_offset: Vector<f64::new(-10.0, -10.0),
@@ -420,9 +419,7 @@ impl UiComponent for GerberViewerUi {
                 state.view,
                 layer,
                 layer_state.color,
-                false,
-                false,
-                false,
+                &state.render_configuration,
                 state.rotation + layer_state.rotation,
                 state.mirroring ^ layer_state.mirroring,
                 layer_state.design_origin,

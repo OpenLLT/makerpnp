@@ -15,10 +15,7 @@ use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::FontFamily;
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
-use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, Invert, Mirroring, ToPos2, ToVector, Transform2D, UiState, ViewState,
-    draw_crosshair, draw_outline, generate_pastel_color,
-};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Invert, Mirroring, ToPos2, ToVector, Transform2D, UiState, ViewState, draw_crosshair, draw_outline, generate_pastel_color, RenderConfiguration};
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use nalgebra::{Point2, Vector2};
@@ -51,13 +48,11 @@ struct GerberViewer {
     log: Vec<AppLogItem>,
     coord_input: (String, String),
 
-    use_unique_shape_colors: bool,
-    use_shape_numbering: bool,
-    use_vertex_numbering: bool,
     enable_bounding_box_outline: bool,
 
     is_about_modal_open: bool,
     step: f64,
+    config: RenderConfiguration
 }
 
 impl GerberViewer {
@@ -389,9 +384,7 @@ impl GerberViewer {
             state: None,
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
-            use_unique_shape_colors: false,
-            use_shape_numbering: false,
-            use_vertex_numbering: false,
+            config: RenderConfiguration::default(),
             enable_bounding_box_outline: true,
 
             is_about_modal_open: false,
@@ -439,9 +432,9 @@ impl eframe::App for GerberViewer {
                     }
                 });
                 ui.menu_button("View", |ui| {
-                    ui.checkbox(&mut self.use_unique_shape_colors, "🎉 Unique shape colors");
-                    ui.checkbox(&mut self.use_shape_numbering, "＃ Shape numbering");
-                    ui.checkbox(&mut self.use_vertex_numbering, "＃ Vertex numbering (polygons)");
+                    ui.checkbox(&mut self.config.use_unique_shape_colors, "🎉 Unique shape colors");
+                    ui.checkbox(&mut self.config.use_shape_numbering, "＃ Shape numbering");
+                    ui.checkbox(&mut self.config.use_vertex_numbering, "＃ Vertex numbering (polygons)");
                     ui.checkbox(&mut self.enable_bounding_box_outline, "☐ Draw bounding box");
                 });
                 ui.menu_button("Help", |ui| {
@@ -464,9 +457,9 @@ impl eframe::App for GerberViewer {
 
                 ui.separator();
 
-                ui.toggle_value(&mut self.use_unique_shape_colors, "🎉");
-                ui.toggle_value(&mut self.use_shape_numbering, "＃");
-                ui.toggle_value(&mut self.use_vertex_numbering, "＃");
+                ui.toggle_value(&mut self.config.use_unique_shape_colors, "🎉");
+                ui.toggle_value(&mut self.config.use_shape_numbering, "＃");
+                ui.toggle_value(&mut self.config.use_vertex_numbering, "＃");
                 ui.toggle_value(&mut self.enable_bounding_box_outline, "☐");
 
                 ui.separator();
@@ -914,9 +907,7 @@ impl eframe::App for GerberViewer {
                             state.view,
                             layer,
                             layer_state.color,
-                            self.use_unique_shape_colors,
-                            self.use_shape_numbering,
-                            self.use_vertex_numbering,
+                            &self.config,
                             state.rotation + layer_state.rotation,
                             state.mirroring ^ layer_state.mirroring,
                             layer_state.design_origin,
