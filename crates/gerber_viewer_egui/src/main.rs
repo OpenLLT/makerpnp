@@ -15,7 +15,11 @@ use egui_taffy::{TuiBuilderLogic, taffy, tui};
 use epaint::FontFamily;
 use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
-use gerber_viewer::{BoundingBox, GerberLayer, GerberRenderer, Invert, Mirroring, ToPos2, ToVector, Transform2D, UiState, ViewState, draw_crosshair, draw_outline, generate_pastel_color, RenderConfiguration};
+use gerber_viewer::gerber_types::Unit;
+use gerber_viewer::{
+    BoundingBox, DisplayInfo, GerberLayer, GerberRenderer, GerberTransform, Invert, Mirroring, RenderConfiguration,
+    ToPos2, ToVector, UiState, ViewState, draw_crosshair, draw_outline, generate_pastel_color,
+};
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use nalgebra::{Point2, Vector2};
@@ -52,7 +56,8 @@ struct GerberViewer {
 
     is_about_modal_open: bool,
     step: f64,
-    config: RenderConfiguration
+    config: RenderConfiguration,
+    display_info: DisplayInfo,
 }
 
 impl GerberViewer {
@@ -68,13 +73,7 @@ impl GerberViewer {
 struct LayerViewState {
     enabled: bool,
     color: Color32,
-    // in radians, positive = anti-clockwise
-    rotation: f32,
-    mirroring: Mirroring,
-    // the center for rotation/mirroring in gerber units
-    design_origin: Vector,
-    // in gerber units
-    design_offset: Vector,
+    transform: GerberTransform,
 }
 
 impl LayerViewState {
@@ -82,51 +81,34 @@ impl LayerViewState {
         Self {
             enabled: true,
             color,
-            mirroring: Mirroring::default(),
-            rotation: 0.0_f32.to_radians(),
-            design_origin: VECTOR_ZERO,
-            design_offset: VECTOR_ZERO,
+            transform: GerberTransform::default(),
         }
     }
 }
 
 struct GerberViewState {
     view: ViewState,
+    needs_view_fitting: bool,
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
     bounding_box_vertices: Vec<Position>,
     layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
-
-    // used for mirroring and rotation, in gerber coordinates
-    design_origin: Vector,
-
-    // used for offsetting the design, in gerber coordinates
-    design_offset: Vector,
-
-    // global rotation, each layer can be offset from the global rotation
-    rotation: f32,
-    // global mirroring, each layer can mirrored independently of the global mirroring
-    mirroring: Mirroring,
-
     ui_state: UiState,
+    transform: GerberTransform,
 }
 
 impl Default for GerberViewState {
     fn default() -> Self {
         Self {
             view: Default::default(),
-            needs_view_centering: true,
+            needs_view_fitting: true,
+            needs_view_centering: false,
             needs_bbox_update: true,
             bounding_box: BoundingBox::default(),
             bounding_box_vertices: vec![],
             layers: vec![],
-            //design_origin: Vector::new(14.75, 6.0),
-            //design_offset: Vector::new(-10.0, -10.0),
-            design_origin: VECTOR_ZERO,
-            design_offset: VECTOR_ZERO,
-            rotation: 0.0_f32.to_radians(),
-            mirroring: Mirroring::default(),
+            transform: GerberTransform::default(),
             ui_state: Default::default(),
         }
     }
@@ -134,16 +116,21 @@ impl Default for GerberViewState {
 
 impl GerberViewState {
     pub fn reset(&mut self) {
-        self.design_origin = VECTOR_ZERO;
-        self.design_offset = VECTOR_ZERO;
         self.needs_bbox_update = true;
-        self.needs_view_centering = true;
+        self.needs_view_fitting = true;
+        self.needs_view_centering = false;
+
+        self.transform = GerberTransform {
+            rotation_radians: 0.0,
+            mirroring: Mirroring::default(),
+            origin: VECTOR_ZERO,
+            offset: VECTOR_ZERO,
+            scale: 1.0,
+        };
+
         for (_, layer_view_state, _, _) in self.layers.iter_mut() {
-            layer_view_state.design_origin = VECTOR_ZERO;
-            layer_view_state.design_offset = VECTOR_ZERO;
+            layer_view_state.transform = GerberTransform::default();
             layer_view_state.enabled = true;
-            layer_view_state.rotation = 0.0_f32.to_radians();
-            layer_view_state.mirroring = Mirroring::default();
         }
     }
 
@@ -157,7 +144,7 @@ impl GerberViewState {
         self.layers
             .push((path, layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
-        self.request_center_view();
+        self.request_fit_view();
     }
 
     fn update_bbox_from_layers(&mut self) {
@@ -171,16 +158,11 @@ impl GerberViewState {
         {
             let layer_bbox = &layer.bounding_box();
 
-            let origin = self.design_origin - self.design_offset;
+            let layer_transform = layer_view_state
+                .transform
+                .combine(&self.transform);
 
-            let transform = Transform2D {
-                rotation_radians: self.rotation + layer_view_state.rotation,
-                mirroring: self.mirroring ^ layer_view_state.mirroring,
-                origin,
-                offset: self.design_offset,
-            };
-
-            let layer_bbox = layer_bbox.apply_transform(transform);
+            let layer_bbox = layer_bbox.apply_transform(&layer_transform);
 
             debug!("layer bbox: {:?}", layer_bbox);
             bbox.min.x = f64::min(bbox.min.x, layer_bbox.min.x);
@@ -201,13 +183,24 @@ impl GerberViewState {
         self.needs_bbox_update = true;
     }
 
+    pub fn request_fit_view(&mut self) {
+        self.needs_view_fitting = true;
+    }
+
     pub fn request_center_view(&mut self) {
         self.needs_view_centering = true;
     }
 
-    fn reset_view(&mut self, viewport: Rect) {
+    fn fit_view(&mut self, viewport: Rect) {
         self.update_bbox_from_layers();
-        self.view.reset_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT, self.design_origin, self.design_offset, self.rotation, self.mirroring);
+        self.view
+            .fit_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT);
+        self.needs_view_fitting = false;
+    }
+
+    fn center_view(&mut self, viewport: Rect) {
+        self.view
+            .center_view(viewport, &self.bounding_box);
         self.needs_view_centering = false;
     }
 
@@ -300,10 +293,7 @@ impl GerberViewer {
         let color = generate_pastel_color(layer_count as u64);
 
         let layer = GerberLayer::new(commands);
-        let mut layer_view_state = LayerViewState::new(color);
-
-        layer_view_state.design_offset = state.design_offset;
-        layer_view_state.design_origin = state.design_origin;
+        let layer_view_state = LayerViewState::new(color);
 
         state.add_layer(path, layer_view_state, layer, gerber_doc);
 
@@ -389,6 +379,11 @@ impl GerberViewer {
 
             is_about_modal_open: false,
             step: DEFAULT_STEP,
+
+            // TODO update the display information based on the current monitor
+            display_info: DisplayInfo::new()
+                // Example based on an ACER Predator 37" monitor
+                .with_dpi(3840.0 / 37.0, 2160.0 / 20.875),
         }
     }
 
@@ -494,7 +489,7 @@ impl eframe::App for GerberViewer {
                     let x = self.coord_input.0.parse::<f64>();
                     let y = self.coord_input.1.parse::<f64>();
 
-                    let enabled = x.is_ok() && y.is_ok() && self.state.is_some();
+                    let enabled = x.is_ok() && y.is_ok();
 
                     ui.add_enabled_ui(enabled, |ui| {
                         if ui.button("⛶ Go To").clicked() {
@@ -519,13 +514,33 @@ impl eframe::App for GerberViewer {
 
                     let mut changed = false;
 
-                    ui.label("Scale:");
-                    let mut scale = self
+                    ui.label("Zoom:");
+                    let zoom: Option<(f32, Unit)> = self
                         .state
-                        .as_ref()
-                        .map_or(0.0, |state| state.view.scale);
+                        .as_mut()
+                        .map(|state| {
+                            state
+                                .layers
+                                .first()
+                                .unwrap()
+                                .3
+                                .units
+                                .map(|units| (state, units))
+                        })
+                        .flatten()
+                        .map(|(state, units)| {
+                            (
+                                state
+                                    .view
+                                    .zoom_level_percent(units, &self.display_info),
+                                units,
+                            )
+                        });
+
+                    let mut zoom_level = zoom.map_or(100.0, |(zoom, _)| zoom);
+
                     changed |= ui
-                        .add(egui::DragValue::new(&mut scale))
+                        .add(egui::DragValue::new(&mut zoom_level))
                         .changed();
 
                     let mut translation = self
@@ -548,13 +563,15 @@ impl eframe::App for GerberViewer {
                     ui.add(
                         egui::DragValue::new(&mut self.step)
                             .fixed_decimals(2)
+                            .range(0.0..=100.0)
                             .speed(STEP_SPEED * STEP_SCALE),
                     );
 
                     let mut design_origin = self
                         .state
                         .as_ref()
-                        .map_or(VECTOR_ZERO, |state| state.design_origin);
+                        .map_or(VECTOR_ZERO, |state| state.transform.origin + state.transform.offset);
+
                     ui.label("Rotation/Mirror Origin X:");
                     changed |= ui
                         .add(
@@ -576,7 +593,7 @@ impl eframe::App for GerberViewer {
                     let mut rotation = self
                         .state
                         .as_ref()
-                        .map_or(0.0, |state| state.rotation);
+                        .map_or(0.0, |state| state.transform.rotation_radians);
                     changed |= ui.drag_angle(&mut rotation).changed();
 
                     ui.separator();
@@ -584,7 +601,7 @@ impl eframe::App for GerberViewer {
                     let mut design_offset = self
                         .state
                         .as_ref()
-                        .map_or(VECTOR_ZERO, |state| state.design_offset);
+                        .map_or(VECTOR_ZERO, |state| state.transform.offset);
                     ui.label("Design Offset X:");
                     changed |= ui
                         .add(
@@ -609,7 +626,7 @@ impl eframe::App for GerberViewer {
                     let mut mirroring = self
                         .state
                         .as_ref()
-                        .map_or(Mirroring::default(), |state| state.mirroring);
+                        .map_or(Mirroring::default(), |state| state.transform.mirroring);
                     changed |= ui
                         .toggle_value(&mut mirroring.x, "X")
                         .changed();
@@ -619,17 +636,21 @@ impl eframe::App for GerberViewer {
 
                     if changed {
                         if let Some(state) = &mut self.state {
-                            state.view.scale = scale;
-                            state.view.translation = translation;
-                            state.design_offset = design_offset;
-                            state.design_origin = design_origin;
-                            state.rotation = rotation;
-                            state.mirroring = mirroring;
-
-                            for (_path, layer_state, _layer, _doc) in state.layers.iter_mut() {
-                                layer_state.design_origin = design_origin;
-                                layer_state.design_offset = design_offset;
+                            match zoom {
+                                Some((initial_zoom_level, units)) if zoom_level != initial_zoom_level => {
+                                    state
+                                        .view
+                                        .set_zoom_level_percent(zoom_level, units, &self.display_info);
+                                    state.needs_view_centering = true;
+                                }
+                                _ => {}
                             }
+
+                            state.view.translation = translation;
+                            state.transform.offset = design_offset;
+                            state.transform.origin = design_origin - design_offset;
+                            state.transform.rotation_radians = rotation;
+                            state.transform.mirroring = mirroring;
 
                             state.request_bbox_reset();
                         }
@@ -645,7 +666,15 @@ impl eframe::App for GerberViewer {
 
                     ui.separator();
 
-                    if ui.button("Center view").clicked() {
+                    if ui.button("Fit").clicked() {
+                        self.state
+                            .as_mut()
+                            .unwrap()
+                            .request_fit_view();
+                        ctx.request_repaint();
+                    }
+
+                    if ui.button("Center").clicked() {
                         self.state
                             .as_mut()
                             .unwrap()
@@ -814,27 +843,45 @@ impl eframe::App for GerberViewer {
                     for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
                         ui.horizontal(|ui| {
                             ui.color_edit_button_srgba(&mut layer_view_state.color);
-                            if ui
+
+                            let mut changed = false;
+                            let mut origin = layer_view_state.transform.origin + layer_view_state.transform.offset;
+
+                            changed |= ui
                                 .add_sized([50.0, 10.0], |ui: &mut Ui| {
-                                    ui.drag_angle(&mut layer_view_state.rotation)
+                                    ui.drag_angle(
+                                        &mut layer_view_state
+                                            .transform
+                                            .rotation_radians,
+                                    )
                                 })
-                                .changed()
-                            {
-                                request_bbox_reset = true;
-                            };
-                            if ui
-                                .toggle_value(&mut layer_view_state.mirroring.x, "X")
-                                .changed()
-                            {
-                                request_bbox_reset = true;
-                            }
-                            if ui
-                                .toggle_value(&mut layer_view_state.mirroring.y, "Y")
-                                .changed()
-                            {
-                                request_bbox_reset = true;
-                            };
-                            if ui
+                                .changed();
+
+                            changed |= ui
+                                .toggle_value(&mut layer_view_state.transform.mirroring.x, "X")
+                                .changed();
+
+                            changed |= ui
+                                .add(egui::DragValue::new(&mut origin.x))
+                                .changed();
+
+                            changed |= ui
+                                .add(egui::DragValue::new(&mut layer_view_state.transform.offset.x))
+                                .changed();
+
+                            changed |= ui
+                                .toggle_value(&mut layer_view_state.transform.mirroring.y, "Y")
+                                .changed();
+
+                            changed |= ui
+                                .add(egui::DragValue::new(&mut origin.y))
+                                .changed();
+
+                            changed |= ui
+                                .add(egui::DragValue::new(&mut layer_view_state.transform.offset.y))
+                                .changed();
+
+                            changed |= ui
                                 .checkbox(
                                     &mut layer_view_state.enabled,
                                     path.file_stem()
@@ -842,8 +889,11 @@ impl eframe::App for GerberViewer {
                                         .to_string_lossy()
                                         .to_string(),
                                 )
-                                .clicked()
-                            {
+                                .clicked();
+
+                            if changed {
+                                layer_view_state.transform.origin = origin - layer_view_state.transform.offset;
+
                                 request_bbox_reset = true;
                             }
                         });
@@ -871,8 +921,12 @@ impl eframe::App for GerberViewer {
                     state.update_bbox_from_layers();
                 }
 
+                if state.needs_view_fitting {
+                    state.fit_view(viewport);
+                }
+
                 if state.needs_view_centering {
-                    state.reset_view(viewport);
+                    state.center_view(viewport);
                 }
 
                 state
@@ -880,15 +934,14 @@ impl eframe::App for GerberViewer {
                     .update(ui, &viewport, &response, &mut state.view);
 
                 let bbox_screen_vertices = state
-                    .bounding_box
-                    .vertices()
-                    .into_iter()
-                    .map(|position| state.gerber_to_screen_coords(position))
+                    .bounding_box_vertices
+                    .iter()
+                    .map(|position| state.gerber_to_screen_coords(*position))
                     .collect::<Vec<_>>();
 
                 trace!(
                     "view bbox screen vertices: {:?}, offset: {:?}, scale: {:?}, translation: {:?}",
-                    bbox_screen_vertices, state.design_origin, state.view.scale, state.view.translation
+                    bbox_screen_vertices, state.transform.origin, state.view.scale, state.view.translation
                 );
 
                 trace!(
@@ -900,18 +953,19 @@ impl eframe::App for GerberViewer {
                 );
 
                 let painter = ui.painter().with_clip_rect(viewport);
-                for (_, layer_state, layer, _doc) in state.layers.iter() {
-                    if layer_state.enabled {
+                for (_, layer_view_state, layer, _doc) in state.layers.iter() {
+                    if layer_view_state.enabled {
+                        let layer_transform = layer_view_state
+                            .transform
+                            .combine(&state.transform);
+
                         GerberRenderer::default().paint_layer(
                             &painter,
                             state.view,
                             layer,
-                            layer_state.color,
+                            layer_view_state.color,
                             &self.config,
-                            state.rotation + layer_state.rotation,
-                            state.mirroring ^ layer_state.mirroring,
-                            layer_state.design_origin,
-                            layer_state.design_offset,
+                            &layer_transform,
                         );
                     }
                 }
