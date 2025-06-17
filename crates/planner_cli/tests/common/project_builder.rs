@@ -10,7 +10,7 @@ use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacemen
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
-use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PcbUnitPositioning, Unit};
+use pnp::panel::{Dimensions, Unit};
 use pnp::pcb::{PcbSide, PcbUnitIndex};
 use pnp::placement::RefDes;
 use pnp::reference::Reference;
