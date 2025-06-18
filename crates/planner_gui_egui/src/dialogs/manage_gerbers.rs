@@ -145,14 +145,15 @@ impl UiComponent for ManageGerbersModal {
                                 ui.label(label);
                             });
                             row.col(|ui| {
-                                // TODO replace label with a dropdown to allow the user to change the side
+                                // TODO replace label with a dropdown to allow the user to change the purpose
                                 let label = match purpose {
                                     GerberPurpose::Assembly => tr!("gerber-purpose-assembly"),
+                                    GerberPurpose::Component => tr!("gerber-purpose-component"),
                                     GerberPurpose::Copper => tr!("gerber-purpose-copper"),
                                     GerberPurpose::Legend => tr!("gerber-purpose-legend"),
-                                    GerberPurpose::PasteMask => tr!("gerber-purpose-pastemask"),
+                                    GerberPurpose::Paste => tr!("gerber-purpose-pastemask"),
                                     GerberPurpose::Other => tr!("gerber-purpose-other"),
-                                    GerberPurpose::SolderMask => tr!("gerber-purpose-soldermask"),
+                                    GerberPurpose::Solder => tr!("gerber-purpose-soldermask"),
                                 };
                                 ui.label(label);
                             });

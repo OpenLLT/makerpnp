@@ -2343,6 +2343,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gerber"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "gerber_parser",
+ "gerber_types",
+ "planning",
+ "pnp",
+ "rstest",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
 name = "gerber_parser"
 version = "0.2.0"
 source = "git+https://github.com/makerpnp/gerber-parser.git?rev=abcd8bcef8eb4d40d1ebf53d33bbb13d8c30825f#abcd8bcef8eb4d40d1ebf53d33bbb13d8c30825f"
@@ -2359,7 +2374,7 @@ dependencies = [
 [[package]]
 name = "gerber_types"
 version = "0.4.0"
-source = "git+https://github.com/MakerPnP/gerber-types.git?rev=357215682b77093c3693efa4fe9d74076c1685fa#357215682b77093c3693efa4fe9d74076c1685fa"
+source = "git+https://github.com/makerpnp/gerber-types.git?rev=357215682b77093c3693efa4fe9d74076c1685fa#357215682b77093c3693efa4fe9d74076c1685fa"
 dependencies = [
  "chrono",
  "num-rational",

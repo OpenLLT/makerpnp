@@ -10,12 +10,16 @@ pub struct GerberFile {
     pub pcb_side: Option<PcbSide>,
 }
 
+/// For Pick-and-Place planning, we only care about a subset of the gerber files.
+/// See `gerber-types::FileFunction` for the full list.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum GerberPurpose {
-    Other,
-    Legend,
-    PasteMask,
-    SolderMask,
     Assembly,
+    Component,
     Copper,
+    Legend,
+    Paste,
+    Solder,
+
+    Other,
 }

@@ -6,23 +6,25 @@
 resolver = "2"
 
 members = [
-    "crates/cli",
-    "crates/pnp",
-    "crates/cli",
-    "crates/i18n",
-    "crates/planning",
-    "crates/stores",
-    "crates/part_mapper",
     "crates/assembly",
-    "crates/eda",
-    "crates/util",
+    "crates/cli",
     "crates/criteria",
+    "crates/cli",
+    "crates/eda",
+    "crates/gerber",
+    "crates/gerber_viewer_egui",
+    "crates/i18n",
+    "crates/math",
+    "crates/planning",
+    "crates/part_mapper",
+    "crates/pnp",
     "crates/planner_app",
     "crates/planner_cli",
     "crates/planner_gui_egui",
+    "crates/stores",
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
-    "crates/gerber_viewer_egui", "crates/math",
+    "crates/util",
 ]
 
 [workspace.dependencies]
@@ -119,8 +121,13 @@ tokio = { version = "1.45.1", features = ["full"]}
 crossbeam-channel = { version = "0.5.15" }
 
 # Gerber rendering, types and parser
+# Note, these three crates are tightly coupled, ensure that only one of each appears in the dependency tree.
 gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "ef23948e76b3c7639123513d8a465cc92269b9a3" }
 #gerber_viewer = { path = "../gerber-viewer" }
+gerber_types = { git = "https://github.com/makerpnp/gerber-types.git", rev = "357215682b77093c3693efa4fe9d74076c1685fa"}
+#gerber_types = { path = "../gerber-types" }
+gerber_parser = { git = "https://github.com/makerpnp/gerber-parser.git", rev = "abcd8bcef8eb4d40d1ebf53d33bbb13d8c30825f"}
+#gerber_types = { path = "../gerber-parser" }
 
 # math
 num-rational = "0.4.2"

@@ -246,11 +246,12 @@ process-status-complete = Complete
 process-status-abandoned = Abandoned
 
 gerber-purpose-assembly = Assembly
+gerber-purpose-component = Component
 gerber-purpose-copper = Copper
 gerber-purpose-legend = Legend
-gerber-purpose-pastemask = Paste mask
+gerber-purpose-paste = Paste
 gerber-purpose-other = Other
-gerber-purpose-soldermask = Soler mask
+gerber-purpose-solder = Soldar
 
 table-placements-column-index = #
 table-placements-column-object-path = Object path
