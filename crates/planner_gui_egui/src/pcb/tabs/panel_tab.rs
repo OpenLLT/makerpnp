@@ -853,7 +853,8 @@ impl PanelTabUi {
 
         if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview) {
             dump_gerber_source(&commands);
-            gerber_viewer_ui.use_single_layer(commands);
+            gerber_viewer_ui.clear_layers();
+            gerber_viewer_ui.add_layer("Preview".to_string(), commands); // TODO translate 
         } else {
             // TODO show an error message if the gerber preview could not be generated
         }

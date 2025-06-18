@@ -1,5 +1,8 @@
 use derivative::Derivative;
-use egui::{Ui, WidgetText};
+use egui::scroll_area::ScrollBarVisibility;
+use egui::{Resize, Ui, WidgetText};
+use egui_extras::{Column, TableBuilder};
+use egui_i18n::tr;
 use planner_app::PcbOverview;
 use tracing::trace;
 
@@ -21,6 +24,9 @@ pub struct GerberViewerTabUi {
 }
 
 impl GerberViewerTabUi {
+    const TABLE_HEIGHT_MAX: f32 = 200.0;
+    const TABLE_SCROLL_HEIGHT_MIN: f32 = 40.0;
+
     pub fn new(args: GerberViewerUiInstanceArgs) -> Self {
         let component: ComponentState<GerberViewerTabUiCommand> = Default::default();
 
@@ -40,7 +46,7 @@ impl GerberViewerTabUi {
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         self.gerber_viewer_ui
-            .update_pcb_overview(pcb_overview);
+            .update_layers_from_pcb_overview(pcb_overview);
     }
 }
 
@@ -71,7 +77,74 @@ impl UiComponent for GerberViewerTabUi {
         )
         .resizable(true)
         .show_inside(ui, |ui| {
-            ui.label("Gerber Viewer Tab");
+            egui::ScrollArea::both()
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    ui.label("Gerber Viewer Tab");
+                    ui.separator();
+
+                    let layers_binding = self.gerber_viewer_ui.layers();
+                    let layers = layers_binding.lock().unwrap();
+
+                    Resize::default()
+                        .resizable([false, true])
+                        .default_size(ui.available_size())
+                        .min_width(ui.available_width())
+                        .max_width(ui.available_width())
+                        //.max_height(Self::TABLE_HEIGHT_MAX)
+                        .show(ui, |ui| {
+                            // HACK: search codebase for 'HACK: table-resize-hack' for details
+                            egui::Frame::new()
+                                .outer_margin(4.0)
+                                .show(ui, |ui| {
+                                    ui.style_mut()
+                                        .interaction
+                                        .selectable_labels = false;
+
+                                    let text_height = egui::TextStyle::Body
+                                        .resolve(ui.style())
+                                        .size
+                                        .max(ui.spacing().interact_size.y);
+
+                                    let _table_response = TableBuilder::new(ui)
+                                        .striped(true)
+                                        .resizable(true)
+                                        .auto_shrink([false, false])
+                                        .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                        .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                        .sense(egui::Sense::click())
+                                        .column(Column::auto())
+                                        .column(Column::auto())
+                                        .column(Column::remainder())
+                                        .header(20.0, |mut header| {
+                                            header.col(|ui| {
+                                                ui.strong("#"); // TODO translate
+                                            });
+                                            header.col(|ui| {
+                                                ui.strong("NAME"); // TODO translate
+                                            });
+                                            header.col(|ui| {
+                                                ui.strong("FILE"); // TODO translate
+                                            });
+                                        })
+                                        .body(|mut body| {
+                                            for (row_index, ((path, name), _)) in layers.iter().enumerate() {
+                                                body.row(text_height, |mut row| {
+                                                    row.col(|ui| {
+                                                        ui.label(row_index.to_string());
+                                                    });
+                                                    row.col(|ui| {
+                                                        ui.label(format!("{}", name));
+                                                    });
+                                                    row.col(|ui| {
+                                                        ui.label(format!("{:?}", path));
+                                                    });
+                                                });
+                                            }
+                                        });
+                                });
+                        });
+                });
         });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.gerber_viewer_ui
