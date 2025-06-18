@@ -121,7 +121,7 @@ pcb-configuration-tab-label = Configuración
 pcb-configuration-header = Configuración
 pcb-configuration-detail-name = Nombre: { $name }
 
-pcb-panel-tab-label = Panel
+pcb-panel-tab-label = Panelización de PCB
 pcb-panel-tab-panel-size-header = Tamaño del panel
 pcb-panel-tab-panel-edge-rails-header = Raíles de borde
 pcb-panel-tab-panel-fiducials-header = Fiduciales
@@ -131,7 +131,7 @@ pcb-panel-tab-panel-unit-positions-header = Posiciones de la unidad
 pcb-explorer-tab-label = Explorador de PCB
 pcb-explorer-node-root = { $name }
 pcb-explorer-node-configuration = Configuración
-pcb-explorer-node-panel = Panel
+pcb-explorer-node-panel = Panelización de PCB
 pcb-explorer-node-pcb-view = PCB
 pcb-explorer-node-designs = Diseños
 pcb-explorer-node-units = Unidad
