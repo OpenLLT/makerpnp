@@ -1067,7 +1067,7 @@ impl Tab for PanelTab {
 
 fn calculate_initial_table_height(item_count: usize, text_height: f32, ui: &mut Ui) -> Vec2 {
     // FIXME this calculation isn't exact, but it's close enough for now
-    //       the size the resize widget so it contains the table precisely.
+    //       it should be the size of the resize widget so it contains the table precisely.
     let initial_height = (text_height + 11.0) + ((text_height + 3.0) * item_count as f32);
     let initial_width = ui.available_width();
     let initial_size = egui::Vec2::new(initial_width, initial_height);
