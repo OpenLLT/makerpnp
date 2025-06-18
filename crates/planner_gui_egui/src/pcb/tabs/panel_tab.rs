@@ -1178,8 +1178,7 @@ fn build_panel_preview_commands(
             .add_x(pcb_unit_positioning.offset.x)
             .add_y(pcb_unit_positioning.offset.y);
         let unit_size = design_sizing.size;
-        // rotation is positive clockwise, invert the sign
-        let unit_rotation = -pcb_unit_positioning.rotation;
+        let unit_rotation = pcb_unit_positioning.rotation;
 
         let (rotated_origin, rotated_vectors) = make_rotated_box_path(&unit_origin, &unit_size, unit_rotation);
 

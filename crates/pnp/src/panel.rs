@@ -33,7 +33,7 @@ pub struct DesignSizing {
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct PcbUnitPositioning {
     pub offset: Vector2<f64>,
-    /// clockwise positive radians
+    /// anti-clockwise positive radians
     pub rotation: f64,
 }
 

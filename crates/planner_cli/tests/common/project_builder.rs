@@ -220,7 +220,7 @@ pub struct TestDesignSizing {
 #[derive(serde::Serialize, Debug)]
 pub struct TestPcbUnitPositioning {
     pub offset: Vector2<f64>,
-    /// clockwise positive radians
+    /// anti-clockwise positive radians
     pub rotation: f64,
 }
 
