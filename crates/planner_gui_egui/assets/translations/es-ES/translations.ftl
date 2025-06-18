@@ -248,14 +248,14 @@ process-status-incomplete = Incompleto
 process-status-complete = Completo
 process-status-abandoned = Abandonado
 
-gerber-purpose-assembly = Montaje
-gerber-purpose-component = Componente
-gerber-purpose-copper = Cobre
-gerber-purpose-legend = Leyenda
-gerber-purpose-paste = Pasta
-gerber-purpose-profile = Perfil
-gerber-purpose-other = Otro
-gerber-purpose-solder = Soldar
+gerber-file-function-assembly = Montaje
+gerber-file-function-component = Componente
+gerber-file-function-copper = Cobre
+gerber-file-function-legend = Leyenda
+gerber-file-function-paste = Pasta
+gerber-file-function-profile = Perfil
+gerber-file-function-other = Otro
+gerber-file-function-solder = Soldar
 
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto
@@ -286,8 +286,13 @@ table-designs-column-name = Nombre
 tabla-gerbers-column-index = #
 table-gerbers-column-file = Archivo
 table-gerbers-column-pcb-side = Lado PCB
-table-gerbers-column-gerber-purpose = Propósito
+table-gerbers-column-gerber-file-function = Propósito
 table-gerbers-column-actions = Acciones
+
+table-gerber-viewer-layers-column-index = #
+table-gerber-viewer-layers-column-file = Archivo
+table-gerber-viewer-layers-column-pcb-side = Lado PCB
+table-gerber-viewer-layers-column-gerber-file-function = Propósito
 
 table-design-assignments-column-pcb-unit = Unidad PCB
 table-design-assignments-column-design = Nombre del diseño

@@ -4293,6 +4293,7 @@ dependencies = [
  "egui_material_icons",
  "egui_mobius",
  "egui_taffy",
+ "egui_vertical_stack",
  "futures",
  "gerber_viewer",
  "i18n",

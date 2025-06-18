@@ -17,11 +17,14 @@ use gerber_viewer::{
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
-use planner_app::{DesignIndex, PcbOverview, PcbSide};
+use planner_app::{DesignIndex, GerberFileFunction, PcbOverview, PcbSide};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::ui_component::{ComponentState, UiComponent};
+
+pub type LayersMap =
+    IndexMap<(Option<PathBuf>, Option<GerberFileFunction>), (LayerViewState, GerberLayer, Option<GerberDoc>)>;
 
 const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 
@@ -67,39 +70,50 @@ pub enum GerberViewerMode {
     Design(DesignIndex),
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct GerberViewerUi {
     args: GerberViewerUiInstanceArgs,
 
-    #[derivative(Debug = "ignore")]
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
+
+    layers: Value<LayersMap>,
 
     pub component: ComponentState<GerberViewerUiCommand>,
 }
 
 impl GerberViewerUi {
     pub fn new(args: GerberViewerUiInstanceArgs) -> Self {
+        let layers = Value::new(IndexMap::new());
+
         Self {
             args,
-            gerber_state: Value::default(),
+            gerber_state: Value::new(GerberViewState::new(layers.clone())),
             gerber_ui_state: Value::default(),
             component: Default::default(),
+            layers,
         }
     }
 
-    pub fn use_single_layer(&mut self, commands: Vec<Command>) {
-        let mut gerber_state = self.gerber_state.lock().unwrap();
+    pub fn layers(&self) -> Value<LayersMap> {
+        self.layers.clone()
+    }
 
-        gerber_state.layers.clear();
+    pub fn clear_layers(&mut self) {
+        let mut layers = self.layers.lock().unwrap();
+
+        layers.clear();
+    }
+
+    pub fn add_layer(&mut self, function: Option<GerberFileFunction>, commands: Vec<Command>) {
+        let mut gerber_state = self.gerber_state.lock().unwrap();
 
         let (state, layer) = Self::build_gerber_layer_from_commands(0, commands);
 
-        gerber_state.add_layer(None, state, layer, None);
+        gerber_state.add_layer(None, function, state, layer, None);
     }
 
-    pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
+    pub fn update_layers_from_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         let gerber_items = match self.args.mode {
             GerberViewerMode::Panel => pcb_overview.pcb_gerbers.clone(),
             GerberViewerMode::Design(design_index) => pcb_overview.design_gerbers[design_index].clone(),
@@ -135,16 +149,20 @@ impl GerberViewerUi {
         // FUTURE move this, e.g. `GerberLayerState::sync_layers` and give it the `FBuild` and `FKey` closures as arguments.
         // FUTURE load each layer in a background thead, don't block the UI thread.
         {
-            let mut layers = gerber_state.layers.split_off(0);
+            let mut layers = gerber_state
+                .layers
+                .lock()
+                .unwrap()
+                .split_off(0);
 
             let errors = sync_indexmap(
                 &mut layers,
                 &gerber_items,
-                |index, key, _content| {
-                    Self::build_gerber_layer_from_file(index, key.as_ref().unwrap())
+                |index, (path, _name), _content| {
+                    Self::build_gerber_layer_from_file(index, path.as_ref().unwrap())
                         .map(|(layer_view_state, layer, gerber_doc)| (layer_view_state, layer, Some(gerber_doc)))
                 },
-                |content| Some(content.path.clone()),
+                |content| (Some(content.path.clone()), content.function),
                 |_existing_entry, _gerber_item| true,
             );
 
@@ -155,7 +173,7 @@ impl GerberViewerUi {
                 );
             }
 
-            gerber_state.layers = layers;
+            gerber_state.layers.write(layers);
             gerber_state.request_center_view();
         }
 
@@ -259,13 +277,14 @@ impl GerberViewerUi {
     }
 }
 
+#[derive(Debug)]
 struct GerberViewState {
     view: ViewState,
     needs_view_centering: bool,
     needs_bbox_update: bool,
     bounding_box: BoundingBox,
     render_configuration: RenderConfiguration,
-    layers: IndexMap<Option<PathBuf>, (LayerViewState, GerberLayer, Option<GerberDoc>)>,
+    layers: Value<LayersMap>,
     transform: GerberTransform,
 }
 
@@ -284,15 +303,25 @@ impl Default for GerberViewState {
 }
 
 impl GerberViewState {
+    pub fn new(layers: Value<LayersMap>) -> Self {
+        Self {
+            layers,
+            ..Default::default()
+        }
+    }
+
     pub fn add_layer(
         &mut self,
         path: Option<PathBuf>,
+        function: Option<GerberFileFunction>,
         layer_view_state: LayerViewState,
         layer: GerberLayer,
         gerber_doc: Option<GerberDoc>,
     ) {
         self.layers
-            .insert(path, (layer_view_state, layer, gerber_doc));
+            .lock()
+            .unwrap()
+            .insert((path, function), (layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_center_view();
     }
@@ -300,8 +329,10 @@ impl GerberViewState {
     fn update_bbox_from_layers(&mut self) {
         let mut bbox = BoundingBox::default();
 
-        for (layer_index, (_path, (layer_view_state, layer, _))) in self
+        for (layer_index, ((_path, _name), (layer_view_state, layer, _))) in self
             .layers
+            .lock()
+            .unwrap()
             .iter()
             .enumerate()
             .filter(|(_, (_path, (_, layer, _)))| !layer.is_empty())
@@ -347,7 +378,8 @@ enum GerberViewerUiError {
     ParserError(ParseError),
 }
 
-struct LayerViewState {
+#[derive(Debug, Clone)]
+pub struct LayerViewState {
     color: Color32,
     transform: GerberTransform,
 }
@@ -398,7 +430,7 @@ impl UiComponent for GerberViewerUi {
         ui_state.update(ui, &viewport, &response, &mut state.view);
 
         let painter = ui.painter().with_clip_rect(viewport);
-        for (_path, (layer_view_state, layer, _doc)) in state.layers.iter() {
+        for (_path, (layer_view_state, layer, _doc)) in state.layers.lock().unwrap().iter() {
             let layer_transform = layer_view_state
                 .transform
                 .combine(&state.transform);

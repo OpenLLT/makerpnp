@@ -249,14 +249,14 @@ process-status-incomplete = Incomplete
 process-status-complete = Complete
 process-status-abandoned = Abandoned
 
-gerber-purpose-assembly = Assembly
-gerber-purpose-component = Component
-gerber-purpose-copper = Copper
-gerber-purpose-legend = Legend
-gerber-purpose-paste = Paste
-gerber-purpose-profile = Profile
-gerber-purpose-other = Other
-gerber-purpose-solder = Solder
+gerber-file-function-assembly = Assembly
+gerber-file-function-component = Component
+gerber-file-function-copper = Copper
+gerber-file-function-legend = Legend
+gerber-file-function-paste = Paste
+gerber-file-function-profile = Profile
+gerber-file-function-other = Other
+gerber-file-function-solder = Solder
 
 table-placements-column-index = #
 table-placements-column-object-path = Object path
@@ -287,8 +287,13 @@ table-designs-column-actions = Actions
 table-gerbers-column-index = #
 table-gerbers-column-file = File
 table-gerbers-column-pcb-side = PCB Side
-table-gerbers-column-gerber-purpose = Purpose
+table-gerbers-column-gerber-file-function = Purpose
 table-gerbers-column-actions = Actions
+
+table-gerber-viewer-layers-column-index = #
+table-gerber-viewer-layers-column-file = File
+table-gerber-viewer-layers-column-pcb-side = PCB Side
+table-gerber-viewer-layers-column-gerber-file-function = Purpose
 
 table-design-assignments-column-pcb-unit = PCB Unit
 table-design-assignments-column-design = Design Name

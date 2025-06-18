@@ -15,8 +15,8 @@ use gerber_viewer::gerber_types::{
 use math::ops::Ops2D;
 use nalgebra::{Point, Point2, Vector2};
 use planner_app::{
-    DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbOverview, PcbSide, PcbUnitIndex, PcbUnitPositioning,
-    Unit,
+    DesignSizing, Dimensions, FiducialParameters, GerberFileFunction, PanelSizing, PcbOverview, PcbSide, PcbUnitIndex,
+    PcbUnitPositioning, Unit,
 };
 use tracing::{debug, trace};
 
@@ -853,7 +853,8 @@ impl PanelTabUi {
 
         if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview) {
             dump_gerber_source(&commands);
-            gerber_viewer_ui.use_single_layer(commands);
+            gerber_viewer_ui.clear_layers();
+            gerber_viewer_ui.add_layer(Some(GerberFileFunction::Other(None)), commands);
         } else {
             // TODO show an error message if the gerber preview could not be generated
         }

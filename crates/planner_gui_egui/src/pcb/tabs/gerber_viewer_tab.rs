@@ -1,14 +1,22 @@
+use std::collections::HashSet;
+
 use derivative::Derivative;
+use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
+use egui_extras::{Column, TableBuilder};
+use egui_i18n::tr;
+use egui_mobius::Value;
+use egui_vertical_stack::VerticalStack;
 use planner_app::PcbOverview;
 use tracing::trace;
 
+use crate::i18n::conversions::{gerber_file_function_to_i18n_key, pcb_side_to_i18n_key};
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
-    GerberViewerUiInstanceArgs,
+    GerberViewerUiInstanceArgs, LayersMap,
 };
 
 #[derive(Derivative)]
@@ -18,9 +26,13 @@ pub struct GerberViewerTabUi {
     gerber_viewer_ui: GerberViewerUi,
 
     pub component: ComponentState<GerberViewerTabUiCommand>,
+    #[derivative(Debug = "ignore")]
+    stack: Value<VerticalStack>,
 }
 
 impl GerberViewerTabUi {
+    const TABLE_SCROLL_HEIGHT_MIN: f32 = 40.0;
+
     pub fn new(args: GerberViewerUiInstanceArgs) -> Self {
         let component: ComponentState<GerberViewerTabUiCommand> = Default::default();
 
@@ -34,13 +46,137 @@ impl GerberViewerTabUi {
 
         Self {
             gerber_viewer_ui,
+            stack: Value::new(
+                VerticalStack::new()
+                    .min_panel_height(150.0)
+                    .default_panel_height(50.0),
+            ),
             component,
         }
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         self.gerber_viewer_ui
-            .update_pcb_overview(pcb_overview);
+            .update_layers_from_pcb_overview(pcb_overview);
+    }
+
+    fn show_layers_table(ui: &mut Ui, layers: &LayersMap) {
+        ui.style_mut()
+            .interaction
+            .selectable_labels = false;
+
+        let text_height = egui::TextStyle::Body
+            .resolve(ui.style())
+            .size
+            .max(ui.spacing().interact_size.y);
+
+        let mut table_builder = TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            .auto_shrink([false, true])
+            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+            .sense(egui::Sense::click());
+
+        let show_function_column = layers
+            .iter()
+            .all(|((_, function), _)| function.is_some());
+
+        let show_file_column = layers
+            .iter()
+            .all(|((path, _), _)| path.is_some());
+
+        let pcb_sides = layers
+            .iter()
+            .filter_map(|((_, function), _)| {
+                function
+                    .map(|function| function.pcb_side())
+                    .flatten()
+            })
+            .collect::<HashSet<_>>();
+
+        let show_pcb_side_column = pcb_sides.len() > 1;
+
+        if show_function_column {
+            // add another column
+            table_builder = table_builder.column(Column::auto());
+        }
+
+        if show_pcb_side_column {
+            // add another column
+            table_builder = table_builder.column(Column::auto());
+        }
+
+        if show_file_column {
+            // add another column
+            table_builder = table_builder.column(Column::auto());
+        }
+
+        // add the last column, which is always 'remainder'
+        table_builder = table_builder.column(Column::remainder());
+
+        table_builder
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.strong(tr!("table-gerber-viewer-layers-column-index"));
+                });
+                if show_function_column {
+                    header.col(|ui| {
+                        ui.strong(tr!("table-gerber-viewer-layers-column-gerber-file-function"));
+                    });
+                }
+                if show_pcb_side_column {
+                    header.col(|ui| {
+                        ui.strong(tr!("table-gerber-viewer-layers-column-pcb-side"));
+                    });
+                }
+                if show_file_column {
+                    header.col(|ui| {
+                        ui.strong(tr!("table-gerber-viewer-layers-column-file"));
+                    });
+                }
+            })
+            .body(|mut body| {
+                for (row_index, ((path, function), _)) in layers.iter().enumerate() {
+                    body.row(text_height, |mut row| {
+                        row.col(|ui| {
+                            ui.label(row_index.to_string());
+                        });
+
+                        if show_function_column {
+                            row.col(|ui| {
+                                if let Some(function) = function {
+                                    ui.label(tr!(gerber_file_function_to_i18n_key(function)));
+                                }
+                            });
+                        }
+
+                        if show_pcb_side_column {
+                            row.col(|ui| {
+                                if let Some(pcb_side) = function
+                                    .map(|function| function.pcb_side())
+                                    .flatten()
+                                {
+                                    ui.label(tr!(pcb_side_to_i18n_key(&pcb_side)));
+                                }
+                            });
+                        }
+
+                        if show_file_column {
+                            row.col(|ui| {
+                                if let Some(path) = path {
+                                    ui.label(format!(
+                                        "{}",
+                                        path.file_name()
+                                            .unwrap()
+                                            .to_string_lossy()
+                                    ));
+                                }
+                            });
+                        }
+                    });
+                }
+            });
     }
 }
 
@@ -71,7 +207,21 @@ impl UiComponent for GerberViewerTabUi {
         )
         .resizable(true)
         .show_inside(ui, |ui| {
-            ui.label("Gerber Viewer Tab");
+            let layers_binding = self.gerber_viewer_ui.layers();
+            let mut stack = self.stack.lock().unwrap();
+            stack
+                .id_salt(ui.id().with("vertical_stack"))
+                .body(ui, move |body| {
+                    body.add_panel("top", {
+                        let layers_binding = layers_binding.clone();
+
+                        move |ui| {
+                            let layers_map = layers_binding.lock().unwrap();
+
+                            Self::show_layers_table(ui, &layers_map);
+                        }
+                    });
+                });
         });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.gerber_viewer_ui

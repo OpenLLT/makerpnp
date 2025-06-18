@@ -5,10 +5,10 @@ use egui::Modal;
 use egui_extras::Column;
 use egui_i18n::tr;
 use egui_mobius::Value;
-use planner_app::{GerberFileFunction, PcbGerberItem, PcbSide};
+use planner_app::{PcbGerberItem, PcbSide};
 
 use crate::file_picker::Picker;
-use crate::i18n::conversions::pcb_side_to_i18n_key;
+use crate::i18n::conversions::{gerber_file_function_to_i18n_key, pcb_side_to_i18n_key};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
@@ -104,7 +104,7 @@ impl UiComponent for ManageGerbersModal {
                         ui.strong(tr!("table-gerbers-column-file"));
                     });
                     header.col(|ui| {
-                        ui.strong(tr!("table-gerbers-column-gerber-purpose"));
+                        ui.strong(tr!("table-gerbers-column-gerber-file-function"));
                     });
                     header.col(|ui| {
                         ui.strong(tr!("table-gerbers-column-pcb-side"));
@@ -137,14 +137,7 @@ impl UiComponent for ManageGerbersModal {
                             row.col(|ui| {
                                 // TODO replace label with a dropdown to allow the user to change the purpose
                                 let label = match function {
-                                    Some(GerberFileFunction::Assembly(_)) => tr!("gerber-purpose-assembly"),
-                                    Some(GerberFileFunction::Component(_)) => tr!("gerber-purpose-component"),
-                                    Some(GerberFileFunction::Copper(_)) => tr!("gerber-purpose-copper"),
-                                    Some(GerberFileFunction::Legend(_)) => tr!("gerber-purpose-legend"),
-                                    Some(GerberFileFunction::Paste(_)) => tr!("gerber-purpose-paste"),
-                                    Some(GerberFileFunction::Profile) => tr!("gerber-purpose-profile"),
-                                    Some(GerberFileFunction::Other(_)) => tr!("gerber-purpose-other"),
-                                    Some(GerberFileFunction::Solder(_)) => tr!("gerber-purpose-solder"),
+                                    Some(function) => tr!(gerber_file_function_to_i18n_key(function)),
                                     None => tr!("common-value-not-available"),
                                 };
                                 ui.label(label);

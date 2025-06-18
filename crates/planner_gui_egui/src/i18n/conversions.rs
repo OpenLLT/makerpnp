@@ -1,5 +1,6 @@
 use planner_app::{
-    OperationStatus, PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus,
+    GerberFileFunction, OperationStatus, PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus,
+    TaskStatus,
 };
 use util::sorting::SortOrder;
 
@@ -64,5 +65,18 @@ pub fn process_task_status_to_i18n_key(status: &TaskStatus) -> &'static str {
         TaskStatus::Started => "process-status-incomplete",
         TaskStatus::Complete => "process-status-complete",
         TaskStatus::Abandoned => "process-status-abandoned",
+    }
+}
+
+pub fn gerber_file_function_to_i18n_key(function: &GerberFileFunction) -> &'static str {
+    match function {
+        GerberFileFunction::Assembly(_) => "gerber-file-function-assembly",
+        GerberFileFunction::Component(_) => "gerber-file-function-component",
+        GerberFileFunction::Copper(_) => "gerber-file-function-copper",
+        GerberFileFunction::Legend(_) => "gerber-file-function-legend",
+        GerberFileFunction::Paste(_) => "gerber-file-function-paste",
+        GerberFileFunction::Profile => "gerber-file-function-profile",
+        GerberFileFunction::Solder(_) => "gerber-file-function-solder",
+        GerberFileFunction::Other(_) => "gerber-file-function-other",
     }
 }

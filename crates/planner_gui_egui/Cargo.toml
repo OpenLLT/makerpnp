@@ -45,6 +45,7 @@ egui_ltreeview = { workspace = true, features = ["persistence", "serde"] }
 egui-data-table = { git = "https://github.com/kang-sw/egui-data-table.git", rev ="024fc65" }
 #egui-data-table = { git = "https://github.com/MakerPnP/egui-data-table.git", rev ="024fc6579b9e8ad273124dd8b0719ec2921e0d16" }
 egui_double_slider = { workspace = true }
+egui_vertical_stack = { workspace = true }
 
 rfd = { workspace = true }
 

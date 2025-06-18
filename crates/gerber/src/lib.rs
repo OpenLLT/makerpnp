@@ -20,7 +20,7 @@ pub struct GerberFile {
 
 /// For Pick-and-Place planning, we only care about a subset of the gerber files.
 /// See `gerber-types::FileFunction` for the full list.
-#[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum GerberFileFunction {
     Assembly(PcbSide),
     Component(PcbSide),
