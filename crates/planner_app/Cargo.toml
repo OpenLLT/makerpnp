@@ -4,10 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+gerber = { path = "../gerber" }
 planning = { path = "../planning" }
-pnp = { path = "../pnp"}
-stores = { path = "../stores"}
-math = { path = "../math"}
+pnp = { path = "../pnp" }
+math = { path = "../math" }
+stores = { path = "../stores" }
 
 thiserror = { workspace = true }
 anyhow = { workspace = true }

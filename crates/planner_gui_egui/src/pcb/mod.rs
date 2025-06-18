@@ -690,7 +690,7 @@ impl UiComponent for Pcb {
                     //
                     // gerber file management
                     //
-                    Some(ConfigurationTabUiAction::AddGerberFiles {
+                    Some(ConfigurationTabUiAction::UpdateGerberFiles {
                         path,
                         design,
                         files,

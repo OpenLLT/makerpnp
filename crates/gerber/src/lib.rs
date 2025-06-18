@@ -2,7 +2,6 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
 use gerber_types::{Command, ExtendedCode, ExtendedPosition, FileAttribute, FileFunction, Position};
-use planning::gerber::GerberPurpose;
 use pnp::pcb::PcbSide;
 use thiserror::Error;
 use tracing::{error, info, trace};
@@ -11,13 +10,56 @@ use tracing::{error, info, trace};
 #[cfg(test)]
 mod testing;
 
-#[allow(dead_code)]
-trait AsGerberPurpose {
-    fn as_gerber_purpose(&self) -> (GerberPurpose, Option<PcbSide>);
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct GerberFile {
+    pub file: PathBuf,
+
+    /// until the purpose is determined or set, this is `None`
+    pub function: Option<GerberFileFunction>,
 }
 
-impl AsGerberPurpose for FileFunction {
-    fn as_gerber_purpose(&self) -> (GerberPurpose, Option<PcbSide>) {
+/// For Pick-and-Place planning, we only care about a subset of the gerber files.
+/// See `gerber-types::FileFunction` for the full list.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq)]
+pub enum GerberFileFunction {
+    Assembly(PcbSide),
+    Component(PcbSide),
+    Copper(PcbSide),
+    Legend(PcbSide),
+    Paste(PcbSide),
+    /// Aka 'outline', defines the profile / edge / outline of the PCB, hence no side is applicable.
+    Profile,
+    Solder(PcbSide),
+
+    Other(Option<PcbSide>),
+}
+
+impl GerberFileFunction {
+    pub fn pcb_side(&self) -> Option<PcbSide> {
+        match self {
+            GerberFileFunction::Assembly(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Component(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Copper(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Legend(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Paste(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Profile => None,
+            GerberFileFunction::Solder(pcb_side) => Some(*pcb_side),
+            GerberFileFunction::Other(_) => None,
+        }
+    }
+}
+
+#[allow(dead_code)]
+trait AsGerberFunction {
+    fn as_gerber_file_function(&self) -> GerberFileFunction;
+}
+
+impl AsGerberFunction for FileFunction {
+    // FUTURE it seems we need to detect the EDA tool and version in order do determine the file function properly.
+    //        * diptrace 4.3 uses 'Drawing' not 'AssemblyDrawing' for the 'BottomAssembly.gbr', 'TopAssembly.gbr'
+    //        so we need the 'GenerationSoftware' or list of file names to detect the EDA tool, then when we know the EDA
+    //        tool and version we could use a more specialized mapping system.
+    fn as_gerber_file_function(&self) -> GerberFileFunction {
         fn map_extended_position_to_pcb_side(pos: &ExtendedPosition) -> Option<PcbSide> {
             match pos {
                 ExtendedPosition::Top => Some(PcbSide::Top),
@@ -34,21 +76,24 @@ impl AsGerberPurpose for FileFunction {
         }
 
         match self {
-            FileFunction::AssemblyDrawing(pos) => (GerberPurpose::Assembly, Some(map_position_to_pcb_side(pos))),
+            FileFunction::AssemblyDrawing(pos) => GerberFileFunction::Assembly(map_position_to_pcb_side(pos)),
             FileFunction::Component {
                 pos, ..
-            } => (GerberPurpose::Component, Some(map_position_to_pcb_side(pos))),
+            } => GerberFileFunction::Component(map_position_to_pcb_side(pos)),
             FileFunction::Legend {
                 pos, ..
-            } => (GerberPurpose::Legend, Some(map_position_to_pcb_side(pos))),
+            } => GerberFileFunction::Legend(map_position_to_pcb_side(pos)),
             FileFunction::Copper {
                 pos, ..
-            } => (GerberPurpose::Copper, map_extended_position_to_pcb_side(pos)),
-            FileFunction::Paste(pos) => (GerberPurpose::Paste, Some(map_position_to_pcb_side(pos))),
+            } if *pos != ExtendedPosition::Inner => {
+                GerberFileFunction::Copper(map_extended_position_to_pcb_side(pos).unwrap())
+            }
+            FileFunction::Paste(pos) => GerberFileFunction::Paste(map_position_to_pcb_side(pos)),
+            FileFunction::Profile(_) => GerberFileFunction::Profile,
             FileFunction::SolderMask {
                 pos, ..
-            } => (GerberPurpose::Solder, Some(map_position_to_pcb_side(pos))),
-            _ => (GerberPurpose::Other, None),
+            } => GerberFileFunction::Solder(map_position_to_pcb_side(pos)),
+            _ => GerberFileFunction::Other(None),
         }
     }
 }
@@ -60,20 +105,24 @@ mod into_gerber_purpose_tests {
     use super::*;
 
     #[rstest]
-    #[case::component(FileFunction::Component{ layer:0, pos: Position::Top}, (GerberPurpose::Component, Some(PcbSide::Top)))]
-    #[case::copper(FileFunction::Copper{ layer: 0, pos: ExtendedPosition::Top, copper_type: None}, (GerberPurpose::Copper, Some(PcbSide::Top)))]
-    #[case::legend(FileFunction::Legend { pos: Position::Top, index: None }, (GerberPurpose::Legend, Some(PcbSide::Top)))]
-    #[case::solder(FileFunction::SolderMask { pos: Position::Bottom, index: None }, (GerberPurpose::Solder, Some(PcbSide::Bottom)))]
-    #[case::paste(FileFunction::Paste(Position::Top), (GerberPurpose::Paste, Some(PcbSide::Top)))]
-    #[case::assembly(FileFunction::AssemblyDrawing(Position::Top), (GerberPurpose::Assembly, Some(PcbSide::Top)))]
-    #[case::other_drawing(FileFunction::OtherDrawing("Other".to_string()), (GerberPurpose::Other, None))]
-    #[case::other(FileFunction::Other("Other".to_string()), (GerberPurpose::Other, None))]
+    #[case::component(FileFunction::Component{ layer:0, pos: Position::Top}, GerberFileFunction::Component(PcbSide::Top))]
+    #[case::copper(FileFunction::Copper{ layer: 0, pos: ExtendedPosition::Top, copper_type: None}, GerberFileFunction::Copper(PcbSide::Top))]
+    #[case::legend(FileFunction::Legend { pos: Position::Top, index: None }, GerberFileFunction::Legend(PcbSide::Top))]
+    #[case::solder(FileFunction::SolderMask { pos: Position::Bottom, index: None }, GerberFileFunction::Solder(PcbSide::Bottom))]
+    #[case::paste(FileFunction::Paste(Position::Top), GerberFileFunction::Paste(PcbSide::Top))]
+    #[case::paste(FileFunction::Profile(None), GerberFileFunction::Profile)]
+    #[case::assembly(
+        FileFunction::AssemblyDrawing(Position::Top),
+        GerberFileFunction::Assembly(PcbSide::Top)
+    )]
+    #[case::other_drawing(FileFunction::OtherDrawing("Other".to_string()), GerberFileFunction::Other(None))]
+    #[case::other(FileFunction::Other("Other".to_string()), GerberFileFunction::Other(None))]
     fn test_into_gerber_purpose_file_function(
         #[case] file_function: FileFunction,
-        #[case] expected: (GerberPurpose, Option<PcbSide>),
+        #[case] expected: GerberFileFunction,
     ) {
-        let (gerber_purpose, pcb_side) = file_function.as_gerber_purpose();
-        assert_eq!((gerber_purpose, pcb_side), expected);
+        let gerber_function = file_function.as_gerber_file_function();
+        assert_eq!(gerber_function, expected);
     }
 }
 
@@ -93,7 +142,7 @@ pub enum DetectionError {
 /// Looks for 'TF' FileFunction attributes. e.g.
 /// `%TF.FileFunction,AssemblyDrawing,Top*%`
 #[allow(dead_code)]
-pub fn detect_purpose(path: PathBuf) -> Result<(GerberPurpose, Option<PcbSide>), DetectionError> {
+pub fn detect_purpose(path: PathBuf) -> Result<GerberFileFunction, DetectionError> {
     let file = std::fs::File::open(&path).map_err(DetectionError::IoError)?;
     let reader = BufReader::new(file);
 
@@ -124,15 +173,12 @@ pub fn detect_purpose(path: PathBuf) -> Result<(GerberPurpose, Option<PcbSide>),
         .iter()
         .find_map(|command| match command {
             Ok(Command::ExtendedCode(ExtendedCode::FileAttribute(FileAttribute::FileFunction(file_function)))) => {
-                Some(file_function.as_gerber_purpose())
+                Some(file_function.as_gerber_file_function())
             }
             _ => None,
         })
-        .inspect(|(_purpose, pcb_side)| {
-            info!(
-                "Detected gerber purpose: {:?}, pcb side: {:?}, path: {:?}",
-                _purpose, pcb_side, path
-            );
+        .inspect(|gerber_file_function| {
+            info!("Detected gerber function: {:?}, path: {:?}", gerber_file_function, path);
         })
         .ok_or(DetectionError::UnknownPurpose)
 }
@@ -188,6 +234,6 @@ mod detect_purpose_tests {
             panic!("Unable to detect purpose");
         };
 
-        assert_eq!(result, (GerberPurpose::Assembly, Some(PcbSide::Top)));
+        assert_eq!(result, GerberFileFunction::Assembly(PcbSide::Top));
     }
 }

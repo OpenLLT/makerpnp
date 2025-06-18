@@ -249,6 +249,7 @@ gerber-purpose-component = Componente
 gerber-purpose-copper = Cobre
 gerber-purpose-legend = Leyenda
 gerber-purpose-paste = Pasta
+gerber-purpose-profile = Perfil
 gerber-purpose-other = Otro
 gerber-purpose-solder = Solder
 

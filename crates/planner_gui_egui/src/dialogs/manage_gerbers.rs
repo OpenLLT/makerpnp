@@ -5,9 +5,10 @@ use egui::Modal;
 use egui_extras::Column;
 use egui_i18n::tr;
 use egui_mobius::Value;
-use planner_app::{GerberPurpose, PcbGerberItem, PcbSide};
+use planner_app::{GerberFileFunction, PcbGerberItem, PcbSide};
 
 use crate::file_picker::Picker;
+use crate::i18n::conversions::pcb_side_to_i18n_key;
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
@@ -103,10 +104,10 @@ impl UiComponent for ManageGerbersModal {
                         ui.strong(tr!("table-gerbers-column-file"));
                     });
                     header.col(|ui| {
-                        ui.strong(tr!("table-gerbers-column-pcb-side"));
+                        ui.strong(tr!("table-gerbers-column-gerber-purpose"));
                     });
                     header.col(|ui| {
-                        ui.strong(tr!("table-gerbers-column-gerber-purpose"));
+                        ui.strong(tr!("table-gerbers-column-pcb-side"));
                     });
                     header.col(|ui| {
                         ui.strong(tr!("table-gerbers-column-actions"));
@@ -116,9 +117,8 @@ impl UiComponent for ManageGerbersModal {
                     for (
                         index,
                         PcbGerberItem {
-                            pcb_side,
                             path,
-                            purpose,
+                            function,
                         },
                     ) in self.gerbers.iter().enumerate()
                     {
@@ -135,27 +135,31 @@ impl UiComponent for ManageGerbersModal {
                                 );
                             });
                             row.col(|ui| {
-                                // TODO replace label with a dropdown to allow the user to change the side
-                                let pcb_side_choice = GerberPcbSideChoice::from(pcb_side);
-                                let label = match pcb_side_choice {
-                                    GerberPcbSideChoice::Both => tr!("pcb-side-both"),
-                                    GerberPcbSideChoice::Top => tr!("pcb-side-top"),
-                                    GerberPcbSideChoice::Bottom => tr!("pcb-side-bottom"),
+                                // TODO replace label with a dropdown to allow the user to change the purpose
+                                let label = match function {
+                                    Some(GerberFileFunction::Assembly(_)) => tr!("gerber-purpose-assembly"),
+                                    Some(GerberFileFunction::Component(_)) => tr!("gerber-purpose-component"),
+                                    Some(GerberFileFunction::Copper(_)) => tr!("gerber-purpose-copper"),
+                                    Some(GerberFileFunction::Legend(_)) => tr!("gerber-purpose-legend"),
+                                    Some(GerberFileFunction::Paste(_)) => tr!("gerber-purpose-paste"),
+                                    Some(GerberFileFunction::Profile) => tr!("gerber-purpose-profile"),
+                                    Some(GerberFileFunction::Other(_)) => tr!("gerber-purpose-other"),
+                                    Some(GerberFileFunction::Solder(_)) => tr!("gerber-purpose-solder"),
+                                    None => tr!("common-value-not-available"),
                                 };
                                 ui.label(label);
                             });
                             row.col(|ui| {
-                                // TODO replace label with a dropdown to allow the user to change the purpose
-                                let label = match purpose {
-                                    GerberPurpose::Assembly => tr!("gerber-purpose-assembly"),
-                                    GerberPurpose::Component => tr!("gerber-purpose-component"),
-                                    GerberPurpose::Copper => tr!("gerber-purpose-copper"),
-                                    GerberPurpose::Legend => tr!("gerber-purpose-legend"),
-                                    GerberPurpose::Paste => tr!("gerber-purpose-pastemask"),
-                                    GerberPurpose::Other => tr!("gerber-purpose-other"),
-                                    GerberPurpose::Solder => tr!("gerber-purpose-soldermask"),
-                                };
-                                ui.label(label);
+                                // TODO ask the function if PCB side is relevant and if so, replace the label with a
+                                //      dropdown to allow the user to change the side
+
+                                let label_key = function
+                                    .map(|function| function.pcb_side())
+                                    .flatten()
+                                    .map(|pcb_side| pcb_side_to_i18n_key(&pcb_side))
+                                    .unwrap_or("common-value-not-available");
+
+                                ui.label(tr!(label_key));
                             });
                             row.col(|ui| {
                                 if ui

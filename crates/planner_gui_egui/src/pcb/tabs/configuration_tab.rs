@@ -14,7 +14,7 @@ use egui_mobius::Value;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{DesignIndex, DesignName, GerberPurpose, PcbOverview, PcbSide, PcbUnitIndex};
+use planner_app::{DesignIndex, DesignName, GerberFileFunction, PcbOverview, PcbUnitIndex};
 use tracing::{debug, trace};
 use util::range_utils::{RangeIntoUsize, clamp_inclusive_range};
 use validator::{Validate, ValidationError};
@@ -856,10 +856,10 @@ pub enum ConfigurationTabUiCommand {
 #[derive(Debug, Clone)]
 pub enum ConfigurationTabUiAction {
     None,
-    AddGerberFiles {
+    UpdateGerberFiles {
         path: PathBuf,
         design: Option<DesignName>,
-        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
+        files: Vec<(PathBuf, Option<GerberFileFunction>)>,
     },
     RemoveGerberFiles {
         path: PathBuf,
@@ -1159,9 +1159,9 @@ impl UiComponent for ConfigurationUi {
                             debug!("gerber files picked. mode: {:?}, picked: {:?}", mode, files);
                             let files = files
                                 .into_iter()
-                                .map(|file| (file, None, GerberPurpose::Other))
+                                .map(|file| (file, None))
                                 .collect();
-                            Some(ConfigurationTabUiAction::AddGerberFiles {
+                            Some(ConfigurationTabUiAction::UpdateGerberFiles {
                                 path: pcb_overview.path.clone(),
                                 design,
                                 files,

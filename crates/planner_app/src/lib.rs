@@ -9,13 +9,13 @@ use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
+use gerber::GerberFile;
+pub use gerber::GerberFileFunction;
 use indexmap::IndexSet;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
-use planning::gerber::GerberFile;
-pub use planning::gerber::GerberPurpose;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
@@ -218,9 +218,7 @@ pub enum Effect {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct PcbGerberItem {
     pub path: PathBuf,
-    /// if `None` then the gerber applies to both sides, e.g. 'pcb outline'
-    pub pcb_side: Option<PcbSide>,
-    pub purpose: GerberPurpose,
+    pub function: Option<GerberFileFunction>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -586,7 +584,7 @@ pub enum Event {
         path: PathBuf,
         design: Option<DesignName>,
         // TODO use FileReferences, not paths?
-        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
+        files: Vec<(PathBuf, Option<GerberFileFunction>)>,
     },
     RemoveGerberFiles {
         path: PathBuf,
@@ -1268,7 +1266,7 @@ impl Planner {
                 );
 
                 *modified |= pcb
-                    .add_gerbers(design, files)
+                    .update_gerbers(design, files)
                     .map_err(|e| AppError::PcbOperationError(PcbOperationError::PcbError(e)))?;
 
                 Ok(render::render())
@@ -1945,8 +1943,7 @@ impl Planner {
         // convert from project type to view type
         PcbGerberItem {
             path: gerber_file.file.clone(),
-            pcb_side: gerber_file.pcb_side.clone(),
-            purpose: gerber_file.purpose,
+            function: gerber_file.function,
         }
     }
 

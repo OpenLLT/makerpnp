@@ -2,16 +2,16 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
+use gerber::{detect_purpose, GerberFile, GerberFileFunction};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use pnp::panel::PanelSizing;
-use pnp::pcb::{PcbSide, PcbUnitIndex, PcbUnitNumber};
+use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 use serde_with::serde_as;
 use thiserror::Error;
 use tracing::{info, trace};
 
 use crate::design::{DesignIndex, DesignName};
-use crate::gerber::{GerberFile, GerberPurpose};
 use crate::project::PcbOperationError;
 
 /// Defines a PCB
@@ -134,31 +134,37 @@ impl Pcb {
         self.design_names.iter()
     }
 
-    /// If `design` is None, then the changers are applied to the PCB, otherwise they are applied to the design.
+    /// If `design` is None, then the changes are applied to the PCB, otherwise they are applied to the design.
     /// returns a [`Result`] containing the modified state of the PCB, or an error.
-    pub fn add_gerbers(
+    pub fn update_gerbers(
         &mut self,
         design: Option<DesignName>,
-        files: Vec<(PathBuf, Option<PcbSide>, GerberPurpose)>,
+        files: Vec<(PathBuf, Option<GerberFileFunction>)>,
     ) -> Result<bool, PcbError> {
         let gerbers = self.gerbers_for_pcb_or_design(design)?;
         let mut modified = false;
 
-        for (file, pcb_side, purpose) in files {
+        for (file, optional_function) in files {
             if let Some(existing_gerber) = gerbers
                 .iter_mut()
                 .find(|candidate| candidate.file.eq(&file))
             {
-                // change it
-                existing_gerber.purpose = purpose;
-                existing_gerber.pcb_side = pcb_side;
-                modified |= true;
+                if let Some(function) = optional_function {
+                    // change it
+                    existing_gerber.function = Some(function);
+                    modified |= true;
+                }
             } else {
                 // add it
+
+                let function = optional_function.or_else(|| {
+                    // try and detect the purpose, otherwise leave it as None
+                    detect_purpose(file.clone()).ok()
+                });
+
                 gerbers.push(GerberFile {
                     file,
-                    purpose,
-                    pcb_side,
+                    function,
                 });
                 modified |= true;
             }

@@ -250,6 +250,7 @@ gerber-purpose-component = Component
 gerber-purpose-copper = Copper
 gerber-purpose-legend = Legend
 gerber-purpose-paste = Paste
+gerber-purpose-profile = Profile
 gerber-purpose-other = Other
 gerber-purpose-solder = Soldar
 

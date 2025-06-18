@@ -9,6 +9,7 @@ markdown = ["dep:json2markdown"]
 [dependencies]
 pnp = { path = "../pnp" }
 util = { path = "../util" }
+gerber = { path = "../gerber" }
 
 anyhow = { workspace = true }
 thiserror = { workspace = true }
