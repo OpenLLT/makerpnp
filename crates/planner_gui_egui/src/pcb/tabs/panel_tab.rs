@@ -1203,11 +1203,11 @@ fn build_panel_preview_commands(
     Ok(gerber_builder.as_commands())
 }
 
-/// rotation radians is positive anti-clockwise (nalgebra)
+/// rotation is in radians, positive anti-clockwise
 fn make_rotated_box_path(
     unit_origin: &Point2<f64>,
     unit_size: &Vector2<f64>,
-    rotation_radians: f64,
+    rotation: f64,
 ) -> (Point<f64, 2>, Vec<Vector2<f64>>) {
     // Create path vectors based on unit_size
     // For example, to create a path that forms a rectangle:
@@ -1227,7 +1227,7 @@ fn make_rotated_box_path(
     // 2. Create a rotation
     // 3. Create a translation back from origin to center
     let translation_to_origin = nalgebra::Translation2::new(-center_x, -center_y);
-    let rotation = nalgebra::Rotation2::new(rotation_radians);
+    let rotation = nalgebra::Rotation2::new(rotation);
     let translation_from_origin = nalgebra::Translation2::new(center_x, center_y);
 
     // Combine these transformations into a single isometry

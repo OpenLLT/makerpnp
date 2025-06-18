@@ -121,7 +121,7 @@ impl GerberViewState {
         self.needs_view_centering = false;
 
         self.transform = GerberTransform {
-            rotation_radians: 0.0,
+            rotation: 0.0,
             mirroring: Mirroring::default(),
             origin: VECTOR_ZERO,
             offset: VECTOR_ZERO,
@@ -593,7 +593,7 @@ impl eframe::App for GerberViewer {
                     let mut rotation = self
                         .state
                         .as_ref()
-                        .map_or(0.0, |state| state.transform.rotation_radians);
+                        .map_or(0.0, |state| state.transform.rotation);
                     changed |= ui.drag_angle(&mut rotation).changed();
 
                     ui.separator();
@@ -649,7 +649,7 @@ impl eframe::App for GerberViewer {
                             state.view.translation = translation;
                             state.transform.offset = design_offset;
                             state.transform.origin = design_origin - design_offset;
-                            state.transform.rotation_radians = rotation;
+                            state.transform.rotation = rotation;
                             state.transform.mirroring = mirroring;
 
                             state.request_bbox_reset();
@@ -849,11 +849,7 @@ impl eframe::App for GerberViewer {
 
                             changed |= ui
                                 .add_sized([50.0, 10.0], |ui: &mut Ui| {
-                                    ui.drag_angle(
-                                        &mut layer_view_state
-                                            .transform
-                                            .rotation_radians,
-                                    )
+                                    ui.drag_angle(&mut layer_view_state.transform.rotation)
                                 })
                                 .changed();
 
