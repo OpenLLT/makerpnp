@@ -1008,6 +1008,7 @@ impl Planner {
                         ..
                     },
                     pcbs,
+                    directory,
                     ..,
                 ) = { Self::model_project_and_pcbs(model) }?;
 
@@ -1026,7 +1027,7 @@ impl Planner {
                 *modified |= project::refresh_phase_operation_states(project);
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 match operation {
                     SetOrClearAction::Set => {
@@ -1055,14 +1056,12 @@ impl Planner {
                 manufacturer: manufacturer_pattern,
                 mpn: mpn_pattern,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project,
-                    path,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
 
                 let phase = project
                     .phases
@@ -1070,7 +1069,7 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&path, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 let parts = project::find_phase_parts(project, &phase_reference, manufacturer_pattern, mpn_pattern);
 
@@ -1100,14 +1099,12 @@ impl Planner {
                 manufacturer,
                 mpn,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    path,
-                    project,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
 
                 let phase = project
                     .phases
@@ -1120,7 +1117,7 @@ impl Planner {
                     .clone();
 
                 let load_out_source =
-                    try_build_phase_load_out_source(path, phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::LoadoutSourceError)?;
 
                 stores::load_out::assign_feeder_to_load_out_item(
                     &load_out_source,
@@ -1708,14 +1705,12 @@ impl Planner {
                 Ok(project_view_renderer::view(ProjectView::ProjectTree(project_tree)))
             }),
             Event::RequestPhasesView {} => Box::new(|model: &mut Model| {
-                let ModelProject {
-                    path,
-                    project,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
 
                 let phases = project
                     .phases
@@ -1727,7 +1722,7 @@ impl Planner {
                             .unwrap();
                         // FUTURE try and avoid the [`unwrap`] here, ideally by ensuring load-out sources are always correct
                         //        for every situation instead of using [`try_build_phase_load_out_source`]
-                        try_build_phase_overview(path, phase_reference.clone(), phase, phase_state).unwrap()
+                        try_build_phase_overview(&directory, phase_reference.clone(), phase, phase_state).unwrap()
                     })
                     .collect::<Vec<PhaseOverview>>();
 
@@ -1741,14 +1736,13 @@ impl Planner {
             Event::RequestPhaseOverviewView {
                 phase_reference,
             } => Box::new(|model: &mut Model| {
-                let ModelProject {
-                    path,
-                    project,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
+
                 let phase = project
                     .phases
                     .get(&phase_reference)
@@ -1758,7 +1752,7 @@ impl Planner {
                     .get(&phase_reference)
                     .unwrap();
 
-                let phase_overview = try_build_phase_overview(path, phase_reference, phase, phase_state)
+                let phase_overview = try_build_phase_overview(&directory, phase_reference, phase, phase_state)
                     .map_err(AppError::LoadoutSourceError)?;
 
                 Ok(project_view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
@@ -1766,21 +1760,19 @@ impl Planner {
             Event::RequestPhasePlacementsView {
                 phase_reference,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    path,
-                    project,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
                 let phase = project
                     .phases
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(path, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 let loadout_items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
@@ -1889,21 +1881,20 @@ impl Planner {
             Event::RequestPhaseLoadOutView {
                 phase_reference,
             } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    path,
-                    project,
-                    ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    directory,
+                ) = Self::model_project_and_directory(model)?;
+
                 let phase = project
                     .phases
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(path, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
 
                 let items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
@@ -1957,6 +1948,7 @@ impl Planner {
             .parent()
             .unwrap()
             .to_path_buf();
+
         let model_pcbs = &mut model.model_pcbs;
         Model::load_project_pcbs_inner(&mut model_project.project, model_pcbs, &project_directory)?;
 
@@ -1964,6 +1956,19 @@ impl Planner {
         let pcbs = Model::project_pcbs_inner(iter);
 
         Ok((model_project, pcbs, project_directory))
+    }
+
+    fn model_project_and_directory(model: &mut Model) -> Result<(&mut ModelProject, PathBuf), AppError> {
+        let Some(model_project) = model.model_project.as_mut() else {
+            return Err(AppError::OperationRequiresProject);
+        };
+
+        let project_directory = model_project
+            .path
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        Ok((model_project, project_directory))
     }
 }
 
@@ -2081,10 +2086,8 @@ mod app_tests {
 }
 
 /// Build a load-out source, where the load-out source *may* be a relative or absolute path.
-///
-/// 'project_path' is the project FILE (not directory).
 fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Result<LoadOutSource, LoadOutSourceError> {
-    assert!(project_path.is_file());
+    assert!(project_path.is_dir());
 
     let directory = project_path
         .parent()
@@ -2095,12 +2098,12 @@ fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Res
 }
 
 fn try_build_phase_overview(
-    project_path: &PathBuf,
+    directory: &PathBuf,
     phase_reference: PhaseReference,
     phase: &Phase,
     state: &PhaseState,
 ) -> Result<PhaseOverview, LoadOutSourceError> {
-    let load_out_source = try_build_phase_load_out_source(project_path, phase)?;
+    let load_out_source = try_build_phase_load_out_source(directory, phase)?;
 
     Ok(PhaseOverview {
         phase_reference,
