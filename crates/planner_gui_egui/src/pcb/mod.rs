@@ -5,7 +5,7 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{DesignIndex, Event, PcbView, PcbViewRequest};
+use planner_app::{DesignIndex, Event, PcbSide, PcbView, PcbViewRequest};
 use regex::Regex;
 use slotmap::new_key_type;
 use tabs::configuration_tab::{
@@ -265,9 +265,18 @@ impl Pcb {
 
         #[must_use]
         fn handle_pcb(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
-            if navigation_path.eq(&"/pcb/pcb".into()) {
+            let design_pattern = Regex::new(r"^/pcb/pcb(/(?<side>(top|bottom)))?$").unwrap();
+            if let Some(captures) = design_pattern.captures(&navigation_path) {
+                let pcb_side: Option<PcbSide> = captures
+                    .name("side")
+                    .map(|value| value.as_str().parse::<PcbSide>().ok())
+                    .flatten();
+
+                debug!("pcb_side: {:?}", pcb_side);
+
                 let args = GerberViewerUiInstanceArgs {
                     mode: GerberViewerMode::Panel,
+                    pcb_side,
                 };
 
                 Some(PcbAction::Task(
@@ -281,7 +290,7 @@ impl Pcb {
 
         #[must_use]
         fn handle_pcb_design(key: &PcbKey, navigation_path: &NavigationPath) -> Option<PcbAction> {
-            let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}$").unwrap();
+            let design_pattern = Regex::new(r"^/pcb/designs/(?<design>\d*){1}(/(?<side>(top|bottom)))?$").unwrap();
             if let Some(captures) = design_pattern.captures(&navigation_path) {
                 let design_index: DesignIndex = captures
                     .name("design")
@@ -289,10 +298,17 @@ impl Pcb {
                     .as_str()
                     .parse::<DesignIndex>()
                     .unwrap();
-                debug!("design_index: {}", design_index);
+
+                let pcb_side: Option<PcbSide> = captures
+                    .name("side")
+                    .map(|value| value.as_str().parse::<PcbSide>().ok())
+                    .flatten();
+
+                debug!("design_index: {}, pcb_side: {:?}", design_index, pcb_side);
 
                 let args = GerberViewerUiInstanceArgs {
                     mode: GerberViewerMode::Design(design_index),
+                    pcb_side,
                 };
 
                 Some(PcbAction::Task(
