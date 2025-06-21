@@ -220,6 +220,10 @@ form-file-not-found = File not found
 form-input-error-map-incorrect-entry-count = Incorrect entry count.  Required: { $required }, Actual: { $actual }
 form-input-error-map-unassigned-entries = Mapping contains unassigned entries.
 
+form-input-error-reference-invalid = Reference invalid
+form-input-error-process-reference-invalid = Process reference invalid
+form-input-error-loadout-source-invalid = Loadout-source invalid
+
 assignment-assigned = Assigned
 assignment-unassigned = Unassigned
 

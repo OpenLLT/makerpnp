@@ -219,6 +219,10 @@ form-file-not-found = Archivo no encontrado
 form-input-error-map-incorrect-entry-count = Número de entradas incorrecto.  Requerido: { $required }, Actual: { $actual }
 form-input-error-map-unassigned-entries = El mapa contiene entradas sin asignar.
 
+form-input-error-reference-invalid = Referencia inválida
+form-input-error-process-reference-invalid = Referencia de proceso inválida
+form-input-error-loadout-source-invalid = Fuente de carga inválida
+
 assignment-assigned = Asignado
 assignment-unassigned = No asignado
 
