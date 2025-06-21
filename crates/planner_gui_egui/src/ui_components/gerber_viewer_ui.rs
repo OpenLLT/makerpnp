@@ -17,7 +17,7 @@ use gerber_viewer::{
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
-use planner_app::{DesignIndex, PcbOverview};
+use planner_app::{DesignIndex, PcbOverview, PcbSide};
 use thiserror::Error;
 use tracing::{debug, error, info};
 
@@ -41,7 +41,11 @@ const INITIAL_GERBER_AREA_PERCENT: f32 = 0.95;
 )]
 pub struct GerberViewerUiInstanceArgs {
     pub mode: GerberViewerMode,
-    // TODO add other args, like pcb_side: Option<PcbSide> or tags: Option<Vec<Tag>>
+    // TODO a way to select a specific set of gerbers, e.g. profile + top paste + top solder + top silk
+    //      using PCB side will show copper layers, which isn't very useful for PnP
+    //      perhaps Vec<GerberFileFunction> ?
+    /// Which sides to show, gerber files without a side, like Profile, will also be shown.
+    pub pcb_side: Option<PcbSide>,
 }
 
 #[derive(
@@ -100,6 +104,28 @@ impl GerberViewerUi {
             GerberViewerMode::Panel => pcb_overview.pcb_gerbers.clone(),
             GerberViewerMode::Design(design_index) => pcb_overview.design_gerbers[design_index].clone(),
         };
+
+        let gerber_items = gerber_items
+            .iter()
+            .filter(|gerber| match self.args.pcb_side {
+                // if no PCB side filter is specified, include this item
+                None => true,
+                Some(pcb_side) => {
+                    if let Some(function) = gerber.function {
+                        let gerber_side = function.pcb_side();
+                        match gerber_side {
+                            // if the item has no side, include it.
+                            None => true,
+                            // if a PCB side is specified, include this item if it's side matches
+                            Some(gerber_side) => gerber_side == pcb_side,
+                        }
+                    } else {
+                        // if there is no function, exclude it 
+                        false
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
 
         // The new list of gerber items may contain fewer, more or different entries and/or the same entries in a different
         // order.  Only to reparse files that need reparsing, use the layer order defined by the gerber items collection.

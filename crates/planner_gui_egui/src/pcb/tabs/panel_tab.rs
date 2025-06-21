@@ -97,6 +97,7 @@ impl PanelTabUi {
         // FIXME probably the gerber viewer UI needs different args now
         let args = GerberViewerUiInstanceArgs {
             mode: GerberViewerMode::Panel,
+            pcb_side: None,
         };
 
         let mut gerber_viewer_ui = GerberViewerUi::new(args);
