@@ -273,6 +273,9 @@ impl VerticalStack {
                             let meh = ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
                                 // without this, the content will overflow to the right and below the frame.
                                 ui.set_clip_rect(content_rect);
+                                ui.set_max_size(content_rect.size());  // Explicitly limit maximum size
+                                ui.set_min_size(Vec2::new(content_rect.width(), 0.0));  // Allow height to be as small as needed
+                                
                                 // Call the panel content function
                                 panel_fn(ui);
                             });
