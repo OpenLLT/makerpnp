@@ -306,10 +306,9 @@ impl VerticalStack {
                 }
             });
     }
-
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
-        let handle_height = 7.0;
+        let handle_height = 7.0;  // Keep this as 7 pixels total
 
         // For the last panel handle, we don't need to check the next panel's index
         let is_last_panel = panel_idx == self.panel_heights.len() - 1;
@@ -336,20 +335,30 @@ impl VerticalStack {
         if response.hovered() || response.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
         }
-        
-        // Draw the handle 
+
+        // Draw a small horizontal rule to indicate the drag handle
+        // Calculate exact position for the 1px line with 3px padding above and below
         let painter = ui.painter();
         let handle_stroke = if response.hovered() || response.dragged() {
-            Stroke::new(2.0, Color32::WHITE)
+            Stroke::new(1.0, Color32::WHITE)
         } else {
             Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
         };
 
-        let center_y = rect.center().y;
+        // Position line exactly in the middle of the handle area
+        let line_y = rect.min.y + 3.0;  // 3px from the top of the handle area
+
+        // Draw a thin line that's always visible
         painter.line_segment(
-            [egui::Pos2::new(rect.left(), center_y), egui::Pos2::new(rect.right(), center_y)],
+            [egui::Pos2::new(rect.left(), line_y), egui::Pos2::new(rect.right(), line_y)],
             handle_stroke,
         );
+
+        // Debug visualization of handle rect to see its exact bounds (can be removed in production)
+        if true {  // Set to true for debugging
+            let debug_stroke = Stroke::new(1.0, Color32::YELLOW);
+            painter.rect_stroke(rect, 0.0, debug_stroke, StrokeKind::Outside);
+        }
 
         // Check if this is the active drag handle
         let is_active_handle = self.active_drag_handle == Some(panel_idx);
@@ -375,9 +384,8 @@ impl VerticalStack {
                     let current_height = self.panel_heights[panel_idx];
                     let target_height = (start_height + total_delta).max(self.min_panel_height);
 
-                    println!("Drag: panel={}, current_height={}, delta={}, target_height={},
-                     pointer_y={}", panel_idx, current_height, total_delta,
-                             target_height, current_pos.y);
+                    println!("Drag: panel={}, current_height={}, delta={}, target_height={}, pointer_y={}",
+                             panel_idx, current_height, total_delta, target_height, current_pos.y);
 
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_panel_height);
