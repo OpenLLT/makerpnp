@@ -113,6 +113,16 @@ impl VerticalStack {
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     let panel_height = self.panel_heights[idx].max(self.min_height);
 
+                    // Calculate handle height (needed for spacing calculation)
+                    let handle_height = 8.0;
+
+                    // For all panels except the last one, include the handle as part of the panel
+                    let full_height = if idx < panel_count - 1 {
+                        panel_height + handle_height
+                    } else {
+                        panel_height
+                    };
+
                     // Create a panel that spans the full width
                     let panel_rect = ui.available_rect_before_wrap();
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
@@ -122,7 +132,6 @@ impl VerticalStack {
 
                     // Draw the panel frame manually
                     let frame_rect = rect;
-                    // Updated code: Create a proper Stroke and use the correct rect signature
                     let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
                     ui.painter().rect(
                         frame_rect,
@@ -142,7 +151,6 @@ impl VerticalStack {
                         .inner_margin(0.0)
                         .outer_margin(0.0)
                         .show(ui, |ui| {
-                            // First position the UI where we want the content
                             // Use allocate_new_ui instead of the deprecated allocate_ui_at_rect
                             ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
                                 // Call the panel content function
@@ -151,6 +159,7 @@ impl VerticalStack {
                         });
 
                     // Add a resize handle after each panel (except the last one)
+                    // Add it directly after the panel with no gap
                     if idx < panel_count - 1 {
                         self.add_resize_handle(ui, idx);
                     }
@@ -160,7 +169,7 @@ impl VerticalStack {
         // Mark as initialized
         self.initialized = true;
     }
-
+    
     /// Add a resize handle between panels.
     fn add_resize_handle(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
