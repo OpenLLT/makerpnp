@@ -1,5 +1,6 @@
+
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, UiBuilder, Vec2};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, UiBuilder, Vec2, ScrollArea};
 use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
@@ -12,6 +13,7 @@ pub struct VerticalStack {
     active_drag_handle: Option<usize>,
     initialized: bool,
     last_available_height: f32,
+    max_height: Option<f32>,
 }
 
 impl VerticalStack {
@@ -26,12 +28,20 @@ impl VerticalStack {
             active_drag_handle: None,
             initialized: false,
             last_available_height: 0.0,
+            max_height: None,
         }
     }
 
     /// Sets the minimum height for panels.
     pub fn min_height(mut self, height: f32) -> Self {
         self.min_height = height;
+        self
+    }
+
+    /// Sets the maximum height for the scroll area.
+    /// If None, will use all available height.
+    pub fn max_height(mut self, height: Option<f32>) -> Self {
+        self.max_height = height;
         self
     }
 
@@ -53,7 +63,10 @@ impl VerticalStack {
         F: FnOnce(&mut StackBodyBuilder),
     {
         let available_rect = ui.available_rect_before_wrap();
-        let available_height = available_rect.height();
+        let available_height = match self.max_height {
+            Some(max_height) => max_height.min(available_rect.height()),
+            None => available_rect.height(),
+        };
 
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
@@ -91,65 +104,78 @@ impl VerticalStack {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
- 
+
         self.last_available_height = available_height;
 
         // Calculate exact space needed for the entire stack
         let handle_height = 8.0;
         let handles_height = (panel_count - 1) as f32 * handle_height;
+        let total_content_height = self.panel_heights.iter().sum::<f32>() + handles_height;
 
-        // Reserve the exact available rect
-        let response = ui.allocate_rect(available_rect, Sense::hover());
-
-        // Now render all panels with their calculated heights
-        let mut current_pos = available_rect.min;
-
-        // Render each panel with its calculated height
-        for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-            let panel_height = self.panel_heights[idx].max(self.min_height);
-
-            // Determine panel rect
-            let panel_rect = Rect::from_min_size(
-                current_pos,
-                Vec2::new(available_rect.width(), panel_height),
-            );
-
-            println!("Rendering panel {}: height = {}, rect = {:?}", idx, panel_height, panel_rect);
-
-            // Create a frame with a border for the panel
-            Frame::default()
-                .stroke(Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
-                .show(ui, |ui| {
-                    // Set a clip rect to ensure content doesn't overflow
-                    ui.set_clip_rect(panel_rect);
-
-                    // Allocate the exact panel rect
-                    ui.allocate_new_ui(UiBuilder::new().max_rect(panel_rect), |ui| {
-                        // Make sure the UI uses the full allocated space
-                        ui.expand_to_include_rect(panel_rect);
-
-                        // Call the panel content function
-                        panel_fn(ui);
-                    });
-                });
-
-            // Move the current position down
-            current_pos.y += panel_height;
-
-            // Add a resize handle after each panel (except the last one)
-            if idx < panel_count - 1 {
-                // Create the handle rect
-                let handle_rect = Rect::from_min_size(
-                    current_pos,
-                    Vec2::new(available_rect.width(), handle_height),
+        // Create a ScrollArea with the available height
+        ScrollArea::vertical()
+            .id_source(self.id_source.with("scroll_area"))
+            .max_height(available_height)
+            .show(ui, |ui| {
+                // Reserve space for the entire content
+                let content_rect = Rect::from_min_size(
+                    ui.available_rect_before_wrap().min,
+                    Vec2::new(ui.available_width(), total_content_height),
                 );
 
-                self.add_resize_handle(ui, idx, handle_rect);
+                // Reserve the exact content rect
+                let response = ui.allocate_rect(content_rect, Sense::hover());
 
-                // Move the position down past the handle
-                current_pos.y += handle_height;
-            }
-        }
+                // Now render all panels with their calculated heights
+                let mut current_pos = content_rect.min;
+
+                // Render each panel with its calculated height
+                for (idx, panel_fn) in body.panels.into_iter().enumerate() {
+                    let panel_height = self.panel_heights[idx].max(self.min_height);
+
+                    // Determine panel rect
+                    let panel_rect = Rect::from_min_size(
+                        current_pos,
+                        Vec2::new(content_rect.width(), panel_height),
+                    );
+
+                    println!("Rendering panel {}: height = {}, rect = {:?}", idx, panel_height, panel_rect);
+
+                    // Create a frame with a border for the panel
+                    Frame::default()
+                        .stroke(Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                        .show(ui, |ui| {
+                            // Set a clip rect to ensure content doesn't overflow
+                            ui.set_clip_rect(panel_rect);
+
+                            // Allocate the exact panel rect
+                            ui.allocate_new_ui(UiBuilder::new().max_rect(panel_rect), |ui| {
+                                // Make sure the UI uses the full allocated space
+                                ui.expand_to_include_rect(panel_rect);
+
+                                // Call the panel content function
+                                panel_fn(ui);
+                            });
+                        });
+
+                    // Move the current position down
+                    current_pos.y += panel_height;
+
+                    // Add a resize handle after each panel (except the last one)
+                    if idx < panel_count - 1 {
+                        // Create the handle rect
+                        let handle_rect = Rect::from_min_size(
+                            current_pos,
+                            Vec2::new(content_rect.width(), handle_height),
+                        );
+
+                        self.add_resize_handle(ui, idx, handle_rect);
+
+                        // Move the position down past the handle
+                        current_pos.y += handle_height;
+                    }
+                }
+            });
 
         // Mark as initialized
         self.initialized = true;
@@ -191,7 +217,7 @@ impl VerticalStack {
             handle_stroke,
         );
 
-        // Handle dragging to resize - ONLY affecting the two adjacent panels
+        // Handle dragging to resize - ONLY affecting the panel above
         if handle_response.dragged() {
             // If this is the first drag or a different handle than before
             if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
@@ -207,12 +233,14 @@ impl VerticalStack {
             if delta != 0.0 {
                 println!("  Drag delta: {}", delta);
 
-                let new_height = todo!();
-                
-                // Apply the new heights ONLY to the two affected panels
+                // Adjust only the panel above the handle
+                let new_height = (self.panel_heights[panel_idx] + delta).max(self.min_height);
+
+                // Apply the new height ONLY to the panel above the handle
                 self.panel_heights[panel_idx] = new_height;
 
-                // CRITICAL: Do not modify any other panel heights!
+                // No need to adjust other panels - they keep their heights
+                // Total height of the scroll area increases/decreases accordingly
             }
         }
     }
