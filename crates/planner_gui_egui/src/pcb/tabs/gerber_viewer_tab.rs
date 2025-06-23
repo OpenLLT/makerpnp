@@ -169,6 +169,16 @@ impl UiComponent for GerberViewerTabUi {
                     ui.label("top");
                     ui.label("top");
                     ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
                 });
                 body.add_panel(|ui|{
                     ui.label("middle");
