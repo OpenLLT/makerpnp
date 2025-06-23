@@ -9,9 +9,10 @@ pub struct VerticalStack {
     panel_heights: Vec<f32>,
     default_panel_height: f32,
     drag_in_progress: bool,
+    active_drag_handle: Option<usize>,
+    drag_start_heights: Vec<f32>,
     initialized: bool,
     last_available_height: f32,
-    drag_released_this_frame: bool,
 }
 
 impl VerticalStack {
@@ -23,9 +24,10 @@ impl VerticalStack {
             panel_heights: Vec::new(),
             default_panel_height: 100.0,
             drag_in_progress: false,
+            active_drag_handle: None,
+            drag_start_heights: Vec::new(),
             initialized: false,
             last_available_height: 0.0,
-            drag_released_this_frame: false,
         }
     }
 
@@ -66,9 +68,6 @@ impl VerticalStack {
 
         println!("Stack body - panel count: {}, available height: {}", panel_count, available_height);
 
-        // Reset drag released flag
-        self.drag_released_this_frame = false;
-
         // Ensure we have enough heights for all panels
         while self.panel_heights.len() < panel_count {
             self.panel_heights.push(self.default_panel_height);
@@ -85,8 +84,24 @@ impl VerticalStack {
 
         if pointer_was_down && !pointer_is_down {
             // Drag just released
-            self.drag_released_this_frame = true;
             self.drag_in_progress = false;
+            self.active_drag_handle = None;
+
+            // After drag release, make sure total height exactly matches available space
+            let handle_height = 8.0;
+            let handles_height = if panel_count > 1 { (panel_count - 1) as f32 * handle_height } else { 0.0 };
+            let available_for_panels = available_height - handles_height;
+
+            let total_height: f32 = self.panel_heights.iter().sum();
+            if (total_height - available_for_panels).abs() > 0.1 {
+                let scale = available_for_panels / total_height;
+                for height in &mut self.panel_heights {
+                    *height *= scale;
+                }
+            }
+
+            // Clear saved heights
+            self.drag_start_heights.clear();
         }
 
         // Check if we need to redistribute heights
@@ -97,10 +112,9 @@ impl VerticalStack {
         // 1. First initialization
         // 2. Panel count changed
         // 3. Available height changed significantly
-        // DO NOT redistribute after drag release - that's what causes the snap
-        let need_redistribution = !self.initialized ||
-            panel_count_changed ||
-            height_changed;
+        // 4. NOT during a drag or just after a drag release
+        let need_redistribution = (!self.initialized || panel_count_changed || height_changed) &&
+            !self.drag_in_progress;
 
         if need_redistribution {
             println!("Redistributing heights - initialized: {}, panel_count_changed: {}, height_changed: {}",
@@ -108,11 +122,6 @@ impl VerticalStack {
 
             // Only do a full redistribution in these cases
             self.distribute_panel_heights(panel_count, available_height);
-        } else if self.drag_released_this_frame {
-            // When drag is released, we only need to ensure the total height matches available height
-            // without changing the relative sizes of panels
-            println!("Drag released - adjusting total height without redistributing");
-            self.adjust_total_height(panel_count, available_height);
         }
 
         self.last_available_height = available_height;
@@ -237,41 +246,49 @@ impl VerticalStack {
 
         // Handle dragging to resize - ONLY affecting the two adjacent panels
         if handle_response.dragged() {
-            self.drag_in_progress = true;
+            // If we're just starting a drag or dragging a different handle
+            if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
+                // New drag starting
+                self.drag_in_progress = true;
+                self.active_drag_handle = Some(panel_idx);
+
+                // Store all panel heights at the start of the drag
+                self.drag_start_heights = self.panel_heights.clone();
+
+                println!("  Started dragging handle {}, stored heights: {:?}", panel_idx, self.drag_start_heights);
+            }
+
             let delta = handle_response.drag_delta().y;
             println!("  Drag delta: {}", delta);
 
             // Only process if there's an actual delta
             if delta != 0.0 {
-                // Calculate new heights while respecting min_height
-                let current_height = self.panel_heights[panel_idx];
-                let next_height = self.panel_heights[panel_idx + 1];
+                // Get the original heights of the two adjacent panels
+                let original_top = self.drag_start_heights[panel_idx];
+                let original_bottom = self.drag_start_heights[panel_idx + 1];
+                let original_sum = original_top + original_bottom;
 
-                println!("  Before resize: panel {} height = {}, panel {} height = {}",
-                         panel_idx, current_height, panel_idx + 1, next_height);
+                // Calculate how much the top panel has changed in total since drag started
+                let current_top = self.panel_heights[panel_idx];
+                let current_bottom = self.panel_heights[panel_idx + 1];
+                let total_delta_so_far = current_top - original_top;
+                let new_total_delta = total_delta_so_far + delta;
 
-                // Adjust heights while ensuring minimum constraints
-                let new_current = (current_height + delta).max(self.min_height);
-                let current_delta = new_current - current_height;
+                // Constrain the delta to respect minimum heights
+                let max_delta_up = original_top - self.min_height;
+                let max_delta_down = original_bottom - self.min_height;
+                let constrained_delta = new_total_delta.max(-max_delta_up).min(max_delta_down);
 
-                // Only adjust the next panel by exactly what the current panel changed
-                let new_next = (next_height - current_delta).max(self.min_height);
-                let next_delta = next_height - new_next;
+                // Calculate new heights while preserving the sum
+                let new_top = original_top + constrained_delta;
+                let new_bottom = original_bottom - constrained_delta;
 
-                // If next panel hit min height, readjust current panel
-                let final_current = if next_delta != current_delta {
-                    current_height + next_delta
-                } else {
-                    new_current
-                };
+                println!("  Original: top={}, bottom={}, sum={}", original_top, original_bottom, original_sum);
+                println!("  New: top={}, bottom={}, sum={}", new_top, new_bottom, new_top + new_bottom);
 
-                // Apply the new heights - ONLY to the two affected panels
-                self.panel_heights[panel_idx] = final_current;
-                self.panel_heights[panel_idx + 1] = new_next;
-
-                println!("  After resize: panel {} height = {}, panel {} height = {}",
-                         panel_idx, self.panel_heights[panel_idx],
-                         panel_idx + 1, self.panel_heights[panel_idx + 1]);
+                // Apply the new heights ONLY to the two affected panels
+                self.panel_heights[panel_idx] = new_top;
+                self.panel_heights[panel_idx + 1] = new_bottom;
             }
         }
 
@@ -319,47 +336,6 @@ impl VerticalStack {
         }
 
         println!("Panel heights after distribution: {:?}", self.panel_heights);
-    }
-
-    // Adjust total height without redistribution (used after drag release)
-    fn adjust_total_height(&mut self, panel_count: usize, available_height: f32) {
-        if panel_count == 0 {
-            return;
-        }
-
-        // Calculate space needed for resize handles
-        let handle_height = 8.0;
-        let handles_height = if panel_count > 1 {
-            (panel_count - 1) as f32 * handle_height
-        } else {
-            0.0
-        };
-
-        // Space available for actual panels
-        let available_for_panels = available_height - handles_height;
-
-        // Get the total height currently used by panels
-        let total_panel_height: f32 = self.panel_heights.iter().sum();
-
-        println!("Adjusting total height: Available: {}, Current total: {}",
-                 available_for_panels, total_panel_height);
-
-        // Only adjust if there's a significant difference
-        if (total_panel_height - available_for_panels).abs() > 1.0 {
-            // Calculate scale factor to adjust heights
-            let scale_factor = available_for_panels / total_panel_height;
-
-            // Apply scale factor to all panels
-            for i in 0..panel_count {
-                self.panel_heights[i] *= scale_factor;
-                self.panel_heights[i] = self.panel_heights[i].max(self.min_height);
-            }
-
-            // Final adjustment to ensure exact fit
-            self.ensure_exact_total_height(panel_count, available_for_panels);
-        }
-
-        println!("Panel heights after adjustment: {:?}", self.panel_heights);
     }
 
     // Helper to scale panels proportionally to fit available space
