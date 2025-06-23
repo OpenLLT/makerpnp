@@ -237,6 +237,9 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
+                // Handle height for positioning calculations
+                let handle_height = 7.0;
+
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied above)
                     let panel_height = self.panel_heights[idx];
@@ -306,6 +309,7 @@ impl VerticalStack {
                 }
             });
     }
+    
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;  // Keep this as 7 pixels total
@@ -346,7 +350,7 @@ impl VerticalStack {
         };
 
         // Position line exactly in the middle of the handle area
-        let line_y = rect.min.y + 3.0;  // 3px from the top of the handle area
+        let line_y = rect.min.y / 2.0;
 
         // Draw a thin line that's always visible
         painter.line_segment(
