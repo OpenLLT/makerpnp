@@ -6,7 +6,7 @@ use std::collections::HashMap;
 /// A component that displays multiple panels stacked vertically with resize handles.
 #[derive(Debug)]
 pub struct VerticalStack {
-    min_height: f32,
+    min_panel_height: f32,
     id_source: Id,
     panel_heights: Vec<f32>,
     default_panel_height: f32,
@@ -25,7 +25,7 @@ pub struct VerticalStack {
 impl VerticalStack {
     pub fn new() -> Self {
         Self {
-            min_height: 50.0,
+            min_panel_height: 50.0,
             id_source: Id::new("vertical_stack"),
             panel_heights: Vec::new(),
             default_panel_height: 100.0,
@@ -42,9 +42,9 @@ impl VerticalStack {
         }
     }
 
-    /// Sets the minimum height for panels.
-    pub fn min_height(mut self, height: f32) -> Self {
-        self.min_height = height;
+    /// Sets a custom ID salt for the stack.
+    pub fn id_salt(&mut self, id: impl std::hash::Hash) -> &mut Self {
+        self.id_source = Id::new(id);
         self
     }
 
@@ -54,7 +54,13 @@ impl VerticalStack {
         self.max_height = height;
         self
     }
-
+    
+    /// Sets the minimum height for panels.
+    pub fn min_panel_height(mut self, height: f32) -> Self {
+        self.min_panel_height = height;
+        self
+    }
+    
     /// Sets the maximum height for individual panels.
     /// If None, panels can grow as large as needed (or up to the entire scroll area).
     pub fn max_panel_height(mut self, height: Option<f32>) -> Self {
@@ -62,11 +68,6 @@ impl VerticalStack {
         self
     }
 
-    /// Sets a custom ID salt for the stack.
-    pub fn id_salt(&mut self, id: impl std::hash::Hash) -> &mut Self {
-        self.id_source = Id::new(id);
-        self
-    }
 
     /// Set the default height for new panels.
     pub fn default_panel_height(mut self, height: f32) -> Self {
@@ -129,7 +130,7 @@ impl VerticalStack {
             // Ensure we have enough heights for all panels
             while self.panel_heights.len() < panel_count {
                 // Always respect the minimum height from the beginning
-                self.panel_heights.push(self.default_panel_height.max(self.min_height));
+                self.panel_heights.push(self.default_panel_height.max(self.min_panel_height));
             }
 
             // Truncate if we have too many heights
@@ -197,7 +198,7 @@ impl VerticalStack {
                     .unwrap_or(self.default_panel_height);
 
                 // Ensure it respects minimum height
-                let initial_height = content_height.max(self.min_height);
+                let initial_height = content_height.max(self.min_panel_height);
 
                 // Add to panel heights
                 self.panel_heights.push(initial_height);
@@ -206,7 +207,7 @@ impl VerticalStack {
 
         // Also ensure ALL existing panel heights respect minimum height
         for idx in 0..self.panel_heights.len() {
-            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_height);
+            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_panel_height);
 
             // Also apply max_panel_height if configured
             if let Some(max_panel_height) = self.max_panel_height {
@@ -367,14 +368,14 @@ impl VerticalStack {
                     // Calculate delta from initial position
                     let total_delta = current_pos.y - start_y;
                     let current_height = self.panel_heights[panel_idx];
-                    let target_height = (start_height + total_delta).max(self.min_height);
+                    let target_height = (start_height + total_delta).max(self.min_panel_height);
 
                     println!("Drag: panel={}, current_height={}, delta={}, target_height={},
                      pointer_y={}", panel_idx, current_height, total_delta,
                              target_height, current_pos.y);
 
                     // Apply delta to the initial height
-                    let mut new_height = (start_height + total_delta).max(self.min_height);
+                    let mut new_height = (start_height + total_delta).max(self.min_panel_height);
 
                     // Apply maximum constraint if set
                     if let Some(max_panel_height) = self.max_panel_height {

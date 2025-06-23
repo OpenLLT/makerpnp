@@ -45,7 +45,7 @@ impl GerberViewerTabUi {
         Self {
             gerber_viewer_ui,
             stack: Value::new(VerticalStack::new()
-                .min_height(150.0)
+                .min_panel_height(150.0)
                 .default_panel_height(50.0)),
             component,
         }
