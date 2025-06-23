@@ -1,5 +1,5 @@
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, UiBuilder, Vec2, ScrollArea};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea};
 use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
@@ -61,9 +61,7 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
-        // Get the exact available space before anything is added
         let available_rect = ui.available_rect_before_wrap();
-        let available_width = available_rect.width();
         let available_height = match self.max_height {
             Some(max_height) => max_height.min(available_rect.height()),
             None => available_rect.height(),
@@ -78,8 +76,6 @@ impl VerticalStack {
 
         // Get panel count
         let panel_count = body.panels.len();
-
-        println!("Stack body - panel count: {}, available height: {}", panel_count, available_height);
 
         // Early return if no panels
         if panel_count == 0 {
@@ -100,75 +96,37 @@ impl VerticalStack {
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
 
         if self.drag_in_progress && !pointer_is_down {
-            // Drag just released
-            println!("Drag released");
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
 
         self.last_available_height = available_height;
 
-        // Calculate exact space needed for the entire stack
-        let handle_height = 8.0;
-        let handles_height = (panel_count - 1) as f32 * handle_height;
-        let total_content_height = self.panel_heights.iter().sum::<f32>() + handles_height;
-
-        // Important: We need to constrain the width to prevent growing the parent container
-        let content_width = available_width;
-
-        // First, allocate exactly the space we want to use
-        ui.allocate_space(Vec2::new(content_width, available_height));
-
-        // Create a ScrollArea with the available height, and fixed width
+        // Create a ScrollArea with the available height
         ScrollArea::vertical()
             .id_source(self.id_source.with("scroll_area"))
             .max_height(available_height)
+            .auto_shrink([false, false])
             .show(ui, |ui| {
-                // Set a fixed width for all content in the ScrollArea
-                ui.set_max_width(content_width);
-
                 // Render each panel with its calculated height
-                let mut current_pos_y = 0.0;
-
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     let panel_height = self.panel_heights[idx].max(self.min_height);
 
-                    // Create a containing frame to ensure fixed width
+                    // Create a panel with fixed height
                     Frame::default()
                         .stroke(Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
                         .show(ui, |ui| {
-                            // Force the width to match available space
-                            ui.set_max_width(content_width);
-
-                            // Allocate exact height
-                            let available_rect = ui.available_rect_before_wrap();
-                            let panel_rect = Rect::from_min_size(
-                                available_rect.min,
-                                Vec2::new(content_width, panel_height),
-                            );
+                            // Constrain the height of this panel
+                            ui.set_min_height(panel_height);
+                            ui.set_max_height(panel_height);
 
                             // Call the panel content function
-                            let inner_response = ui.allocate_new_ui(UiBuilder::new().max_rect(panel_rect), |ui| {
-                                // Make sure the UI uses exactly our specified width
-                                ui.set_max_width(content_width);
-                                ui.expand_to_include_rect(panel_rect);
-                                panel_fn(ui);
-                            });
+                            panel_fn(ui);
                         });
-
-                    current_pos_y += panel_height;
 
                     // Add a resize handle after each panel (except the last one)
                     if idx < panel_count - 1 {
-                        ui.allocate_space(Vec2::new(0.0, handle_height));
-
-                        // Create the handle rect
-                        let handle_rect = Rect::from_min_size(
-                            ui.available_rect_before_wrap().min,
-                            Vec2::new(content_width, handle_height),
-                        );
-
-                        self.add_resize_handle(ui, idx, handle_rect);
+                        self.add_resize_handle(ui, idx);
                     }
                 }
             });
@@ -177,45 +135,46 @@ impl VerticalStack {
         self.initialized = true;
     }
 
-    /// Add a resize handle between panels at the exact specified position.
-    fn add_resize_handle(&mut self, ui: &mut Ui, panel_idx: usize, handle_rect: Rect) {
+    /// Add a resize handle between panels.
+    fn add_resize_handle(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
+        let handle_height = 8.0;
 
         // Make sure we have the next panel's index available
         if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
-            ui.allocate_rect(handle_rect, Sense::hover());
+            ui.allocate_space(Vec2::new(ui.available_width(), handle_height));
             return;
         }
 
-        // Use drag sense explicitly to ensure dragging works
-        let handle_response = ui.interact(handle_rect, handle_id, Sense::drag());
+        // Allocate the space for the handle
+        let (rect, response) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), handle_height),
+            Sense::drag()
+        );
 
-        // Draw the handle
-        let handle_visuals = ui.style().noninteractive();
-        let handle_stroke = if handle_response.hovered() || handle_response.dragged() {
-            Stroke::new(2.0, Color32::WHITE) // More visible when hovered/dragged
+        // Style for the handle
+        let handle_stroke = if response.hovered() || response.dragged() {
+            Stroke::new(2.0, Color32::WHITE)
         } else {
-            Stroke::new(1.0, handle_visuals.bg_stroke.color)
+            Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
         };
 
         // Draw the handle line
-        let center_y = handle_rect.center().y;
-        let left = handle_rect.left();
-        let right = handle_rect.right();
+        let center_y = rect.center().y;
         ui.painter().line_segment(
-            [egui::Pos2::new(left, center_y), egui::Pos2::new(right, center_y)],
+            [egui::Pos2::new(rect.left(), center_y), egui::Pos2::new(rect.right(), center_y)],
             handle_stroke,
         );
 
         // Handle dragging to resize - ONLY affecting the panel above
-        if handle_response.dragged() {
+        if response.dragged() {
             // If this is the first drag or a different handle than before
             if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
                 self.drag_in_progress = true;
                 self.active_drag_handle = Some(panel_idx);
             }
 
-            let delta = handle_response.drag_delta().y;
+            let delta = response.drag_delta().y;
 
             // Only process if there's an actual delta
             if delta != 0.0 {
@@ -224,9 +183,6 @@ impl VerticalStack {
 
                 // Apply the new height ONLY to the panel above the handle
                 self.panel_heights[panel_idx] = new_height;
-
-                // No need to adjust other panels - they keep their heights
-                // Total height of the scroll area increases/decreases accordingly
             }
         }
     }
