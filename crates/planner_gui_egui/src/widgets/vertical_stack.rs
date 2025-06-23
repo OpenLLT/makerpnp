@@ -12,18 +12,17 @@ pub struct VerticalStack {
     default_panel_height: f32,
     drag_in_progress: bool,
     active_drag_handle: Option<usize>,
-    drag_start_pos: Option<egui::Pos2>, // Add this field to store initial pointer position
-    drag_start_height: Option<f32>,     // Add this field to store initial panel height
+    drag_start_y: Option<f32>,      // Store just the Y coordinate
+    drag_start_height: Option<f32>, // Initial panel height
     initialized: bool,
     last_available_height: f32,
     max_height: Option<f32>,
     max_panel_height: Option<f32>,
-    content_heights: HashMap<usize, f32>, // Store measured content heights
+    content_heights: HashMap<usize, f32>,
     need_sizing_pass: bool,
 }
 
 impl VerticalStack {
-    /// Creates a new empty vertical stack.
     pub fn new() -> Self {
         Self {
             min_height: 50.0,
@@ -32,7 +31,7 @@ impl VerticalStack {
             default_panel_height: 100.0,
             drag_in_progress: false,
             active_drag_handle: None,
-            drag_start_pos: None,
+            drag_start_y: None,
             drag_start_height: None,
             initialized: false,
             last_available_height: 0.0,
@@ -297,7 +296,6 @@ impl VerticalStack {
                 }
             });
     }
-    // Update the add_resize_handle_no_gap method
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;
@@ -307,79 +305,75 @@ impl VerticalStack {
             return;
         }
 
-        // Calculate handle rect directly where we need it
+        // Calculate handle rect
         let available_rect = ui.available_rect_before_wrap();
-
-        // Create a thin rectangle for the handle
         let handle_rect = Rect::from_min_size(
             available_rect.min,
             Vec2::new(available_rect.width(), handle_height)
         );
 
-        // Allocate exact size with no default spacing
+        // Allocate exact size with drag sense
         let (rect, response) = ui.allocate_exact_size(
             handle_rect.size(),
             Sense::drag()
         );
 
-        // Create a custom painter that doesn't add spacing
+        // Draw the handle 
         let painter = ui.painter();
-
-        // Style for the handle
         let handle_stroke = if response.hovered() || response.dragged() {
             Stroke::new(2.0, Color32::WHITE)
         } else {
             Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
         };
 
-        // Draw the handle line
         let center_y = rect.center().y;
         painter.line_segment(
             [egui::Pos2::new(rect.left(), center_y), egui::Pos2::new(rect.right(), center_y)],
             handle_stroke,
         );
 
-        // Handle dragging to resize
-        if response.dragged() {
-            // If this is the first drag or a different handle than before
-            if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
-                self.drag_in_progress = true;
-                self.active_drag_handle = Some(panel_idx);
+        // Check if this is the active drag handle
+        let is_active_handle = self.active_drag_handle == Some(panel_idx);
 
-                // Store the initial drag position and panel height
-                if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
-                    self.drag_start_pos = Some(pointer_pos);
-                    self.drag_start_height = Some(self.panel_heights[panel_idx]);
-                }
+        // Handle drag start
+        if response.drag_started() {
+            self.drag_in_progress = true;
+            self.active_drag_handle = Some(panel_idx);
+
+            // Store initial values
+            if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
+                self.drag_start_y = Some(pointer_pos.y);
+                self.drag_start_height = Some(self.panel_heights[panel_idx]);
             }
+        }
 
-            // Calculate delta from the initial drag position, not just the last frame
-            if let (Some(start_pos), Some(start_height)) = (self.drag_start_pos, self.drag_start_height) {
+        // Handle ongoing drag
+        if is_active_handle && self.drag_in_progress && response.dragged() {
+            if let (Some(start_y), Some(start_height)) = (self.drag_start_y, self.drag_start_height) {
                 if let Some(current_pos) = ui.ctx().pointer_latest_pos() {
-                    let total_delta = current_pos.y - start_pos.y;
+                    // Calculate delta from initial position
+                    let total_delta = current_pos.y - start_y;
 
-                    // Calculate new height based on the initial height plus total delta
+                    // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_height);
 
-                    // Apply max_panel_height constraint if set
+                    // Apply maximum constraint if set
                     if let Some(max_panel_height) = self.max_panel_height {
                         new_height = new_height.min(max_panel_height);
                     }
 
-                    // Apply the new height ONLY to the panel above the handle
+                    // Update the panel height
                     self.panel_heights[panel_idx] = new_height;
-
-                    // Mark that we need a sizing pass on the next frame to update content heights
                     self.need_sizing_pass = true;
                 }
             }
         }
 
-        // Reset drag state when the drag ends
-        if !response.dragged() && self.drag_in_progress && self.active_drag_handle == Some(panel_idx) {
+        // Handle drag end
+        if is_active_handle && response.drag_released() {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
-            self.drag_start_pos = None;
+            self.drag_start_y = None;
             self.drag_start_height = None;
         }
     }
