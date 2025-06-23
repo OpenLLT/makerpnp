@@ -1,5 +1,5 @@
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText, StrokeKind};
 use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
@@ -127,6 +127,7 @@ impl VerticalStack {
                         frame_rect,
                         0.0, // No rounding
                         Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
+                        StrokeKind::Outside,
                     );
 
                     // Create a child UI with padding inside the frame
@@ -135,7 +136,7 @@ impl VerticalStack {
                     let content_rect = frame_rect.shrink(inner_margin);
 
                     let clip_rect = ui.clip_rect().intersect(content_rect);
-                    let mut child_ui = ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT));
+                    let mut child_ui = ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT), None);
                     child_ui.set_clip_rect(clip_rect);
 
                     // Call the panel content function in the child UI
