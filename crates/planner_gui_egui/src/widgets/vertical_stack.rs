@@ -170,6 +170,7 @@ impl VerticalStack {
         F: FnOnce(&mut StackBodyBuilder),
     {
         println!("vertical stack: render pass");
+        
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -185,6 +186,23 @@ impl VerticalStack {
             return;
         }
 
+        // First, ensure panel heights are initialized correctly
+        if !self.initialized || self.panel_heights.len() < panel_count {
+            // Initialize panel heights while ensuring minimum height
+            while self.panel_heights.len() < panel_count {
+                // Start with either content height or default height, whichever is larger
+                let content_height = self.content_heights.get(&self.panel_heights.len())
+                    .copied()
+                    .unwrap_or(self.default_panel_height);
+
+                // Ensure it respects minimum height
+                let initial_height = content_height.max(self.min_height);
+
+                // Add to panel heights
+                self.panel_heights.push(initial_height);
+            }
+        }
+        
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
 
@@ -192,7 +210,7 @@ impl VerticalStack {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
-
+        
         println!("vertical stack: {:?}", self);
         
         // Create a ScrollArea with the available height
@@ -212,6 +230,11 @@ impl VerticalStack {
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied)
                     let panel_height = self.panel_heights[idx];
+
+                    // Also apply max_panel_height if configured
+                    if let Some(max_panel_height) = self.max_panel_height {
+                        self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
+                    }
 
                     // Create a fixed size for this panel
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
