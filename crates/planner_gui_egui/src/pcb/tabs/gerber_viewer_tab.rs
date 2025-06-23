@@ -158,24 +158,24 @@ impl UiComponent for GerberViewerTabUi {
                 .with("gerber_viewer_tab_right_panel"),
 
         ).show_inside(ui, |ui| {
-            
+
             println!("right panel. available_size: {:?}", ui.available_size());
-            
+
             let mut stack = self.stack.lock().unwrap();
             stack
                 .id_salt(ui.id().with("vertical_stack"))
                 .body(ui, |body|{
-                body.add_panel(|ui|{
+                body.add_panel(|ui: &mut Ui|{
                     ui.label("top");
                     ui.label("top");
                     ui.label("top");
                 });
-                body.add_panel(|ui|{
+                body.add_panel(|ui: &mut Ui|{
                     ui.label("middle");
                     ui.label("middle");
                     ui.label("middle");
                 });
-                body.add_panel(|ui|{
+                body.add_panel(|ui: &mut Ui|{
                     ui.label("bottom");
                     ui.label("bottom");
                     ui.label("bottom");

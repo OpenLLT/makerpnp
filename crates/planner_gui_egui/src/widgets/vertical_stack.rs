@@ -1,13 +1,6 @@
 use eframe::epaint::Color32;
 use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2};
 
-/// Common trait for both counter and stack bodies
-pub trait PanelAdder {
-    fn add_panel<F>(&mut self, add_contents: F)
-    where
-        F: FnOnce(&mut Ui);
-}
-
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
     min_height: f32,
@@ -50,60 +43,207 @@ impl VerticalStack {
     }
 
     /// The main function to render the stack and add panels.
-    pub fn body<F>(&mut self, ui: &mut Ui, add_contents: F)
+    pub fn body<F, P>(&mut self, ui: &mut Ui, add_contents: F)
     where
-        F: for<'b> Fn(&'b mut dyn PanelAdder),
+        P: FnOnce(&mut Ui),
+        F: FnOnce(&mut StackBody<P>),
+
     {
-        // Create panel counter that will be modified in the body
-        let mut panel_counter = PanelCounter { count: 0 };
+        // Create the stack body to collect panel functions
+        let mut body = StackBody {
+            panel_functions: Vec::new(),
+        };
 
-        // First pass: Count panels (without rendering)
-        {
-            let mut counter_body = CounterBody {
-                counter: &mut panel_counter,
-            };
-            add_contents(&mut counter_body);
-        }
+        // Collect panel functions (this doesn't render anything yet)
+        add_contents(&mut body);
 
-        let panel_count = panel_counter.count;
+        // Get panel count and available height
+        let panel_count = body.panel_functions.len();
         let available_height = ui.available_height();
 
-        // Ensure we have enough heights
+        // Ensure we have enough heights for all panels
         while self.panel_heights.len() < panel_count {
             self.panel_heights.push(self.default_panel_height);
         }
 
-        // Truncate if we have too many
+        // Truncate if we have too many heights
         if self.panel_heights.len() > panel_count {
             self.panel_heights.truncate(panel_count);
         }
 
-        // Only redistribute on first frame or when panel count changes
+        // Distribute heights if needed (first frame, panel count changed, or no drag in progress)
         let need_redistribution = !self.initialized ||
-            (panel_count != 0 && panel_count != self.panel_heights.len()) ||
+            (panel_count != 0 && self.panel_heights.len() != panel_count) ||
             !self.drag_in_progress;
 
         if need_redistribution {
             self.distribute_panel_heights(panel_count, available_height);
         }
 
-        // Create the rendering body
-        let mut body = StackBody {
-            ui,
-            min_height: self.min_height,
-            id_source: self.id_source,
-            panel_heights: &mut self.panel_heights,
-            panel_index: 0,
-            panel_count,
-            drag_in_progress: &mut self.drag_in_progress,
-            available_height,
-        };
-
-        // Render the body with calculated heights
-        add_contents(&mut body);
+        // Now render all panels with the calculated heights
+        self.render_panels(ui, body.panel_functions);
 
         // Mark as initialized
         self.initialized = true;
+    }
+
+    /// Render all panels with the calculated heights
+    fn render_panels<F>(&mut self, ui: &mut Ui, panel_functions: Vec<F>)
+    where
+        F: FnOnce(&mut Ui),
+    {
+        // Skip if no panels
+        if panel_functions.is_empty() {
+            return;
+        }
+
+        // Handle height for resize handles
+        let handle_height = 8.0;
+
+        // Render each panel with its calculated height
+        for (idx, panel_fn) in panel_functions.into_iter().enumerate() {
+            // Add a resize handle before each panel (except the first one)
+            if idx > 0 {
+                self.add_resize_handle(ui, idx - 1);
+            }
+
+            // Get this panel's height
+            let panel_height = self.panel_heights[idx].max(self.min_height);
+            println!("Rendering panel {}: height = {}", idx, panel_height);
+
+            // Create a frame with a border for the panel
+            Frame::default()
+                .stroke(Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
+                .show(ui, |ui| {
+                    let available_width = ui.available_width();
+
+                    // Use the allocated height exactly as specified
+                    ui.allocate_ui_with_layout(
+                        Vec2::new(available_width, panel_height),
+                        egui::Layout::top_down(egui::Align::LEFT).with_cross_justify(true),
+                        |ui| {
+                            // Use the full allocated space
+                            ui.set_min_height(panel_height);
+                            ui.expand_to_include_rect(ui.max_rect());
+                            panel_fn(ui);
+                        }
+                    );
+                });
+        }
+    }
+
+    /// Add a resize handle between panels.
+    fn add_resize_handle(&mut self, ui: &mut Ui, panel_idx: usize) {
+        let handle_id = self.id_source.with("resize_handle").with(panel_idx);
+        let handle_height = 8.0;
+        let handle_rect = Rect::from_min_size(
+            ui.cursor().min,
+            Vec2::new(ui.available_width(), handle_height),
+        );
+
+        println!("Resize handle for panel {}: rect = {:?}", panel_idx, handle_rect);
+
+        // Make sure we have the next panel's index available
+        if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
+            println!("  Error: Panel index out of bounds");
+            ui.allocate_rect(handle_rect, Sense::hover());
+            return;
+        }
+
+        // Use drag sense explicitly to ensure dragging works
+        let handle_response = ui.interact(handle_rect, handle_id, Sense::drag());
+
+        println!("  Handle response: dragged = {}, hovered = {}",
+                 handle_response.dragged(), handle_response.hovered());
+
+        // Draw the handle
+        let handle_visuals = ui.style().noninteractive();
+        let handle_stroke = if handle_response.hovered() || handle_response.dragged() {
+            Stroke::new(2.0, Color32::WHITE) // Make it more visible when hovered or dragged
+        } else {
+            Stroke::new(1.0, handle_visuals.bg_stroke.color)
+        };
+
+        // Draw the handle line
+        let center_y = handle_rect.center().y;
+        let left = handle_rect.left();
+        let right = handle_rect.right();
+        ui.painter().line_segment(
+            [egui::Pos2::new(left, center_y), egui::Pos2::new(right, center_y)],
+            handle_stroke,
+        );
+
+        // Add some grip indicators
+        for i in 0..5 {
+            let x = left + (right - left) * (0.3 + 0.1 * i as f32);
+            let y_top = center_y - 2.0;
+            let y_bottom = center_y + 2.0;
+            ui.painter().line_segment(
+                [egui::Pos2::new(x, y_top), egui::Pos2::new(x, y_bottom)],
+                handle_stroke,
+            );
+        }
+
+        // Handle dragging to resize
+        if handle_response.dragged() {
+            self.drag_in_progress = true;
+            let delta = handle_response.drag_delta().y;
+            println!("  Drag delta: {}", delta);
+
+            // Only process if there's an actual delta
+            if delta != 0.0 {
+                // Calculate new heights while respecting min_height
+                let current_height = self.panel_heights[panel_idx];
+                let next_height = self.panel_heights[panel_idx + 1];
+
+                println!("  Before resize: panel {} height = {}, panel {} height = {}",
+                         panel_idx, current_height, panel_idx + 1, next_height);
+
+                // Calculate maximum available height to prevent scrollbars
+                let panel_count = self.panel_heights.len();
+                let other_panels_sum: f32 = self.panel_heights.iter().enumerate()
+                    .filter(|(i, _)| *i != panel_idx && *i != panel_idx + 1)
+                    .map(|(_, &h)| h)
+                    .sum();
+
+                let handle_count = (panel_count - 1).max(0) as f32;
+                let handles_height = handle_count * handle_height;
+                let available_height = ui.available_rect_before_wrap().height();
+                let max_available = available_height - other_panels_sum - handles_height;
+
+                // Calculate new heights with constraints
+                let mut new_current = (current_height + delta).max(self.min_height);
+                let mut new_next = (next_height - delta).max(self.min_height);
+
+                // Enforce the constraint that both panels combined can't exceed max_available
+                if new_current + new_next > max_available {
+                    // Scale both panels proportionally to fit
+                    let ratio = max_available / (new_current + new_next);
+                    new_current = (new_current * ratio).max(self.min_height);
+                    new_next = (new_next * ratio).max(self.min_height);
+
+                    // If we still exceed due to minimum heights, adjust the larger one
+                    if new_current + new_next > max_available {
+                        if new_current > new_next {
+                            new_current = (max_available - new_next).max(self.min_height);
+                        } else {
+                            new_next = (max_available - new_current).max(self.min_height);
+                        }
+                    }
+                }
+
+                // Apply the new heights
+                self.panel_heights[panel_idx] = new_current;
+                self.panel_heights[panel_idx + 1] = new_next;
+
+                println!("  After resize: panel {} height = {}, panel {} height = {}",
+                         panel_idx, self.panel_heights[panel_idx],
+                         panel_idx + 1, self.panel_heights[panel_idx + 1]);
+            }
+        }
+
+        // Make sure we allocate the rect with drag sense
+        ui.allocate_rect(handle_rect, Sense::drag());
     }
 
     // Helper method to distribute heights to fill available space
@@ -208,194 +348,19 @@ impl VerticalStack {
     }
 }
 
-// Helper struct to count panels
-struct PanelCounter {
-    count: usize,
+// The body that collects panel functions
+pub struct StackBody<F> {
+    panel_functions: Vec<F>,
 }
 
-// Body used only for counting panels
-pub struct CounterBody<'a> {
-    counter: &'a mut PanelCounter,
-}
-
-impl<'a> PanelAdder for CounterBody<'a> {
-    fn add_panel<F>(&mut self, _: F)
-    where
-        F: FnOnce(&mut Ui),
-    {
-        self.counter.count += 1;
-    }
-}
-
-// The actual rendering body
-pub struct StackBody<'a> {
-    ui: &'a mut Ui,
-    min_height: f32,
-    id_source: Id,
-    panel_heights: &'a mut Vec<f32>,
-    panel_index: usize,
-    panel_count: usize,
-    drag_in_progress: &'a mut bool,
-    available_height: f32,
-}
-
-impl<'a> PanelAdder for StackBody<'a> {
-    fn add_panel<F>(&mut self, add_contents: F)
-    where
-        F: FnOnce(&mut Ui),
-    {
-        let panel_idx = self.panel_index;
-
-        // Skip if we're out of bounds
-        if panel_idx >= self.panel_count || panel_idx >= self.panel_heights.len() {
-            self.panel_index += 1;
-            return;
-        }
-
-        // Get current panel height
-        let panel_height = self.panel_heights[panel_idx].max(self.min_height);
-        println!("Panel {}: height = {}", panel_idx, panel_height);
-
-        // Add a resize handle before the panel (except for the first panel)
-        if panel_idx > 0 {
-            self.add_resize_handle(panel_idx - 1);
-        }
-
-        // Create a frame with a border for the panel that fills the available space
-        Frame::default()
-            .stroke(Stroke::new(1.0, self.ui.visuals().widgets.noninteractive.bg_stroke.color))
-            .show(self.ui, |ui| {
-                let available_width = ui.available_width();
-
-                // Use the allocated height exactly as specified
-                ui.allocate_ui_with_layout(
-                    Vec2::new(available_width, panel_height),
-                    egui::Layout::top_down(egui::Align::LEFT).with_cross_justify(true),
-                    |ui| {
-                        // Use the full allocated space
-                        ui.set_min_height(panel_height);
-                        ui.expand_to_include_rect(ui.max_rect());
-                        add_contents(ui);
-                    }
-                );
-            });
-
-        // Increment the panel index
-        self.panel_index += 1;
-    }
-}
-
-impl<'a> StackBody<'a> {
-    /// Add a resize handle between panels.
-    fn add_resize_handle(&mut self, panel_idx: usize) {
-        let handle_id = self.id_source.with("resize_handle").with(panel_idx);
-        let handle_height = 8.0;
-        let handle_rect = Rect::from_min_size(
-            self.ui.cursor().min,
-            Vec2::new(self.ui.available_width(), handle_height),
-        );
-
-        println!("Resize handle for panel {}: rect = {:?}", panel_idx, handle_rect);
-
-        // Make sure we have the next panel's index available
-        if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
-            println!("  Error: Panel index out of bounds");
-            self.ui.allocate_rect(handle_rect, Sense::hover());
-            return;
-        }
-
-        // Use drag sense explicitly to ensure dragging works
-        let handle_response = self.ui.interact(handle_rect, handle_id, Sense::drag());
-
-        println!("  Handle response: dragged = {}, hovered = {}",
-                 handle_response.dragged(), handle_response.hovered());
-
-        // Draw the handle
-        let handle_visuals = self.ui.style().noninteractive();
-        let handle_stroke = if handle_response.hovered() || handle_response.dragged() {
-            Stroke::new(2.0, Color32::WHITE) // Make it more visible when hovered or dragged
-        } else {
-            Stroke::new(1.0, handle_visuals.bg_stroke.color)
-        };
-
-        // Draw the handle line
-        let center_y = handle_rect.center().y;
-        let left = handle_rect.left();
-        let right = handle_rect.right();
-        self.ui.painter().line_segment(
-            [egui::Pos2::new(left, center_y), egui::Pos2::new(right, center_y)],
-            handle_stroke,
-        );
-
-        // Add some grip indicators
-        for i in 0..5 {
-            let x = left + (right - left) * (0.3 + 0.1 * i as f32);
-            let y_top = center_y - 2.0;
-            let y_bottom = center_y + 2.0;
-            self.ui.painter().line_segment(
-                [egui::Pos2::new(x, y_top), egui::Pos2::new(x, y_bottom)],
-                handle_stroke,
-            );
-        }
-
-        // Handle dragging to resize
-        if handle_response.dragged() {
-            *self.drag_in_progress = true;
-            let delta = handle_response.drag_delta().y;
-            println!("  Drag delta: {}", delta);
-
-            // Only process if there's an actual delta
-            if delta != 0.0 {
-                // Calculate new heights while respecting min_height
-                let current_height = self.panel_heights[panel_idx];
-                let next_height = self.panel_heights[panel_idx + 1];
-
-                println!("  Before resize: panel {} height = {}, panel {} height = {}",
-                         panel_idx, current_height, panel_idx + 1, next_height);
-
-                // Calculate maximum available height to prevent scrollbars
-                let other_panels_sum: f32 = self.panel_heights.iter().enumerate()
-                    .filter(|(i, _)| *i != panel_idx && *i != panel_idx + 1)
-                    .map(|(_, &h)| h)
-                    .sum();
-
-                let handle_count = (self.panel_count - 1).max(0) as f32;
-                let handles_height = handle_count * handle_height;
-                let max_available = self.available_height - other_panels_sum - handles_height;
-
-                // Calculate new heights with constraints
-                let mut new_current = (current_height + delta).max(self.min_height);
-                let mut new_next = (next_height - delta).max(self.min_height);
-
-                // Enforce the constraint that both panels combined can't exceed max_available
-                if new_current + new_next > max_available {
-                    // Scale both panels proportionally to fit
-                    let ratio = max_available / (new_current + new_next);
-                    new_current = (new_current * ratio).max(self.min_height);
-                    new_next = (new_next * ratio).max(self.min_height);
-
-                    // If we still exceed due to minimum heights, adjust the larger one
-                    if new_current + new_next > max_available {
-                        if new_current > new_next {
-                            new_current = (max_available - new_next).max(self.min_height);
-                        } else {
-                            new_next = (max_available - new_current).max(self.min_height);
-                        }
-                    }
-                }
-
-                // Apply the new heights
-                self.panel_heights[panel_idx] = new_current;
-                self.panel_heights[panel_idx + 1] = new_next;
-
-                println!("  After resize: panel {} height = {}, panel {} height = {}",
-                         panel_idx, self.panel_heights[panel_idx],
-                         panel_idx + 1, self.panel_heights[panel_idx + 1]);
-            }
-        }
-
-        // Make sure we allocate the rect with drag sense
-        self.ui.allocate_rect(handle_rect, Sense::drag());
+impl<F> StackBody<F>
+where
+    F: FnOnce(&mut Ui),
+{
+    /// Add a panel to the stack with the given content.
+    pub fn add_panel(&mut self, add_contents: F) {
+        // Just store the function for later execution
+        self.panel_functions.push(add_contents);
     }
 }
 
