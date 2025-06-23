@@ -1,6 +1,8 @@
+
 use eframe::epaint::{Color32, StrokeKind};
 use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder};
 use std::boxed::Box;
+use std::collections::HashMap;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
@@ -13,6 +15,9 @@ pub struct VerticalStack {
     initialized: bool,
     last_available_height: f32,
     max_height: Option<f32>,
+    max_panel_height: Option<f32>,
+    content_heights: HashMap<usize, f32>, // Store measured content heights
+    need_sizing_pass: bool,
 }
 
 impl VerticalStack {
@@ -28,6 +33,9 @@ impl VerticalStack {
             initialized: false,
             last_available_height: 0.0,
             max_height: None,
+            max_panel_height: None,
+            content_heights: HashMap::new(),
+            need_sizing_pass: true,
         }
     }
 
@@ -41,6 +49,13 @@ impl VerticalStack {
     /// If None, will use all available height.
     pub fn max_height(mut self, height: Option<f32>) -> Self {
         self.max_height = height;
+        self
+    }
+
+    /// Sets the maximum height for individual panels.
+    /// If None, panels can grow as large as needed (or up to the entire scroll area).
+    pub fn max_panel_height(mut self, height: Option<f32>) -> Self {
+        self.max_panel_height = height;
         self
     }
 
@@ -59,7 +74,7 @@ impl VerticalStack {
     /// The main function to render the stack and add panels.
     pub fn body<F>(&mut self, ui: &mut Ui, collect_panels: F)
     where
-        F: FnOnce(&mut StackBodyBuilder),
+        F: FnOnce(&mut StackBodyBuilder) + Clone,
     {
         let available_rect = ui.available_rect_before_wrap();
         let available_height = match self.max_height {
@@ -67,6 +82,85 @@ impl VerticalStack {
             None => available_rect.height(),
         };
 
+        // Check if we need a sizing pass (first frame or available height changed)
+        if self.need_sizing_pass || !self.initialized || (self.last_available_height - available_height).abs() > 1.0 {
+            self.last_available_height = available_height;
+            self.need_sizing_pass = false;
+
+            // Run a sizing pass to measure content heights
+            self.do_sizing_pass(ui, collect_panels.clone(), available_height);
+            
+            ui.ctx().request_discard("sizing");
+        }
+
+        // Now do the actual rendering with known content heights
+        self.do_render_pass(ui, collect_panels, available_height);
+
+        // Mark as initialized
+        self.initialized = true;
+    }
+
+    /// Perform a sizing pass to measure content heights without rendering
+    fn do_sizing_pass<F>(&mut self, ui: &mut Ui, collect_panels: F, available_height: f32)
+    where
+        F: FnOnce(&mut StackBodyBuilder),
+    {
+        // Create a child UI for sizing pass
+        ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
+            let mut body = StackBodyBuilder {
+                panels: Vec::new(),
+            };
+
+            // Collect panel functions
+            collect_panels(&mut body);
+
+            // Get panel count
+            let panel_count = body.panels.len();
+
+            // Early return if no panels
+            if panel_count == 0 {
+                return;
+            }
+
+            // Ensure we have enough heights for all panels
+            while self.panel_heights.len() < panel_count {
+                self.panel_heights.push(self.default_panel_height);
+            }
+
+            // Truncate if we have too many heights
+            if self.panel_heights.len() > panel_count {
+                self.panel_heights.truncate(panel_count);
+            }
+
+            // Get the available width for panels
+            let panel_width = ui.available_width();
+
+            // Measure each panel's content
+            for (idx, panel_fn) in body.panels.into_iter().enumerate() {
+                // Create a temporary rect with max height for measurement
+                let panel_rect = Rect::from_min_size(
+                    ui.cursor().min,
+                    Vec2::new(panel_width, f32::MAX)
+                );
+
+                // Create a child UI with sizing pass enabled
+                    // Enable sizing pass
+                    let response = ui.allocate_new_ui(UiBuilder::new().max_rect(panel_rect).sizing_pass(), |ui| {
+                        panel_fn(ui);
+                    });
+
+                // Store the measured content height
+                let content_height = response.response.rect.height();
+                self.content_heights.insert(idx, content_height);
+            }
+        });
+    }
+
+    /// Render the actual UI with known content heights
+    fn do_render_pass<F>(&mut self, ui: &mut Ui, collect_panels: F, available_height: f32)
+    where
+        F: FnOnce(&mut StackBodyBuilder),
+    {
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -82,16 +176,6 @@ impl VerticalStack {
             return;
         }
 
-        // Ensure we have enough heights for all panels
-        while self.panel_heights.len() < panel_count {
-            self.panel_heights.push(self.default_panel_height);
-        }
-
-        // Truncate if we have too many heights
-        if self.panel_heights.len() > panel_count {
-            self.panel_heights.truncate(panel_count);
-        }
-
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
 
@@ -99,8 +183,6 @@ impl VerticalStack {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
-
-        self.last_available_height = available_height;
 
         // Create a ScrollArea with the available height
         ScrollArea::both()
@@ -112,13 +194,40 @@ impl VerticalStack {
                 ui.spacing_mut().item_spacing.y = 0.0;
 
                 // Get the available rect for the panel content
-                // if this is done INSIDE the loop below, and one of the panels overflows, then the width of remaining panels will be wrong.
                 let panel_rect = ui.available_rect_before_wrap();
 
                 // Render each panel with its calculated height
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-                    // Create a panel that spans the full width
-                    let panel_height = self.panel_heights[idx].max(self.min_height);
+                    // Get the content height from our measurements
+                    let content_height = self.content_heights.get(&idx).copied().unwrap_or(self.default_panel_height);
+
+                    // Apply constraints based on content height, min_height, and max_panel_height
+                    let mut panel_height = content_height;
+
+                    // Apply min_height constraint
+                    panel_height = panel_height.max(self.min_height);
+
+                    // Apply max_panel_height constraint if set
+                    if let Some(max_panel_height) = self.max_panel_height {
+                        panel_height = panel_height.min(max_panel_height);
+                    }
+
+                    // Use user-defined height if it was manually resized and is within constraints
+                    if self.initialized && idx < self.panel_heights.len() {
+                        let user_height = self.panel_heights[idx];
+
+                        // Only use user height if it's within the valid range and has been explicitly set
+                        if user_height >= self.min_height &&
+                            (self.max_panel_height.is_none() || user_height <= self.max_panel_height.unwrap()) {
+                            panel_height = user_height;
+                        }
+                    }
+
+                    // Update the stored panel height
+                    if idx < self.panel_heights.len() {
+                        self.panel_heights[idx] = panel_height;
+                    }
+
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
                     // Allocate space with a sense for interaction but without consuming input
@@ -175,9 +284,6 @@ impl VerticalStack {
                     }
                 }
             });
-
-        // Mark as initialized
-        self.initialized = true;
     }
 
     /// Add a resize handle between panels with no gap.
@@ -192,7 +298,7 @@ impl VerticalStack {
 
         // Calculate handle rect directly where we need it
         let available_rect = ui.available_rect_before_wrap();
-        
+
         // Create a thin rectangle for the handle
         let handle_rect = Rect::from_min_size(
             available_rect.min,
@@ -235,10 +341,18 @@ impl VerticalStack {
             // Only process if there's an actual delta
             if delta != 0.0 {
                 // Adjust only the panel above the handle
-                let new_height = (self.panel_heights[panel_idx] + delta).max(self.min_height);
+                let mut new_height = (self.panel_heights[panel_idx] + delta).max(self.min_height);
+
+                // Apply max_panel_height constraint if set
+                if let Some(max_panel_height) = self.max_panel_height {
+                    new_height = new_height.min(max_panel_height);
+                }
 
                 // Apply the new height ONLY to the panel above the handle
                 self.panel_heights[panel_idx] = new_height;
+
+                // Mark that we need a sizing pass on the next frame to update content heights
+                self.need_sizing_pass = true;
             }
         }
     }
