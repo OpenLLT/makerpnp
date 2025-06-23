@@ -7,8 +7,9 @@ pub struct VerticalStack {
     id_source: Id,
     panel_heights: Vec<f32>,
     default_panel_height: f32,
-    panel_count: usize,  // Track the number of panels
+    panel_count: usize,
     drag_in_progress: bool,
+    first_frame: bool,
 }
 
 impl VerticalStack {
@@ -21,6 +22,7 @@ impl VerticalStack {
             default_panel_height: 100.0,
             panel_count: 0,
             drag_in_progress: false,
+            first_frame: true,
         }
     }
 
@@ -60,13 +62,17 @@ impl VerticalStack {
             id_source: self.id_source,
             panel_heights: &mut self.panel_heights,
             default_panel_height: self.default_panel_height,
-            panel_count: &mut self.panel_count,  // Pass reference to panel_count
+            panel_count: &mut self.panel_count,
             drag_in_progress: &mut self.drag_in_progress,
-
+            available_height,
+            first_frame: self.first_frame,
         };
 
         // Render the contents
         add_contents(&mut body);
+
+        // Update first_frame flag after first render
+        self.first_frame = false;
 
         // Ensure heights after we know the panel count
         // Only normalize heights if no drag is in progress
@@ -88,7 +94,7 @@ impl VerticalStack {
 
         // Calculate space needed for resize handles
         let handle_height = 8.0;
-        let handles_height = if self.panel_count > 0 {
+        let handles_height = if self.panel_count > 1 {
             (self.panel_count - 1) as f32 * handle_height
         } else {
             0.0
@@ -168,7 +174,6 @@ impl VerticalStack {
         println!("Panel heights after distribution: {:?}",
                  &self.panel_heights[0..self.panel_count.min(self.panel_heights.len())]);
     }
-
 }
 
 pub struct StackBody<'a> {
@@ -179,6 +184,8 @@ pub struct StackBody<'a> {
     default_panel_height: f32,
     panel_count: &'a mut usize,
     drag_in_progress: &'a mut bool,
+    available_height: f32,
+    first_frame: bool,
 }
 
 impl<'a> StackBody<'a> {
@@ -191,18 +198,44 @@ impl<'a> StackBody<'a> {
 
         // Ensure we have a height for this panel
         if self.panel_heights.len() <= panel_idx {
-            self.panel_heights.push(self.default_panel_height);
+            // On first frame, distribute height more evenly based on panel count seen so far
+            if self.first_frame {
+                // For the first frame, calculate a reasonable height that won't cause scrolling
+                let handle_height = 8.0;
+                let estimated_panels = panel_idx + 1;  // Assume at least this many panels
+                let handles_space = (estimated_panels - 1).max(0) as f32 * handle_height;
+                let available_space = self.available_height - handles_space;
+                let reasonable_height = (available_space / estimated_panels as f32).max(self.min_height);
+                self.panel_heights.push(reasonable_height);
+            } else {
+                self.panel_heights.push(self.default_panel_height);
+            }
         }
 
-        let panel_height = self.panel_heights[panel_idx].max(self.min_height);
+        // Determine if this is the last panel
+        let is_last_panel = panel_idx == *self.panel_count;
+
+        // Calculate remaining space for the last panel to fill the available height
+        let panel_height = if is_last_panel && self.panel_heights.len() > 1 {
+            // For the last panel, calculate remaining space
+            let used_space: f32 = self.panel_heights.iter().take(panel_idx).sum();
+            let handle_space = panel_idx as f32 * 8.0; // 8.0 is handle height
+            let remaining = (self.available_height - used_space - handle_space).max(self.min_height);
+            self.panel_heights[panel_idx] = remaining;
+            remaining
+        } else {
+            self.panel_heights[panel_idx].max(self.min_height)
+        };
+
         println!("Panel {}: height = {}", panel_idx, panel_height);
 
         // Add a resize handle before the panel (except for the first panel)
         if panel_idx > 0 {
             self.add_resize_handle(panel_idx - 1);
         }
+
         // Create a frame with a border for the panel that fills the available space
-        let frame_response = Frame::default()
+        Frame::default()
             .stroke(Stroke::new(1.0, self.ui.visuals().widgets.noninteractive.bg_stroke.color))
             .show(self.ui, |ui| {
                 let available_width = ui.available_width();
@@ -220,10 +253,10 @@ impl<'a> StackBody<'a> {
                 );
             });
 
-
         // Increment the panel count
         *self.panel_count += 1;
     }
+
     /// Add a resize handle between panels.
     fn add_resize_handle(&mut self, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
@@ -276,7 +309,7 @@ impl<'a> StackBody<'a> {
             );
         }
 
-        // Handle dragging to resize
+        // Handle dragging to resize with constraints to prevent scrollbars
         if handle_response.dragged() {
             *self.drag_in_progress = true;
             let delta = handle_response.drag_delta().y;
@@ -284,20 +317,40 @@ impl<'a> StackBody<'a> {
 
             // Only process if there's an actual delta
             if delta != 0.0 {
-                // Calculate new heights while respecting min_height
+                // Calculate new heights while respecting constraints
                 let current_height = self.panel_heights[panel_idx];
                 let next_height = self.panel_heights[panel_idx + 1];
 
                 println!("  Before resize: panel {} height = {}, panel {} height = {}",
                          panel_idx, current_height, panel_idx + 1, next_height);
 
+                // Check if we're at the last handle (affecting the last panel)
+                let is_last_handle = panel_idx + 2 == *self.panel_count;
+
+                // Calculate maximum allowed heights to prevent scrollbars
+                let max_total = if is_last_handle {
+                    // For last handle, ensure we don't exceed available height
+                    let other_panels_height: f32 = self.panel_heights.iter()
+                        .take(*self.panel_count)
+                        .enumerate()
+                        .filter(|(i, _)| *i != panel_idx && *i != panel_idx + 1)
+                        .map(|(_, h)| *h)
+                        .sum();
+
+                    let handles_height = (*self.panel_count - 1) as f32 * handle_height;
+                    self.available_height - other_panels_height - handles_height
+                } else {
+                    // For other handles, we don't need special constraint
+                    current_height + next_height
+                };
+
                 // Calculate new heights
                 let new_current = (current_height + delta).max(self.min_height);
                 let actual_delta = new_current - current_height;
                 let new_next = (next_height - actual_delta).max(self.min_height);
 
-                // Check if we hit the min_height constraint on the next panel
-                if new_next == self.min_height && next_height > self.min_height {
+                // Check if we hit the minimum height constraint on the next panel
+                if new_next <= self.min_height && next_height > self.min_height {
                     // We can only take what's available above min_height
                     let available_delta = next_height - self.min_height;
                     self.panel_heights[panel_idx] = current_height + available_delta;
@@ -305,7 +358,7 @@ impl<'a> StackBody<'a> {
                     println!("  Limited by min height: panel {} height = {}, panel {} height = {}",
                              panel_idx, self.panel_heights[panel_idx],
                              panel_idx + 1, self.panel_heights[panel_idx + 1]);
-                } else if new_current == self.min_height && current_height > self.min_height {
+                } else if new_current <= self.min_height && current_height > self.min_height {
                     // We can only reduce current panel to min_height
                     let available_delta = current_height - self.min_height;
                     self.panel_heights[panel_idx] = self.min_height;
@@ -313,10 +366,28 @@ impl<'a> StackBody<'a> {
                     println!("  Limited by min height: panel {} height = {}, panel {} height = {}",
                              panel_idx, self.panel_heights[panel_idx],
                              panel_idx + 1, self.panel_heights[panel_idx + 1]);
+                } else if new_current + new_next > max_total {
+                    // Limit by max_total to prevent scrollbars
+                    let excess = new_current + new_next - max_total;
+
+                    // Distribute the excess reduction proportionally
+                    let total = new_current + new_next;
+                    let current_ratio = new_current / total;
+                    let next_ratio = new_next / total;
+
+                    let current_reduction = excess * current_ratio;
+                    let next_reduction = excess * next_ratio;
+
+                    self.panel_heights[panel_idx] = (new_current - current_reduction).max(self.min_height);
+                    self.panel_heights[panel_idx + 1] = (new_next - next_reduction).max(self.min_height);
+
+                    println!("  Limited by max_total: panel {} height = {}, panel {} height = {}",
+                             panel_idx, self.panel_heights[panel_idx],
+                             panel_idx + 1, self.panel_heights[panel_idx + 1]);
                 } else {
                     // Normal case - we can apply the full delta
                     self.panel_heights[panel_idx] = new_current;
-                    self.panel_heights[panel_idx + 1] = next_height - actual_delta;
+                    self.panel_heights[panel_idx + 1] = new_next;
                     println!("  After resize: panel {} height = {}, panel {} height = {}",
                              panel_idx, self.panel_heights[panel_idx],
                              panel_idx + 1, self.panel_heights[panel_idx + 1]);
@@ -328,7 +399,6 @@ impl<'a> StackBody<'a> {
         self.ui.allocate_rect(handle_rect, Sense::drag());
     }
 }
-
 
 impl Default for VerticalStack {
     fn default() -> Self {
