@@ -55,13 +55,13 @@ impl VerticalStack {
         self.default_panel_height = height;
         self
     }
+
     /// The main function to render the stack and add panels.
     pub fn body<F>(&mut self, ui: &mut Ui, collect_panels: F)
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
         let available_rect = ui.available_rect_before_wrap();
-        let available_width = available_rect.width();
         let available_height = match self.max_height {
             Some(max_height) => max_height.min(available_rect.height()),
             None => available_rect.height(),
@@ -108,17 +108,12 @@ impl VerticalStack {
             .max_height(available_height)
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                // Use vertical layout with no spacing
+                ui.spacing_mut().item_spacing.y = 0.0;
+
                 // Render each panel with its calculated height
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-                    let handle_height = 8.0;
-
-                    // For all panels except the last one, we need to account for the handle
-                    let panel_height = if idx < panel_count - 1 {
-                        // Subtract handle height to ensure no gap
-                        (self.panel_heights[idx].max(self.min_height) - handle_height).max(self.min_height)
-                    } else {
-                        self.panel_heights[idx].max(self.min_height)
-                    };
+                    let panel_height = self.panel_heights[idx].max(self.min_height);
 
                     // Create a panel that spans the full width
                     let panel_rect = ui.available_rect_before_wrap();
@@ -157,7 +152,7 @@ impl VerticalStack {
 
                     // Add a resize handle after each panel (except the last one)
                     if idx < panel_count - 1 {
-                        self.add_resize_handle(ui, idx);
+                        self.add_resize_handle_no_gap(ui, idx);
                     }
                 }
             });
@@ -166,29 +161,33 @@ impl VerticalStack {
         self.initialized = true;
     }
 
-    /// Add a resize handle between panels.
-    fn add_resize_handle(&mut self, ui: &mut Ui, panel_idx: usize) {
+    /// Add a resize handle between panels with no gap.
+    fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 8.0;
 
         // Make sure we have the next panel's index available
         if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
-            ui.allocate_space(Vec2::new(ui.available_width(), handle_height));
             return;
         }
 
-        // Allocate the space for the handle with no spacing
+        // Calculate handle rect directly where we need it
         let available_rect = ui.available_rect_before_wrap();
+        
+        // Create a thin rectangle for the handle
         let handle_rect = Rect::from_min_size(
             available_rect.min,
             Vec2::new(available_rect.width(), handle_height)
         );
 
-        // Allocate the exact space needed with no extra margins
+        // Allocate exact size with no default spacing
         let (rect, response) = ui.allocate_exact_size(
-            Vec2::new(handle_rect.width(), handle_height),
+            handle_rect.size(),
             Sense::drag()
         );
+
+        // Create a custom painter that doesn't add spacing
+        let painter = ui.painter();
 
         // Style for the handle
         let handle_stroke = if response.hovered() || response.dragged() {
@@ -199,12 +198,12 @@ impl VerticalStack {
 
         // Draw the handle line
         let center_y = rect.center().y;
-        ui.painter().line_segment(
+        painter.line_segment(
             [egui::Pos2::new(rect.left(), center_y), egui::Pos2::new(rect.right(), center_y)],
             handle_stroke,
         );
 
-        // Handle dragging to resize - ONLY affecting the panel above
+        // Handle dragging to resize
         if response.dragged() {
             // If this is the first drag or a different handle than before
             if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
