@@ -103,7 +103,7 @@ impl VerticalStack {
         self.last_available_height = available_height;
 
         // Create a ScrollArea with the available height
-        ScrollArea::vertical()
+        ScrollArea::both()
             .id_salt(self.id_source.with("scroll_area"))
             .max_height(available_height)
             .auto_shrink([false, false])
