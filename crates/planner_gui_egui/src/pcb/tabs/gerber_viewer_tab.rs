@@ -158,6 +158,9 @@ impl UiComponent for GerberViewerTabUi {
                 .with("gerber_viewer_tab_right_panel"),
 
         ).show_inside(ui, |ui| {
+            
+            println!("right panel. available_size: {:?}", ui.available_size());
+            
             let mut stack = self.stack.lock().unwrap();
             stack
                 .id_salt(ui.id().with("vertical_stack"))
