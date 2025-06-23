@@ -54,13 +54,13 @@ impl VerticalStack {
         self.max_height = height;
         self
     }
-    
+
     /// Sets the minimum height for panels.
     pub fn min_panel_height(mut self, height: f32) -> Self {
         self.min_panel_height = height;
         self
     }
-    
+
     /// Sets the maximum height for individual panels.
     /// If None, panels can grow as large as needed (or up to the entire scroll area).
     pub fn max_panel_height(mut self, height: Option<f32>) -> Self {
@@ -282,7 +282,7 @@ impl VerticalStack {
                             .max_rect(content_rect)
                             .layout(*ui.layout())
                     );
-                    
+
                     // Set clip rect to prevent overflow
                     child_ui.set_clip_rect(content_rect);
 
@@ -332,6 +332,11 @@ impl VerticalStack {
             Sense::drag()
         );
 
+        // Set the resize cursor when hovering or dragging
+        if response.hovered() || response.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeVertical);
+        }
+        
         // Draw the handle 
         let painter = ui.painter();
         let handle_stroke = if response.hovered() || response.dragged() {
