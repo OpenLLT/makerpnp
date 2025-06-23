@@ -85,8 +85,10 @@ impl<'a> StackBody<'a> {
 
         let panel_height = self.panel_heights[panel_idx].max(self.min_height);
 
-        // Create a unique ID for this panel
-        let panel_id = self.id_source.with(panel_idx);
+        // Add a resize handle before the panel (except for the first panel)
+        if panel_idx > 0 {
+            self.add_resize_handle(panel_idx - 1);
+        }
 
         // Create a frame with a border for the panel
         Frame::default()
@@ -94,29 +96,18 @@ impl<'a> StackBody<'a> {
             .show(self.ui, |ui| {
                 let available_width = ui.available_width();
 
-                // Create a sizing area for the panel with the current height
-                let panel_rect = Rect::from_min_size(
-                    ui.cursor().min,
+                // Use allocate_ui directly with size
+                ui.allocate_ui(
                     Vec2::new(available_width, panel_height),
+                    |ui| {
+                        add_contents(ui);
+                    }
                 );
-
-                // Allocate the space
-                ui.allocate_rect(panel_rect, Sense::hover());
-
-                // Add a child UI confined to the panel area
-                let mut child_ui = ui.child_ui(panel_rect, *ui.layout(), None);
-
-                // Add the panel content
-                add_contents(&mut child_ui);
             });
-
-        // Add resize handle after the panel (unless it's the last panel)
-        if self.panel_count > 0 && panel_idx < self.panel_heights.len() - 1 {
-            self.add_resize_handle(panel_idx);
-        }
 
         self.panel_count += 1;
     }
+
 
     /// Add a resize handle between panels.
     fn add_resize_handle(&mut self, panel_idx: usize) {
@@ -127,6 +118,7 @@ impl<'a> StackBody<'a> {
             Vec2::new(self.ui.available_width(), handle_height),
         );
 
+        // Use drag sense explicitly to ensure dragging works
         let handle_response = self.ui.interact(handle_rect, handle_id, Sense::drag());
 
         // Draw the handle
@@ -147,21 +139,36 @@ impl<'a> StackBody<'a> {
         );
 
         // Handle dragging to resize
-        if handle_response.dragged() && panel_idx < self.panel_heights.len() {
+        if handle_response.dragged() && panel_idx < self.panel_heights.len() && panel_idx + 1 < self.panel_heights.len() {
             let delta = handle_response.drag_delta().y;
             if delta != 0.0 {
-                self.panel_heights[panel_idx] = (self.panel_heights[panel_idx] + delta).max(self.min_height);
+                // Calculate new heights while respecting min_height
+                let current_height = self.panel_heights[panel_idx];
+                let next_height = self.panel_heights[panel_idx + 1];
 
-                // If there's a next panel, adjust its height too
-                if panel_idx + 1 < self.panel_heights.len() {
-                    self.panel_heights[panel_idx + 1] = (self.panel_heights[panel_idx + 1] - delta).max(self.min_height);
+                // Calculate proposed new heights
+                let new_current = (current_height + delta).max(self.min_height);
+                let height_delta = new_current - current_height;
+                let new_next = (next_height - height_delta).max(self.min_height);
+
+                // If next panel would go below min_height, adjust current panel too
+                if new_next == self.min_height && next_height > self.min_height {
+                    // Only remove as much height as available above min_height
+                    let available_to_remove = next_height - self.min_height;
+                    self.panel_heights[panel_idx] = current_height + available_to_remove;
+                    self.panel_heights[panel_idx + 1] = self.min_height;
+                } else {
+                    // Normal case where both panels stay above min_height
+                    self.panel_heights[panel_idx] = new_current;
+                    self.panel_heights[panel_idx + 1] = new_next;
                 }
             }
         }
 
         // Allocate space for the handle
-        self.ui.allocate_rect(handle_rect, Sense::hover());
+        self.ui.allocate_rect(handle_rect, Sense::drag());
     }
+
 }
 
 impl Default for VerticalStack {
