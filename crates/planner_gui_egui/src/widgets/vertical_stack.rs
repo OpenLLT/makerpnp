@@ -1,5 +1,5 @@
 use eframe::epaint::{Color32, StrokeKind};
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder};
 use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
@@ -120,27 +120,31 @@ impl VerticalStack {
                     // Allocate space with a sense for interaction but without consuming input
                     let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
 
-                    // Draw the panel frame manually using the correct rect_stroke signature for egui 0.31.1
+                    // Draw the panel frame manually
                     let frame_rect = rect;
-                    ui.painter().rect_stroke(
+                    // Updated code: Create a proper Stroke and use the correct rect signature
+                    let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
+                    ui.painter().rect(
                         frame_rect,
                         CornerRadius::ZERO,
-                        Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
-                        StrokeKind::Outside,
+                        Color32::TRANSPARENT,
+                        stroke,
+                        StrokeKind::Outside
                     );
 
                     // Create content with padding inside the frame
                     let inner_margin = 8.0; // Adjust this for desired spacing
                     let content_rect = frame_rect.shrink(inner_margin);
 
-                    // Use a Frame to contain the panel content
-                    Frame::none()
+                    // Use Frame::NONE instead of the deprecated Frame::none()
+                    Frame::NONE
                         .fill(Color32::TRANSPARENT)
                         .inner_margin(0.0)
                         .outer_margin(0.0)
                         .show(ui, |ui| {
                             // First position the UI where we want the content
-                            ui.allocate_ui_at_rect(content_rect, |ui| {
+                            // Use allocate_new_ui instead of the deprecated allocate_ui_at_rect
+                            ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
                                 // Call the panel content function
                                 panel_fn(ui);
                             });
