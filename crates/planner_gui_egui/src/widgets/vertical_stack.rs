@@ -1,5 +1,5 @@
 use eframe::epaint::{Color32, StrokeKind};
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder, Layout, UiStackInfo};
 use std::boxed::Box;
 use std::collections::HashMap;
 
@@ -276,8 +276,12 @@ impl VerticalStack {
                     let child_response = ui.allocate_rect(content_rect, Sense::hover());
 
                     // Create a child UI inside this exact rect
-                    let mut child_ui = ui.child_ui(content_rect, *ui.layout(), None);
-
+                    let mut child_ui = ui.new_child(
+                        UiBuilder::new()
+                            .max_rect(content_rect)
+                            .layout(*ui.layout())
+                    );
+                    
                     // Set clip rect to prevent overflow
                     child_ui.set_clip_rect(content_rect);
 
@@ -295,10 +299,9 @@ impl VerticalStack {
                         StrokeKind::Outside
                     );
 
-                    // Add resize handle
-                    if idx < panel_count - 1 {
-                        self.add_resize_handle_no_gap(ui, idx);
-                    }
+                    // Add resize handle after each panel
+                    // Note: We now add a handle after EVERY panel, including the last one
+                    self.add_resize_handle_no_gap(ui, idx);
                 }
             });
     }
@@ -307,8 +310,11 @@ impl VerticalStack {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;
 
-        // Make sure we have the next panel's index available
-        if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
+        // For the last panel handle, we don't need to check the next panel's index
+        let is_last_panel = panel_idx == self.panel_heights.len() - 1;
+
+        // Skip if not valid (except for last panel)
+        if !is_last_panel && (panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len()) {
             return;
         }
 
@@ -366,7 +372,6 @@ impl VerticalStack {
                     println!("Drag: panel={}, current_height={}, delta={}, target_height={},
                      pointer_y={}", panel_idx, current_height, total_delta,
                              target_height, current_pos.y);
-
 
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_height);
