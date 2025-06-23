@@ -111,12 +111,14 @@ impl VerticalStack {
                 // Use vertical layout with no spacing
                 ui.spacing_mut().item_spacing.y = 0.0;
 
+                // Get the available rect for the panel content
+                // if this is done INSIDE the loop below, and one of the panels overflows, then the width of remaining panels will be wrong.
+                let panel_rect = ui.available_rect_before_wrap();
+
                 // Render each panel with its calculated height
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-                    let panel_height = self.panel_heights[idx].max(self.min_height);
-
                     // Create a panel that spans the full width
-                    let panel_rect = ui.available_rect_before_wrap();
+                    let panel_height = self.panel_heights[idx].max(self.min_height);
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
                     // Allocate space with a sense for interaction but without consuming input
@@ -134,7 +136,7 @@ impl VerticalStack {
                     );
 
                     // Create content with padding inside the frame
-                    let inner_margin = 8.0; // Adjust this for desired spacing
+                    let inner_margin = 2.0; // Adjust this for desired spacing
                     let content_rect = frame_rect.shrink(inner_margin);
 
                     let mut inner_stroke = stroke;
