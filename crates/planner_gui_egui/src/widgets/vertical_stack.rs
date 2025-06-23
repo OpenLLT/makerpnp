@@ -240,6 +240,9 @@ impl VerticalStack {
                 // Handle height for positioning calculations
                 let handle_height = 7.0;
 
+                // Get panel count before the loop
+                let panel_count = body.panels.len();
+
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied above)
                     let panel_height = self.panel_heights[idx];
@@ -304,9 +307,15 @@ impl VerticalStack {
                     );
 
                     // Add resize handle after each panel
-                    // Note: We now add a handle after EVERY panel, including the last one
                     self.add_resize_handle_no_gap(ui, idx);
+
+                    // Add a 2px empty space after each handle (except the last one)
+                    if idx < panel_count - 1 {
+                        ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
+                    }
+
                 }
+
             });
     }
     
