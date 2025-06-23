@@ -3,6 +3,7 @@ use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
+use egui_mobius::Value;
 use planner_app::PcbOverview;
 use tracing::trace;
 
@@ -13,6 +14,7 @@ use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
     GerberViewerUiInstanceArgs,
 };
+use crate::widgets::vertical_stack::VerticalStack;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -21,6 +23,8 @@ pub struct GerberViewerTabUi {
     gerber_viewer_ui: GerberViewerUi,
 
     pub component: ComponentState<GerberViewerTabUiCommand>,
+    #[derivative(Debug = "ignore")]
+    stack: Value<VerticalStack>,
 }
 
 impl GerberViewerTabUi {
@@ -40,6 +44,9 @@ impl GerberViewerTabUi {
 
         Self {
             gerber_viewer_ui,
+            stack: Value::new(VerticalStack::new()
+                .min_height(150.0)
+                .default_panel_height(50.0)),
             component,
         }
     }
@@ -80,7 +87,7 @@ impl UiComponent for GerberViewerTabUi {
             egui::ScrollArea::both()
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
-                    ui.label("Gerber Viewer Tab");
+                    ui.label("Gerber Viewer Tab"); // TODO delete or translate
                     ui.separator();
 
                     let layers_binding = self.gerber_viewer_ui.layers();
@@ -145,6 +152,32 @@ impl UiComponent for GerberViewerTabUi {
                                 });
                         });
                 });
+        });
+        egui::SidePanel::right(
+            ui.id()
+                .with("gerber_viewer_tab_left_panel"),
+
+        ).show_inside(ui, |ui| {
+            let mut stack = self.stack.lock().unwrap();
+            stack
+                .id_source("stack")
+                .body(ui, |body|{
+                body.add_panel(|ui|{
+                    ui.label("top");
+                    ui.label("top");
+                    ui.label("top");
+                });
+                body.add_panel(|ui|{
+                    ui.label("middle");
+                    ui.label("middle");
+                    ui.label("middle");
+                });
+                body.add_panel(|ui|{
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                });
+            })
         });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.gerber_viewer_ui
