@@ -1,5 +1,6 @@
 use eframe::epaint::Color32;
 use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2};
+use std::mem;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
@@ -51,48 +52,86 @@ impl VerticalStack {
     {
         let available_height = ui.available_height();
 
-        // Reset panel count before adding new panels
+        // Store previous panel count
         let prev_panel_count = self.panel_count;
+
+        // Reset panel count and drag state
         self.panel_count = 0;
         self.drag_in_progress = false;
 
-        // Create a body for panel collection
-        let mut body = StackBody {
-            ui,
-            min_height: self.min_height,
-            id_source: self.id_source,
-            panel_heights: &mut self.panel_heights,
-            default_panel_height: self.default_panel_height,
-            panel_count: &mut self.panel_count,
-            drag_in_progress: &mut self.drag_in_progress,
-            available_height,
-            initialized: self.initialized,
-            panel_renders: Vec::new(),
-        };
+        // Temporary vector to store panel rendering functions
+        let mut panel_renders = Vec::new();
 
-        // Add panels (this will collect the closures without rendering)
-        add_contents(&mut body);
+        // First pass - collect panel info without rendering
+        {
+            let mut body = StackBody {
+                ui,
+                min_height: self.min_height,
+                id_source: self.id_source,
+                panel_count: &mut self.panel_count,
+                default_panel_height: self.default_panel_height,
+                available_height,
+                collection_phase: true,
+                panel_renders: &mut panel_renders,
+            };
 
-        // Make sure we have enough heights before rendering
+            // This will count panels but not render them yet
+            add_contents(&mut body);
+        }
+
+        // Make sure we have heights for all panels
         while self.panel_heights.len() < self.panel_count {
             self.panel_heights.push(self.default_panel_height);
         }
 
-        // Distribute heights before rendering
-        // If not dragging and either first frame or panel count changed
+        // Trim excess panel heights if needed
+        if self.panel_heights.len() > self.panel_count {
+            self.panel_heights.truncate(self.panel_count);
+        }
+
+        // Pre-distribute heights if needed (first frame or panel count changed)
         if !self.drag_in_progress && (!self.initialized || prev_panel_count != self.panel_count) {
             self.distribute_panel_heights(available_height);
         }
 
-        // Now render the panels with pre-calculated heights
-        body.render_panels();
+        // Second pass - render panels with calculated heights
+        {
+            let mut body = StackBody {
+                ui,
+                min_height: self.min_height,
+                id_source: self.id_source,
+                panel_count: &mut self.panel_count,
+                default_panel_height: self.default_panel_height,
+                available_height,
+                collection_phase: false,
+                panel_renders: &mut panel_renders,
+            };
 
-        // Update heights again if needed (for next frame)
+            // Render panels with the pre-calculated heights
+            for panel_idx in 0..panel_renders.len() {
+                // Get panel height
+                let panel_height = if panel_idx < self.panel_heights.len() {
+                    self.panel_heights[panel_idx].max(self.min_height)
+                } else {
+                    self.min_height
+                };
+
+                // Add resize handle before panel (except first panel)
+                if panel_idx > 0 {
+                    body.add_resize_handle(panel_idx - 1, &mut self.panel_heights, &mut self.drag_in_progress);
+                }
+
+                // Render the panel with its allocated height
+                body.render_panel(panel_idx, panel_height);
+            }
+        }
+
+        // Distribute heights for next frame if no drag is in progress
         if !self.drag_in_progress {
             self.distribute_panel_heights(available_height);
         }
 
-        // Mark as initialized
+        // Mark as initialized after first frame
         self.initialized = true;
     }
 
@@ -100,11 +139,6 @@ impl VerticalStack {
     fn distribute_panel_heights(&mut self, available_height: f32) {
         if self.panel_count == 0 {
             return;
-        }
-
-        // Trim excess panel heights if we have more than needed
-        if self.panel_heights.len() > self.panel_count {
-            self.panel_heights.truncate(self.panel_count);
         }
 
         // Calculate space needed for resize handles
@@ -203,17 +237,18 @@ impl VerticalStack {
     }
 }
 
+// Type for storing panel rendering functions
+type PanelRenderFn<'a> = Box<dyn FnOnce(&mut Ui) + 'a>;
+
 pub struct StackBody<'a> {
     ui: &'a mut Ui,
     min_height: f32,
     id_source: Id,
-    panel_heights: &'a mut Vec<f32>,
-    default_panel_height: f32,
     panel_count: &'a mut usize,
-    drag_in_progress: &'a mut bool,
+    default_panel_height: f32,
     available_height: f32,
-    initialized: bool,
-    panel_renders: Vec<Box<dyn FnOnce(&mut Ui) + 'a>>,
+    collection_phase: bool,
+    panel_renders: &'a mut Vec<PanelRenderFn<'a>>,
 }
 
 impl<'a> StackBody<'a> {
@@ -222,54 +257,49 @@ impl<'a> StackBody<'a> {
     where
         F: FnOnce(&mut Ui) + 'a,
     {
-        // Store the render function for later
-        self.panel_renders.push(Box::new(add_contents));
-
-        // Increment the panel count
+        // Increment panel count
         *self.panel_count += 1;
-    }
 
-    /// Render all panels with the calculated heights
-    fn render_panels(&mut self) {
-        // Render each panel with its calculated height
-        for panel_idx in 0..self.panel_renders.len() {
-            let panel_height = if panel_idx < self.panel_heights.len() {
-                self.panel_heights[panel_idx].max(self.min_height)
-            } else {
-                self.min_height
-            };
-
-            println!("Panel {}: height = {}", panel_idx, panel_height);
-
-            // Add a resize handle before the panel (except for the first panel)
-            if panel_idx > 0 {
-                self.add_resize_handle(panel_idx - 1);
-            }
-
-            // Create a frame with a border for the panel
-            let panel_renderer = self.panel_renders.remove(0);
-            Frame::default()
-                .stroke(Stroke::new(1.0, self.ui.visuals().widgets.noninteractive.bg_stroke.color))
-                .show(self.ui, |ui| {
-                    let available_width = ui.available_width();
-
-                    // Use the allocated height exactly as specified
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(available_width, panel_height),
-                        egui::Layout::top_down(egui::Align::LEFT).with_cross_justify(true),
-                        |ui| {
-                            // Use the full allocated space
-                            ui.set_min_height(panel_height);
-                            ui.expand_to_include_rect(ui.max_rect());
-                            panel_renderer(ui);
-                        }
-                    );
-                });
+        // In collection phase, just store the rendering function
+        if self.collection_phase {
+            self.panel_renders.push(Box::new(add_contents));
         }
     }
 
+    /// Render a panel with the given height
+    fn render_panel(&mut self, panel_idx: usize, panel_height: f32) {
+        if panel_idx >= self.panel_renders.len() {
+            return;
+        }
+
+        println!("Panel {}: height = {}", panel_idx, panel_height);
+
+        // Take ownership of the render function to avoid borrow checker issues
+        let render_fn = mem::replace(&mut self.panel_renders[panel_idx],
+                                     Box::new(|_| {})); // Placeholder
+
+        // Create a frame with a border for the panel
+        Frame::default()
+            .stroke(Stroke::new(1.0, self.ui.visuals().widgets.noninteractive.bg_stroke.color))
+            .show(self.ui, |ui| {
+                let available_width = ui.available_width();
+
+                // Use the allocated height exactly as specified
+                ui.allocate_ui_with_layout(
+                    Vec2::new(available_width, panel_height),
+                    egui::Layout::top_down(egui::Align::LEFT).with_cross_justify(true),
+                    |ui| {
+                        // Use the full allocated space
+                        ui.set_min_height(panel_height);
+                        ui.expand_to_include_rect(ui.max_rect());
+                        render_fn(ui);
+                    }
+                );
+            });
+    }
+
     /// Add a resize handle between panels.
-    fn add_resize_handle(&mut self, panel_idx: usize) {
+    fn add_resize_handle(&mut self, panel_idx: usize, panel_heights: &mut Vec<f32>, drag_in_progress: &mut bool) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 8.0;
         let handle_rect = Rect::from_min_size(
@@ -280,7 +310,7 @@ impl<'a> StackBody<'a> {
         println!("Resize handle for panel {}: rect = {:?}", panel_idx, handle_rect);
 
         // Make sure we have the next panel's index available
-        if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
+        if panel_idx >= panel_heights.len() || panel_idx + 1 >= panel_heights.len() {
             println!("  Error: Panel index out of bounds");
             self.ui.allocate_rect(handle_rect, Sense::hover());
             return;
@@ -322,21 +352,21 @@ impl<'a> StackBody<'a> {
 
         // Handle dragging to resize
         if handle_response.dragged() {
-            *self.drag_in_progress = true;
+            *drag_in_progress = true;
             let delta = handle_response.drag_delta().y;
             println!("  Drag delta: {}", delta);
 
             // Only process if there's an actual delta
             if delta != 0.0 {
                 // Calculate new heights while respecting min_height
-                let current_height = self.panel_heights[panel_idx];
-                let next_height = self.panel_heights[panel_idx + 1];
+                let current_height = panel_heights[panel_idx];
+                let next_height = panel_heights[panel_idx + 1];
 
                 println!("  Before resize: panel {} height = {}, panel {} height = {}",
                          panel_idx, current_height, panel_idx + 1, next_height);
 
                 // Calculate maximum available height to prevent scrollbars
-                let other_panels_sum: f32 = self.panel_heights.iter().enumerate()
+                let other_panels_sum: f32 = panel_heights.iter().enumerate()
                     .filter(|(i, _)| *i != panel_idx && *i != panel_idx + 1)
                     .map(|(_, &h)| h)
                     .sum();
@@ -367,12 +397,12 @@ impl<'a> StackBody<'a> {
                 }
 
                 // Apply the new heights
-                self.panel_heights[panel_idx] = new_current;
-                self.panel_heights[panel_idx + 1] = new_next;
+                panel_heights[panel_idx] = new_current;
+                panel_heights[panel_idx + 1] = new_next;
 
                 println!("  After resize: panel {} height = {}, panel {} height = {}",
-                         panel_idx, self.panel_heights[panel_idx],
-                         panel_idx + 1, self.panel_heights[panel_idx + 1]);
+                         panel_idx, panel_heights[panel_idx],
+                         panel_idx + 1, panel_heights[panel_idx + 1]);
             }
         }
 
