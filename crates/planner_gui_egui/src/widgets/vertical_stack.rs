@@ -273,12 +273,17 @@ impl VerticalStack {
                             let meh = ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
                                 // without this, the content will overflow to the right and below the frame.
                                 ui.set_clip_rect(content_rect);
-                                ui.set_max_size(content_rect.size());  // Explicitly limit maximum size
-                                ui.set_min_size(Vec2::new(content_rect.width(), 0.0));  // Allow height to be as small as needed
-                                
+                                //ui.set_max_size(content_rect.size());  // Explicitly limit maximum size
+                                //ui.set_min_size(Vec2::new(content_rect.width(), 0.0));  // Allow height to be as small as needed
+                                //ui.set_max_height(content_rect.height());
+
                                 // Call the panel content function
                                 panel_fn(ui);
                             });
+
+                            println!("Panel {}: Height={}, Content Rect={:?}, Response Rect={:?}",
+                                     idx, panel_height, content_rect, meh.response.rect);
+
 
                             let mut debug_stroke = stroke;
                             debug_stroke.color = Color32::GREEN;
@@ -356,6 +361,13 @@ impl VerticalStack {
                 if let Some(current_pos) = ui.ctx().pointer_latest_pos() {
                     // Calculate delta from initial position
                     let total_delta = current_pos.y - start_y;
+                    let current_height = self.panel_heights[panel_idx];
+                    let target_height = (start_height + total_delta).max(self.min_height);
+
+                    println!("Drag: panel={}, current_height={}, delta={}, target_height={}, 
+                     pointer_y={}", panel_idx, current_height, total_delta,
+                             target_height, current_pos.y);
+
 
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_height);
