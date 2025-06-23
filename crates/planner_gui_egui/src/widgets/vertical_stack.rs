@@ -1,6 +1,7 @@
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText, StrokeKind};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText, StrokeKind, UiBuilder};
 use std::boxed::Box;
+use egui::scroll_area::ScrollBarVisibility;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
@@ -105,6 +106,7 @@ impl VerticalStack {
 
         // Create a ScrollArea with the available height
         ScrollArea::vertical()
+            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
             .id_source(self.id_source.with("scroll_area"))
             .max_height(available_height)
             .auto_shrink([false, false])
@@ -138,8 +140,6 @@ impl VerticalStack {
                     let clip_rect = ui.clip_rect().intersect(content_rect);
                     let mut child_ui = ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT), None);
                     child_ui.set_clip_rect(clip_rect);
-
-                    // Call the panel content function in the child UI
                     panel_fn(&mut child_ui);
 
                     // Add a resize handle after each panel (except the last one)
