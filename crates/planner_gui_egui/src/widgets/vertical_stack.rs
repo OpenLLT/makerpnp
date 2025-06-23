@@ -1,4 +1,3 @@
-
 use eframe::epaint::{Color32, StrokeKind};
 use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder};
 use std::boxed::Box;
@@ -105,7 +104,7 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
-        // Create a child UI for sizing pass
+        // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             let mut body = StackBodyBuilder {
                 panels: Vec::new(),
@@ -143,14 +142,18 @@ impl VerticalStack {
                     Vec2::new(panel_width, f32::MAX)
                 );
 
-                // Create a child UI with sizing pass enabled
-                    // Enable sizing pass
-                    let response = ui.allocate_new_ui(UiBuilder::new().max_rect(panel_rect).sizing_pass(), |ui| {
-                        panel_fn(ui);
-                    });
+                // Create a new child UI with sizing pass enabled
+                let mut measuring_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(panel_rect)
+                        .sizing_pass()
+                );
 
-                // Store the measured content height
-                let content_height = response.response.rect.height();
+                // Call the panel function to measure its size
+                panel_fn(&mut measuring_ui);
+
+                // Get the measured content height
+                let content_height = measuring_ui.min_rect().height();
                 self.content_heights.insert(idx, content_height);
             }
         });
