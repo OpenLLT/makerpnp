@@ -53,54 +53,20 @@ impl VerticalStack {
         self.panel_count = 0;
         self.drag_in_progress = false;
 
-        // If we haven't distributed heights yet or total heights are too large,
-        // pre-calculate panel count and set even distribution
-        if self.panel_heights.is_empty() ||
-            (self.panel_heights.len() > 0 && self.panel_heights.iter().sum::<f32>() > available_height * 1.1) {
-            // We'll count panels during this render and then use even heights next frame
-            // Store the number of panels from the previous render
-            let old_panel_count = self.panel_count;
-
-            // Create the body for counting
-            let mut body = StackBody {
-                ui,
-                min_height: self.min_height,
-                id_source: self.id_source,
-                panel_heights: &mut self.panel_heights,
-                default_panel_height: self.default_panel_height,
-                panel_count: &mut self.panel_count,
-                drag_in_progress: &mut self.drag_in_progress,
-                available_height,
-                counting_only: true, // Flag to indicate we're just counting
-            };
-
-            // Count panels without actually rendering
-            add_contents(&mut body);
-
-            // Pre-allocate even distribution to avoid scrollbar
+        // Pre-allocate evenly distributed heights if needed
+        if self.panel_heights.is_empty() {
+            // Start with a reasonable default (3 panels)
+            let estimated_panel_count = 3;
             let handle_height = 8.0;
-            let handles_height = if self.panel_count > 0 {
-                (self.panel_count - 1) as f32 * handle_height
-            } else {
-                0.0
-            };
+            let handles_height = (estimated_panel_count - 1) as f32 * handle_height;
             let available_for_panels = available_height - handles_height;
 
             // Distribute evenly
-            let panel_height = if self.panel_count > 0 {
-                (available_for_panels / self.panel_count as f32).max(self.min_height)
-            } else {
-                self.default_panel_height
-            };
-
-            // Set initial heights
-            self.panel_heights = vec![panel_height; self.panel_count];
-
-            // Reset panel count for actual rendering
-            self.panel_count = 0;
+            let panel_height = (available_for_panels / estimated_panel_count as f32).max(self.min_height);
+            self.panel_heights = vec![panel_height; estimated_panel_count];
         }
 
-        // Create the body for actual rendering
+        // Create the body for rendering
         let mut body = StackBody {
             ui,
             min_height: self.min_height,
@@ -110,11 +76,17 @@ impl VerticalStack {
             panel_count: &mut self.panel_count,
             drag_in_progress: &mut self.drag_in_progress,
             available_height,
-            counting_only: false, // Now we're actually rendering
         };
 
         // Render the contents
         add_contents(&mut body);
+
+        // After rendering, if we have too many or too few heights, adjust the vector
+        if self.panel_heights.len() < self.panel_count {
+            // Add heights for new panels
+            let default_height = self.default_panel_height;
+            self.panel_heights.resize(self.panel_count, default_height);
+        }
 
         // Only normalize heights if no drag is in progress
         if !self.drag_in_progress {
@@ -124,8 +96,7 @@ impl VerticalStack {
             self.constrain_to_available_height(available_height);
         }
     }
-       
-
+    
     // New method to constrain total height during dragging
     fn constrain_to_available_height(&mut self, available_height: f32) {
         if self.panel_count == 0 {
@@ -290,7 +261,6 @@ pub struct StackBody<'a> {
     panel_count: &'a mut usize,
     drag_in_progress: &'a mut bool,
     available_height: f32,
-    counting_only: bool, // Flag to indicate if we're just counting panels
 }
 
 impl<'a> StackBody<'a> {
@@ -306,20 +276,9 @@ impl<'a> StackBody<'a> {
             self.panel_heights.push(self.default_panel_height);
         }
 
-        // Get the height for this panel
-        let panel_height = if panel_idx < self.panel_heights.len() {
-            self.panel_heights[panel_idx].max(self.min_height)
-        } else {
-            self.default_panel_height
-        };
-
+        // Use the current height from panel_heights
+        let panel_height = self.panel_heights[panel_idx].max(self.min_height);
         println!("Panel {}: height = {}", panel_idx, panel_height);
-
-        // If we're just counting panels, don't actually render anything
-        if self.counting_only {
-            *self.panel_count += 1;
-            return;
-        }
 
         // Add a resize handle before the panel (except for the first panel)
         if panel_idx > 0 {
@@ -330,14 +289,24 @@ impl<'a> StackBody<'a> {
         let frame = Frame::default()
             .stroke(Stroke::new(1.0, self.ui.visuals().widgets.noninteractive.bg_stroke.color));
 
-        frame.show(self.ui, |ui| {
-            let available_width = ui.available_width();
+        // Force the panel to use exactly the calculated height
+        let rect = self.ui.available_rect_before_wrap();
+        let panel_rect = Rect::from_min_size(
+            rect.min,
+            Vec2::new(rect.width(), panel_height),
+        );
 
-            ui.allocate_ui_with_layout(
-                Vec2::new(available_width, panel_height),
-                egui::Layout::top_down(egui::Align::LEFT).with_cross_justify(true),
-                add_contents
-            );
+        // Allocate the space for this panel
+        self.ui.allocate_rect(panel_rect, Sense::hover());
+
+        // Show the frame in the allocated space
+        frame.show(self.ui, |ui| {
+            // Use the full width but constrain to the exact panel height
+            ui.set_max_height(panel_height);
+            ui.set_min_height(panel_height);
+
+            // Add the contents
+            add_contents(ui);
         });
 
         // Increment the panel count
