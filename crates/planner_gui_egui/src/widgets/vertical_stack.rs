@@ -165,6 +165,7 @@ impl VerticalStack {
             }
         }
     }
+
     // Helper method to distribute heights to fill available space
     fn distribute_panel_heights(&mut self, available_height: f32) {
         if self.panel_count == 0 {
@@ -176,79 +177,63 @@ impl VerticalStack {
             self.panel_heights.push(self.default_panel_height);
         }
 
+        // Trim any excess heights
+        if self.panel_heights.len() > self.panel_count {
+            self.panel_heights.truncate(self.panel_count);
+        }
+
         // Calculate space needed for resize handles
         let handle_height = 8.0;
-        let handles_height = if self.panel_count > 0 {
+        let handles_height = if self.panel_count > 1 {
             (self.panel_count - 1) as f32 * handle_height
         } else {
             0.0
         };
 
-        // Calculate available space for panels
-        let available_for_panels = available_height - handles_height;
-
-        // Start with distributing available space evenly
-        let equal_height = (available_for_panels / self.panel_count as f32).max(self.min_height);
-
         // Get the total height currently used by panels
-        let total_panel_height: f32 = self.panel_heights.iter().take(self.panel_count).sum();
+        let total_panel_height: f32 = self.panel_heights.iter().sum();
+        let available_for_panels = available_height - handles_height;
 
         println!("Available height: {}, Handles: {}, Total panel height: {}",
                  available_height, handles_height, total_panel_height);
 
-        // If we're significantly off the available space, reset to equal distribution
-        if (total_panel_height - available_for_panels).abs() > available_for_panels * 0.1 {
-            // More than 10% difference, reset to equal distribution
-            for i in 0..self.panel_count {
-                self.panel_heights[i] = equal_height;
-            }
-        } else if total_panel_height > available_for_panels + 1.0 {
-            // We need to shrink panels (but less than 10% difference)
+        // If total height is significantly different from available space
+        if (total_panel_height - available_for_panels).abs() > 1.0 {
+            // Calculate the scaling factor
             let scale_factor = available_for_panels / total_panel_height;
 
+            // Apply scaling to all panels, respecting minimum height
             for i in 0..self.panel_count {
                 self.panel_heights[i] = (self.panel_heights[i] * scale_factor).max(self.min_height);
             }
 
-            // If we still exceed (due to min_height constraints), reduce larger panels more
-            let new_total: f32 = self.panel_heights.iter().take(self.panel_count).sum();
-            if new_total > available_for_panels {
-                // Sort panels by size (largest first)
-                let mut panels: Vec<(usize, f32)> = self.panel_heights.iter()
-                    .take(self.panel_count)
-                    .enumerate()
-                    .map(|(i, &h)| (i, h))
-                    .collect();
+            // After scaling, check if we still fit
+            let scaled_total: f32 = self.panel_heights.iter().sum();
 
-                panels.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+            if (scaled_total - available_for_panels).abs() > 1.0 {
+                // We're still off - just distribute evenly
+                let even_height = (available_for_panels / self.panel_count as f32).max(self.min_height);
 
-                // Reduce largest panels first
-                let mut remaining = new_total - available_for_panels;
-                for (idx, height) in panels {
-                    if height > self.min_height {
-                        let reducible = height - self.min_height;
-                        let reduction = remaining.min(reducible);
-                        self.panel_heights[idx] -= reduction;
-                        remaining -= reduction;
+                // If even distribution exceeds available space, reduce it
+                if even_height * self.panel_count as f32 > available_for_panels {
+                    // Calculate how much we're over
+                    let excess = even_height * self.panel_count as f32 - available_for_panels;
+                    let per_panel_reduction = excess / self.panel_count as f32;
 
-                        if remaining <= 0.01 {
-                            break;
-                        }
+                    // Apply reduction to each panel
+                    for i in 0..self.panel_count {
+                        self.panel_heights[i] = (even_height - per_panel_reduction).max(self.min_height);
+                    }
+                } else {
+                    // Just use even distribution
+                    for i in 0..self.panel_count {
+                        self.panel_heights[i] = even_height;
                     }
                 }
             }
-        } else if total_panel_height < available_for_panels - 1.0 {
-            // We need to grow panels a bit to fill space
-            let extra_space = available_for_panels - total_panel_height;
-            let per_panel = extra_space / self.panel_count as f32;
-
-            for i in 0..self.panel_count {
-                self.panel_heights[i] += per_panel;
-            }
         }
 
-        println!("Panel heights after distribution: {:?}",
-                 &self.panel_heights[0..self.panel_count.min(self.panel_heights.len())]);
+        println!("Panel heights after distribution: {:?}", self.panel_heights);
     }
 }
 
