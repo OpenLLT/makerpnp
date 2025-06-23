@@ -25,8 +25,8 @@ impl VerticalStack {
         self
     }
 
-    /// Sets a custom ID source for the stack.
-    pub fn id_source(&mut self, id: impl std::hash::Hash) -> &mut Self {
+    /// Sets a custom ID salt for the stack.
+    pub fn id_salt(&mut self, id: impl std::hash::Hash) -> &mut Self {
         self.id_source = Id::new(id);
         self
     }
@@ -111,7 +111,7 @@ impl<'a> StackBody<'a> {
             });
 
         // Add resize handle after the panel (unless it's the last panel)
-        if panel_idx < self.panel_count || panel_idx == 0 {
+        if self.panel_count > 0 && panel_idx < self.panel_heights.len() - 1 {
             self.add_resize_handle(panel_idx);
         }
 

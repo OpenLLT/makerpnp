@@ -155,12 +155,12 @@ impl UiComponent for GerberViewerTabUi {
         });
         egui::SidePanel::right(
             ui.id()
-                .with("gerber_viewer_tab_left_panel"),
+                .with("gerber_viewer_tab_right_panel"),
 
         ).show_inside(ui, |ui| {
             let mut stack = self.stack.lock().unwrap();
             stack
-                .id_source("stack")
+                .id_salt(ui.id().with("vertical_stack"))
                 .body(ui, |body|{
                 body.add_panel(|ui|{
                     ui.label("top");
