@@ -92,7 +92,7 @@ impl VerticalStack {
 
             // Run a sizing pass to measure content heights
             self.do_sizing_pass(ui, collect_panels.clone(), available_height);
-            
+
             ui.ctx().request_discard("sizing");
         }
 
@@ -128,7 +128,8 @@ impl VerticalStack {
 
             // Ensure we have enough heights for all panels
             while self.panel_heights.len() < panel_count {
-                self.panel_heights.push(self.default_panel_height);
+                // Always respect the minimum height from the beginning
+                self.panel_heights.push(self.default_panel_height.max(self.min_height));
             }
 
             // Truncate if we have too many heights
@@ -170,7 +171,7 @@ impl VerticalStack {
         F: FnOnce(&mut StackBodyBuilder),
     {
         println!("vertical stack: render pass");
-        
+
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -186,7 +187,7 @@ impl VerticalStack {
             return;
         }
 
-        // First, ensure panel heights are initialized correctly
+        // Ensure panel heights are initialized correctly and respect minimum height
         if !self.initialized || self.panel_heights.len() < panel_count {
             // Initialize panel heights while ensuring minimum height
             while self.panel_heights.len() < panel_count {
@@ -202,7 +203,17 @@ impl VerticalStack {
                 self.panel_heights.push(initial_height);
             }
         }
-        
+
+        // Also ensure ALL existing panel heights respect minimum height
+        for idx in 0..self.panel_heights.len() {
+            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_height);
+
+            // Also apply max_panel_height if configured
+            if let Some(max_panel_height) = self.max_panel_height {
+                self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
+            }
+        }
+
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
 
@@ -210,9 +221,9 @@ impl VerticalStack {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
-        
+
         println!("vertical stack: {:?}", self);
-        
+
         // Create a ScrollArea with the available height
         ScrollArea::both()
             .id_salt(self.id_source.with("scroll_area"))
@@ -225,16 +236,9 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
-                // In the do_render_pass function where you render each panel:
-
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-                    // Get panel height (already has min_height applied)
+                    // Get panel height (already has min_height applied above)
                     let panel_height = self.panel_heights[idx];
-
-                    // Also apply max_panel_height if configured
-                    if let Some(max_panel_height) = self.max_panel_height {
-                        self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
-                    }
 
                     // Create a fixed size for this panel
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
@@ -268,11 +272,10 @@ impl VerticalStack {
                         StrokeKind::Outside
                     );
 
-                    // IMPORTANT CHANGE: Use allocate_rect + child_ui instead of allocate_ui_with_layout
-                    // This ensures the child UI is positioned exactly where we want it
+                    // Allocate space for content area
                     let child_response = ui.allocate_rect(content_rect, Sense::hover());
 
-                    // Now create a child UI inside this exact rect
+                    // Create a child UI inside this exact rect
                     let mut child_ui = ui.child_ui(content_rect, *ui.layout(), None);
 
                     // Set clip rect to prevent overflow
@@ -299,6 +302,7 @@ impl VerticalStack {
                 }
             });
     }
+
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;
