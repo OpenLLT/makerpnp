@@ -137,17 +137,34 @@ impl VerticalStack {
                     let inner_margin = 8.0; // Adjust this for desired spacing
                     let content_rect = frame_rect.shrink(inner_margin);
 
+                    let mut inner_stroke = stroke;
+                    inner_stroke.color = Color32::RED;
+
                     // Use Frame::NONE instead of the deprecated Frame::none()
                     Frame::NONE
                         .fill(Color32::TRANSPARENT)
+                        .stroke(inner_stroke)
                         .inner_margin(0.0)
                         .outer_margin(0.0)
                         .show(ui, |ui| {
                             // Use allocate_new_ui instead of the deprecated allocate_ui_at_rect
-                            ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
+                            let meh = ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
+                                // without this, the content will overflow to the right and below the frame.
+                                ui.set_clip_rect(content_rect);
                                 // Call the panel content function
                                 panel_fn(ui);
                             });
+
+                            let mut debug_stroke = stroke;
+                            debug_stroke.color = Color32::GREEN;
+
+                            ui.painter().rect(
+                                meh.response.rect,
+                                CornerRadius::ZERO,
+                                Color32::TRANSPARENT,
+                                debug_stroke,
+                                StrokeKind::Outside
+                            );
                         });
 
                     // Add a resize handle after each panel (except the last one)
