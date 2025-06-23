@@ -1,7 +1,6 @@
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText, StrokeKind, UiBuilder};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Layout, Align, UiBuilder, StrokeKind};
 use std::boxed::Box;
-use egui::scroll_area::ScrollBarVisibility;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
@@ -106,7 +105,6 @@ impl VerticalStack {
 
         // Create a ScrollArea with the available height
         ScrollArea::vertical()
-            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
             .id_source(self.id_source.with("scroll_area"))
             .max_height(available_height)
             .auto_shrink([false, false])
@@ -129,18 +127,20 @@ impl VerticalStack {
                         frame_rect,
                         0.0, // No rounding
                         Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
-                        StrokeKind::Outside,
+                        StrokeKind::Outside
                     );
 
-                    // Create a child UI with padding inside the frame
+                    // Create content with padding inside the frame
                     // This ensures content doesn't touch the frame edges
                     let inner_margin = 8.0; // Adjust this for desired spacing
                     let content_rect = frame_rect.shrink(inner_margin);
 
-                    let clip_rect = ui.clip_rect().intersect(content_rect);
-                    let mut child_ui = ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT), None);
-                    child_ui.set_clip_rect(clip_rect);
-                    panel_fn(&mut child_ui);
+                    // Using allocate_new_ui instead of the deprecated methods
+                    let builder = UiBuilder::new().max_rect(content_rect);
+                    let content_response = ui.allocate_new_ui(builder, |ui| {
+                        // Call the panel content function
+                        panel_fn(ui);
+                    });
 
                     // Add a resize handle after each panel (except the last one)
                     if idx < panel_count - 1 {
