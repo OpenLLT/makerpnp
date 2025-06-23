@@ -207,6 +207,8 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
+                // In the do_render_pass function where you render each panel:
+
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied)
                     let panel_height = self.panel_heights[idx];
@@ -214,7 +216,7 @@ impl VerticalStack {
                     // Create a fixed size for this panel
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
-                    // Allocate EXACT size - this is critical - it forces the UI to use exactly this size
+                    // Allocate EXACT size for the panel frame
                     let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
 
                     // Draw frame
@@ -232,7 +234,7 @@ impl VerticalStack {
                     let inner_margin = 2.0;
                     let content_rect = frame_rect.shrink(inner_margin);
 
-                    // Debug stroke for content rect
+                    // Debug stroke for content rect (RED)
                     let mut inner_stroke = stroke;
                     inner_stroke.color = Color32::RED;
                     ui.painter().rect(
@@ -243,24 +245,24 @@ impl VerticalStack {
                         StrokeKind::Outside
                     );
 
-                    // Use a child UI with fixed size
-                    let inner_response = ui.allocate_ui_with_layout(
-                        content_rect.size(),  // Force this exact size
-                        *ui.layout(),         // Use same layout as parent
-                        |ui| {
-                            // Important: Set clip rect to prevent content from rendering outside bounds
-                            ui.set_clip_rect(content_rect);
+                    // IMPORTANT CHANGE: Use allocate_rect + child_ui instead of allocate_ui_with_layout
+                    // This ensures the child UI is positioned exactly where we want it
+                    let child_response = ui.allocate_rect(content_rect, Sense::hover());
 
-                            // Call panel function
-                            panel_fn(ui);
-                        }
-                    );
+                    // Now create a child UI inside this exact rect
+                    let mut child_ui = ui.child_ui(content_rect, *ui.layout(), None);
 
-                    // Debug visualization of response rect
+                    // Set clip rect to prevent overflow
+                    child_ui.set_clip_rect(content_rect);
+
+                    // Call panel function
+                    panel_fn(&mut child_ui);
+
+                    // Debug visualization of response rect (GREEN)
                     let mut debug_stroke = stroke;
                     debug_stroke.color = Color32::GREEN;
                     ui.painter().rect(
-                        inner_response.response.rect,
+                        child_response.rect,
                         CornerRadius::ZERO,
                         Color32::TRANSPARENT,
                         debug_stroke,
@@ -272,7 +274,6 @@ impl VerticalStack {
                         self.add_resize_handle_no_gap(ui, idx);
                     }
                 }
-
             });
     }
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
