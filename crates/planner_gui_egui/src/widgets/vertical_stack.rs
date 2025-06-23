@@ -305,17 +305,13 @@ impl VerticalStack {
                         debug_stroke,
                         StrokeKind::Outside
                     );
+                    // Add resize handle after each panel but with spacing adjustment
+                    // First, add 2px spacing to correctly position the handle
+                    ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
 
-                    // Add resize handle after each panel
+                    // Now add the resize handle (without overlapping the panel)
                     self.add_resize_handle_no_gap(ui, idx);
-
-                    // Add a 2px empty space after each handle (except the last one)
-                    if idx < panel_count - 1 {
-                        ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
-                    }
-
                 }
-
             });
     }
     
@@ -359,7 +355,7 @@ impl VerticalStack {
         };
 
         // Position line exactly in the middle of the handle area
-        let line_y = rect.min.y / 2.0;
+        let line_y = rect.min.y + (rect.height() / 2.0);
 
         // Draw a thin line that's always visible
         painter.line_segment(
