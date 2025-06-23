@@ -164,7 +164,7 @@ impl VerticalStack {
     /// Add a resize handle between panels with no gap.
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
-        let handle_height = 8.0;
+        let handle_height = 7.0;
 
         // Make sure we have the next panel's index available
         if panel_idx >= self.panel_heights.len() || panel_idx + 1 >= self.panel_heights.len() {
