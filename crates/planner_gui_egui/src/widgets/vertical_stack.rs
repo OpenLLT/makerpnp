@@ -1,5 +1,5 @@
 use eframe::epaint::Color32;
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea};
+use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, RichText};
 use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
@@ -62,6 +62,7 @@ impl VerticalStack {
         F: FnOnce(&mut StackBodyBuilder),
     {
         let available_rect = ui.available_rect_before_wrap();
+        let available_width = available_rect.width();
         let available_height = match self.max_height {
             Some(max_height) => max_height.min(available_rect.height()),
             None => available_rect.height(),
@@ -112,17 +113,33 @@ impl VerticalStack {
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     let panel_height = self.panel_heights[idx].max(self.min_height);
 
-                    // Create a panel with fixed height
-                    Frame::default()
-                        .stroke(Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color))
-                        .show(ui, |ui| {
-                            // Constrain the height of this panel
-                            ui.set_min_height(panel_height);
-                            ui.set_max_height(panel_height);
+                    // Create a panel that spans the full width
+                    // First allocate the full available space
+                    let panel_rect = ui.available_rect_before_wrap();
+                    let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
-                            // Call the panel content function
-                            panel_fn(ui);
-                        });
+                    // Allocate space with a sense for interaction but without consuming input
+                    let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
+
+                    // Draw the panel frame manually to ensure it covers the full width
+                    let frame_rect = rect;
+                    ui.painter().rect_stroke(
+                        frame_rect,
+                        0.0, // No rounding
+                        Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color),
+                    );
+
+                    // Create a child UI with padding inside the frame
+                    // This ensures content doesn't touch the frame edges
+                    let inner_margin = 8.0; // Adjust this for desired spacing
+                    let content_rect = frame_rect.shrink(inner_margin);
+
+                    let clip_rect = ui.clip_rect().intersect(content_rect);
+                    let mut child_ui = ui.child_ui(content_rect, egui::Layout::top_down(egui::Align::LEFT));
+                    child_ui.set_clip_rect(clip_rect);
+
+                    // Call the panel content function in the child UI
+                    panel_fn(&mut child_ui);
 
                     // Add a resize handle after each panel (except the last one)
                     if idx < panel_count - 1 {
