@@ -4,6 +4,7 @@ use std::boxed::Box;
 use std::collections::HashMap;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
+#[derive(Debug)]
 pub struct VerticalStack {
     min_height: f32,
     id_source: Id,
@@ -11,6 +12,8 @@ pub struct VerticalStack {
     default_panel_height: f32,
     drag_in_progress: bool,
     active_drag_handle: Option<usize>,
+    drag_start_pos: Option<egui::Pos2>, // Add this field to store initial pointer position
+    drag_start_height: Option<f32>,     // Add this field to store initial panel height
     initialized: bool,
     last_available_height: f32,
     max_height: Option<f32>,
@@ -29,6 +32,8 @@ impl VerticalStack {
             default_panel_height: 100.0,
             drag_in_progress: false,
             active_drag_handle: None,
+            drag_start_pos: None,
+            drag_start_height: None,
             initialized: false,
             last_available_height: 0.0,
             max_height: None,
@@ -104,6 +109,7 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
+        println!("vertical stack: sizing pass");
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             let mut body = StackBodyBuilder {
@@ -164,6 +170,7 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
+        println!("vertical stack: render pass");
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -187,6 +194,8 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
+        println!("vertical stack: {:?}", self);
+        
         // Create a ScrollArea with the available height
         ScrollArea::both()
             .id_salt(self.id_source.with("scroll_area"))
@@ -288,8 +297,7 @@ impl VerticalStack {
                 }
             });
     }
-
-    /// Add a resize handle between panels with no gap.
+    // Update the add_resize_handle_no_gap method
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
         let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;
@@ -337,26 +345,42 @@ impl VerticalStack {
             if !self.drag_in_progress || self.active_drag_handle != Some(panel_idx) {
                 self.drag_in_progress = true;
                 self.active_drag_handle = Some(panel_idx);
-            }
 
-            let delta = response.drag_delta().y;
-
-            // Only process if there's an actual delta
-            if delta != 0.0 {
-                // Adjust only the panel above the handle
-                let mut new_height = (self.panel_heights[panel_idx] + delta).max(self.min_height);
-
-                // Apply max_panel_height constraint if set
-                if let Some(max_panel_height) = self.max_panel_height {
-                    new_height = new_height.min(max_panel_height);
+                // Store the initial drag position and panel height
+                if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
+                    self.drag_start_pos = Some(pointer_pos);
+                    self.drag_start_height = Some(self.panel_heights[panel_idx]);
                 }
-
-                // Apply the new height ONLY to the panel above the handle
-                self.panel_heights[panel_idx] = new_height;
-
-                // Mark that we need a sizing pass on the next frame to update content heights
-                self.need_sizing_pass = true;
             }
+
+            // Calculate delta from the initial drag position, not just the last frame
+            if let (Some(start_pos), Some(start_height)) = (self.drag_start_pos, self.drag_start_height) {
+                if let Some(current_pos) = ui.ctx().pointer_latest_pos() {
+                    let total_delta = current_pos.y - start_pos.y;
+
+                    // Calculate new height based on the initial height plus total delta
+                    let mut new_height = (start_height + total_delta).max(self.min_height);
+
+                    // Apply max_panel_height constraint if set
+                    if let Some(max_panel_height) = self.max_panel_height {
+                        new_height = new_height.min(max_panel_height);
+                    }
+
+                    // Apply the new height ONLY to the panel above the handle
+                    self.panel_heights[panel_idx] = new_height;
+
+                    // Mark that we need a sizing pass on the next frame to update content heights
+                    self.need_sizing_pass = true;
+                }
+            }
+        }
+
+        // Reset drag state when the drag ends
+        if !response.dragged() && self.drag_in_progress && self.active_drag_handle == Some(panel_idx) {
+            self.drag_in_progress = false;
+            self.active_drag_handle = None;
+            self.drag_start_pos = None;
+            self.drag_start_height = None;
         }
     }
 }
