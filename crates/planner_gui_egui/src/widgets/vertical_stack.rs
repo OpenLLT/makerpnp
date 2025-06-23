@@ -207,44 +207,17 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
-                // Render each panel with its calculated height
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
-                    // Get the content height from our measurements
-                    let content_height = self.content_heights.get(&idx).copied().unwrap_or(self.default_panel_height);
+                    // Get panel height (already has min_height applied)
+                    let panel_height = self.panel_heights[idx];
 
-                    // Apply constraints based on content height, min_height, and max_panel_height
-                    let mut panel_height = content_height;
-
-                    // Apply min_height constraint
-                    panel_height = panel_height.max(self.min_height);
-
-                    // Apply max_panel_height constraint if set
-                    if let Some(max_panel_height) = self.max_panel_height {
-                        panel_height = panel_height.min(max_panel_height);
-                    }
-
-                    // Use user-defined height if it was manually resized and is within constraints
-                    if self.initialized && idx < self.panel_heights.len() {
-                        let user_height = self.panel_heights[idx];
-
-                        // Only use user height if it's within the valid range and has been explicitly set
-                        if user_height >= self.min_height &&
-                            (self.max_panel_height.is_none() || user_height <= self.max_panel_height.unwrap()) {
-                            panel_height = user_height;
-                        }
-                    }
-
-                    // Update the stored panel height
-                    if idx < self.panel_heights.len() {
-                        self.panel_heights[idx] = panel_height;
-                    }
-
+                    // Create a fixed size for this panel
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
-                    // Allocate space with a sense for interaction but without consuming input
+                    // Allocate EXACT size - this is critical - it forces the UI to use exactly this size
                     let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
 
-                    // Draw the panel frame manually
+                    // Draw frame
                     let frame_rect = rect;
                     let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
                     ui.painter().rect(
@@ -255,53 +228,51 @@ impl VerticalStack {
                         StrokeKind::Outside
                     );
 
-                    // Create content with padding inside the frame
-                    let inner_margin = 2.0; // Adjust this for desired spacing
+                    // Create content area with padding
+                    let inner_margin = 2.0;
                     let content_rect = frame_rect.shrink(inner_margin);
 
+                    // Debug stroke for content rect
                     let mut inner_stroke = stroke;
                     inner_stroke.color = Color32::RED;
+                    ui.painter().rect(
+                        content_rect,
+                        CornerRadius::ZERO,
+                        Color32::TRANSPARENT,
+                        inner_stroke,
+                        StrokeKind::Outside
+                    );
 
-                    // Use Frame::NONE instead of the deprecated Frame::none()
-                    Frame::NONE
-                        .fill(Color32::TRANSPARENT)
-                        .stroke(inner_stroke)
-                        .inner_margin(0.0)
-                        .outer_margin(0.0)
-                        .show(ui, |ui| {
-                            // Use allocate_new_ui instead of the deprecated allocate_ui_at_rect
-                            let meh = ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
-                                // without this, the content will overflow to the right and below the frame.
-                                ui.set_clip_rect(content_rect);
-                                //ui.set_max_size(content_rect.size());  // Explicitly limit maximum size
-                                //ui.set_min_size(Vec2::new(content_rect.width(), 0.0));  // Allow height to be as small as needed
-                                //ui.set_max_height(content_rect.height());
+                    // Use a child UI with fixed size
+                    let inner_response = ui.allocate_ui_with_layout(
+                        content_rect.size(),  // Force this exact size
+                        *ui.layout(),         // Use same layout as parent
+                        |ui| {
+                            // Important: Set clip rect to prevent content from rendering outside bounds
+                            ui.set_clip_rect(content_rect);
 
-                                // Call the panel content function
-                                panel_fn(ui);
-                            });
+                            // Call panel function
+                            panel_fn(ui);
+                        }
+                    );
 
-                            println!("Panel {}: Height={}, Content Rect={:?}, Response Rect={:?}",
-                                     idx, panel_height, content_rect, meh.response.rect);
+                    // Debug visualization of response rect
+                    let mut debug_stroke = stroke;
+                    debug_stroke.color = Color32::GREEN;
+                    ui.painter().rect(
+                        inner_response.response.rect,
+                        CornerRadius::ZERO,
+                        Color32::TRANSPARENT,
+                        debug_stroke,
+                        StrokeKind::Outside
+                    );
 
-
-                            let mut debug_stroke = stroke;
-                            debug_stroke.color = Color32::GREEN;
-
-                            ui.painter().rect(
-                                meh.response.rect,
-                                CornerRadius::ZERO,
-                                Color32::TRANSPARENT,
-                                debug_stroke,
-                                StrokeKind::Outside
-                            );
-                        });
-
-                    // Add a resize handle after each panel (except the last one)
+                    // Add resize handle
                     if idx < panel_count - 1 {
                         self.add_resize_handle_no_gap(ui, idx);
                     }
                 }
+
             });
     }
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
@@ -364,7 +335,7 @@ impl VerticalStack {
                     let current_height = self.panel_heights[panel_idx];
                     let target_height = (start_height + total_delta).max(self.min_height);
 
-                    println!("Drag: panel={}, current_height={}, delta={}, target_height={}, 
+                    println!("Drag: panel={}, current_height={}, delta={}, target_height={},
                      pointer_y={}", panel_idx, current_height, total_delta,
                              target_height, current_pos.y);
 
