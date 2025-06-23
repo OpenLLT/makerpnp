@@ -172,10 +172,28 @@ impl UiComponent for GerberViewerTabUi {
                 });
                 body.add_panel(|ui|{
                     ui.label("middle");
-                    ui.label("middle");
+                    ui.label("middle with some very very very very very long text");
                     ui.label("middle");
                 });
                 body.add_panel(|ui|{
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
+                    ui.label("bottom");
                     ui.label("bottom");
                     ui.label("bottom");
                     ui.label("bottom");
