@@ -1,5 +1,6 @@
 use eframe::epaint::Color32;
 use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2};
+use std::boxed::Box;
 
 /// A component that displays multiple panels stacked vertically with resize handles.
 pub struct VerticalStack {
@@ -43,11 +44,9 @@ impl VerticalStack {
     }
 
     /// The main function to render the stack and add panels.
-    pub fn body<F, P>(&mut self, ui: &mut Ui, add_contents: F)
+    pub fn body<F>(&mut self, ui: &mut Ui, add_contents: F)
     where
-        P: FnOnce(&mut Ui),
-        F: FnOnce(&mut StackBody<P>),
-
+        F: FnOnce(&mut StackBody),
     {
         // Create the stack body to collect panel functions
         let mut body = StackBody {
@@ -88,10 +87,7 @@ impl VerticalStack {
     }
 
     /// Render all panels with the calculated heights
-    fn render_panels<F>(&mut self, ui: &mut Ui, panel_functions: Vec<F>)
-    where
-        F: FnOnce(&mut Ui),
-    {
+    fn render_panels(&mut self, ui: &mut Ui, panel_functions: Vec<Box<dyn FnOnce(&mut Ui)>>) {
         // Skip if no panels
         if panel_functions.is_empty() {
             return;
@@ -349,18 +345,18 @@ impl VerticalStack {
 }
 
 // The body that collects panel functions
-pub struct StackBody<F> {
-    panel_functions: Vec<F>,
+pub struct StackBody {
+    panel_functions: Vec<Box<dyn FnOnce(&mut Ui)>>,
 }
 
-impl<F> StackBody<F>
-where
-    F: FnOnce(&mut Ui),
-{
+impl StackBody {
     /// Add a panel to the stack with the given content.
-    pub fn add_panel(&mut self, add_contents: F) {
-        // Just store the function for later execution
-        self.panel_functions.push(add_contents);
+    pub fn add_panel<F>(&mut self, add_contents: F)
+    where
+        F: FnOnce(&mut Ui) + 'static,
+    {
+        // Box the function and store it for later execution
+        self.panel_functions.push(Box::new(add_contents));
     }
 }
 
