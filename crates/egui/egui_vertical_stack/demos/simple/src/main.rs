@@ -1,10 +1,11 @@
 use std::sync::{Arc, Mutex};
 use eframe::CreationContext;
+use eframe::egui::{Color32, CornerRadius, Stroke, StrokeKind};
 use egui::{Frame, Style};
 use egui_vertical_stack::VerticalStack;
 struct MyApp {
     vertical_stack: VerticalStack,
-    enabled_panels: [bool; 3],
+    enabled_panels: [bool; 4],
     vertical_stack_settings: VerticalStackSettings,
     
     example_state: Arc<Mutex<bool>>,
@@ -34,15 +35,14 @@ impl MyApp {
         cc.egui_ctx.style_mut(|style| {
             // Set solid scrollbars for the entire app
             style.spacing.scroll = eframe::egui::style::ScrollStyle::solid();
-            // Disable text wrapping - for demonstration purposes only
-            // style.wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
+
         });
         
         let vertical_stack_settings = VerticalStackSettings::default();
         
         Self {
             vertical_stack: Self::make_vertical_stack(&vertical_stack_settings),
-            enabled_panels: [true; 3],
+            enabled_panels: [true, true, false, false],
             vertical_stack_settings,
             example_state: Arc::new(Mutex::new(false)),
         }
@@ -66,7 +66,7 @@ impl eframe::App for MyApp {
                         .id_salt(ui.id().with("vertical_stack"))
                         .body(ui, {
                             |body|{
-                                for index in 0..3 {
+                                for index in 0..self.enabled_panels.len() {
                                     if !self.enabled_panels[index] {
                                         continue
                                     }
@@ -82,10 +82,22 @@ impl eframe::App for MyApp {
                                         }),
                                         1 => body.add_panel(|ui|{
                                             ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
-                                            ui.label("middle with some very long text");
+                                            ui.label("panel with some non-wrapping text");
                                         }),
-                                        2 => body.add_panel(|ui| {
-                                            ui.label("bottom\nwith\nlots\nof\nlines\nto\nsee");
+                                        2 => body.add_panel(|ui|{
+                                            let rect = ui.max_rect();
+
+                                            let debug_stroke = Stroke::new(1.0, Color32::LIGHT_GRAY);
+                                            ui.painter().rect(
+                                                rect,
+                                                CornerRadius::ZERO,
+                                                Color32::DARK_GRAY,
+                                                debug_stroke,
+                                                StrokeKind::Inside
+                                            );
+                                        }),
+                                        3 => body.add_panel(|ui| {
+                                            ui.label("panel\nwith\nlots\nof\nlines\nto\nsee");
                                         }),
                                         _ => unreachable!(),
                                     }
@@ -120,8 +132,8 @@ impl eframe::App for MyApp {
             Frame::group(&Style::default())
                 .show(ui, |ui| {
                     ui.label("You can enable/disable panels at runtime using these controls");
-                    for index in 0..3 {
-                        ui.checkbox(&mut self.enabled_panels[index], format!("Enable panel {}", index));
+                    for (index, enabled) in self.enabled_panels.iter_mut().enumerate() {
+                        ui.checkbox(enabled, format!("Enable panel {}", index + 1));
                     }
                 });
             
@@ -162,9 +174,7 @@ impl eframe::App for MyApp {
                     });
                     ui.add(egui::Slider::new(&mut self.vertical_stack_settings.default_panel_height, 0.0..=1000.0).text("Default panel height"));
                     
-                    println!("initial settings: {:?}, current settings: {:?}", initial_settings, self.vertical_stack_settings);
                     if !initial_settings.eq(&self.vertical_stack_settings) {
-                        println!("settings changed");
                         self.vertical_stack = Self::make_vertical_stack(&self.vertical_stack_settings);
                     }
                 });

@@ -172,14 +172,15 @@ impl VerticalStack {
             self.do_sizing_pass(ui, &mut body);
 
             ui.ctx().request_discard("sizing");
+            // Mark as initialized
+            self.initialized = true;
+            
+            // avoid final rendering on the sizing pass
+            return
         }
 
         // Now do the actual rendering with known content heights
-
         self.do_render_pass(ui, body, available_height);
-
-        // Mark as initialized
-        self.initialized = true;
     }
 
     /// Perform a sizing pass to measure content heights without rendering
@@ -243,22 +244,6 @@ impl VerticalStack {
     fn do_render_pass(&mut self, ui: &mut Ui, body: StackBodyBuilder, available_height: f32)
     {
         let inner_margin = 4.0;
-
-        // Ensure panel heights are initialized correctly and respect minimum height
-        // if !self.initialized || self.panel_heights.len() < panel_count {
-        //     // Initialize panel heights while ensuring minimum height
-        //     while self.panel_heights.len() < panel_count {
-        //         // Start with either content height or default height, whichever is larger
-        //         let (content_width, content_height) = self.content_sizes[self.panel_heights.len()];
-        //
-        //         // Ensure it respects minimum height
-        //         let initial_height = content_height.max(self.min_panel_height);
-        //
-        //         // Add to panel heights
-        //         self.panel_heights.push(initial_height);
-        //     }
-        // }
-        //
 
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
