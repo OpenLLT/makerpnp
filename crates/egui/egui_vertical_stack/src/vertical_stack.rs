@@ -342,48 +342,48 @@ impl VerticalStack {
                                 StrokeKind::Outside
                             );
                         }
+                        // 
+                        // let mut clip_rect = content_rect;
+                        // clip_rect.max.y = scroll_area_rect.max.y.min(clip_rect.max.y);
+                        // 
+                        // #[cfg(feature = "layout_debugging")]
+                        // {
+                        //     let debug_stroke = Stroke::new(1.0, Color32::RED);
+                        //     ui.painter().rect(
+                        //         clip_rect,
+                        //         CornerRadius::ZERO,
+                        //         Color32::TRANSPARENT,
+                        //         debug_stroke,
+                        //         StrokeKind::Outside
+                        //     );
+                        // }
 
-                        let mut clip_rect = content_rect;
-                        clip_rect.max.y = scroll_area_rect.max.y.min(clip_rect.max.y);
+                        ui.allocate_ui_at_rect(frame_rect, |ui| {
 
-                        #[cfg(feature = "layout_debugging")]
-                        {
-                            let debug_stroke = Stroke::new(1.0, Color32::RED);
-                            ui.painter().rect(
-                                clip_rect,
-                                CornerRadius::ZERO,
-                                Color32::TRANSPARENT,
-                                debug_stroke,
-                                StrokeKind::Outside
-                            );
-                        }
-
-                        ui.allocate_ui_at_rect(content_rect, |ui| {
-
-                            Frame::NONE.show(ui, |ui| {
-                                let mut clip_rect = ui.clip_rect();
-                                println!("before clip_rect={:?}", clip_rect);
-
-                                clip_rect.max.x = clip_rect.min.x + content_rect.width();
-                                println!("after clip_rect={:?}", clip_rect);
-
-                                #[cfg(feature = "layout_debugging")]
-                                {
-                                    let debug_stroke = Stroke::new(1.0, Color32::CYAN);
-                                    ui.painter().rect(
-                                        clip_rect,
-                                        CornerRadius::ZERO,
-                                        Color32::TRANSPARENT,
-                                        debug_stroke,
-                                        StrokeKind::Outside
-                                    );
-                                }
+                            //Frame::NONE.show(ui, |ui| {
+                                // let mut clip_rect = ui.clip_rect();
+                                // println!("before clip_rect={:?}", clip_rect);
+                                // 
+                                // clip_rect.max.x = clip_rect.min.x + content_rect.width();
+                                // println!("after clip_rect={:?}", clip_rect);
+                                // 
+                                // #[cfg(feature = "layout_debugging")]
+                                // {
+                                //     let debug_stroke = Stroke::new(1.0, Color32::CYAN);
+                                //     ui.painter().rect(
+                                //         clip_rect,
+                                //         CornerRadius::ZERO,
+                                //         Color32::TRANSPARENT,
+                                //         debug_stroke,
+                                //         StrokeKind::Outside
+                                //     );
+                                // }
 
                                 //ui.set_clip_rect(content_rect);
 
 
                                 panel_fn(ui);
-                            })
+                            //})
 
                         });
                     });
