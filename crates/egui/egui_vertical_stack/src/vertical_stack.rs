@@ -275,15 +275,31 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
-        let mut clip_rect = ui.clip_rect();
-        clip_rect.max.y = available_height;
-        ui.set_clip_rect(clip_rect);
-        
+        // Create a fixed-height container for the ScrollArea
+        let scroll_container_rect = Rect::from_min_size(
+            ui.cursor().min,
+            Vec2::new(ui.available_width(), available_height)
+        );
+
+        // Allocate the exact scroll container area
+        let (scroll_container_rect, _) = ui.allocate_exact_size(
+            scroll_container_rect.size(),
+            Sense::hover()
+        );
+
+        // Create a child UI for the scroll container
+        ui.allocate_ui_at_rect(scroll_container_rect, |ui| {
+
+
+            // let mut clip_rect = ui.clip_rect();
+        // clip_rect.max.y = available_height;
+        // ui.set_clip_rect(clip_rect);
+        // 
         // Create a ScrollArea with the available height
         ScrollArea::both()
-            .id_salt(self.id_source.with("scroll_area"))
+            //.id_salt(self.id_source.with("scroll_area"))
             .max_height(available_height)
-            .scroll_bar_visibility(self.scroll_bar_visibility)
+            //.scroll_bar_visibility(self.scroll_bar_visibility)
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 // Use vertical layout with no spacing
@@ -301,6 +317,7 @@ impl VerticalStack {
 
                     // Allocate EXACT size for the panel frame
                     let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
+
 
                     // Draw frame
                     let frame_rect = rect;
@@ -368,6 +385,7 @@ impl VerticalStack {
                     self.add_resize_handle_no_gap(ui, idx);
                 }
             });
+        });
     }
     
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {

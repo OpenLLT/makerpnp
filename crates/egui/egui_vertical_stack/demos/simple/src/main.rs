@@ -21,9 +21,7 @@ impl Default for VerticalStackSettings {
             min_panel_height: 50.0,
             default_panel_height: 150.0,
             max_panel_height: Some(300.0),
-            max_height: None,
-            // max_panel_height: Some(300.0),
-            // max_height: Some(800.0),
+            max_height: Some(300.0),
         }
     }
 }
@@ -88,7 +86,7 @@ impl eframe::App for MyApp {
             ui.heading("Right Panel");
 
             // Scrollable content
-            egui::ScrollArea::vertical()
+            egui::ScrollArea::both()
                 .max_height(100.0)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
