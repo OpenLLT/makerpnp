@@ -347,40 +347,41 @@ impl VerticalStack {
                             //         ui.set_max_height(panel_height);
                             //     
 
-                                //let mut clip_rect = ui.clip_rect();
+                                let mut clip_rect = ui.clip_rect();
+                                //let mut clip_rect = content_rect;
 
  
-                                // println!("before clip_rect={:?}", clip_rect);
-                                //                                #[cfg(feature = "layout_debugging")]
-                                // {
-                                //     let debug_stroke = Stroke::new(1.0, Color32::CYAN);
-                                //     ui.painter().rect(
-                                //         clip_rect,
-                                //         CornerRadius::ZERO,
-                                //         Color32::TRANSPARENT,
-                                //         debug_stroke,
-                                //         StrokeKind::Inside
-                                //     );
-                                // }
+                                println!("before clip_rect={:?}", clip_rect);
+                                                               #[cfg(feature = "layout_debugging")]
+                                {
+                                    let debug_stroke = Stroke::new(1.0, Color32::CYAN);
+                                    ui.painter().rect(
+                                        clip_rect,
+                                        CornerRadius::ZERO,
+                                        Color32::TRANSPARENT,
+                                        debug_stroke,
+                                        StrokeKind::Inside
+                                    );
+                                }
                                     
-                                // clip_rect.max.x = clip_rect.min.x + content_rect.width();
-                                // clip_rect.max.y = clip_rect.min.y + content_rect.height();
-                                // 
-                                // println!("after clip_rect={:?}", clip_rect);
-                                //     //                                #[cfg(feature = "layout_debugging")]
-                                //     {
-                                //         let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
-                                //         ui.painter().rect(
-                                //             clip_rect,
-                                //             CornerRadius::ZERO,
-                                //             Color32::TRANSPARENT,
-                                //             debug_stroke,
-                                //             StrokeKind::Inside
-                                //         );
-                                //     }
+                                 //clip_rect.max.x = clip_rect.min.x + content_rect.width();
+                                 //clip_rect.max.y = clip_rect.min.y + content_rect.height();
+                                
+                                println!("after clip_rect={:?}", clip_rect);
+                                    //                                #[cfg(feature = "layout_debugging")]
+                                    {
+                                        let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
+                                        ui.painter().rect(
+                                            clip_rect,
+                                            CornerRadius::ZERO,
+                                            Color32::TRANSPARENT,
+                                            debug_stroke,
+                                            StrokeKind::Inside
+                                        );
+                                    }
 
 
-                                    //ui.set_clip_rect(content_rect);
+                                    ui.set_clip_rect(clip_rect);
 
                                     panel_fn(ui);
 
