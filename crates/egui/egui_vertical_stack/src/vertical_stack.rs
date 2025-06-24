@@ -313,13 +313,14 @@ impl VerticalStack {
                         ui.set_min_height(panel_height);
 
                         // Call panel function in a slightly inset area
-                        let inner_margin = 2.0;
+                        let inner_margin = 4.0;
 
-                        let frame_width = max_content_width.max(scroll_area_rect.width());
+                        let frame_width = max_content_width + (inner_margin * 2.0) + 2.0;
+                        let frame_width = frame_width.max(scroll_area_rect.width());
 
                         // Draw the panel frame
                         let mut frame_rect = ui.max_rect();
-                        frame_rect.max.x = frame_rect.min.x + frame_width + (inner_margin * 2.0);
+                        frame_rect.max.x = frame_rect.min.x + frame_width;
 
                         let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
                         ui.painter().rect(
@@ -358,7 +359,7 @@ impl VerticalStack {
                         //     );
                         // }
 
-                        ui.allocate_ui_at_rect(frame_rect, |ui| {
+                        ui.allocate_ui_at_rect(content_rect, |ui| {
 
                             //Frame::NONE.show(ui, |ui| {
                                 // let mut clip_rect = ui.clip_rect();
