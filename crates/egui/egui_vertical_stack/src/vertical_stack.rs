@@ -371,61 +371,61 @@ impl VerticalStack {
                         );
 
                         // Set clip rect to prevent overflow
-                        child_ui.set_clip_rect(content_rect);
+                        //child_ui.set_clip_rect(content_rect);
 
-                        ui.allocate_ui_at_rect(content_rect, |ui| {
+                        //ui.allocate_ui_at_rect(content_rect, |ui| {
 
                             // no effect
                             //ui.set_min_height(content_rect.height());
                             // no effect
                             //ui.set_max_height(content_rect.height());
                             
-                            Frame::NONE
-                                .show(ui, |ui| {
-                                    // no effect
-                                    ui.set_min_height(panel_height);
-                                    // no effect
-                                    ui.set_max_height(panel_height);
-                                
+                            // Frame::NONE
+                            //     .show(ui, |ui| {
+                            //         // no effect
+                            //         ui.set_min_height(panel_height);
+                            //         // no effect
+                            //         ui.set_max_height(panel_height);
+                            //     
 
-                                let mut clip_rect = ui.clip_rect();
+                            //    let mut clip_rect = ui.clip_rect();
 
-                                panel_fn(ui);
+                                panel_fn(&mut child_ui);
 
-                                println!("before clip_rect={:?}", clip_rect);
+                                // println!("before clip_rect={:?}", clip_rect);
                                 //                                #[cfg(feature = "layout_debugging")]
-                                {
-                                    let debug_stroke = Stroke::new(1.0, Color32::CYAN);
-                                    ui.painter().rect(
-                                        clip_rect,
-                                        CornerRadius::ZERO,
-                                        Color32::TRANSPARENT,
-                                        debug_stroke,
-                                        StrokeKind::Inside
-                                    );
-                                }
+                                // {
+                                //     let debug_stroke = Stroke::new(1.0, Color32::CYAN);
+                                //     ui.painter().rect(
+                                //         clip_rect,
+                                //         CornerRadius::ZERO,
+                                //         Color32::TRANSPARENT,
+                                //         debug_stroke,
+                                //         StrokeKind::Inside
+                                //     );
+                                // }
                                     
-                                clip_rect.max.x = clip_rect.min.x + content_rect.width();
-                                clip_rect.max.y = clip_rect.min.y + content_rect.height();
+                                // clip_rect.max.x = clip_rect.min.x + content_rect.width();
+                                // clip_rect.max.y = clip_rect.min.y + content_rect.height();
+                                // 
+                                // println!("after clip_rect={:?}", clip_rect);
+                                //     //                                #[cfg(feature = "layout_debugging")]
+                                //     {
+                                //         let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
+                                //         ui.painter().rect(
+                                //             clip_rect,
+                                //             CornerRadius::ZERO,
+                                //             Color32::TRANSPARENT,
+                                //             debug_stroke,
+                                //             StrokeKind::Inside
+                                //         );
+                                //     }
 
-                                println!("after clip_rect={:?}", clip_rect);
-                                    //                                #[cfg(feature = "layout_debugging")]
-                                    {
-                                        let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
-                                        ui.painter().rect(
-                                            clip_rect,
-                                            CornerRadius::ZERO,
-                                            Color32::TRANSPARENT,
-                                            debug_stroke,
-                                            StrokeKind::Inside
-                                        );
-                                    }
 
+                                    //ui.set_clip_rect(content_rect);
+                            //})
 
-                                    ui.set_clip_rect(content_rect);
-                            })
-
-                        });
+                        //});
                     });
                     // 
                     // // Draw frame
