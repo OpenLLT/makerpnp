@@ -64,7 +64,7 @@ pub struct VerticalStack {
     last_available_height: f32,
     max_height: Option<f32>,
     max_panel_height: Option<f32>,
-    content_heights: HashMap<usize, f32>,
+    content_sizes: Vec<(f32, f32)>,
     need_sizing_pass: bool,
     scroll_bar_visibility: ScrollBarVisibility,
 }
@@ -84,7 +84,7 @@ impl VerticalStack {
             last_available_height: 0.0,
             max_height: None,
             max_panel_height: None,
-            content_heights: HashMap::new(),
+            content_sizes: Vec::new(),
             need_sizing_pass: true,
             scroll_bar_visibility: ScrollBarVisibility::VisibleWhenNeeded,
         }
@@ -164,6 +164,7 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
+        self.content_sizes.clear();
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             let mut body = StackBodyBuilder {
@@ -214,8 +215,8 @@ impl VerticalStack {
                 panel_fn(&mut measuring_ui);
 
                 // Get the measured content height
-                let content_height = measuring_ui.min_rect().height();
-                self.content_heights.insert(idx, content_height);
+                let content_rect = measuring_ui.min_rect();
+                self.content_sizes.push((content_rect.width(), content_rect.height()));
             }
         });
     }
@@ -238,33 +239,6 @@ impl VerticalStack {
         // Early return if no panels
         if panel_count == 0 {
             return;
-        }
-
-        // Ensure panel heights are initialized correctly and respect minimum height
-        if !self.initialized || self.panel_heights.len() < panel_count {
-            // Initialize panel heights while ensuring minimum height
-            while self.panel_heights.len() < panel_count {
-                // Start with either content height or default height, whichever is larger
-                let content_height = self.content_heights.get(&self.panel_heights.len())
-                    .copied()
-                    .unwrap_or(self.default_panel_height);
-
-                // Ensure it respects minimum height
-                let initial_height = content_height.max(self.min_panel_height);
-
-                // Add to panel heights
-                self.panel_heights.push(initial_height);
-            }
-        }
-
-        // Also ensure ALL existing panel heights respect minimum height
-        for idx in 0..self.panel_heights.len() {
-            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_panel_height);
-
-            // Also apply max_panel_height if configured
-            if let Some(max_panel_height) = self.max_panel_height {
-                self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
-            }
         }
 
         // Handle drag state
