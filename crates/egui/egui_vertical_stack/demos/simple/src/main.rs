@@ -32,7 +32,7 @@ impl MyApp {
             // Set solid scrollbars for the entire app
             style.spacing.scroll = eframe::egui::style::ScrollStyle::solid();
             // Disable text wrapping - for demonstration purposes only
-            style.wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
+            // style.wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
         });
         
         let vertical_stack_settings = VerticalStackSettings::default();
@@ -70,6 +70,7 @@ impl eframe::App for MyApp {
                                         ui.label("top");
                                     }),
                                     1 => body.add_panel(|ui|{
+                                        ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
                                         ui.label("middle with some very long text");
                                     }),
                                     2 => body.add_panel(|ui| {
