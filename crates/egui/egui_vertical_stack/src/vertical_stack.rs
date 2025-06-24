@@ -251,13 +251,8 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
-
         let (max_content_width, max_content_height) = self.content_sizes.iter().fold((0.0_f32, 0.0_f32), |acc, (w, h)| (acc.0.max(*w), acc.1.max(*h)));
 
-        // let mut clip_rect = ui.clip_rect();
-        // clip_rect.max.y = available_height;
-        // ui.set_clip_rect(clip_rect);
-        // 
         // Create a ScrollArea with the available height
         ScrollArea::both()
             //.id_salt(self.id_source.with("scroll_area"))
@@ -266,9 +261,9 @@ impl VerticalStack {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 // Create a clip rect that exactly matches the ScrollArea's constraints
-                let scroll_area_rect = ui.max_rect();
                 #[cfg(feature = "layout_debugging")] {
-                    let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
+                    let scroll_area_rect = ui.max_rect();
+                    let debug_stroke = Stroke::new(1.0, Color32::PINK);
                     ui.painter().rect(
                         scroll_area_rect,
                         CornerRadius::ZERO,
@@ -278,23 +273,17 @@ impl VerticalStack {
                     );
                 }
 
-                let scroll_area_rect = ui.available_rect_before_wrap();
+                let scroll_area_rect_before_wrap = ui.available_rect_before_wrap();
                 #[cfg(feature = "layout_debugging")] {
                     let debug_stroke = Stroke::new(1.0, Color32::PURPLE);
                     ui.painter().rect(
-                        scroll_area_rect,
+                        scroll_area_rect_before_wrap,
                         CornerRadius::ZERO,
                         Color32::TRANSPARENT,
                         debug_stroke,
                         StrokeKind::Outside
                     );
                 }
-
-                // let mut clip_rect = scroll_area_rect;
-                // 
-                // // Set this clip rect to ensure content doesn't visually overflow
-                // ui.set_clip_rect(clip_rect);
-                // 
 
                 // Use vertical layout with no spacing
                 ui.spacing_mut().item_spacing.y = 0.0;
@@ -313,10 +302,9 @@ impl VerticalStack {
                     ui.allocate_ui(desired_size, |ui| {
                         // Set a min height for the panel content
                         ui.set_min_height(panel_height);
-                        //ui.set_max_height(panel_height);
-                        
+ 
                         let frame_width = max_content_width + (inner_margin * 2.0) + 2.0;
-                        let frame_width = frame_width.max(scroll_area_rect.width());
+                        let frame_width = frame_width.max(scroll_area_rect_before_wrap.width());
 
                         // Draw the panel frame
                         let mut frame_rect = ui.max_rect();
@@ -343,36 +331,7 @@ impl VerticalStack {
                                 StrokeKind::Outside
                             );
                         }
-                        // 
-                        // let mut clip_rect = content_rect;
-                        // clip_rect.max.y = scroll_area_rect.max.y.min(clip_rect.max.y);
-                        // 
-                        // #[cfg(feature = "layout_debugging")]
-                        // {
-                        //     let debug_stroke = Stroke::new(1.0, Color32::RED);
-                        //     ui.painter().rect(
-                        //         clip_rect,
-                        //         CornerRadius::ZERO,
-                        //         Color32::TRANSPARENT,
-                        //         debug_stroke,
-                        //         StrokeKind::Outside
-                        //     );
-                        // }
-                        // 
-                        // Allocate space for content area
-                        //let _child_response = ui.allocate_rect(content_rect, Sense::hover());
-                        // 
-                        // // Create a child UI inside this exact rect
-                        // let mut child_ui = ui.new_child(
-                        //     UiBuilder::new()
-                        //         .max_rect(content_rect)
-                        //         .layout(*ui.layout())
-                        // );
-                        // 
-                        // // Set clip rect to prevent overflow
-                        // child_ui.set_clip_rect(content_rect);
-                        // panel_fn(&mut child_ui);
-
+                        
                         ui.allocate_ui_at_rect(content_rect, |ui| {
 
                             // no effect
