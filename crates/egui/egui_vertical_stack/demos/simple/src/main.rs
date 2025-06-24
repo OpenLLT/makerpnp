@@ -7,7 +7,7 @@ struct MyApp {
     vertical_stack: VerticalStack,
     enabled_panels: [bool; 4],
     vertical_stack_settings: VerticalStackSettings,
-    
+
     example_state: Arc<Mutex<bool>>,
 }
 
@@ -71,7 +71,7 @@ impl eframe::App for MyApp {
                                         continue
                                     }
                                     match index {
-                                        0 => body.add_panel({
+                                        0 => body.add_panel(index,{
                                             // clone the state, for the closure to have access to it
                                             let example_state = self.example_state.clone();
                                             move |ui| {
@@ -80,11 +80,11 @@ impl eframe::App for MyApp {
                                                 ui.checkbox(&mut state, "example state");
                                             }
                                         }),
-                                        1 => body.add_panel(|ui|{
+                                        1 => body.add_panel(index,|ui|{
                                             ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
                                             ui.label("panel with some non-wrapping text");
                                         }),
-                                        2 => body.add_panel(|ui|{
+                                        2 => body.add_panel(index,|ui|{
                                             let rect = ui.max_rect();
 
                                             let debug_stroke = Stroke::new(1.0, Color32::LIGHT_GRAY);
@@ -96,7 +96,7 @@ impl eframe::App for MyApp {
                                                 StrokeKind::Inside
                                             );
                                         }),
-                                        3 => body.add_panel(|ui| {
+                                        3 => body.add_panel(index,|ui| {
                                             ui.label("panel\nwith\nlots\nof\nlines\nto\nsee");
                                         }),
                                         _ => unreachable!(),

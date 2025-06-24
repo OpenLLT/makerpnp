@@ -1,6 +1,7 @@
 use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind, Frame};
 use std::boxed::Box;
 use std::collections::HashMap;
+use std::hash::Hash;
 use egui::scroll_area::ScrollBarVisibility;
 
 /// A component that displays multiple panels stacked vertically with resize handles contained within a scroll area.
@@ -54,7 +55,7 @@ use egui::scroll_area::ScrollBarVisibility;
 pub struct VerticalStack {
     min_panel_height: f32,
     id_source: Id,
-    panel_heights: Vec<f32>,
+    panel_heights: HashMap<Id, f32>,
     default_panel_height: f32,
     drag_in_progress: bool,
     active_drag_handle: Option<usize>,
@@ -64,7 +65,7 @@ pub struct VerticalStack {
     last_available_height: f32,
     max_height: Option<f32>,
     max_panel_height: Option<f32>,
-    content_sizes: Vec<(f32, f32)>,
+    content_sizes: HashMap<Id, (f32, f32)>,
     need_sizing_pass: bool,
     scroll_bar_visibility: ScrollBarVisibility,
     last_panel_count: usize,
@@ -75,7 +76,7 @@ impl VerticalStack {
         Self {
             min_panel_height: 50.0,
             id_source: Id::new("vertical_stack"),
-            panel_heights: Vec::new(),
+            panel_heights: HashMap::new(),
             default_panel_height: 100.0,
             drag_in_progress: false,
             active_drag_handle: None,
@@ -85,7 +86,7 @@ impl VerticalStack {
             last_available_height: 0.0,
             max_height: None,
             max_panel_height: None,
-            content_sizes: Vec::new(),
+            content_sizes: HashMap::new(),
             need_sizing_pass: true,
             scroll_bar_visibility: ScrollBarVisibility::VisibleWhenNeeded,
             last_panel_count: 0,
@@ -185,28 +186,28 @@ impl VerticalStack {
 
     /// Perform a sizing pass to measure content heights without rendering
     fn do_sizing_pass(&mut self, ui: &mut Ui, body: &mut StackBodyBuilder) {
-        let panel_count = body.panels.len();
-
-        self.content_sizes.clear();
+        //self.content_sizes.clear();
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
-
-            // Ensure we have enough heights for all panels
-            while self.panel_heights.len() < panel_count {
-                // Always respect the minimum height from the beginning
-                self.panel_heights.push(self.default_panel_height.max(self.min_panel_height));
-            }
-
-            // Truncate if we have too many heights
-            if self.panel_heights.len() > panel_count {
-                self.panel_heights.truncate(panel_count);
-            }
 
             // Get the available width for panels
             let panel_width = ui.available_width();
 
             // Measure each panel's content
-            for (idx, panel_fn) in body.panels.iter_mut().enumerate() {
+            for (hash, panel_fn) in body.panels.iter_mut() {
+                // Always respect the minimum height from the beginning
+                let mut panel_height = *self.panel_heights.get(hash).unwrap_or(&self.default_panel_height);
+                
+                // Also ensure ALL existing panel heights respect minimum height
+                panel_height = panel_height.max(self.min_panel_height);
+
+                // Also apply max_panel_height if configured
+                if let Some(max_panel_height) = self.max_panel_height {
+                    panel_height = panel_height.min(max_panel_height);
+                }
+                
+                self.panel_heights.insert(*hash, panel_height);
+                
                 // Create a temporary rect with max height for measurement
                 let panel_rect = Rect::from_min_size(
                     ui.cursor().min,
@@ -225,19 +226,9 @@ impl VerticalStack {
 
                 // Get the measured content height
                 let content_rect = measuring_ui.min_rect();
-                self.content_sizes.push((content_rect.width(), content_rect.height()));
+                self.content_sizes.insert(*hash, (content_rect.width(), content_rect.height()));
             }
         });
-
-        // Also ensure ALL existing panel heights respect minimum height
-        for idx in 0..self.panel_heights.len() {
-            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_panel_height);
-
-            // Also apply max_panel_height if configured
-            if let Some(max_panel_height) = self.max_panel_height {
-                self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
-            }
-        }
     }
 
     /// Render the actual UI with known content heights
@@ -253,7 +244,7 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
-        let (max_content_width, max_content_height) = self.content_sizes.iter().fold((0.0_f32, 0.0_f32), |acc, (w, h)| (acc.0.max(*w), acc.1.max(*h)));
+        let (max_content_width, max_content_height) = self.content_sizes.values().fold((0.0_f32, 0.0_f32), |acc, (w, h)| (acc.0.max(*w), acc.1.max(*h)));
 
         // Create a ScrollArea with the available height
         ScrollArea::both()
@@ -280,9 +271,9 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
-                for (idx, mut panel_fn) in body.panels.into_iter().enumerate() {
+                for (idx, (hash, mut panel_fn)) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied above)
-                    let panel_height = self.panel_heights[idx];
+                    let panel_height = *self.panel_heights.get(&hash).unwrap();
 
                     let desired_size = Vec2::new(panel_rect.width(), panel_height);
                     ui.allocate_ui(desired_size, |ui| {
@@ -328,12 +319,12 @@ impl VerticalStack {
                     });
 
                     //ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
-                    self.add_resize_handle_no_gap(ui, idx, inner_margin);
+                    self.add_resize_handle_no_gap(ui, idx, inner_margin, &hash);
                 }
             });
     }
     
-    fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize, inner_margin: f32) {
+    fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize, inner_margin: f32, id: &Id) {
         let handle_height = 7.0;  // Keep this as 7 pixels total
 
         // For the last panel handle, we don't need to check the next panel's index
@@ -398,7 +389,9 @@ impl VerticalStack {
             // Store initial values
             if let Some(pointer_pos) = ui.ctx().pointer_latest_pos() {
                 self.drag_start_y = Some(pointer_pos.y);
-                self.drag_start_height = Some(self.panel_heights[panel_idx]);
+                
+                let panel_height = *self.panel_heights.get(id).unwrap();
+                self.drag_start_height = Some(panel_height);
             }
         }
 
@@ -406,9 +399,12 @@ impl VerticalStack {
         if is_active_handle && self.drag_in_progress && response.dragged() {
             if let (Some(start_y), Some(start_height)) = (self.drag_start_y, self.drag_start_height) {
                 if let Some(current_pos) = ui.ctx().pointer_latest_pos() {
+                    let panel_height = self.panel_heights.get_mut(id).unwrap();
+
+
                     // Calculate delta from initial position
                     let total_delta = current_pos.y - start_y;
-                    let current_height = self.panel_heights[panel_idx];
+                    let current_height = *panel_height;
                     let target_height = (start_height + total_delta).max(self.min_panel_height);
 
                     println!("Drag: panel={}, current_height={}, delta={}, target_height={}, pointer_y={}",
@@ -417,7 +413,8 @@ impl VerticalStack {
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_panel_height);
 
-                    let content_height = self.content_sizes[panel_idx].1 + (inner_margin * 2.0);
+                    let content_size = self.content_sizes.get_mut(id).unwrap();
+                    let content_height = content_size.1 + (inner_margin * 2.0);
                     // FIXME remove this constraint, allow the panel to be clipped!
                     new_height = new_height.max(content_height);
 
@@ -427,8 +424,8 @@ impl VerticalStack {
                     }
 
                     // Update the panel height
-                    self.panel_heights[panel_idx] = new_height;
-                    self.need_sizing_pass = true;
+                    *panel_height = new_height;
+                    //self.need_sizing_pass = true;
                 }
             }
         }
@@ -445,17 +442,21 @@ impl VerticalStack {
 
 // The body that collects panel functions
 pub struct StackBodyBuilder {
-    panels: Vec<Box<dyn FnMut(&mut Ui)>>,
+    panels: Vec<(Id, Box<dyn FnMut(&mut Ui)>)>,
 }
 
 impl StackBodyBuilder {
     /// Add a panel to the stack with the given content.
-    pub fn add_panel<F>(&mut self, add_contents: F)
+    /// 
+    /// Each panel should have it's own id, usually just the panel index, but if you re-arrange
+    /// panels then use something that uniquely identifies the panel, e.g a name.
+    pub fn add_panel<F>(&mut self, id_salt: impl Hash, add_contents: F)
     where
         F: FnMut(&mut Ui) + 'static,
     {
+        let id = Id::new(id_salt);
         // Box the function and store it for later execution
-        self.panels.push(Box::new(add_contents));
+        self.panels.push((id, Box::new(add_contents)));
     }
 }
 
