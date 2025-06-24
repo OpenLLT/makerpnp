@@ -275,23 +275,7 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
-        // Create a fixed-height container for the ScrollArea
-        let scroll_container_rect = Rect::from_min_size(
-            ui.cursor().min,
-            Vec2::new(ui.available_width(), available_height)
-        );
-
-        // Allocate the exact scroll container area
-        let (scroll_container_rect, _) = ui.allocate_exact_size(
-            scroll_container_rect.size(),
-            Sense::hover()
-        );
-
-        // Create a child UI for the scroll container
-        ui.allocate_ui_at_rect(scroll_container_rect, |ui| {
-
-
-            // let mut clip_rect = ui.clip_rect();
+        // let mut clip_rect = ui.clip_rect();
         // clip_rect.max.y = available_height;
         // ui.set_clip_rect(clip_rect);
         // 
@@ -302,6 +286,14 @@ impl VerticalStack {
             //.scroll_bar_visibility(self.scroll_bar_visibility)
             .auto_shrink([false, true])
             .show(ui, |ui| {
+                // Create a clip rect that exactly matches the ScrollArea's constraints
+                // let scroll_area_rect = ui.max_rect();
+                // let mut clip_rect = scroll_area_rect;
+                // 
+                // // Set this clip rect to ensure content doesn't visually overflow
+                // ui.set_clip_rect(clip_rect);
+                // 
+
                 // Use vertical layout with no spacing
                 ui.spacing_mut().item_spacing.y = 0.0;
 
@@ -315,68 +307,88 @@ impl VerticalStack {
                     // Create a fixed size for this panel
                     let panel_size = Vec2::new(panel_rect.width(), panel_height);
 
-                    // Allocate EXACT size for the panel frame
-                    let (rect, _) = ui.allocate_exact_size(panel_size, Sense::hover());
+                    let desired_size = Vec2::new(panel_rect.width(), panel_height);
+                    ui.allocate_ui(desired_size, |ui| {
+                        // Set a min height for the panel content
+                        ui.set_min_height(panel_height);
 
-
-                    // Draw frame
-                    let frame_rect = rect;
-                    let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
-                    ui.painter().rect(
-                        frame_rect,
-                        CornerRadius::ZERO,
-                        Color32::TRANSPARENT,
-                        stroke,
-                        StrokeKind::Outside
-                    );
-
-                    // Create content area with padding
-                    let inner_margin = 2.0;
-                    let content_rect = frame_rect.shrink(inner_margin);
-
-                    #[cfg(feature = "layout_debuging")]
-                    {
-                        // Debug stroke for content rect (RED)
-                        let mut inner_stroke = stroke;
-                        inner_stroke.color = Color32::RED;
+                        // Draw the panel frame
+                        let frame_rect = ui.max_rect();
+                        let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
                         ui.painter().rect(
-                            content_rect,
+                            frame_rect,
                             CornerRadius::ZERO,
                             Color32::TRANSPARENT,
-                            inner_stroke,
+                            stroke,
                             StrokeKind::Outside
                         );
-                    }
 
-                    // Allocate space for content area
-                    let _child_response = ui.allocate_rect(content_rect, Sense::hover());
-
-                    // Create a child UI inside this exact rect
-                    let mut child_ui = ui.new_child(
-                        UiBuilder::new()
-                            .max_rect(content_rect)
-                            .layout(*ui.layout())
-                    );
-
-                    // Set clip rect to prevent overflow
-                    child_ui.set_clip_rect(content_rect);
-
-                    // Call panel function
-                    panel_fn(&mut child_ui);
-
-                    #[cfg(feature = "layout_debuging")]
-                    {
-                        // Debug visualization of response rect (GREEN)
-                        let mut debug_stroke = stroke;
-                        debug_stroke.color = Color32::GREEN;
-                        ui.painter().rect(
-                            _child_response.rect,
-                            CornerRadius::ZERO,
-                            Color32::TRANSPARENT,
-                            debug_stroke,
-                            StrokeKind::Outside
-                        );
-                    }
+                        // Call panel function in a slightly inset area
+                        let inner_margin = 2.0;
+                        let content_rect = frame_rect.shrink(inner_margin);
+                        ui.allocate_ui_at_rect(content_rect, |ui| {
+                            panel_fn(ui);
+                        });
+                    });
+                    // 
+                    // // Draw frame
+                    // let frame_rect = rect;
+                    // let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
+                    // ui.painter().rect(
+                    //     frame_rect,
+                    //     CornerRadius::ZERO,
+                    //     Color32::TRANSPARENT,
+                    //     stroke,
+                    //     StrokeKind::Outside
+                    // );
+                    // 
+                    // // Create content area with padding
+                    // let inner_margin = 2.0;
+                    // let content_rect = frame_rect.shrink(inner_margin);
+                    // 
+                    // #[cfg(feature = "layout_debuging")]
+                    // {
+                    //     // Debug stroke for content rect (RED)
+                    //     let mut inner_stroke = stroke;
+                    //     inner_stroke.color = Color32::RED;
+                    //     ui.painter().rect(
+                    //         content_rect,
+                    //         CornerRadius::ZERO,
+                    //         Color32::TRANSPARENT,
+                    //         inner_stroke,
+                    //         StrokeKind::Outside
+                    //     );
+                    // }
+                    // 
+                    // // Allocate space for content area
+                    // let _child_response = ui.allocate_rect(content_rect, Sense::hover());
+                    // 
+                    // // Create a child UI inside this exact rect
+                    // let mut child_ui = ui.new_child(
+                    //     UiBuilder::new()
+                    //         .max_rect(content_rect)
+                    //         .layout(*ui.layout())
+                    // );
+                    // 
+                    // // Set clip rect to prevent overflow
+                    // child_ui.set_clip_rect(content_rect);
+                    // 
+                    // // Call panel function
+                    // panel_fn(&mut child_ui);
+                    // 
+                    // #[cfg(feature = "layout_debuging")]
+                    // {
+                    //     // Debug visualization of response rect (GREEN)
+                    //     let mut debug_stroke = stroke;
+                    //     debug_stroke.color = Color32::GREEN;
+                    //     ui.painter().rect(
+                    //         _child_response.rect,
+                    //         CornerRadius::ZERO,
+                    //         Color32::TRANSPARENT,
+                    //         debug_stroke,
+                    //         StrokeKind::Outside
+                    //     );
+                    // }
                     // Add resize handle after each panel but with spacing adjustment
                     // First, add 2px spacing to correctly position the handle
                     ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
@@ -385,7 +397,6 @@ impl VerticalStack {
                     self.add_resize_handle_no_gap(ui, idx);
                 }
             });
-        });
     }
     
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
