@@ -290,6 +290,9 @@ impl VerticalStack {
                         let frame_stroke_width = 1.0;
                         let intial_frame_width = max_content_width + ((inner_margin + frame_stroke_width) * 2.0);
                         let frame_width = intial_frame_width.max(scroll_area_rect_before_wrap.width());
+                        
+                        // without this, the right hand side of the frame will not be visible when the scroll area is narrower than the content
+                        ui.set_min_width(frame_width);
 
                         // Draw the panel frame
                         let mut frame_rect = ui.max_rect();
