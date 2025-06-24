@@ -67,6 +67,7 @@ pub struct VerticalStack {
     content_sizes: Vec<(f32, f32)>,
     need_sizing_pass: bool,
     scroll_bar_visibility: ScrollBarVisibility,
+    last_panel_count: usize,
 }
 
 impl VerticalStack {
@@ -87,6 +88,7 @@ impl VerticalStack {
             content_sizes: Vec::new(),
             need_sizing_pass: true,
             scroll_bar_visibility: ScrollBarVisibility::VisibleWhenNeeded,
+            last_panel_count: 0,
         }
     }
 
@@ -141,46 +143,59 @@ impl VerticalStack {
             None => available_rect.height(),
         };
 
-        // Check if we need a sizing pass (first frame or available height changed)
-        if self.need_sizing_pass || !self.initialized || (self.last_available_height - available_height).abs() > 1.0 {
+        let mut body = StackBodyBuilder {
+            panels: Vec::new(),
+        };
+
+        // Collect panel functions
+        collect_panels.clone()(&mut body);
+
+        // Get panel count
+        let panel_count = body.panels.len();
+
+        // Early return if no panels
+        if panel_count == 0 {
+            return;
+        }
+        
+        if !self.initialized || (self.last_available_height - available_height).abs() > 1.0 || panel_count != self.last_panel_count {
+            self.need_sizing_pass = true;
+        }
+
+        // Check if we need a sizing pass 
+        if self.need_sizing_pass {
             self.last_available_height = available_height;
+            self.last_panel_count = panel_count;
             self.need_sizing_pass = false;
 
             // Run a sizing pass to measure content heights
-            self.do_sizing_pass(ui, collect_panels.clone());
+            self.do_sizing_pass(ui, body);
 
             ui.ctx().request_discard("sizing");
         }
-
+        
         // Now do the actual rendering with known content heights
-        self.do_render_pass(ui, collect_panels, available_height);
+
+        let mut body = StackBodyBuilder {
+            panels: Vec::new(),
+        };
+
+        // Collect panel functions
+        collect_panels(&mut body);
+
+        self.do_render_pass(ui, body, available_height);
 
         // Mark as initialized
         self.initialized = true;
     }
 
     /// Perform a sizing pass to measure content heights without rendering
-    fn do_sizing_pass<F>(&mut self, ui: &mut Ui, collect_panels: F)
-    where
-        F: FnOnce(&mut StackBodyBuilder),
-    {
+    fn do_sizing_pass(&mut self, ui: &mut Ui, body: StackBodyBuilder) {
+        let panel_count = body.panels.len();
+        
         self.content_sizes.clear();
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
-            let mut body = StackBodyBuilder {
-                panels: Vec::new(),
-            };
-
-            // Collect panel functions
-            collect_panels(&mut body);
-
-            // Get panel count
-            let panel_count = body.panels.len();
-
-            // Early return if no panels
-            if panel_count == 0 {
-                return;
-            }
 
             // Ensure we have enough heights for all panels
             while self.panel_heights.len() < panel_count {
@@ -232,27 +247,10 @@ impl VerticalStack {
     }
 
     /// Render the actual UI with known content heights
-    fn do_render_pass<F>(&mut self, ui: &mut Ui, collect_panels: F, available_height: f32)
-    where
-        F: FnOnce(&mut StackBodyBuilder),
+    fn do_render_pass(&mut self, ui: &mut Ui, body: StackBodyBuilder, available_height: f32)
     {
         let inner_margin = 4.0;
-
-        let mut body = StackBodyBuilder {
-            panels: Vec::new(),
-        };
-
-        // Collect panel functions (this doesn't render anything yet)
-        collect_panels(&mut body);
-
-        // Get panel count
-        let panel_count = body.panels.len();
-
-        // Early return if no panels
-        if panel_count == 0 {
-            return;
-        }
-
+        
         // Ensure panel heights are initialized correctly and respect minimum height
         // if !self.initialized || self.panel_heights.len() < panel_count {
         //     // Initialize panel heights while ensuring minimum height
