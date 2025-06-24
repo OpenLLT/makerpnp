@@ -1,4 +1,4 @@
-use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind, Frame};
+use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind};
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -66,7 +66,6 @@ pub struct VerticalStack {
     max_height: Option<f32>,
     max_panel_height: Option<f32>,
     content_sizes: HashMap<Id, (f32, f32)>,
-    need_sizing_pass: bool,
     scroll_bar_visibility: ScrollBarVisibility,
     last_panel_count: usize,
 }
@@ -87,7 +86,6 @@ impl VerticalStack {
             max_height: None,
             max_panel_height: None,
             content_sizes: HashMap::new(),
-            need_sizing_pass: true,
             scroll_bar_visibility: ScrollBarVisibility::VisibleWhenNeeded,
             last_panel_count: 0,
         }
@@ -159,15 +157,14 @@ impl VerticalStack {
             return;
         }
 
-        if !self.initialized || (self.last_available_height - available_height).abs() > 1.0 || panel_count != self.last_panel_count {
-            self.need_sizing_pass = true;
-        }
+        let seen_all_panels = body.panels.iter().all(|(id, _fn)| {
+            self.panel_heights.contains_key(id)
+        });
 
         // Check if we need a sizing pass
-        if self.need_sizing_pass {
+        if !self.initialized || (self.last_available_height - available_height).abs() > 1.0 || panel_count != self.last_panel_count || !seen_all_panels {
             self.last_available_height = available_height;
             self.last_panel_count = panel_count;
-            self.need_sizing_pass = false;
 
             // Run a sizing pass to measure content heights
             self.do_sizing_pass(ui, &mut body);
@@ -244,7 +241,7 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
-        let (max_content_width, max_content_height) = self.content_sizes.values().fold((0.0_f32, 0.0_f32), |acc, (w, h)| (acc.0.max(*w), acc.1.max(*h)));
+        let (max_content_width, _max_content_height) = self.content_sizes.values().fold((0.0_f32, 0.0_f32), |acc, (w, h)| (acc.0.max(*w), acc.1.max(*h)));
 
         // Create a ScrollArea with the available height
         ScrollArea::both()
@@ -425,7 +422,6 @@ impl VerticalStack {
 
                     // Update the panel height
                     *panel_height = new_height;
-                    //self.need_sizing_pass = true;
                 }
             }
         }

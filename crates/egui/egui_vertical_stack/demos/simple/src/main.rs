@@ -6,6 +6,7 @@ use egui_vertical_stack::VerticalStack;
 struct MyApp {
     vertical_stack: VerticalStack,
     enabled_panels: [bool; 4],
+    panel_order: [usize; 4],
     vertical_stack_settings: VerticalStackSettings,
 
     example_state: Arc<Mutex<bool>>,
@@ -45,6 +46,7 @@ impl MyApp {
             enabled_panels: [true, true, false, false],
             vertical_stack_settings,
             example_state: Arc::new(Mutex::new(false)),
+            panel_order: [0, 1, 2, 3],
         }
     }
     
@@ -66,25 +68,31 @@ impl eframe::App for MyApp {
                         .id_salt(ui.id().with("vertical_stack"))
                         .body(ui, {
                             |body|{
-                                for index in 0..self.enabled_panels.len() {
-                                    if !self.enabled_panels[index] {
+                                for (panel_index, enabled) in self.panel_order.iter().zip(self.enabled_panels) {
+                                    if !enabled {
                                         continue
                                     }
-                                    match index {
-                                        0 => body.add_panel(index,{
+                                    
+                                    // panels are always displayed in the order they are added to the stack
+                                    
+                                    match panel_index {
+                                        0 => body.add_panel(panel_index, {
                                             // clone the state, for the closure to have access to it
                                             let example_state = self.example_state.clone();
                                             move |ui| {
                                                 let mut state = example_state.lock().unwrap();
-                                                ui.label("top");
+                                                ui.heading("Panel 1");
+                                                ui.separator();
                                                 ui.checkbox(&mut state, "example state");
                                             }
                                         }),
-                                        1 => body.add_panel(index,|ui|{
+                                        1 => body.add_panel(panel_index, |ui|{
                                             ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
+                                            ui.heading("Panel 2");
+                                            ui.separator();
                                             ui.label("panel with some non-wrapping text");
                                         }),
-                                        2 => body.add_panel(index,|ui|{
+                                        2 => body.add_panel(panel_index, |ui|{
                                             let rect = ui.max_rect();
 
                                             let debug_stroke = Stroke::new(1.0, Color32::LIGHT_GRAY);
@@ -95,8 +103,13 @@ impl eframe::App for MyApp {
                                                 debug_stroke,
                                                 StrokeKind::Inside
                                             );
+                                            ui.heading("Panel 3");
+                                            ui.separator();
+                                            ui.label("Panel with painting");
                                         }),
-                                        3 => body.add_panel(index,|ui| {
+                                        3 => body.add_panel(panel_index, |ui| {
+                                            ui.heading("Panel 4");
+                                            ui.separator();
                                             ui.label("panel\nwith\nlots\nof\nlines\nto\nsee");
                                         }),
                                         _ => unreachable!(),
@@ -131,9 +144,28 @@ impl eframe::App for MyApp {
             ui.add_space(10.0);
             Frame::group(&Style::default())
                 .show(ui, |ui| {
-                    ui.label("You can enable/disable panels at runtime using these controls");
-                    for (index, enabled) in self.enabled_panels.iter_mut().enumerate() {
-                        ui.checkbox(enabled, format!("Enable panel {}", index + 1));
+                    ui.label("You can enable/disable panels at runtime, or re-order them using these controls");
+                    let panel_count = self.enabled_panels.len();
+                    
+                    let mut panel_order = self.panel_order.clone();
+                    for (index, (panel_index, enabled)) in self.panel_order.iter_mut().zip(self.enabled_panels.iter_mut()).enumerate() {
+                        let is_first = index == 0;
+                        let is_last = index == panel_count - 1;
+                        
+                        ui.horizontal(|ui| {
+                            ui.checkbox(enabled, format!("Enable panel {}", *panel_index + 1));
+                            ui.add_enabled_ui(!is_first, |ui| if ui.button("Up").clicked() {
+                                panel_order.swap(index - 1, index);
+                            });
+                            ui.add_enabled_ui(!is_last, |ui| if ui.button("Down").clicked() {
+                                panel_order.swap(index, index + 1);
+                            });
+                        });
+                    }
+                    
+                    if panel_order != self.panel_order {
+                        println!("new panel order: {:?}", panel_order);
+                        self.panel_order = panel_order;
                     }
                 });
             
