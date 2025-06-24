@@ -311,6 +311,7 @@ impl VerticalStack {
                     ui.allocate_ui(desired_size, |ui| {
                         // Set a min height for the panel content
                         ui.set_min_height(panel_height);
+                        //ui.set_max_height(panel_height);
 
                         // Call panel function in a slightly inset area
                         let inner_margin = 4.0;
@@ -361,7 +362,10 @@ impl VerticalStack {
 
                         ui.allocate_ui_at_rect(content_rect, |ui| {
 
-                            //Frame::NONE.show(ui, |ui| {
+                            Frame::NONE
+                                .show(ui, |ui| {
+                                    //ui.set_min_height(panel_height);
+                                    ui.set_max_height(panel_height);
                                 // let mut clip_rect = ui.clip_rect();
                                 // println!("before clip_rect={:?}", clip_rect);
                                 // 
@@ -384,7 +388,7 @@ impl VerticalStack {
 
 
                                 panel_fn(ui);
-                            //})
+                            })
 
                         });
                     });
