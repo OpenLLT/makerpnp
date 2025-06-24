@@ -202,9 +202,7 @@ impl VerticalStack {
                 if let Some(max_panel_height) = self.max_panel_height {
                     panel_height = panel_height.min(max_panel_height);
                 }
-                
-                self.panel_heights.insert(*hash, panel_height);
-                
+
                 // Create a temporary rect with max height for measurement
                 let panel_rect = Rect::from_min_size(
                     ui.cursor().min,
@@ -223,7 +221,15 @@ impl VerticalStack {
 
                 // Get the measured content height
                 let content_rect = measuring_ui.min_rect();
-                self.content_sizes.insert(*hash, (content_rect.width(), content_rect.height()));
+                let content_height = content_rect.height();
+                self.content_sizes.insert(*hash, (content_rect.width(), content_height));
+
+                // FIXME remove this constraint, allow the panel to be clipped!
+                panel_height = panel_height.max(content_height);
+
+                // Update the panel height
+                self.panel_heights.insert(*hash, panel_height);
+
             }
         });
     }
