@@ -265,6 +265,29 @@ impl VerticalStack {
             .show(ui, |ui| {
                 // Create a clip rect that exactly matches the ScrollArea's constraints
                 let scroll_area_rect = ui.max_rect();
+                #[cfg(feature = "layout_debugging")] {
+                    let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
+                    ui.painter().rect(
+                        scroll_area_rect,
+                        CornerRadius::ZERO,
+                        Color32::TRANSPARENT,
+                        debug_stroke,
+                        StrokeKind::Outside
+                    );
+                }
+
+                let scroll_area_rect = ui.available_rect_before_wrap();
+                #[cfg(feature = "layout_debugging")] {
+                    let debug_stroke = Stroke::new(1.0, Color32::PURPLE);
+                    ui.painter().rect(
+                        scroll_area_rect,
+                        CornerRadius::ZERO,
+                        Color32::TRANSPARENT,
+                        debug_stroke,
+                        StrokeKind::Outside
+                    );
+                }
+
                 // let mut clip_rect = scroll_area_rect;
                 // 
                 // // Set this clip rect to ensure content doesn't visually overflow
@@ -292,9 +315,11 @@ impl VerticalStack {
                         // Call panel function in a slightly inset area
                         let inner_margin = 2.0;
 
+                        let frame_width = max_content_width.max(scroll_area_rect.width());
+
                         // Draw the panel frame
                         let mut frame_rect = ui.max_rect();
-                        frame_rect.max.x = frame_rect.min.x + max_content_width + (inner_margin * 2.0);
+                        frame_rect.max.x = frame_rect.min.x + frame_width + (inner_margin * 2.0);
 
                         let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
                         ui.painter().rect(
@@ -307,26 +332,31 @@ impl VerticalStack {
 
                         let content_rect = frame_rect.shrink(inner_margin);
 
-                        let debug_stroke = Stroke::new(1.0, Color32::GREEN);
-                        ui.painter().rect(
-                            frame_rect,
-                            CornerRadius::ZERO,
-                            Color32::TRANSPARENT,
-                            debug_stroke,
-                            StrokeKind::Outside
-                        );
+                        #[cfg(feature = "layout_debugging")] {
+                            let debug_stroke = Stroke::new(1.0, Color32::GREEN);
+                            ui.painter().rect(
+                                frame_rect,
+                                CornerRadius::ZERO,
+                                Color32::TRANSPARENT,
+                                debug_stroke,
+                                StrokeKind::Outside
+                            );
+                        }
 
                         let mut clip_rect = content_rect;
                         clip_rect.max.y = scroll_area_rect.max.y.min(clip_rect.max.y);
-                        let debug_stroke = Stroke::new(1.0, Color32::RED);
-                        ui.painter().rect(
-                            clip_rect,
-                            CornerRadius::ZERO,
-                            Color32::TRANSPARENT,
-                            debug_stroke,
-                            StrokeKind::Outside
-                        );
-                        //ui.set_clip_rect(content_rect);
+
+                        #[cfg(feature = "layout_debugging")]
+                        {
+                            let debug_stroke = Stroke::new(1.0, Color32::RED);
+                            ui.painter().rect(
+                                clip_rect,
+                                CornerRadius::ZERO,
+                                Color32::TRANSPARENT,
+                                debug_stroke,
+                                StrokeKind::Outside
+                            );
+                        }
 
                         ui.allocate_ui_at_rect(content_rect, |ui| {
 
@@ -334,19 +364,20 @@ impl VerticalStack {
                                 let mut clip_rect = ui.clip_rect();
                                 println!("before clip_rect={:?}", clip_rect);
 
-
-
                                 clip_rect.max.x = clip_rect.min.x + content_rect.width();
                                 println!("after clip_rect={:?}", clip_rect);
 
-                                let debug_stroke = Stroke::new(1.0, Color32::CYAN);
-                                ui.painter().rect(
-                                    clip_rect,
-                                    CornerRadius::ZERO,
-                                    Color32::TRANSPARENT,
-                                    debug_stroke,
-                                    StrokeKind::Outside
-                                );
+                                #[cfg(feature = "layout_debugging")]
+                                {
+                                    let debug_stroke = Stroke::new(1.0, Color32::CYAN);
+                                    ui.painter().rect(
+                                        clip_rect,
+                                        CornerRadius::ZERO,
+                                        Color32::TRANSPARENT,
+                                        debug_stroke,
+                                        StrokeKind::Outside
+                                    );
+                                }
 
                                 //ui.set_clip_rect(content_rect);
 
@@ -372,7 +403,7 @@ impl VerticalStack {
                     // let inner_margin = 2.0;
                     // let content_rect = frame_rect.shrink(inner_margin);
                     // 
-                    // #[cfg(feature = "layout_debuging")]
+                    // #[cfg(feature = "layout_debugging")]
                     // {
                     //     // Debug stroke for content rect (RED)
                     //     let mut inner_stroke = stroke;
@@ -402,7 +433,7 @@ impl VerticalStack {
                     // // Call panel function
                     // panel_fn(&mut child_ui);
                     // 
-                    // #[cfg(feature = "layout_debuging")]
+                    // #[cfg(feature = "layout_debugging")]
                     // {
                     //     // Debug visualization of response rect (GREEN)
                     //     let mut debug_stroke = stroke;
@@ -472,7 +503,7 @@ impl VerticalStack {
             handle_stroke,
         );
 
-        #[cfg(feature = "layout_debuging")]
+        #[cfg(feature = "layout_debugging")]
         {
             // Debug visualization of handle rect to see its exact bounds (can be removed in production)
             let debug_stroke = Stroke::new(1.0, Color32::YELLOW);

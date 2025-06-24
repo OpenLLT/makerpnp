@@ -5,7 +5,7 @@ edition = "2024"
 
 [features]
 # for developers, adds overlays on various elements to aid with debugging
-layout_debuging = []
+layout_debugging = []
 
 [dependencies]
 egui = { workspace = true }
