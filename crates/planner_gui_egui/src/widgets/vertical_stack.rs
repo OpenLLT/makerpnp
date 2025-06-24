@@ -1,9 +1,55 @@
 use eframe::epaint::{Color32, StrokeKind};
-use egui::{Frame, Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, Rounding, CornerRadius, UiBuilder, Layout, UiStackInfo};
+use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder};
 use std::boxed::Box;
 use std::collections::HashMap;
 
-/// A component that displays multiple panels stacked vertically with resize handles.
+/// A component that displays multiple panels stacked vertically with resize handles contained within a scroll area.
+/// 
+/// This is very useful for layouts that need multiple 'panel' views.
+///
+/// The amount of panels is dynamic and can be added or removed at runtime.
+///
+/// Example use: 
+/// ```
+/// use planner_gui_egui::widgets::vertical_stack::VerticalStack;
+///
+/// struct MyApp {
+///     vertical_stack: VerticalStack,
+/// }
+/// 
+/// impl MyApp {
+///     pub fn new() -> Self {
+///         Self {
+///             vertical_stack: VerticalStack::new()
+///                 .min_panel_height(150.0)
+///                 .default_panel_height(50.0),
+///         }
+///     }
+/// }
+///
+/// impl eframe::App for MyApp {
+///     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+///        egui::SidePanel::left("left_panel").show(ctx, |ui| {
+///             self.vertical_stack
+///                 .id_salt(ui.id().with("vertical_stack"))
+///                 .body(ui, |body|{
+///                     body.add_panel(|ui|{
+///                         ui.label("top");
+///                     });
+///                     body.add_panel(|ui|{
+///                         ui.label("middle with some very long text");
+///                     });
+///                     body.add_panel(|ui|{
+///                         ui.label("bottom");
+///                     });
+///                 });
+///         });
+///         egui::CentralPanel::default().show(ctx, |ui| {
+///             ui.label("main content");
+///         });
+///     }
+/// }
+/// ```
 #[derive(Debug)]
 pub struct VerticalStack {
     min_panel_height: f32,
@@ -12,8 +58,8 @@ pub struct VerticalStack {
     default_panel_height: f32,
     drag_in_progress: bool,
     active_drag_handle: Option<usize>,
-    drag_start_y: Option<f32>,      // Store just the Y coordinate
-    drag_start_height: Option<f32>, // Initial panel height
+    drag_start_y: Option<f32>,
+    drag_start_height: Option<f32>,
     initialized: bool,
     last_available_height: f32,
     max_height: Option<f32>,
@@ -109,7 +155,6 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
-        println!("vertical stack: sizing pass");
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             let mut body = StackBodyBuilder {
@@ -222,8 +267,6 @@ impl VerticalStack {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
         }
-
-        println!("vertical stack: {:?}", self);
 
         // Create a ScrollArea with the available height
         ScrollArea::both()
