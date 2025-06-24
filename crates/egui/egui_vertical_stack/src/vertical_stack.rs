@@ -140,7 +140,7 @@ impl VerticalStack {
             Some(max_height) => max_height.min(available_rect.height()),
             None => available_rect.height(),
         };
-        
+
         // Check if we need a sizing pass (first frame or available height changed)
         if self.need_sizing_pass || !self.initialized || (self.last_available_height - available_height).abs() > 1.0 {
             self.last_available_height = available_height;
@@ -255,24 +255,11 @@ impl VerticalStack {
 
         // Create a ScrollArea with the available height
         ScrollArea::both()
-            //.id_salt(self.id_source.with("scroll_area"))
+            .id_salt(self.id_source.with("scroll_area"))
             .max_height(available_height)
-            //.scroll_bar_visibility(self.scroll_bar_visibility)
+            .scroll_bar_visibility(self.scroll_bar_visibility)
             .auto_shrink([false, true])
             .show(ui, |ui| {
-                // Create a clip rect that exactly matches the ScrollArea's constraints
-                #[cfg(feature = "layout_debugging")] {
-                    let scroll_area_rect = ui.max_rect();
-                    let debug_stroke = Stroke::new(1.0, Color32::PINK);
-                    ui.painter().rect(
-                        scroll_area_rect,
-                        CornerRadius::ZERO,
-                        Color32::TRANSPARENT,
-                        debug_stroke,
-                        StrokeKind::Outside
-                    );
-                }
-
                 let scroll_area_rect_before_wrap = ui.available_rect_before_wrap();
                 #[cfg(feature = "layout_debugging")] {
                     let debug_stroke = Stroke::new(1.0, Color32::PURPLE);
@@ -295,22 +282,21 @@ impl VerticalStack {
                     // Get panel height (already has min_height applied above)
                     let panel_height = self.panel_heights[idx];
 
-                    // Create a fixed size for this panel
-                    let panel_size = Vec2::new(panel_rect.width(), panel_height);
-
                     let desired_size = Vec2::new(panel_rect.width(), panel_height);
                     ui.allocate_ui(desired_size, |ui| {
                         // Set a min height for the panel content
                         ui.set_min_height(panel_height);
- 
-                        let frame_width = max_content_width + (inner_margin * 2.0) + 2.0;
-                        let frame_width = frame_width.max(scroll_area_rect_before_wrap.width());
+
+                        let frame_stroke_width = 1.0;
+                        let intial_frame_width = max_content_width + ((inner_margin + frame_stroke_width) * 2.0);
+                        let frame_width = intial_frame_width.max(scroll_area_rect_before_wrap.width());
 
                         // Draw the panel frame
                         let mut frame_rect = ui.max_rect();
                         frame_rect.max.x = frame_rect.min.x + frame_width;
+                        frame_rect.max.y = frame_rect.min.y + panel_height;
 
-                        let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
+                        let stroke = Stroke::new(frame_stroke_width, ui.visuals().widgets.noninteractive.bg_stroke.color);
                         ui.painter().rect(
                             frame_rect,
                             CornerRadius::ZERO,
@@ -320,139 +306,23 @@ impl VerticalStack {
                         );
 
                         let content_rect = frame_rect.shrink(inner_margin);
+                        ui.allocate_new_ui(UiBuilder::new().max_rect(content_rect), |ui| {
+                            #[cfg(feature = "layout_debugging")] {
+                                let debug_stroke = Stroke::new(1.0, Color32::RED);
+                                ui.painter().rect(
+                                    content_rect,
+                                    CornerRadius::ZERO,
+                                    Color32::TRANSPARENT,
+                                    debug_stroke,
+                                    StrokeKind::Outside
+                                );
+                            }
 
-                        #[cfg(feature = "layout_debugging")] {
-                            let debug_stroke = Stroke::new(1.0, Color32::GREEN);
-                            ui.painter().rect(
-                                frame_rect,
-                                CornerRadius::ZERO,
-                                Color32::TRANSPARENT,
-                                debug_stroke,
-                                StrokeKind::Outside
-                            );
-                        }
-                        
-                        ui.allocate_ui_at_rect(content_rect, |ui| {
-
-                            // no effect
-                            //ui.set_min_height(content_rect.height());
-                            // no effect
-                            //ui.set_max_height(content_rect.height());
-                            
-                            // Frame::NONE
-                            //     .show(ui, |ui| {
-                            //         // no effect
-                            //         ui.set_min_height(panel_height);
-                            //         // no effect
-                            //         ui.set_max_height(panel_height);
-                            //     
-
-                                let mut clip_rect = ui.clip_rect();
-                                //let mut clip_rect = content_rect;
-
- 
-                                println!("before clip_rect={:?}", clip_rect);
-                                                               #[cfg(feature = "layout_debugging")]
-                                {
-                                    let debug_stroke = Stroke::new(1.0, Color32::CYAN);
-                                    ui.painter().rect(
-                                        clip_rect,
-                                        CornerRadius::ZERO,
-                                        Color32::TRANSPARENT,
-                                        debug_stroke,
-                                        StrokeKind::Inside
-                                    );
-                                }
-                                    
-                                 //clip_rect.max.x = clip_rect.min.x + content_rect.width();
-                                 //clip_rect.max.y = clip_rect.min.y + content_rect.height();
-                                
-                                println!("after clip_rect={:?}", clip_rect);
-                                    //                                #[cfg(feature = "layout_debugging")]
-                                    {
-                                        let debug_stroke = Stroke::new(1.0, Color32::ORANGE);
-                                        ui.painter().rect(
-                                            clip_rect,
-                                            CornerRadius::ZERO,
-                                            Color32::TRANSPARENT,
-                                            debug_stroke,
-                                            StrokeKind::Inside
-                                        );
-                                    }
-
-
-                                    ui.set_clip_rect(clip_rect);
-
-                                    panel_fn(ui);
-
-                            //})
-
+                            panel_fn(ui);
                         });
                     });
-                    // 
-                    // // Draw frame
-                    // let frame_rect = rect;
-                    // let stroke = Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color);
-                    // ui.painter().rect(
-                    //     frame_rect,
-                    //     CornerRadius::ZERO,
-                    //     Color32::TRANSPARENT,
-                    //     stroke,
-                    //     StrokeKind::Outside
-                    // );
-                    // 
-                    // // Create content area with padding
-                    // let inner_margin = 2.0;
-                    // let content_rect = frame_rect.shrink(inner_margin);
-                    // 
-                    // #[cfg(feature = "layout_debugging")]
-                    // {
-                    //     // Debug stroke for content rect (RED)
-                    //     let mut inner_stroke = stroke;
-                    //     inner_stroke.color = Color32::RED;
-                    //     ui.painter().rect(
-                    //         content_rect,
-                    //         CornerRadius::ZERO,
-                    //         Color32::TRANSPARENT,
-                    //         inner_stroke,
-                    //         StrokeKind::Outside
-                    //     );
-                    // }
-                    // 
-                    // // Allocate space for content area
-                    // let _child_response = ui.allocate_rect(content_rect, Sense::hover());
-                    // 
-                    // // Create a child UI inside this exact rect
-                    // let mut child_ui = ui.new_child(
-                    //     UiBuilder::new()
-                    //         .max_rect(content_rect)
-                    //         .layout(*ui.layout())
-                    // );
-                    // 
-                    // // Set clip rect to prevent overflow
-                    // child_ui.set_clip_rect(content_rect);
-                    // 
-                    // // Call panel function
-                    // panel_fn(&mut child_ui);
-                    // 
-                    // #[cfg(feature = "layout_debugging")]
-                    // {
-                    //     // Debug visualization of response rect (GREEN)
-                    //     let mut debug_stroke = stroke;
-                    //     debug_stroke.color = Color32::GREEN;
-                    //     ui.painter().rect(
-                    //         _child_response.rect,
-                    //         CornerRadius::ZERO,
-                    //         Color32::TRANSPARENT,
-                    //         debug_stroke,
-                    //         StrokeKind::Outside
-                    //     );
-                    // }
-                    // Add resize handle after each panel but with spacing adjustment
-                    // First, add 2px spacing to correctly position the handle
-                    ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
-
-                    // Now add the resize handle (without overlapping the panel)
+                    
+                    //ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
                     self.add_resize_handle_no_gap(ui, idx, inner_margin);
                 }
             });
@@ -541,8 +411,9 @@ impl VerticalStack {
 
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_panel_height);
-                    
+
                     let content_height = self.content_sizes[panel_idx].1 + (inner_margin * 2.0);
+                    // FIXME remove this constraint, allow the panel to be clipped!
                     new_height = new_height.max(content_height);
 
                     // Apply maximum constraint if set
