@@ -1656,6 +1656,7 @@ dependencies = [
  "objc2-foundation 0.2.2",
  "parking_lot",
  "percent-encoding",
+ "pollster",
  "profiling",
  "raw-window-handle",
  "ron",
@@ -1665,6 +1666,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "wgpu",
  "winapi",
  "windows-sys 0.59.0",
  "winit",
@@ -1854,6 +1856,14 @@ dependencies = [
  "parking_lot",
  "stackbox",
  "taffy",
+]
+
+[[package]]
+name = "egui_vertical_stack"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
 ]
 
 [[package]]
@@ -6543,6 +6553,7 @@ dependencies = [
  "document-features",
  "js-sys",
  "log",
+ "naga",
  "parking_lot",
  "profiling",
  "raw-window-handle",
@@ -6591,6 +6602,7 @@ dependencies = [
  "arrayvec",
  "ash",
  "bitflags 2.9.1",
+ "block",
  "bytemuck",
  "cfg_aliases",
  "core-graphics-types",
