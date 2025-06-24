@@ -1,0 +1,12 @@
+[package]
+name = "egui_vertical_stack"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+# for developers, adds overlays on various elements to aid with debugging
+layout_debuging = []
+
+[dependencies]
+egui = { workspace = true }
+

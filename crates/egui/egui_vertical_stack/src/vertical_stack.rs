@@ -1,7 +1,7 @@
-use eframe::epaint::{Color32, StrokeKind};
-use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder};
+use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind};
 use std::boxed::Box;
 use std::collections::HashMap;
+use egui::scroll_area::ScrollBarVisibility;
 
 /// A component that displays multiple panels stacked vertically with resize handles contained within a scroll area.
 /// 
@@ -11,12 +11,12 @@ use std::collections::HashMap;
 ///
 /// Example use: 
 /// ```
-/// use planner_gui_egui::widgets::vertical_stack::VerticalStack;
+/// use egui_vertical_stack::vertical_stack::VerticalStack;
 ///
 /// struct MyApp {
 ///     vertical_stack: VerticalStack,
 /// }
-/// 
+///
 /// impl MyApp {
 ///     pub fn new() -> Self {
 ///         Self {
@@ -66,6 +66,7 @@ pub struct VerticalStack {
     max_panel_height: Option<f32>,
     content_heights: HashMap<usize, f32>,
     need_sizing_pass: bool,
+    scroll_bar_visibility: ScrollBarVisibility,
 }
 
 impl VerticalStack {
@@ -85,6 +86,7 @@ impl VerticalStack {
             max_panel_height: None,
             content_heights: HashMap::new(),
             need_sizing_pass: true,
+            scroll_bar_visibility: ScrollBarVisibility::VisibleWhenNeeded,
         }
     }
 
@@ -120,6 +122,13 @@ impl VerticalStack {
         self.default_panel_height = height;
         self
     }
+    
+    /// Adjust the scroll-area's scrollbar visibility, the default is 'when needed', but using 'always visible' will
+    /// likely yield a better UX.
+    pub fn scroll_bar_visibility(mut self, visibility: ScrollBarVisibility) -> Self {
+        self.scroll_bar_visibility = visibility;
+        self
+    }
 
     /// The main function to render the stack and add panels.
     pub fn body<F>(&mut self, ui: &mut Ui, collect_panels: F)
@@ -138,7 +147,7 @@ impl VerticalStack {
             self.need_sizing_pass = false;
 
             // Run a sizing pass to measure content heights
-            self.do_sizing_pass(ui, collect_panels.clone(), available_height);
+            self.do_sizing_pass(ui, collect_panels.clone());
 
             ui.ctx().request_discard("sizing");
         }
@@ -151,7 +160,7 @@ impl VerticalStack {
     }
 
     /// Perform a sizing pass to measure content heights without rendering
-    fn do_sizing_pass<F>(&mut self, ui: &mut Ui, collect_panels: F, available_height: f32)
+    fn do_sizing_pass<F>(&mut self, ui: &mut Ui, collect_panels: F)
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
@@ -216,8 +225,6 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
-        println!("vertical stack: render pass");
-
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -268,23 +275,22 @@ impl VerticalStack {
             self.active_drag_handle = None;
         }
 
+        let mut clip_rect = ui.clip_rect();
+        clip_rect.max.y = available_height;
+        ui.set_clip_rect(clip_rect);
+        
         // Create a ScrollArea with the available height
         ScrollArea::both()
             .id_salt(self.id_source.with("scroll_area"))
             .max_height(available_height)
-            .auto_shrink([false, false])
+            .scroll_bar_visibility(self.scroll_bar_visibility)
+            .auto_shrink([false, true])
             .show(ui, |ui| {
                 // Use vertical layout with no spacing
                 ui.spacing_mut().item_spacing.y = 0.0;
 
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
-
-                // Handle height for positioning calculations
-                let handle_height = 7.0;
-
-                // Get panel count before the loop
-                let panel_count = body.panels.len();
 
                 for (idx, panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied above)
@@ -311,19 +317,22 @@ impl VerticalStack {
                     let inner_margin = 2.0;
                     let content_rect = frame_rect.shrink(inner_margin);
 
-                    // Debug stroke for content rect (RED)
-                    let mut inner_stroke = stroke;
-                    inner_stroke.color = Color32::RED;
-                    ui.painter().rect(
-                        content_rect,
-                        CornerRadius::ZERO,
-                        Color32::TRANSPARENT,
-                        inner_stroke,
-                        StrokeKind::Outside
-                    );
+                    #[cfg(feature = "layout_debuging")]
+                    {
+                        // Debug stroke for content rect (RED)
+                        let mut inner_stroke = stroke;
+                        inner_stroke.color = Color32::RED;
+                        ui.painter().rect(
+                            content_rect,
+                            CornerRadius::ZERO,
+                            Color32::TRANSPARENT,
+                            inner_stroke,
+                            StrokeKind::Outside
+                        );
+                    }
 
                     // Allocate space for content area
-                    let child_response = ui.allocate_rect(content_rect, Sense::hover());
+                    let _child_response = ui.allocate_rect(content_rect, Sense::hover());
 
                     // Create a child UI inside this exact rect
                     let mut child_ui = ui.new_child(
@@ -338,16 +347,19 @@ impl VerticalStack {
                     // Call panel function
                     panel_fn(&mut child_ui);
 
-                    // Debug visualization of response rect (GREEN)
-                    let mut debug_stroke = stroke;
-                    debug_stroke.color = Color32::GREEN;
-                    ui.painter().rect(
-                        child_response.rect,
-                        CornerRadius::ZERO,
-                        Color32::TRANSPARENT,
-                        debug_stroke,
-                        StrokeKind::Outside
-                    );
+                    #[cfg(feature = "layout_debuging")]
+                    {
+                        // Debug visualization of response rect (GREEN)
+                        let mut debug_stroke = stroke;
+                        debug_stroke.color = Color32::GREEN;
+                        ui.painter().rect(
+                            _child_response.rect,
+                            CornerRadius::ZERO,
+                            Color32::TRANSPARENT,
+                            debug_stroke,
+                            StrokeKind::Outside
+                        );
+                    }
                     // Add resize handle after each panel but with spacing adjustment
                     // First, add 2px spacing to correctly position the handle
                     ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
@@ -359,7 +371,6 @@ impl VerticalStack {
     }
     
     fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
-        let handle_id = self.id_source.with("resize_handle").with(panel_idx);
         let handle_height = 7.0;  // Keep this as 7 pixels total
 
         // For the last panel handle, we don't need to check the next panel's index
@@ -406,8 +417,9 @@ impl VerticalStack {
             handle_stroke,
         );
 
-        // Debug visualization of handle rect to see its exact bounds (can be removed in production)
-        if true {  // Set to true for debugging
+        #[cfg(feature = "layout_debuging")]
+        {
+            // Debug visualization of handle rect to see its exact bounds (can be removed in production)
             let debug_stroke = Stroke::new(1.0, Color32::YELLOW);
             painter.rect_stroke(rect, 0.0, debug_stroke, StrokeKind::Outside);
         }
@@ -455,7 +467,7 @@ impl VerticalStack {
         }
 
         // Handle drag end
-        if is_active_handle && response.drag_released() {
+        if is_active_handle && response.drag_stopped() {
             self.drag_in_progress = false;
             self.active_drag_handle = None;
             self.drag_start_y = None;

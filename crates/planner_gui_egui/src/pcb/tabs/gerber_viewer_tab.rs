@@ -2,7 +2,6 @@ use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
-use egui_i18n::tr;
 use egui_mobius::Value;
 use planner_app::PcbOverview;
 use tracing::trace;
@@ -14,7 +13,7 @@ use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
     GerberViewerUiInstanceArgs,
 };
-use crate::widgets::vertical_stack::VerticalStack;
+use egui_vertical_stack::VerticalStack;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -28,7 +27,6 @@ pub struct GerberViewerTabUi {
 }
 
 impl GerberViewerTabUi {
-    const TABLE_HEIGHT_MAX: f32 = 200.0;
     const TABLE_SCROLL_HEIGHT_MIN: f32 = 40.0;
 
     pub fn new(args: GerberViewerUiInstanceArgs) -> Self {

@@ -24,7 +24,7 @@ members = [
     "crates/stores",
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
-    "crates/util",
+    "crates/util", "crates/egui/egui_vertical_stack",
 ]
 
 [workspace.dependencies]
@@ -90,6 +90,7 @@ egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", t
 egui_ltreeview = { version = "0.2.0" }
 egui-data-table = { version = "0.6.2" }
 egui_double_slider = { version = "0.7.1"}
+egui_vertical_stack = { path = "crates/egui/egui_vertical_stack" }
 
 rfd = { version = "0.15.3" }
 

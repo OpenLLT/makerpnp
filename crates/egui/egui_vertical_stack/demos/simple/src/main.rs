@@ -1,0 +1,167 @@
+use eframe::CreationContext;
+use egui::{Frame, Style};
+use egui_vertical_stack::VerticalStack;
+struct MyApp {
+    vertical_stack: VerticalStack,
+    enabled_panels: [bool; 3],
+    vertical_stack_settings: VerticalStackSettings,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct VerticalStackSettings {
+    min_panel_height: f32,
+    default_panel_height: f32,
+    max_panel_height: Option<f32>,
+    max_height: Option<f32>,
+}
+
+impl Default for VerticalStackSettings {
+    fn default() -> Self {
+        Self {
+            min_panel_height: 50.0,
+            default_panel_height: 150.0,
+            max_panel_height: Some(300.0),
+            max_height: None,
+            // max_panel_height: Some(300.0),
+            // max_height: Some(800.0),
+        }
+    }
+}
+
+impl MyApp {
+    pub fn new(cc: &CreationContext) -> Self {
+        cc.egui_ctx.style_mut(|style| {
+            // Set solid scrollbars for the entire app
+            style.spacing.scroll = eframe::egui::style::ScrollStyle::solid();
+            // Disable text wrapping - for demonstration purposes only
+            style.wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
+        });
+        
+        let vertical_stack_settings = VerticalStackSettings::default();
+        
+        Self {
+            vertical_stack: Self::make_vertical_stack(&vertical_stack_settings),
+            enabled_panels: [true; 3],
+            vertical_stack_settings,
+        }
+    }
+    
+    pub fn make_vertical_stack(settings: &VerticalStackSettings) -> VerticalStack {
+        VerticalStack::new()
+            .min_panel_height(settings.min_panel_height)
+            .default_panel_height(settings.default_panel_height)
+            .max_panel_height(settings.max_panel_height)
+            .max_height(settings.max_height)
+    }
+}
+
+impl eframe::App for MyApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::SidePanel::left("left_panel")
+            .default_width(150.0)
+            .show(ctx, |ui| {
+                    self.vertical_stack
+                        .id_salt(ui.id().with("vertical_stack"))
+                        .body(ui, |body|{
+                            for index in 0..3 {
+                                if !self.enabled_panels[index] {
+                                    continue
+                                }
+                                match index {
+                                    0 => body.add_panel(|ui| {
+                                        ui.label("top");
+                                    }),
+                                    1 => body.add_panel(|ui|{
+                                        ui.label("middle with some very long text");
+                                    }),
+                                    2 => body.add_panel(|ui| {
+                                        ui.label("bottom\nwith\nlots\nof\nlines\nto\nsee");
+                                    }),
+                                    _ => unreachable!(),
+                                }
+                            }
+                        });
+                    ui.label("This label is below the stack");
+            });
+        
+        egui::SidePanel::right("right_panel").show(ctx, |ui| {
+            ui.heading("Right Panel");
+
+            // Scrollable content
+            egui::ScrollArea::vertical()
+                .max_height(100.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for i in 0..20 {
+                        ui.label(format!("Scrollable Item {}", i));
+                    }
+                });
+
+            // Label BELOW the scroll area
+            ui.label("This label is below the scroll area.");
+        });
+        
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.label("Vertical panel layout demo.");
+            ui.add_space(10.0);
+            ui.label("Use the drag handles below each panel to re-size the panel above the handle.");
+            ui.add_space(10.0);
+            Frame::group(&Style::default())
+                .show(ui, |ui| {
+                    ui.label("You can enable/disable panels at runtime using these controls");
+                    for index in 0..3 {
+                        ui.checkbox(&mut self.enabled_panels[index], format!("Enable panel {}", index));
+                    }
+                });
+            
+            Frame::group(&Style::default())
+                .show(ui, |ui| {
+                    ui.label("You can change the settings for the vertical stack at runtime using these controls");
+                    ui.label("Note: this will reset the layout of the panels.");
+                    
+                    let initial_settings = self.vertical_stack_settings;
+                    
+                    ui.add(egui::Slider::new(&mut self.vertical_stack_settings.min_panel_height, 0.0..=1000.0).text("Min panel height"));
+                    
+                    let mut max_panel_height_enabled = self.vertical_stack_settings.max_panel_height.is_some();
+                    if ui.checkbox(&mut max_panel_height_enabled, "Enable max panel height").changed() {
+                        match max_panel_height_enabled {
+                            true => self.vertical_stack_settings.max_panel_height = Some(100.0),
+                            false => self.vertical_stack_settings.max_panel_height = None,
+                        }
+                    }
+                    ui.add_enabled_ui(max_panel_height_enabled, |ui| {
+                        if let Some(max_panel_height) = &mut self.vertical_stack_settings.max_panel_height {
+                            ui.add(egui::Slider::new(max_panel_height, 0.0..=1000.0).text("Max panel height"));
+                        }
+                    });
+
+                    let mut max_height_enabled = self.vertical_stack_settings.max_height.is_some();
+                    if ui.checkbox(&mut max_height_enabled, "Enable max height").changed() {
+                        match max_height_enabled {
+                            true => self.vertical_stack_settings.max_height = Some(200.0),
+                            false => self.vertical_stack_settings.max_height = None,
+                        }
+                    }
+
+                    ui.add_enabled_ui(max_height_enabled, |ui| {
+                        if let Some(max_height) = &mut self.vertical_stack_settings.max_height {
+                            ui.add(egui::Slider::new(max_height, 0.0..=1000.0).text("Max height"));
+                        }
+                    });
+                    ui.add(egui::Slider::new(&mut self.vertical_stack_settings.default_panel_height, 0.0..=1000.0).text("Default panel height"));
+                    
+                    println!("initial settings: {:?}, current settings: {:?}", initial_settings, self.vertical_stack_settings);
+                    if !initial_settings.eq(&self.vertical_stack_settings) {
+                        println!("settings changed");
+                        self.vertical_stack = Self::make_vertical_stack(&self.vertical_stack_settings);
+                    }
+                });
+        });
+    }
+}
+
+fn main() -> eframe::Result {
+    let native_options = eframe::NativeOptions::default();
+    eframe::run_native("MyApp", native_options, Box::new(|cc| Ok(Box::new(MyApp::new(cc)))))
+}

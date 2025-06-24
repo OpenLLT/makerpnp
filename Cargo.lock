@@ -1857,6 +1857,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_vertical_stack"
+version = "0.1.0"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4250,6 +4257,7 @@ dependencies = [
  "egui_material_icons",
  "egui_mobius",
  "egui_taffy",
+ "egui_vertical_stack",
  "futures",
  "gerber_viewer",
  "i18n",
