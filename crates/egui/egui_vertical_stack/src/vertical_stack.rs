@@ -1,4 +1,4 @@
-use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind};
+use egui::{Id, Rect, Sense, Stroke, Ui, Vec2, ScrollArea, CornerRadius, UiBuilder, Color32, StrokeKind, Frame};
 use std::boxed::Box;
 use std::collections::HashMap;
 use egui::scroll_area::ScrollBarVisibility;
@@ -261,7 +261,7 @@ impl VerticalStack {
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 // Create a clip rect that exactly matches the ScrollArea's constraints
-                // let scroll_area_rect = ui.max_rect();
+                let scroll_area_rect = ui.max_rect();
                 // let mut clip_rect = scroll_area_rect;
                 // 
                 // // Set this clip rect to ensure content doesn't visually overflow
@@ -300,8 +300,54 @@ impl VerticalStack {
                         // Call panel function in a slightly inset area
                         let inner_margin = 2.0;
                         let content_rect = frame_rect.shrink(inner_margin);
+
+                        let debug_stroke = Stroke::new(1.0, Color32::GREEN);
+                        ui.painter().rect(
+                            frame_rect,
+                            CornerRadius::ZERO,
+                            Color32::TRANSPARENT,
+                            debug_stroke,
+                            StrokeKind::Outside
+                        );
+
+                        let mut clip_rect = content_rect;
+                        clip_rect.max.y = scroll_area_rect.max.y.min(clip_rect.max.y);
+                        let debug_stroke = Stroke::new(1.0, Color32::RED);
+                        ui.painter().rect(
+                            clip_rect,
+                            CornerRadius::ZERO,
+                            Color32::TRANSPARENT,
+                            debug_stroke,
+                            StrokeKind::Outside
+                        );
+                        //ui.set_clip_rect(content_rect);
+
                         ui.allocate_ui_at_rect(content_rect, |ui| {
-                            panel_fn(ui);
+
+                            Frame::NONE.show(ui, |ui| {
+                                let mut clip_rect = ui.clip_rect();
+                                println!("before clip_rect={:?}", clip_rect);
+
+
+
+                                clip_rect.max.x = clip_rect.min.x + content_rect.width();
+                                println!("after clip_rect={:?}", clip_rect);
+
+                                let debug_stroke = Stroke::new(1.0, Color32::CYAN);
+                                ui.painter().rect(
+                                    clip_rect,
+                                    CornerRadius::ZERO,
+                                    Color32::TRANSPARENT,
+                                    debug_stroke,
+                                    StrokeKind::Outside
+                                );
+                                
+                                //ui.set_clip_rect(content_rect);
+
+
+                                panel_fn(ui);
+                            })
+                            
                         });
                     });
                     // 
