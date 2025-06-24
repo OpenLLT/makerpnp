@@ -359,21 +359,22 @@ impl VerticalStack {
                         //         StrokeKind::Outside
                         //     );
                         // }
-
+                        // 
                         // Allocate space for content area
-                        let _child_response = ui.allocate_rect(content_rect, Sense::hover());
+                        //let _child_response = ui.allocate_rect(content_rect, Sense::hover());
+                        // 
+                        // // Create a child UI inside this exact rect
+                        // let mut child_ui = ui.new_child(
+                        //     UiBuilder::new()
+                        //         .max_rect(content_rect)
+                        //         .layout(*ui.layout())
+                        // );
+                        // 
+                        // // Set clip rect to prevent overflow
+                        // child_ui.set_clip_rect(content_rect);
+                        // panel_fn(&mut child_ui);
 
-                        // Create a child UI inside this exact rect
-                        let mut child_ui = ui.new_child(
-                            UiBuilder::new()
-                                .max_rect(content_rect)
-                                .layout(*ui.layout())
-                        );
-
-                        // Set clip rect to prevent overflow
-                        //child_ui.set_clip_rect(content_rect);
-
-                        //ui.allocate_ui_at_rect(content_rect, |ui| {
+                        ui.allocate_ui_at_rect(content_rect, |ui| {
 
                             // no effect
                             //ui.set_min_height(content_rect.height());
@@ -388,10 +389,9 @@ impl VerticalStack {
                             //         ui.set_max_height(panel_height);
                             //     
 
-                            //    let mut clip_rect = ui.clip_rect();
+                                //let mut clip_rect = ui.clip_rect();
 
-                                panel_fn(&mut child_ui);
-
+ 
                                 // println!("before clip_rect={:?}", clip_rect);
                                 //                                #[cfg(feature = "layout_debugging")]
                                 // {
@@ -423,9 +423,12 @@ impl VerticalStack {
 
 
                                     //ui.set_clip_rect(content_rect);
+
+                                    panel_fn(ui);
+
                             //})
 
-                        //});
+                        });
                     });
                     // 
                     // // Draw frame
