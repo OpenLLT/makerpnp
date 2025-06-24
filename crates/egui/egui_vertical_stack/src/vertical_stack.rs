@@ -219,6 +219,16 @@ impl VerticalStack {
                 self.content_sizes.push((content_rect.width(), content_rect.height()));
             }
         });
+
+        // Also ensure ALL existing panel heights respect minimum height
+        for idx in 0..self.panel_heights.len() {
+            self.panel_heights[idx] = self.panel_heights[idx].max(self.min_panel_height);
+
+            // Also apply max_panel_height if configured
+            if let Some(max_panel_height) = self.max_panel_height {
+                self.panel_heights[idx] = self.panel_heights[idx].min(max_panel_height);
+            }
+        }
     }
 
     /// Render the actual UI with known content heights
@@ -242,6 +252,22 @@ impl VerticalStack {
         if panel_count == 0 {
             return;
         }
+
+        // Ensure panel heights are initialized correctly and respect minimum height
+        // if !self.initialized || self.panel_heights.len() < panel_count {
+        //     // Initialize panel heights while ensuring minimum height
+        //     while self.panel_heights.len() < panel_count {
+        //         // Start with either content height or default height, whichever is larger
+        //         let (content_width, content_height) = self.content_sizes[self.panel_heights.len()];
+        // 
+        //         // Ensure it respects minimum height
+        //         let initial_height = content_height.max(self.min_panel_height);
+        // 
+        //         // Add to panel heights
+        //         self.panel_heights.push(initial_height);
+        //     }
+        // }
+        // 
 
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
