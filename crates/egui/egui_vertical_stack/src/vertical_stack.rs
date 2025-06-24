@@ -140,7 +140,7 @@ impl VerticalStack {
             Some(max_height) => max_height.min(available_rect.height()),
             None => available_rect.height(),
         };
-
+        
         // Check if we need a sizing pass (first frame or available height changed)
         if self.need_sizing_pass || !self.initialized || (self.last_available_height - available_height).abs() > 1.0 {
             self.last_available_height = available_height;
@@ -226,6 +226,8 @@ impl VerticalStack {
     where
         F: FnOnce(&mut StackBodyBuilder),
     {
+        let inner_margin = 4.0;
+
         let mut body = StackBodyBuilder {
             panels: Vec::new(),
         };
@@ -312,10 +314,7 @@ impl VerticalStack {
                         // Set a min height for the panel content
                         ui.set_min_height(panel_height);
                         //ui.set_max_height(panel_height);
-
-                        // Call panel function in a slightly inset area
-                        let inner_margin = 4.0;
-
+                        
                         let frame_width = max_content_width + (inner_margin * 2.0) + 2.0;
                         let frame_width = frame_width.max(scroll_area_rect.width());
 
@@ -494,12 +493,12 @@ impl VerticalStack {
                     ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
 
                     // Now add the resize handle (without overlapping the panel)
-                    self.add_resize_handle_no_gap(ui, idx);
+                    self.add_resize_handle_no_gap(ui, idx, inner_margin);
                 }
             });
     }
     
-    fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize) {
+    fn add_resize_handle_no_gap(&mut self, ui: &mut Ui, panel_idx: usize, inner_margin: f32) {
         let handle_height = 7.0;  // Keep this as 7 pixels total
 
         // For the last panel handle, we don't need to check the next panel's index
@@ -582,6 +581,9 @@ impl VerticalStack {
 
                     // Apply delta to the initial height
                     let mut new_height = (start_height + total_delta).max(self.min_panel_height);
+                    
+                    let content_height = self.content_sizes[panel_idx].1 + (inner_margin * 2.0);
+                    new_height = new_height.max(content_height);
 
                     // Apply maximum constraint if set
                     if let Some(max_panel_height) = self.max_panel_height {
