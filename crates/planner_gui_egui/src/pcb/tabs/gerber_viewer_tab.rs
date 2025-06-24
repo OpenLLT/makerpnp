@@ -163,7 +163,7 @@ impl UiComponent for GerberViewerTabUi {
             stack
                 .id_salt(ui.id().with("vertical_stack"))
                 .body(ui, |body|{
-                body.add_panel(|ui|{
+                body.add_panel("top", |ui|{
                     ui.label("top");
                     ui.label("top");
                     ui.label("top");
@@ -178,12 +178,12 @@ impl UiComponent for GerberViewerTabUi {
                     ui.label("top");
                     ui.label("top");
                 });
-                body.add_panel(|ui|{
+                body.add_panel("middle", |ui|{
                     ui.label("middle");
                     ui.label("middle with some very very very very very long text");
                     ui.label("middle");
                 });
-                body.add_panel(|ui|{
+                body.add_panel("bottom", |ui|{
                     ui.label("bottom");
                     ui.label("bottom");
                     ui.label("bottom");
