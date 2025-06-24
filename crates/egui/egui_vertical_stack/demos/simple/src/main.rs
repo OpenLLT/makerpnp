@@ -1,3 +1,4 @@
+use std::sync::{Arc, Mutex};
 use eframe::CreationContext;
 use egui::{Frame, Style};
 use egui_vertical_stack::VerticalStack;
@@ -5,6 +6,8 @@ struct MyApp {
     vertical_stack: VerticalStack,
     enabled_panels: [bool; 3],
     vertical_stack_settings: VerticalStackSettings,
+    
+    example_state: Arc<Mutex<bool>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -41,6 +44,7 @@ impl MyApp {
             vertical_stack: Self::make_vertical_stack(&vertical_stack_settings),
             enabled_panels: [true; 3],
             vertical_stack_settings,
+            example_state: Arc::new(Mutex::new(false)),
         }
     }
     
@@ -60,23 +64,31 @@ impl eframe::App for MyApp {
             .show(ctx, |ui| {
                     self.vertical_stack
                         .id_salt(ui.id().with("vertical_stack"))
-                        .body(ui, |body|{
-                            for index in 0..3 {
-                                if !self.enabled_panels[index] {
-                                    continue
-                                }
-                                match index {
-                                    0 => body.add_panel(|ui| {
-                                        ui.label("top");
-                                    }),
-                                    1 => body.add_panel(|ui|{
-                                        ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
-                                        ui.label("middle with some very long text");
-                                    }),
-                                    2 => body.add_panel(|ui| {
-                                        ui.label("bottom\nwith\nlots\nof\nlines\nto\nsee");
-                                    }),
-                                    _ => unreachable!(),
+                        .body(ui, {
+                            |body|{
+                                for index in 0..3 {
+                                    if !self.enabled_panels[index] {
+                                        continue
+                                    }
+                                    match index {
+                                        0 => body.add_panel({
+                                            // clone the state, for the closure to have access to it
+                                            let example_state = self.example_state.clone();
+                                            move |ui| {
+                                                let mut state = example_state.lock().unwrap();
+                                                ui.label("top");
+                                                ui.checkbox(&mut state, "example state");
+                                            }
+                                        }),
+                                        1 => body.add_panel(|ui|{
+                                            ui.style_mut().wrap_mode = Some(eframe::egui::TextWrapMode::Extend);
+                                            ui.label("middle with some very long text");
+                                        }),
+                                        2 => body.add_panel(|ui| {
+                                            ui.label("bottom\nwith\nlots\nof\nlines\nto\nsee");
+                                        }),
+                                        _ => unreachable!(),
+                                    }
                                 }
                             }
                         });

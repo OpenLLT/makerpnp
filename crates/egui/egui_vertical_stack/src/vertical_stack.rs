@@ -133,9 +133,9 @@ impl VerticalStack {
     }
 
     /// The main function to render the stack and add panels.
-    pub fn body<F>(&mut self, ui: &mut Ui, collect_panels: F)
+    pub fn body<F>(&mut self, ui: &mut Ui, mut collect_panels: F)
     where
-        F: FnOnce(&mut StackBodyBuilder) + Clone,
+        F: FnMut(&mut StackBodyBuilder),
     {
         let available_rect = ui.available_rect_before_wrap();
         let available_height = match self.max_height {
@@ -148,7 +148,7 @@ impl VerticalStack {
         };
 
         // Collect panel functions
-        collect_panels.clone()(&mut body);
+        collect_panels(&mut body);
 
         // Get panel count
         let panel_count = body.panels.len();
@@ -157,31 +157,24 @@ impl VerticalStack {
         if panel_count == 0 {
             return;
         }
-        
+
         if !self.initialized || (self.last_available_height - available_height).abs() > 1.0 || panel_count != self.last_panel_count {
             self.need_sizing_pass = true;
         }
 
-        // Check if we need a sizing pass 
+        // Check if we need a sizing pass
         if self.need_sizing_pass {
             self.last_available_height = available_height;
             self.last_panel_count = panel_count;
             self.need_sizing_pass = false;
 
             // Run a sizing pass to measure content heights
-            self.do_sizing_pass(ui, body);
+            self.do_sizing_pass(ui, &mut body);
 
             ui.ctx().request_discard("sizing");
         }
-        
+
         // Now do the actual rendering with known content heights
-
-        let mut body = StackBodyBuilder {
-            panels: Vec::new(),
-        };
-
-        // Collect panel functions
-        collect_panels(&mut body);
 
         self.do_render_pass(ui, body, available_height);
 
@@ -190,9 +183,9 @@ impl VerticalStack {
     }
 
     /// Perform a sizing pass to measure content heights without rendering
-    fn do_sizing_pass(&mut self, ui: &mut Ui, body: StackBodyBuilder) {
+    fn do_sizing_pass(&mut self, ui: &mut Ui, body: &mut StackBodyBuilder) {
         let panel_count = body.panels.len();
-        
+
         self.content_sizes.clear();
         // Create a temporary UI for measuring content heights
         ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
@@ -212,7 +205,7 @@ impl VerticalStack {
             let panel_width = ui.available_width();
 
             // Measure each panel's content
-            for (idx, panel_fn) in body.panels.into_iter().enumerate() {
+            for (idx, panel_fn) in body.panels.iter_mut().enumerate() {
                 // Create a temporary rect with max height for measurement
                 let panel_rect = Rect::from_min_size(
                     ui.cursor().min,
@@ -250,22 +243,22 @@ impl VerticalStack {
     fn do_render_pass(&mut self, ui: &mut Ui, body: StackBodyBuilder, available_height: f32)
     {
         let inner_margin = 4.0;
-        
+
         // Ensure panel heights are initialized correctly and respect minimum height
         // if !self.initialized || self.panel_heights.len() < panel_count {
         //     // Initialize panel heights while ensuring minimum height
         //     while self.panel_heights.len() < panel_count {
         //         // Start with either content height or default height, whichever is larger
         //         let (content_width, content_height) = self.content_sizes[self.panel_heights.len()];
-        // 
+        //
         //         // Ensure it respects minimum height
         //         let initial_height = content_height.max(self.min_panel_height);
-        // 
+        //
         //         // Add to panel heights
         //         self.panel_heights.push(initial_height);
         //     }
         // }
-        // 
+        //
 
         // Handle drag state
         let pointer_is_down = ui.input(|i| i.pointer.any_down());
@@ -302,7 +295,7 @@ impl VerticalStack {
                 // Get the available rect for the panel content
                 let panel_rect = ui.available_rect_before_wrap();
 
-                for (idx, panel_fn) in body.panels.into_iter().enumerate() {
+                for (idx, mut panel_fn) in body.panels.into_iter().enumerate() {
                     // Get panel height (already has min_height applied above)
                     let panel_height = self.panel_heights[idx];
 
@@ -314,7 +307,7 @@ impl VerticalStack {
                         let frame_stroke_width = 1.0;
                         let intial_frame_width = max_content_width + ((inner_margin + frame_stroke_width) * 2.0);
                         let frame_width = intial_frame_width.max(scroll_area_rect_before_wrap.width());
-                        
+
                         // without this, the right hand side of the frame will not be visible when the scroll area is narrower than the content
                         ui.set_min_width(frame_width);
 
@@ -348,7 +341,7 @@ impl VerticalStack {
                             panel_fn(ui);
                         });
                     });
-                    
+
                     //ui.allocate_exact_size(Vec2::new(panel_rect.width(), 2.0), Sense::hover());
                     self.add_resize_handle_no_gap(ui, idx, inner_margin);
                 }
@@ -467,14 +460,14 @@ impl VerticalStack {
 
 // The body that collects panel functions
 pub struct StackBodyBuilder {
-    panels: Vec<Box<dyn FnOnce(&mut Ui)>>,
+    panels: Vec<Box<dyn FnMut(&mut Ui)>>,
 }
 
 impl StackBodyBuilder {
     /// Add a panel to the stack with the given content.
     pub fn add_panel<F>(&mut self, add_contents: F)
     where
-        F: FnOnce(&mut Ui) + 'static,
+        F: FnMut(&mut Ui) + 'static,
     {
         // Box the function and store it for later execution
         self.panels.push(Box::new(add_contents));
