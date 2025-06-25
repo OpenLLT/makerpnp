@@ -87,7 +87,9 @@ eframe = { version = "0.31.1", default-features = false }
 egui_taffy = "0.7.0"
 egui_mobius = "0.3.0-alpha.23"
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.8.0" }
-egui_ltreeview = { version = "0.2.0" }
+# 0.4.1 doesn't compile with the 'persistence' feature, see https://github.com/LennysLounge/egui_ltreeview/pull/17
+#egui_ltreeview = { version = "0.4.1" }
+egui_ltreeview = { git = "https://github.com/makerpnp/egui_ltreeview", rev = "6478505f275fd9419dd5b638e67f43d9a495d475" }
 egui-data-table = { version = "0.6.2" }
 egui_double_slider = { version = "0.7.1"}
 egui_vertical_stack = { version = "0.1.0" }

@@ -54,7 +54,7 @@ for action in actions {
                 // ... handle 'activation'
 
                 // HACK: tree-view-dir-activate-expand-hack
-                tree_view_state.expand_node(node_id);
+                tree_view_state.expand_node(&node_id);
             }
 
         }

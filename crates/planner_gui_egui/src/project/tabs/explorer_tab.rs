@@ -66,7 +66,7 @@ impl ExplorerTabUi {
                         .send(ExplorerTabUiCommand::Navigate(path));
 
                     // HACK: tree-view-dir-activate-expand-hack
-                    tree_view_state.expand_node(node_id);
+                    tree_view_state.expand_node(&node_id);
                 }
             }
         }

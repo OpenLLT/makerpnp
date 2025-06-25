@@ -182,12 +182,6 @@ impl ExplorerUi {
 
                     // TODO handle selection
                 }
-                Action::Move(_dd) => {
-                    unreachable!();
-                }
-                Action::Drag(_dd) => {
-                    unreachable!()
-                }
                 Action::Activate(activation) => {
                     debug!(
                         "action, activate. selection: {:?}, modifiers: {:?}",
@@ -201,8 +195,14 @@ impl ExplorerUi {
                         }
 
                         // HACK: tree-view-dir-activate-expand-hack
-                        tree_view_state.expand_node(node_id);
+                        tree_view_state.expand_node(&node_id);
                     }
+                }
+                Action::Move(_dd) | Action::Drag(_dd) => {
+                    unreachable!();
+                }
+                Action::DragExternal(_dde) | Action::MoveExternal(_dde) => {
+                    unreachable!();
                 }
             }
         }
