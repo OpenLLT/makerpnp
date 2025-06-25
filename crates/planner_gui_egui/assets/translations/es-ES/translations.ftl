@@ -255,7 +255,7 @@ gerber-purpose-legend = Leyenda
 gerber-purpose-paste = Pasta
 gerber-purpose-profile = Perfil
 gerber-purpose-other = Otro
-gerber-purpose-solder = Solder
+gerber-purpose-solder = Soldar
 
 table-placements-column-index = #
 table-placements-column-object-path = Ruta de objeto

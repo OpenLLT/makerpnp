@@ -256,7 +256,7 @@ gerber-purpose-legend = Legend
 gerber-purpose-paste = Paste
 gerber-purpose-profile = Profile
 gerber-purpose-other = Other
-gerber-purpose-solder = Soldar
+gerber-purpose-solder = Solder
 
 table-placements-column-index = #
 table-placements-column-object-path = Object path
