@@ -159,8 +159,15 @@ impl GerberViewerUi {
                 &mut layers,
                 &gerber_items,
                 |index, (path, _name), _content| {
-                    Self::build_gerber_layer_from_file(index, path.as_ref().unwrap())
-                        .map(|(layer_view_state, layer, gerber_doc)| (layer_view_state, layer, Some(gerber_doc)))
+                    Self::build_gerber_layer_from_file(index, path.as_ref().unwrap()).map(
+                        |(mut layer_view_state, layer, gerber_doc)| {
+                            if matches!(self.args.pcb_side, Some(PcbSide::Bottom)) {
+                                layer_view_state.transform.mirroring.x = true
+                            }
+
+                            (layer_view_state, layer, Some(gerber_doc))
+                        },
+                    )
                 },
                 |content| (Some(content.path.clone()), content.function),
                 |_existing_entry, _gerber_item| true,
