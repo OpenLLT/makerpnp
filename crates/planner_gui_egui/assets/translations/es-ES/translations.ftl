@@ -296,8 +296,8 @@ table-design-variants-column-design = Nombre del diseño
 table-design-variants-column-variant = Nombre de la variante
 
 table-unit-assignments-column-pcb-unit = Unidad PCB
-table-unit-assignments-column-design = Design name
-table-unit-assignments-column-variant = Variant name
+table-unit-assignments-column-design = Nombre del diseño
+table-unit-assignments-column-variant = Nombre de la variante
 
 table-design-layout-column-index = #
 table-design-layout-column-x-offset = X despl.
