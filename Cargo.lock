@@ -1656,7 +1656,6 @@ dependencies = [
  "objc2-foundation 0.2.2",
  "parking_lot",
  "percent-encoding",
- "pollster",
  "profiling",
  "raw-window-handle",
  "ron",
@@ -1666,7 +1665,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
- "wgpu",
  "winapi",
  "windows-sys 0.59.0",
  "winit",
@@ -1861,8 +1859,9 @@ dependencies = [
 [[package]]
 name = "egui_vertical_stack"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb2a4101e10f443b1095bd4b997494b7be5cf1d81c717f5f1a2ef2eee7bde8d6"
 dependencies = [
- "eframe",
  "egui",
 ]
 
@@ -6553,7 +6552,6 @@ dependencies = [
  "document-features",
  "js-sys",
  "log",
- "naga",
  "parking_lot",
  "profiling",
  "raw-window-handle",
@@ -6602,7 +6600,6 @@ dependencies = [
  "arrayvec",
  "ash",
  "bitflags 2.9.1",
- "block",
  "bytemuck",
  "cfg_aliases",
  "core-graphics-types",
