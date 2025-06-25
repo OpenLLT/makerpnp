@@ -138,6 +138,9 @@ pcb-explorer-node-units = Unit
 pcb-explorer-node-units-assignment-assigned = { $pcb_number }: {$design_name}
 pcb-explorer-node-units-assignment-unassigned = { $pcb_number }: Unassigned
 
+pcb-gerber-viewer-tab-label-panel = Panel
+pcb-gerber-viewer-tab-label-design = Design ({ $index })
+
 form-button-ok = Ok
 form-button-cancel = Cancel
 form-button-close = Close

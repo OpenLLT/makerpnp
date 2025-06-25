@@ -268,9 +268,11 @@ impl Tab for GerberViewerTab {
 
     fn label(&self) -> WidgetText {
         let title = match self.args.mode {
-            GerberViewerMode::Panel => "Panel".to_string(),
-            // TODO improve the tab title
-            GerberViewerMode::Design(design_index) => format!("Design ({})", design_index),
+            GerberViewerMode::Panel => tr!("pcb-gerber-viewer-tab-label-panel"),
+            // TODO improve the tab title by using the design name, not the index
+            GerberViewerMode::Design(design_index) => {
+                tr!("pcb-gerber-viewer-tab-label-design", { index:  design_index })
+            }
         };
 
         egui::widget_text::WidgetText::from(title)
