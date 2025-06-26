@@ -1,12 +1,9 @@
 use std::collections::HashSet;
 
 use derivative::Derivative;
-use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use egui_mobius::Value;
-use egui_vertical_stack::VerticalStack;
 use planner_app::PcbOverview;
 use tracing::trace;
 
@@ -26,8 +23,6 @@ pub struct GerberViewerTabUi {
     gerber_viewer_ui: GerberViewerUi,
 
     pub component: ComponentState<GerberViewerTabUiCommand>,
-    #[derivative(Debug = "ignore")]
-    stack: Value<VerticalStack>,
 }
 
 impl GerberViewerTabUi {
@@ -46,11 +41,6 @@ impl GerberViewerTabUi {
 
         Self {
             gerber_viewer_ui,
-            stack: Value::new(
-                VerticalStack::new()
-                    .min_panel_height(150.0)
-                    .default_panel_height(50.0),
-            ),
             component,
         }
     }
@@ -64,19 +54,6 @@ impl GerberViewerTabUi {
         ui.style_mut()
             .interaction
             .selectable_labels = false;
-
-        let text_height = egui::TextStyle::Body
-            .resolve(ui.style())
-            .size
-            .max(ui.spacing().interact_size.y);
-
-        let mut table_builder = TableBuilder::new(ui)
-            .striped(true)
-            .resizable(true)
-            .auto_shrink([false, true])
-            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-            .sense(egui::Sense::click());
 
         let show_function_column = layers
             .iter()
@@ -97,23 +74,30 @@ impl GerberViewerTabUi {
 
         let show_pcb_side_column = pcb_sides.len() > 1;
 
-        if show_function_column {
-            // add another column
-            table_builder = table_builder.column(Column::auto());
-        }
+        let column_count = [true, show_function_column, show_pcb_side_column, show_file_column]
+            .iter()
+            .filter(|&&show| show)
+            .count();
 
-        if show_pcb_side_column {
-            // add another column
-            table_builder = table_builder.column(Column::auto());
-        }
+        let text_height = egui::TextStyle::Body
+            .resolve(ui.style())
+            .size
+            .max(ui.spacing().interact_size.y);
 
-        if show_file_column {
-            // add another column
-            table_builder = table_builder.column(Column::auto());
-        }
+        let mut table_builder = TableBuilder::new(ui)
+            .striped(true)
+            .resizable(true)
+            //.auto_shrink([false, true])
+            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+            //.scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+            .sense(egui::Sense::click());
 
-        // add the last column, which is always 'remainder'
-        table_builder = table_builder.column(Column::remainder());
+        for index in 0..column_count {
+            let is_last = index == column_count - 1;
+
+            let column = if is_last { Column::remainder() } else { Column::auto() };
+            table_builder = table_builder.column(column);
+        }
 
         table_builder
             .header(20.0, |mut header| {
@@ -201,31 +185,32 @@ impl UiComponent for GerberViewerTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        egui::SidePanel::left(
-            ui.id()
-                .with("gerber_viewer_tab_left_panel"),
-        )
-        .resizable(true)
-        .show_inside(ui, |ui| {
-            let layers_binding = self.gerber_viewer_ui.layers();
-            let mut stack = self.stack.lock().unwrap();
-            stack
-                .id_salt(ui.id().with("vertical_stack"))
-                .body(ui, move |body| {
-                    body.add_panel("top", {
-                        let layers_binding = layers_binding.clone();
-
-                        move |ui| {
-                            let layers_map = layers_binding.lock().unwrap();
-
-                            Self::show_layers_table(ui, &layers_map);
-                        }
-                    });
-                });
-        });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.gerber_viewer_ui
-                .ui(ui, &mut GerberViewerUiContext {})
+                .ui(ui, &mut GerberViewerUiContext {});
+
+            //
+            // tool windows
+            //
+            // these must be rendered AFTER the gerber viewer ui otherwise the windows appear behind the gerber layers
+
+            let tool_windows_id = ui.id();
+            egui_tool_windows::ToolWindows::new().windows(ui, {
+                move |builder| {
+                    builder
+                        .add_window(tool_windows_id.with("layers"))
+                        .default_pos([20.0, 20.0])
+                        .default_size([200.0, 200.0])
+                        .show(tr!("pcb-gerber-viewer-layers-window-title"), {
+                            let layers_binding = self.gerber_viewer_ui.layers();
+                            move |ui| {
+                                let layers_map = layers_binding.lock().unwrap();
+
+                                Self::show_layers_table(ui, &layers_map);
+                            }
+                        })
+                }
+            });
         });
     }
 
