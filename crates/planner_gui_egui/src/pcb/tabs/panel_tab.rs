@@ -1255,18 +1255,18 @@ mod gerber_util {
     use nalgebra::{Point2, Vector2};
 
     #[allow(dead_code)]
-    pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Coordinates, GerberError> {
+    pub fn x_y_to_gerber(x: f64, y: f64, format: CoordinateFormat) -> Result<Option<Coordinates>, GerberError> {
         let x = CoordinateNumber::try_from(x)?;
         let y = CoordinateNumber::try_from(y)?;
 
         x.gerber(&format)?;
         y.gerber(&format)?;
 
-        Ok(Coordinates {
+        Ok(Some(Coordinates {
             x: Some(x),
             y: Some(y),
             format,
-        })
+        }))
     }
 
     #[allow(dead_code)]
