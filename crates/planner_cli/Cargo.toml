@@ -10,9 +10,9 @@ markdown = ["planner_app/markdown"]
 testing = ["markdown"]
 
 [dependencies]
-cli = { path = "../cli", features = ["tracing"]}
+cli = { path = "../cli", features = ["tracing"] }
 # FIXME remove planning dependency?
-planning = { path = "../planning"}
+planning = { path = "../planning" }
 planner_app = { path = "../planner_app" }
 pnp = { path = "../pnp"}
 stores = { path = "../stores"}
@@ -32,8 +32,9 @@ crux_core = { workspace = true }
 crossbeam-channel = { workspace = true }
 
 [dev-dependencies]
-util = { path = "../util", features = ["testing"]}
+planner_cli = { path = ".", features = ["testing"] }
 
+util = { path = "../util", features = ["testing"] }
 assert_cmd = { workspace = true  }
 tempfile = { workspace = true  }
 indoc = { workspace = true  }
