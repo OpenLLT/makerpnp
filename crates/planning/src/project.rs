@@ -907,10 +907,7 @@ fn find_placement_changes(
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
 
     let unit_assignments = project
-        .all_unit_assignments(pcbs)
-        .into_iter()
-        .map(|(path, unit_assignment)| (path, unit_assignment.clone()))
-        .collect::<Vec<_>>();
+        .all_unit_assignments(pcbs);
 
     // find new or existing placements that are in the updated design_variant_placement_map
 
