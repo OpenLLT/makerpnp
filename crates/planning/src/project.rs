@@ -12,7 +12,7 @@ use pnp;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::part::Part;
-use pnp::pcb::{PcbSide, PcbUnitIndex};
+use pnp::pcb::{PcbInstanceNumber, PcbSide, PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
 use pnp::reference::{Reference, ReferenceError};
 use regex::Regex;
@@ -33,7 +33,7 @@ use crate::operation_history::{
     PlaceComponentsOperationTaskHistoryKind, PlacementOperationHistoryKind,
 };
 use crate::part::PartState;
-use crate::pcb::{Pcb, PcbError};
+use crate::pcb::{Pcb, PcbError, PcbUnitTransform, UnitPlacementPosition};
 use crate::phase::{Phase, PhaseError, PhaseOrderings, PhaseReference, PhaseState};
 use crate::placement::{
     PlacementOperation, PlacementSortingItem, PlacementSortingMode, PlacementState, PlacementStatus,
@@ -503,6 +503,10 @@ pub enum PcbOperationError {
     DesignSizingCountMismatch { expected: usize, actual: usize },
     #[error("Unit sizing count mismatch. expected: {expected}, actual: {actual}")]
     UnitSizingCountMismatch { expected: u16, actual: u16 },
+    #[error("Missing design sizing. design: {0}")]
+    MissingDesignSizing(String),
+    #[error("Missing unit sizing. unit: {0}")]
+    MissingPcbUnitPositioning(PcbUnitIndex),
 }
 
 pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {
@@ -736,9 +740,9 @@ pub fn store_phase_placements_as_csv(
                 .part
                 .mpn
                 .to_string(),
-            x: placement_state.placement.x,
-            y: placement_state.placement.y,
-            rotation: placement_state.placement.rotation,
+            x: placement_state.unit_position.x,
+            y: placement_state.unit_position.y,
+            rotation: placement_state.unit_position.rotation,
         })?;
     }
 
@@ -831,44 +835,63 @@ pub fn refresh_from_design_variants(
     project: &mut Project,
     pcbs: &[&Pcb],
     design_variant_placement_map: BTreeMap<DesignVariant, Vec<Placement>>,
-) -> ProjectRefreshResult {
+) -> Result<ProjectRefreshResult, ProjectError> {
     let unique_parts = placement::build_unique_parts(&design_variant_placement_map);
 
     let mut modified = refresh_parts(project, unique_parts.as_slice());
 
-    modified |= refresh_placements(project, pcbs, &design_variant_placement_map);
+    modified |= refresh_placements(project, pcbs, &design_variant_placement_map)?;
 
-    ProjectRefreshResult {
+    Ok(ProjectRefreshResult {
         modified,
         unique_parts,
-    }
+    })
 }
 
+/// It is possible that the EDA files and/or PCBs have changed since the last time the project was refreshed.
+/// We need to determine which placements:
+/// 1. are still known (existing),
+/// 2. previously in the EDA files, but no longer. (unknown).
+/// 3. were added to the EDA files (new).
+///
+/// Additionally, the placements in the map will have X/Y/Rotation values as per the exported EDA, but we need
+/// to calculate updated X/Y/Rotation values based on the design variant unit assignments and corresponding PCB
+/// configuration.
+///
 /// Returns 'true' if project is modified
 fn refresh_placements(
     project: &mut Project,
     pcbs: &[&Pcb],
     design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
-) -> bool {
+) -> Result<bool, ProjectError> {
+    let unit_assignments = project.all_unit_assignments(pcbs);
+
     let changes: Vec<(Change, ObjectPath, Placement)> =
-        find_placement_changes(project, pcbs, design_variant_placement_map);
+        find_placement_changes(project, design_variant_placement_map, &unit_assignments);
+
+    let all_placements = changes
+        .iter()
+        .map(|(_change, unit_path, placement)| (unit_path.clone(), placement))
+        .collect::<Vec<_>>();
+
+    let mut unit_positions = build_placement_unit_positions(all_placements, &unit_assignments, pcbs)?;
 
     let mut modified = false;
 
-    for (change, unit_path, placement) in changes.iter() {
-        let mut path: ObjectPath = unit_path.clone();
-        path.set_ref_des(placement.ref_des.clone());
+    for (change, path, placement) in changes.into_iter() {
+        let unit_path = path.pcb_unit_path().unwrap();
+        let unit_position = unit_positions.remove(&path).unwrap();
+        let placement_state_entry = project.placements.entry(path.clone());
 
-        let placement_state_entry = project.placements.entry(path);
-
-        match (change, placement) {
-            (Change::New, placement) => {
-                info!("New placement. placement: {:?}", placement);
+        match change {
+            Change::New => {
+                info!("New placement. placement: {:?} ({:?})", placement, unit_position);
                 modified |= true;
 
                 let placement_state = PlacementState {
-                    unit_path: unit_path.clone(),
-                    placement: placement.clone(),
+                    unit_path,
+                    placement,
+                    unit_position,
                     operation_status: PlacementStatus::Pending,
                     project_status: ProjectPlacementStatus::Used,
                     phase: None,
@@ -876,41 +899,485 @@ fn refresh_placements(
 
                 placement_state_entry.or_insert(placement_state);
             }
-            (Change::Existing, _) => {
+            Change::Existing => {
                 placement_state_entry.and_modify(|ps| {
-                    if !ps.placement.eq(placement) {
-                        info!("Updating placement. old: {:?}, new: {:?}", ps.placement, placement);
+                    if !ps.placement.eq(&placement) {
+                        info!("Updating placement. old: {:?}, new: {:?}", ps.placement, placement,);
+                        ps.placement = placement;
                         modified |= true;
-                        ps.placement = placement.clone();
+                    }
+                    if !ps.unit_position.eq(&unit_position) {
+                        info!(
+                            "Updating placement unit position. path: {}, old: {:?}, new: {:?}",
+                            path, ps.unit_position, unit_position
+                        );
+                        ps.unit_position = unit_position;
+                        modified |= true;
                     }
                 });
             }
-            (Change::Unused, placement) => {
-                info!("Marking placement as unused. placement: {:?}", placement);
+            Change::Unused => {
+                info!(
+                    "Marking placement as unused. placement: {:?} ({:?})",
+                    placement, unit_position
+                );
                 modified |= true;
 
                 placement_state_entry.and_modify(|ps| {
                     ps.project_status = ProjectPlacementStatus::Unused;
+                    ps.unit_position = unit_position;
                 });
             }
         }
     }
 
-    modified
+    Ok(modified)
+}
+
+/// attempts to pnp build unit positioning for each eda placement.
+/// requires that the PCB has been configured with sizing information.
+///
+/// there should be one pcb_orientation for each pcb.
+fn build_placement_unit_positions(
+    placements: Vec<(ObjectPath, &Placement)>,
+    unit_assignments: &Vec<(ObjectPath, DesignVariant)>,
+    pcbs: &[&Pcb],
+) -> Result<BTreeMap<ObjectPath, UnitPlacementPosition>, ProjectError> {
+    type BuildTransformResult = Result<PcbUnitTransform, PcbError>;
+    let pcb_unit_transforms: HashMap<(PcbInstanceNumber, PcbUnitNumber), (BuildTransformResult, BuildTransformResult)> =
+        unit_assignments
+            .iter()
+            .map(|(path, _variant)| {
+                let (pcb_instance_number, pcb_unit_number) = path.pcb_instance_and_unit().unwrap();
+                let (pcb_instance_index, pcb_unit_index) = (
+                    pcb_instance_number as PcbUnitIndex - 1,
+                    pcb_unit_number as PcbUnitIndex - 1,
+                );
+
+                let pcb = pcbs[pcb_instance_index as usize];
+
+                let top_transform = pcb.build_unit_transform(pcb_unit_index, &pcb.orientation.top);
+                let bottom_transform = pcb.build_unit_transform(pcb_unit_index, &pcb.orientation.bottom);
+
+                println!(
+                    "unit: {:?}, top_transform: {:?}, bottom_transform: {:?}",
+                    (pcb_instance_number, pcb_unit_number),
+                    top_transform,
+                    bottom_transform
+                );
+
+                (
+                    (pcb_instance_number, pcb_unit_number),
+                    (top_transform, bottom_transform),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+    let mut failures: HashSet<_> = HashSet::new();
+    let mut results = BTreeMap::new();
+    for (path, placement) in placements.into_iter() {
+        let (pcb_instance_number, pcb_unit_number) = path.pcb_instance_and_unit().unwrap();
+
+        let transforms = pcb_unit_transforms.get(&(pcb_instance_number, pcb_unit_number));
+
+        if let Some((Ok(top_transform), Ok(bottom_transform))) = transforms {
+            let transform = match placement.pcb_side {
+                PcbSide::Top => top_transform,
+                PcbSide::Bottom => bottom_transform,
+            };
+
+            let unit_placement_position = transform.apply_to_placement_matrix(placement);
+            results.insert(path, unit_placement_position);
+        } else {
+            failures.insert((pcb_instance_number, pcb_unit_number));
+        }
+    }
+    if failures.len() > 0 {
+        let message = format!(
+            "Unable to build transforms for the following PCB/Unit combinations: {:?}",
+            failures
+        );
+        Err(ProjectError::UnableToBuildUnitPositions(message))
+    } else {
+        Ok(results)
+    }
+}
+
+#[cfg(test)]
+mod placement_unit_positioning_tests {
+    use nalgebra::Vector2;
+    use pnp::panel::{DesignSizing, Dimensions, PanelSizing, PcbUnitPositioning, Unit};
+    use rstest::rstest;
+    use rust_decimal::prelude::ToPrimitive;
+    use rust_decimal_macros::dec;
+    use tap::Tap;
+
+    use super::*;
+    use crate::pcb::{PcbOrientation, PcbSideOrientation};
+
+    macro_rules! make_x_y_rotation {
+        ($x:expr, $y:expr, $rotation:expr) => {
+            [dec!($x), dec!($y), dec!($rotation)]
+        };
+    }
+
+    // abbreviations:
+    // CCW = counter clock-wise
+    // PFLIP = pitch flip (y-axis mirroring)
+
+    const PCB_ORIENTATION_0_PFLIP: PcbOrientation = PcbOrientation {
+        top: PcbSideOrientation {
+            pitch_flipped: false,
+            rotation: dec!(0),
+        },
+        bottom: PcbSideOrientation {
+            pitch_flipped: true,
+            rotation: dec!(0),
+        },
+    };
+
+    const PCB_ORIENTATION_CCW90_PFLIP: PcbOrientation = PcbOrientation {
+        top: PcbSideOrientation {
+            pitch_flipped: false,
+            rotation: dec!(90),
+        },
+        bottom: PcbSideOrientation {
+            pitch_flipped: true,
+            rotation: dec!(90),
+        },
+    };
+
+    const UNIT_ROTATION_0: Decimal = dec!(0.0);
+    const UNIT_ROTATION_90: Decimal = dec!(90.0);
+
+    #[rustfmt::skip]
+    const CASE_1_EXPECTATIONS: [[Decimal; 3]; 8] = [
+        make_x_y_rotation!(10, 10, 45),
+        make_x_y_rotation!(10, 70, -135),
+        make_x_y_rotation!(50, 10, 45),
+        make_x_y_rotation!(50, 70, -135),
+        make_x_y_rotation!(10, 50, 45),
+        make_x_y_rotation!(10, 30, -135),
+        make_x_y_rotation!(50, 50, 45),
+        make_x_y_rotation!(50, 30, -135),
+    ];
+
+    #[rustfmt::skip]
+    const CASE_2_EXPECTATIONS: [[Decimal; 3]; 8] = [
+        make_x_y_rotation!(70, 10, 135),
+        make_x_y_rotation!(70, 70, 135),
+        make_x_y_rotation!(70, 50, 135),
+        make_x_y_rotation!(70, 30, 135),
+        make_x_y_rotation!(30, 10, 135),
+        make_x_y_rotation!(30, 70, 135),
+        make_x_y_rotation!(30, 50, 135),
+        make_x_y_rotation!(30, 30, 135),
+    ];
+
+    #[rustfmt::skip]
+    const CASE_3_EXPECTATIONS: [[Decimal; 3]; 8] = [
+        make_x_y_rotation!(30, 10, 135),
+        make_x_y_rotation!(30, 70, 135),
+        make_x_y_rotation!(70, 10, 135),
+        make_x_y_rotation!(70, 70, 135),
+        make_x_y_rotation!(30, 50, 135),
+        make_x_y_rotation!(30, 30, 135),
+        make_x_y_rotation!(70, 50, 135),
+        make_x_y_rotation!(70, 30, 135),
+    ];
+
+    #[rstest]
+    #[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_0, CASE_1_EXPECTATIONS)]
+    #[case(PCB_ORIENTATION_CCW90_PFLIP, UNIT_ROTATION_0, CASE_2_EXPECTATIONS)]
+    #[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_90, CASE_3_EXPECTATIONS)]
+    fn test_build_placement_unit_positions(
+        #[case] pcb_orientation: PcbOrientation,
+        #[case] unit_rotation_degrees: Decimal,
+        #[case] expectations: [[Decimal; 3]; 8],
+    ) {
+        // given
+        let mut project = Project::new("test".to_string());
+
+        let eda_export_offset = Vector2::new(dec!(10), dec!(10));
+
+        let placement1 = Placement {
+            ref_des: "R1".into(),
+            part: Part {
+                manufacturer: "MFR1".to_string(),
+                mpn: "MPN1".to_string(),
+            },
+            place: true,
+            pcb_side: PcbSide::Top,
+            x: eda_export_offset.x + dec!(10),
+            y: eda_export_offset.y + dec!(10),
+            rotation: Decimal::from(45),
+        };
+
+        let placement2 = Placement {
+            ref_des: "R2".into(),
+            part: Part {
+                manufacturer: "MFR1".to_string(),
+                mpn: "MPN1".to_string(),
+            },
+            place: true,
+            pcb_side: PcbSide::Bottom,
+            x: eda_export_offset.x + dec!(10),
+            y: eda_export_offset.y + dec!(10),
+            rotation: Decimal::from(-45),
+        };
+
+        let placement_state1 = PlacementState {
+            unit_path: ObjectPath::default(),
+            placement: placement1,
+            unit_position: UnitPlacementPosition::default(),
+            operation_status: PlacementStatus::Pending,
+            project_status: ProjectPlacementStatus::Used,
+            phase: Some(PhaseReference::from_raw_str("Top_SMT")),
+        };
+
+        let placement_state2 = PlacementState {
+            unit_path: ObjectPath::default(),
+            placement: placement2,
+            unit_position: UnitPlacementPosition::default(),
+            operation_status: PlacementStatus::Pending,
+            project_status: ProjectPlacementStatus::Used,
+            phase: Some(PhaseReference::from_raw_str("Bottom_SMT")),
+        };
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=1::ref_des=R1").unwrap(),
+            placement_state1
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=1").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=2::ref_des=R1").unwrap(),
+            placement_state1
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=2").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=3::ref_des=R1").unwrap(),
+            placement_state1
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=3").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=4::ref_des=R1").unwrap(),
+            placement_state1
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=4").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=1::ref_des=R2").unwrap(),
+            placement_state2
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=1").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=2::ref_des=R2").unwrap(),
+            placement_state2
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=2").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=3::ref_des=R2").unwrap(),
+            placement_state2
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=3").unwrap()),
+        );
+        project.placements.insert(
+            ObjectPath::from_str("pcb=1::unit=4::ref_des=R2").unwrap(),
+            placement_state2
+                .clone()
+                .tap_mut(|ps| ps.unit_path = ObjectPath::from_str("pcb=1::unit=4").unwrap()),
+        );
+
+        let design_names: IndexSet<DesignName> = IndexSet::from(["Design1".into()]);
+        let unit_map: BTreeMap<PcbUnitIndex, DesignIndex> = BTreeMap::from_iter([(0, 0), (1, 0), (2, 0), (3, 0)]);
+
+        // Panel layout (4 units), bottom left of panel is (0,0), top right is (x+, y+)
+        //
+        //                  pitch-flipped
+        // top view:        bottom view:
+        // +TTTTTTTTT+      +BBBBBBBBB+
+        // L*********R      L*********R
+        // L*###*###*R      L*###*###*R
+        // L*#3#*#4#*R      L*#1#*#2#*R
+        // L*###*###*R      L*###*###*R
+        // L*********R      L*********R
+        // L*###*###*R      L*###*###*R
+        // L*#1#*#2#*R      L*#3#*#4#*R
+        // L*###*###*R      L*###*###*R
+        // +BBBBBBBBB+      +TTTTTTTTT+
+        //
+        // key: T = top rail, B = bottom rail, R = right rail, L = left rail, + = corner
+        //      # = edge routing gap,
+        //      <n> = unit n (origin)
+        //
+        // Note that when pitch flipped, the top edge becomes the bottom edge and the unit numbers are flipped too.
+        //
+        // This is so that when you place components ONLY on a single unit of a panel, e.g. number 1, when you come to
+        // place components on the bottom of the panel, the components are placed on the same unit.
+        //
+        // When components are placed on the bottom, the component rotation needs to be adjusted too.
+
+        let edge_rails = Dimensions {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 0.0,
+        };
+
+        let design_size: Vector2<f64> = [40.0, 40.0].into();
+        // calculate the center of the design, to use as the origin for rotations/translations
+        let design_center: Vector2<f64> = design_size / 2.0;
+        // use the opposite of the eda_export_offset, note the leading `-` sign.
+        let design_offset: Vector2<f64> = [
+            -eda_export_offset.x.to_f64().unwrap(),
+            -eda_export_offset.y.to_f64().unwrap(),
+        ]
+        .into();
+
+        let design_sizing = DesignSizing {
+            size: design_size,
+            origin: design_center,
+            offset: design_offset,
+        };
+
+        let edge_routing_gap = 0.0;
+        let x_count = 2;
+        let y_count = 2;
+
+        let mut pcb1 = Pcb::new("PCB1".to_string(), 4, design_names, unit_map);
+        let panel_sizing = PanelSizing {
+            units: Unit::Millimeters,
+            size: [
+                edge_rails.left
+                    + (design_sizing.size.x * x_count as f64)
+                    + (edge_routing_gap * (x_count + 1) as f64)
+                    + edge_rails.right,
+                edge_rails.bottom
+                    + (design_sizing.size.y * y_count as f64)
+                    + (edge_routing_gap * (y_count + 1) as f64)
+                    + edge_rails.top,
+            ]
+            .into(),
+            // Note: the edge rails are not used in the calculations, but are included for completeness.
+            edge_rails: edge_rails.clone(),
+            fiducials: vec![],
+            design_sizings: vec![design_sizing.clone()],
+            // Note: PcbUnitPositions are from the bottom left of the panel, rails are ignored by the calculations.
+            pcb_unit_positionings: vec![
+                // bottom/front row
+                PcbUnitPositioning {
+                    offset: [
+                        edge_rails.left + edge_routing_gap + ((design_sizing.size.x + edge_routing_gap) * 0 as f64),
+                        edge_rails.bottom + edge_routing_gap + ((design_sizing.size.y + edge_routing_gap) * 0 as f64),
+                    ]
+                    .into(),
+                    rotation: unit_rotation_degrees,
+                },
+                PcbUnitPositioning {
+                    offset: [
+                        edge_rails.left + edge_routing_gap + ((design_sizing.size.x + edge_routing_gap) * 1 as f64),
+                        edge_rails.bottom + edge_routing_gap + ((design_sizing.size.y + edge_routing_gap) * 0 as f64),
+                    ]
+                    .into(),
+                    rotation: unit_rotation_degrees,
+                },
+                // top/rear row
+                PcbUnitPositioning {
+                    offset: [
+                        edge_rails.left + edge_routing_gap + ((design_sizing.size.x + edge_routing_gap) * 0 as f64),
+                        edge_rails.bottom + edge_routing_gap + ((design_sizing.size.y + edge_routing_gap) * 1 as f64),
+                    ]
+                    .into(),
+                    rotation: unit_rotation_degrees,
+                },
+                PcbUnitPositioning {
+                    offset: [
+                        edge_rails.left + edge_routing_gap + ((design_sizing.size.x + edge_routing_gap) * 1 as f64),
+                        edge_rails.bottom + edge_routing_gap + ((design_sizing.size.y + edge_routing_gap) * 1 as f64),
+                    ]
+                    .into(),
+                    rotation: unit_rotation_degrees,
+                },
+            ],
+        };
+        pcb1.panel_sizing = panel_sizing;
+        pcb1.orientation = pcb_orientation;
+
+        let mut project_pcb = ProjectPcb::new(FileReference::Relative(PathBuf::from("pcb1.pcb.json")));
+        project_pcb
+            .unit_assignments
+            .insert(0, (0, "Variant1".into()));
+        project_pcb
+            .unit_assignments
+            .insert(1, (0, "Variant1".into()));
+        project_pcb
+            .unit_assignments
+            .insert(2, (0, "Variant1".into()));
+        project_pcb
+            .unit_assignments
+            .insert(3, (0, "Variant1".into()));
+        project.pcbs.push(project_pcb);
+
+        // and build args
+        let pcbs = vec![&pcb1];
+        println!("pcbs: {:?}", pcbs);
+
+        let all_unit_assignments = project.all_unit_assignments(&pcbs);
+        println!("all_unit_assignments: {:?}", all_unit_assignments);
+        let placements = project
+            .placements
+            .iter()
+            .map(|(path, state)| (path.clone(), &state.placement))
+            .collect::<Vec<_>>();
+        println!("placements: {:?}", placements);
+
+        // and
+        let expected_result = BTreeMap::from_iter(
+            expectations
+                .into_iter()
+                .enumerate()
+                .map(|(index, expectation)| {
+                    (placements[index].0.clone(), UnitPlacementPosition {
+                        x: expectation[0],
+                        y: expectation[1],
+                        rotation: expectation[2],
+                    })
+                }),
+        );
+
+        // when
+        let result = build_placement_unit_positions(placements, &all_unit_assignments, &pcbs);
+
+        // then
+        let Ok(result) = result else {
+            println!("result: {:?}", result);
+            assert!(result.is_ok());
+            unreachable!();
+        };
+
+        // and
+        println!(
+            "result:\n{}",
+            result
+                .iter()
+                .map(|(op, upp)| format!("{} = {:?}", op, upp))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert_eq!(result, expected_result);
+    }
 }
 
 fn find_placement_changes(
     project: &mut Project,
-    pcbs: &[&Pcb],
     design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
+    unit_assignments: &Vec<(ObjectPath, DesignVariant)>,
 ) -> Vec<(Change, ObjectPath, Placement)> {
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
-
-    let unit_assignments = project
-        .all_unit_assignments(pcbs)
-        .into_iter()
-        .map(|(path, unit_assignment)| (path, unit_assignment.clone()))
-        .collect::<Vec<_>>();
 
     // find new or existing placements that are in the updated design_variant_placement_map
 
@@ -927,8 +1394,8 @@ fn find_placement_changes(
                 // look for a placement state for the placement for this object path
 
                 match project.placements.contains_key(&path) {
-                    true => changes.push((Change::Existing, unit_path.clone(), placement.clone())),
-                    false => changes.push((Change::New, unit_path.clone(), placement.clone())),
+                    true => changes.push((Change::Existing, path, placement.clone())),
+                    false => changes.push((Change::New, path, placement.clone())),
                 }
             }
         }
@@ -963,7 +1430,7 @@ fn find_placement_changes(
                             match state.project_status {
                                 ProjectPlacementStatus::Unused => (),
                                 ProjectPlacementStatus::Used => {
-                                    changes.push((Change::Unused, unit_path.clone(), state.placement.clone()))
+                                    changes.push((Change::Unused, path.clone(), state.placement.clone()))
                                 }
                             }
                         }
@@ -1970,4 +2437,12 @@ pub fn find_phase_parts(
             _ => None,
         })
         .collect()
+}
+
+#[derive(Error, Debug)]
+pub enum ProjectError {
+    #[error("Unable to load placements, cause: {0}")]
+    UnableToLoadPlacements(anyhow::Error),
+    #[error("Unable to build unit positions. check pcb configuration. {0}")]
+    UnableToBuildUnitPositions(String),
 }

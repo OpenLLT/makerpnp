@@ -935,6 +935,11 @@ impl UiComponent for UnitAssignmentsTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        ui.ctx().style_mut(|style| {
+            // if this is not done, text in labels/checkboxes/etc wraps
+            style.wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
+
         ui.label(tr!("project-unit-assignments-header"));
         let Some(pcb_overview) = &self.pcb_overview else {
             ui.spinner();

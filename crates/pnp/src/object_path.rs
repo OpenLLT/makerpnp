@@ -15,6 +15,8 @@ use crate::placement::RefDes;
 //      * less potential for confusion
 //      * making it 0 based would remove some error checking
 
+// TODO use PcbInstanceIndex/PcbInstanceNumber and PcbUnitIndex/PcbUnitNumber in signatures for clarity.
+
 #[derive(Debug, Clone, PartialOrd, Ord, Eq, PartialEq, Hash)]
 pub struct ObjectPathChunk {
     key: String,

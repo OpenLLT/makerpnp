@@ -50,6 +50,18 @@ On Windows this is: `%appdata%\MakerPnP - Planner\data\app.ron`.
 
 Don't open the project or PCB multiple times.
 
+### debug mode panic when un-floating a tab that contains a data table.
+
+To reproduce, run the app in debug mode, pull out the placements tab, then re-insert it.
+
+#### Workaround
+
+Run in release mode, or don't float tabs that contain data tables in debug mode.
+
+#### Bug report
+
+https://github.com/Adanos020/egui_dock/issues/278
+
 # Contributing
 
 The plan is to resolve all of these issues eventually; if you'd like to fix any of the above issues then pull-requests (PR's) are accepted!

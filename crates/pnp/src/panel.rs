@@ -4,6 +4,7 @@ use derivative::Derivative;
 use math::ratio::ratio_of_f64;
 use nalgebra::{Point2, Vector2};
 use num_rational::Ratio;
+use rust_decimal::Decimal;
 use serde_with::serde_as;
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq, PartialOrd)]
@@ -16,25 +17,25 @@ pub struct Dimensions<T: Default + Debug + Clone + PartialEq + PartialOrd> {
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct DesignSizing {
-    /// For mirroring and rotation
-    /// (aka Center Offset)
-    ///
-    /// Usually this value should be set to the center of the PCB outline's bounding box.
-    pub origin: Vector2<f64>,
+    /// x,y sizing of the design
+    pub size: Vector2<f64>,
 
     /// In EDA tools like DipTrace, a gerber offset can be specified when exporting gerbers, e.g. (10,5).
     /// Use negative offsets here to relocate the gerber back to (0,0), e.g. (-10, -5)
     pub offset: Vector2<f64>,
 
-    /// x,y sizing of the design
-    pub size: Vector2<f64>,
+    /// For mirroring and rotation
+    /// (aka Center Offset)
+    ///
+    /// Usually this value should be set to the center of the PCB outline's bounding box.
+    pub origin: Vector2<f64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub struct PcbUnitPositioning {
     pub offset: Vector2<f64>,
-    /// anti-clockwise positive radians
-    pub rotation: f64,
+    /// anti-clockwise positive degrees
+    pub rotation: Decimal,
 }
 
 /// Note: 'mils' unsupported here, the /storage/ is constrained by the units usable by the gerber spec, which are Inches and Millimeters.

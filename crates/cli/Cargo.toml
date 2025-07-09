@@ -17,6 +17,9 @@ tracing-subscriber = { workspace = true, optional = true }
 # only for `as_trace`
 tracing-log = { workspace = true }
 anyhow = {  workspace = true }
+rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
+nalgebra = { workspace = true }
 
 [dev-dependencies]
 

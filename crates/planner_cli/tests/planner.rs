@@ -1,6 +1,15 @@
 #[macro_use]
 extern crate util;
 
+use std::collections::BTreeMap;
+
+use nalgebra::Vector2;
+use planning::design::DesignIndex;
+use pnp::panel::Dimensions;
+use pnp::pcb::PcbUnitIndex;
+
+use crate::common::project_builder::TestDesignSizing;
+
 pub mod common;
 
 mod operation_sequence_1 {
@@ -12,10 +21,13 @@ mod operation_sequence_1 {
 
     use assert_cmd::Command;
     use indoc::indoc;
+    use nalgebra::Vector2;
     use planning::file::FileReference;
+    use planning::pcb::PcbOrientation;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
     use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;
+    use pnp::panel::Dimensions;
     use pnp::pcb::PcbSide;
     use rust_decimal_macros::dec;
     use stores::test::load_out_builder::{LoadOutCSVBuilder, TestLoadOutRecord};
@@ -31,7 +43,7 @@ mod operation_sequence_1 {
     use crate::common::project_builder::{
         TestAutomatedSolderingTaskState, TestDesignSizing, TestLoadPcbsTaskState, TestManualSolderingTaskState,
         TestOperationState, TestPartState, TestPcbUnitPositioning, TestPhase, TestPlacement, TestPlacementState,
-        TestPlacementTaskState, TestProcessOperationStatus, TestProject, TestSerializableTaskState,
+        TestPlacementTaskState, TestProcessOperationStatus, TestProject, TestSerializableTaskState, TestUnitPosition,
     };
     use crate::common::project_report_builder as report;
     use crate::common::project_report_builder::{
@@ -42,6 +54,7 @@ mod operation_sequence_1 {
         TestPhaseSpecification, TestPlaceComponentsTaskOverview, TestPlaceComponentsTaskSpecification,
         TestTaskOverview, TestTaskSpecification,
     };
+    use crate::{calculate_offset, calculate_size};
 
     /// A context, which will be dropped when the tests are completed.
     mod context {
@@ -63,6 +76,7 @@ mod operation_sequence_1 {
             pub test_trace_log_path: PathBuf,
             pub test_project_path: PathBuf,
             pub test_pcb_1_path: PathBuf,
+            pub test_pcb_1_arg: String,
             pub phase_1_load_out_path: PathBuf,
             pub phase_2_load_out_path: PathBuf,
             pub phase_1_log_path: PathBuf,
@@ -86,6 +100,7 @@ mod operation_sequence_1 {
                     build_temp_file(&temp_dir, "project-job1", "mpnp.json");
 
                 let (test_pcb_1_path, _test_pcb_1_file_name) = build_temp_file(&temp_dir, "panel_a", "pcb.json");
+                let test_pcb_1_arg = format!("--pcb-file {}", test_pcb_1_path.to_str().unwrap());
 
                 let project_arg = "--project job1".to_string();
 
@@ -106,6 +121,7 @@ mod operation_sequence_1 {
                     test_trace_log_path,
                     test_project_path,
                     test_pcb_1_path,
+                    test_pcb_1_arg,
                     phase_1_load_out_path,
                     phase_1_log_path,
                     phase_2_load_out_path,
@@ -188,6 +204,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "-vvv",
@@ -256,33 +273,33 @@ mod operation_sequence_1 {
                 pcb_unit_positionings: vec![
                     TestPcbUnitPositioning {
                         offset: Default::default(),
-                        rotation: 0.0,
+                        rotation: dec!(0),
                     },
                     TestPcbUnitPositioning {
                         offset: Default::default(),
-                        rotation: 0.0,
+                        rotation: dec!(0),
                     },
                     TestPcbUnitPositioning {
                         offset: Default::default(),
-                        rotation: 0.0,
+                        rotation: dec!(0),
                     },
                     TestPcbUnitPositioning {
                         offset: Default::default(),
-                        rotation: 0.0,
+                        rotation: dec!(0),
                     },
                 ],
             },
+            orientation: PcbOrientation::default(),
         }
         .content();
 
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
-            ctx.path_arg.as_str(),
-            // FUTURE consider making it so the project argument is not required to create a PCB since they're created as stand-alone files.
-            ctx.project_arg.as_str(),
+            "pcb",
             "-vvv",
-            "create-pcb",
+            ctx.test_pcb_1_arg.as_str(),
+            "create",
             "--name panel_a",
             "--units 4",
             "--design 1=design_a,2=design_b,3=design_a,4=design_b",
@@ -322,9 +339,171 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_03_add_pcb() -> Result<(), anyhow::Error> {
+    fn sequence_03_configure_panel_sizing() -> Result<(), anyhow::Error> {
         // given
         let mut ctx_guard = context::acquire(3);
+        let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
+
+        // and
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+        let edge_rails = Dimensions {
+            left: 10.0,
+            right: 10.0,
+            top: 5.0,
+            bottom: 5.0,
+        };
+        let routing_gap = 2.0;
+
+        let design_names = vec!["design_a".into(), "design_b".into()];
+        let design_a_sizing = TestDesignSizing {
+            size: Vector2::new(60.0, 50.0),
+            origin: Vector2::new(30.0, 25.0),
+            offset: Vector2::new(-10.0, -10.0),
+        };
+        let design_b_sizing = TestDesignSizing {
+            size: Vector2::new(40.0, 50.0),
+            origin: Vector2::new(20.0, 25.0),
+            offset: Vector2::new(-10.0, -10.0),
+        };
+        let design_sizings = vec![design_a_sizing, design_b_sizing];
+
+        let unit_map = BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]);
+
+        let size = calculate_size(&unit_map, &design_sizings, &edge_rails, routing_gap, 2, 2);
+
+        let pcb_unit_positions = vec![
+            TestPcbUnitPositioning {
+                offset: calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 2, 2, 0, 0),
+                rotation: dec!(0),
+            },
+            TestPcbUnitPositioning {
+                offset: calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 2, 2, 1, 0),
+                rotation: dec!(0),
+            },
+            TestPcbUnitPositioning {
+                offset: calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 2, 2, 0, 1),
+                rotation: dec!(0),
+            },
+            TestPcbUnitPositioning {
+                offset: calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 2, 2, 1, 1),
+                rotation: dec!(0),
+            },
+        ];
+
+        // and
+        let expected_pcb_1_content = project::TestPcb {
+            name: "panel_a".to_string(),
+            units: 4,
+            design_names: design_names.clone(),
+            unit_map: unit_map.clone(),
+            panel_sizing: project::TestPanelSizing {
+                units: Default::default(),
+                size,
+                edge_rails: edge_rails.clone(),
+                fiducials: vec![],
+                design_sizings: design_sizings.clone(),
+                pcb_unit_positionings: pcb_unit_positions.clone(),
+            },
+            orientation: PcbOrientation::default(),
+        }
+        .content();
+
+        // and
+        let edge_rails_arg = format!(
+            "--edge-rails left={},right={},top={},bottom={}",
+            edge_rails.left, edge_rails.right, edge_rails.top, edge_rails.bottom
+        );
+        let size_arg = format!("--size x={},y={}", size.x, size.y);
+
+        let design_sizings_args = design_sizings
+            .iter()
+            .zip(design_names)
+            .map(|(design_sizing, design_name)| {
+                format!(
+                    "--design-sizing {}:origin=x={},y={}:offset=x={},y={}:size=x={},y={}",
+                    design_name,
+                    design_sizing.origin.x,
+                    design_sizing.origin.y,
+                    design_sizing.offset.x,
+                    design_sizing.offset.y,
+                    design_sizing.size.x,
+                    design_sizing.size.y,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let pcb_unit_position_args = pcb_unit_positions
+            .iter()
+            .enumerate()
+            .map(|(index, pcb_unit_position)| {
+                format!(
+                    "--pcb-unit-position {}:offset=x={},y={}:rotation={}",
+                    index + 1,
+                    pcb_unit_position.offset.x,
+                    pcb_unit_position.offset.y,
+                    pcb_unit_position.rotation,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut unprepared_args = vec![
+            ctx.trace_log_arg.as_str(),
+            "pcb",
+            ctx.test_pcb_1_arg.as_str(),
+            "-vvv",
+            "configure-panel-sizing",
+            edge_rails_arg.as_str(),
+            size_arg.as_str(),
+        ];
+        unprepared_args.extend(
+            design_sizings_args
+                .iter()
+                .map(|arg| arg.as_str()),
+        );
+        unprepared_args.extend(
+            pcb_unit_position_args
+                .iter()
+                .map(|arg| arg.as_str()),
+        );
+
+        let args = prepare_args(unprepared_args);
+
+        println!("args: {:?}", args);
+
+        // when
+        let cmd_assert = cmd
+            .args(args)
+            // then
+            .assert()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+
+        // and
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
+
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
+
+        let saving_pcb_message = &format!("Saved PCB. path: {:?}\n", ctx.test_pcb_1_path);
+
+        assert_contains_inorder!(trace_content, [saving_pcb_message,]);
+
+        // and
+        let pcb_1_content: String = read_and_show_file(&ctx.test_pcb_1_path)?;
+
+        assert_eq!(pcb_1_content, expected_pcb_1_content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_04_add_pcb() -> Result<(), anyhow::Error> {
+        // given
+        let mut ctx_guard = context::acquire(4);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -344,6 +523,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "-vvv",
@@ -380,9 +560,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_04_assign_variant_to_unit() -> Result<(), anyhow::Error> {
+    fn sequence_05_assign_variant_to_unit() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(4);
+        let mut ctx_guard = context::acquire(5);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -392,12 +572,13 @@ mod operation_sequence_1 {
         // and
         let design_a_variant_a_placements_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
-            "R3","RES_MFR1","RES1","true","Top","5","105","90"
-            "C1","CAP_MFR1","CAP1","true","Bottom","30","130","180"
-            "J1","CONN_MFR1","CONN1","true","Bottom","40","140","-90"
-            "R1","RES_MFR1","RES1","true","Top","10","110","0"
+            "R3","RES_MFR1","RES1","true","Top","10","15","90"
+            "C1","CAP_MFR1","CAP1","true","Bottom","40","45","180"
+            "J1","CONN_MFR1","CONN1","true","Bottom","30","35","-90"
+            "R1","RES_MFR1","RES1","true","Top","20","25","0"
         "#};
         // two refdes on the same side should use the same part (R1, R3)
+        // all placements should be within the configured design size (design_a = 60x50) + export offset (10,10)
 
         let mut placements_path = ctx.temp_dir.path().to_path_buf();
         placements_path.push("design_a_variant_a_placements.csv");
@@ -432,10 +613,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -451,10 +633,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(40),
-                            dec!(140),
+                            dec!(30),
+                            dec!(35),
                             dec!(-90),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(84), dec!(-90)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -470,10 +653,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(10),
-                            dec!(110),
+                            dec!(20),
+                            dec!(25),
                             dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(22), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -489,10 +673,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(5),
-                            dec!(105),
+                            dec!(10),
+                            dec!(15),
                             dec!(90),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(12), dec!(90)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -504,6 +689,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "assign-variant-to-unit",
@@ -531,10 +717,10 @@ mod operation_sequence_1 {
             "New part. part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }\n",
             "New part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
             "New part. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }\n",
-            "New placement. placement: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }\n",
-            "New placement. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 30, y: 130, rotation: 180 }\n",
-            "New placement. placement: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 40, y: 140, rotation: -90 }\n",
-            "New placement. placement: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }\n",
+            "New placement. placement: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 15, rotation: 90 }",
+            "New placement. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 40, y: 45, rotation: 180 }",
+            "New placement. placement: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 30, y: 35, rotation: -90 }",
+            "New placement. placement: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 25, rotation: 0 }",
         ]);
 
         // and
@@ -546,23 +732,23 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_05_assign_process_to_parts() -> Result<(), anyhow::Error> {
+    fn sequence_06_assign_process_to_parts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(5);
+        let mut ctx_guard = context::acquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
-        // R2 should be before R1.
         let design_a_variant_a_placements_csv_content = indoc! {r#"
             "RefDes","Manufacturer","Mpn","Place","PcbSide","X","Y","Rotation"
-            "R3","RES_MFR1","RES1","true","Top","105","1105","91"
-            "R2","RES_MFR2","RES2","true","Top","120","1120","91"
-            "J1","CONN_MFR1","CONN1","true","Bottom","130","1130","-179"
-            "R1","RES_MFR1","RES1","true","Top","110","1110","1"
+            "R3","RES_MFR1","RES1","true","Top","40","40","135"
+            "R2","RES_MFR2","RES2","true","Top","30","30","45"
+            "J1","CONN_MFR1","CONN1","true","Bottom","10","10","0"
+            "R1","RES_MFR1","RES1","true","Top","20","20","-45"
         "#};
+        // R2 added (should be before R1). C1 deleted, all coordinates and rotations are changed.
 
         let mut placements_path = ctx.temp_dir.path().to_path_buf();
         placements_path.push("design_a_variant_a_placements.csv");
@@ -598,10 +784,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -617,10 +804,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -636,10 +824,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -655,10 +844,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -674,10 +864,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -689,6 +880,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "assign-process-to-parts",
@@ -716,11 +908,11 @@ mod operation_sequence_1 {
         assert_contains_inorder!(trace_content, [
             "New part. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }\n",
             "Removing unused part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
-            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 5, y: 105, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 105, y: 1105, rotation: 91 }\n",
-            "New placement. placement: Placement { ref_des: \"R2\", part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, place: true, pcb_side: Top, x: 120, y: 1120, rotation: 91 }\n",
-            "Updating placement. old: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 40, y: 140, rotation: -90 }, new: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 130, y: 1130, rotation: -179 }\n",
-            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 110, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 110, y: 1110, rotation: 1 }\n",
-            "Marking placement as unused. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 30, y: 130, rotation: 180 }\n",
+            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 15, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 40, y: 40, rotation: 135 }",
+            "New placement. placement: Placement { ref_des: \"R2\", part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, place: true, pcb_side: Top, x: 30, y: 30, rotation: 45 }",
+            "Updating placement. old: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 30, y: 35, rotation: -90 }, new: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 10, y: 10, rotation: 0 }",
+            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 25, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 20, rotation: -45 }",
+            "Marking placement as unused. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 40, y: 45, rotation: 180 }",
             "Added process. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, applicable_processes: [\"manual\"]",
         ]);
 
@@ -733,9 +925,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_06_create_phase_top() -> Result<(), anyhow::Error> {
+    fn sequence_07_create_phase_top() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(6);
+        let mut ctx_guard = context::acquire(7);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -794,10 +986,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -813,10 +1006,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -832,10 +1026,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -851,10 +1046,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -870,10 +1066,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -893,6 +1090,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "create-phase",
@@ -939,9 +1137,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_07_create_phase_bottom() -> Result<(), anyhow::Error> {
+    fn sequence_08_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(7);
+        let mut ctx_guard = context::acquire(8);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1032,10 +1230,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -1051,10 +1250,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1070,10 +1270,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1089,10 +1290,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1108,10 +1310,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1131,6 +1334,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "create-phase",
@@ -1177,9 +1381,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_08_assign_placements_to_phase() -> Result<(), anyhow::Error> {
+    fn sequence_09_assign_placements_to_phase() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(8);
+        let mut ctx_guard = context::acquire(9);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1270,10 +1474,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -1289,10 +1494,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1308,10 +1514,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1327,10 +1534,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1346,10 +1554,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1361,6 +1570,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "-vv",
@@ -1460,9 +1670,9 @@ mod operation_sequence_1 {
 
     //noinspection MissingFeatures
     #[test]
-    fn sequence_09_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
+    fn sequence_10_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(9);
+        let mut ctx_guard = context::acquire(10);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1472,6 +1682,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "assign-feeder-to-load-out-item",
@@ -1526,9 +1737,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_10_set_placement_ordering() -> Result<(), anyhow::Error> {
+    fn sequence_11_set_placement_ordering() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(10);
+        let mut ctx_guard = context::acquire(11);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1619,10 +1830,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -1638,10 +1850,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -1657,10 +1870,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1676,10 +1890,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1695,10 +1910,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -1710,6 +1926,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "set-placement-ordering",
@@ -1749,9 +1966,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_11_generate_artifacts() -> Result<(), anyhow::Error> {
+    fn sequence_12_generate_artifacts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(11);
+        let mut ctx_guard = context::acquire(12);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1766,27 +1983,27 @@ mod operation_sequence_1 {
                     feeder_reference: "".to_string(),
                     manufacturer: "RES_MFR2".to_string(),
                     mpn: "RES2".to_string(),
-                    x: dec!(120),
-                    y: dec!(1120),
-                    rotation: dec!(91),
+                    x: dec!(32),
+                    y: dec!(27),
+                    rotation: dec!(45),
                 },
                 TestPhasePlacementRecord {
                     object_path: "pcb=1::unit=1::ref_des=R3".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
-                    x: dec!(105),
-                    y: dec!(1105),
-                    rotation: dec!(91),
+                    x: dec!(42),
+                    y: dec!(37),
+                    rotation: dec!(135),
                 },
                 TestPhasePlacementRecord {
                     object_path: "pcb=1::unit=1::ref_des=R1".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
                     manufacturer: "RES_MFR1".to_string(),
                     mpn: "RES1".to_string(),
-                    x: dec!(110),
-                    y: dec!(1110),
-                    rotation: dec!(1),
+                    x: dec!(22),
+                    y: dec!(17),
+                    rotation: dec!(-45),
                 },
             ])
             .as_string();
@@ -1974,6 +2191,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "generate-artifacts",
@@ -2073,9 +2291,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_12_record_phase_operations() -> Result<(), anyhow::Error> {
+    fn sequence_13_record_phase_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(12);
+        let mut ctx_guard = context::acquire(13);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2169,10 +2387,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -2188,10 +2407,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -2207,10 +2427,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2226,10 +2447,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2245,10 +2467,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2295,6 +2518,7 @@ mod operation_sequence_1 {
         // and
         let args_1 = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-phase-operation",
@@ -2307,6 +2531,7 @@ mod operation_sequence_1 {
 
         let args_2 = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-phase-operation",
@@ -2319,6 +2544,7 @@ mod operation_sequence_1 {
 
         let args_3 = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-phase-operation",
@@ -2386,9 +2612,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_13_record_placements_operation() -> Result<(), anyhow::Error> {
+    fn sequence_14_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(13);
+        let mut ctx_guard = context::acquire(14);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2483,10 +2709,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -2502,10 +2729,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -2521,10 +2749,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Placed,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2540,10 +2769,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Placed,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2559,10 +2789,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Placed,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2616,6 +2847,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "record-placements-operation",
@@ -2665,9 +2897,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_14_reset_operations() -> Result<(), anyhow::Error> {
+    fn sequence_15_reset_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(14);
+        let mut ctx_guard = context::acquire(15);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2758,10 +2990,11 @@ mod operation_sequence_1 {
                             "CAP1",
                             true,
                             PcbSide::Bottom,
-                            dec!(30),
-                            dec!(130),
+                            dec!(40),
+                            dec!(45),
                             dec!(180),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Unused,
                         None,
@@ -2777,10 +3010,11 @@ mod operation_sequence_1 {
                             "CONN1",
                             true,
                             PcbSide::Bottom,
-                            dec!(130),
-                            dec!(1130),
-                            dec!(-179),
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
                         ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         None,
@@ -2796,10 +3030,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(110),
-                            dec!(1110),
-                            dec!(1),
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
                         ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2815,10 +3050,11 @@ mod operation_sequence_1 {
                             "RES2",
                             true,
                             PcbSide::Top,
-                            dec!(120),
-                            dec!(1120),
-                            dec!(91),
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
                         ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2834,10 +3070,11 @@ mod operation_sequence_1 {
                             "RES1",
                             true,
                             PcbSide::Top,
-                            dec!(105),
-                            dec!(1105),
-                            dec!(91),
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
                         ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
                         PlacementStatus::Pending,
                         ProjectPlacementStatus::Used,
                         Some("top_1"),
@@ -2849,6 +3086,7 @@ mod operation_sequence_1 {
         // and
         let args = prepare_args(vec![
             ctx.trace_log_arg.as_str(),
+            "project",
             ctx.path_arg.as_str(),
             ctx.project_arg.as_str(),
             "reset-operations",
@@ -2883,8 +3121,8 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_15_cleanup() {
-        let mut ctx_guard = context::acquire(15);
+    fn sequence_16_cleanup() {
+        let mut ctx_guard = context::acquire(16);
         let ctx = ctx_guard.1.take().unwrap();
         drop(ctx);
     }
@@ -2944,34 +3182,20 @@ mod help {
 
         // and
         let expected_output = indoc! {"
-            Usage: planner_cli [OPTIONS] <--project <PROJECT_NAME>> <COMMAND>
+            Usage: planner_cli [OPTIONS] <COMMAND>
 
             Commands:
-              create                          Create a new job
-              create-pcb                      Create a PCB file
-              add-pcb                         Add a PCB file to the project
-              assign-variant-to-unit          Assign a design variant to a PCB unit
-              assign-process-to-parts         Assign a process to parts
-              create-phase                    Create a phase
-              assign-placements-to-phase      Assign placements to a phase
-              assign-feeder-to-load-out-item  Assign feeder to load-out item
-              set-placement-ordering          Set placement ordering for a phase
-              generate-artifacts              Generate artifacts
-              record-phase-operation          Record phase operation
-              record-placements-operation     Record placements operation
-              reset-operations                Reset operations
-              help                            Print this message or the help of the given subcommand(s)
+              project  Project mode
+              pcb      PCB mode
+              help     Print this message or the help of the given subcommand(s)
 
             Options:
-                  --trace [<TRACE>]         Trace log file
-                  --path <PATH>             Path [default: .]
-                  --project <PROJECT_NAME>  Project name
-              -v, --verbose...              Increase logging verbosity
-              -q, --quiet...                Decrease logging verbosity
-              -h, --help                    Print help
-              -V, --version                 Print version
+                  --trace [<TRACE>]  Trace log file
+              -v, --verbose...       Increase logging verbosity
+              -q, --quiet...         Decrease logging verbosity
+              -h, --help             Print help
+              -V, --version          Print version
         "};
-
         // when
         cmd
             // then
@@ -2981,380 +3205,683 @@ mod help {
             .stdout(print("stdout"));
     }
 
-    #[test]
-    fn help_for_create() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    mod pcb_help {
+        use assert_cmd::Command;
+        use indoc::indoc;
+        use predicates::prelude::{predicate, PredicateBooleanExt};
+        use util::test::print;
 
-        // and
-        let expected_output = indoc! {"
-            Create a new job
+        #[test]
+        fn no_args() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
-            Usage: planner_cli <--project <PROJECT_NAME>> create [OPTIONS]
+            // and
+            let expected_output = indoc! {"
+                PCB mode
 
-            Options:
-              -v, --verbose...  Increase logging verbosity
-              -q, --quiet...    Decrease logging verbosity
-              -h, --help        Print help
-        "};
+                Usage: planner_cli pcb [OPTIONS] --pcb-file <PCB_FILE> <COMMAND>
 
-        // when
-        cmd.args(["create", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+                Commands:
+                  create                  Create a PCB file
+                  configure-panel-sizing  Configure a PCB
+                  help                    Print this message or the help of the given subcommand(s)
+
+                Options:
+                      --pcb-file <PCB_FILE>  Specify a PCB context
+                  -v, --verbose...           Increase logging verbosity
+                  -q, --quiet...             Decrease logging verbosity
+                  -h, --help                 Print help
+            "};
+
+            // when
+            cmd.args(&["pcb"])
+                // then
+                .assert()
+                .failure()
+                .stderr(print("stderr").and(predicate::str::diff(expected_output)))
+                .stdout(print("stdout"));
+        }
+
+        #[test]
+        fn help_for_create() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Create a PCB file
+
+                Usage: planner_cli pcb --pcb-file <PCB_FILE> create [OPTIONS] --name <NAME> --units <UNITS> --design <DESIGN>...
+
+                Options:
+                      --name <NAME>         Name of the PCB, e.g. 'panel_1'
+                      --units <UNITS>       The number of individual PCB units. 1 = single, >1 = panel
+                      --design <DESIGN>...  The mapping of designs to units e.g. '1=design_a,2=design_b,3=design_a,4=design_b'. unit is 1-based
+                  -v, --verbose...          Increase logging verbosity
+                  -q, --quiet...            Decrease logging verbosity
+                  -h, --help                Print help
+            "};
+
+            // when
+            cmd.args(["pcb", "create", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_configure_panel_sizing() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Configure a PCB
+                
+                Usage: planner_cli pcb --pcb-file <PCB_FILE> configure-panel-sizing [OPTIONS]
+                
+                Options:
+                      --edge-rails <DIMENSIONS>
+                          Edge rails (left,right,top,bottom) e.g. 'left=5,right=5,top=10,bottom=10'
+                      --size <VECTOR2>
+                          PCB size (x,y) e.g. 'x=100,y=100'
+                      --design-sizing <DESIGN_SIZING>
+                          Design sizing (e.g. 'design_a:origin=x=15.25,y=15.25:offset=x=-10.0,y=-10.0:size=x=30.5,y=30.5')
+                      --pcb-unit-position <PCB_UNIT_POSITIONING>
+                          PCB unit positioning (e.g. '1:offset=x=10,y=10:rotation=90')
+                  -v, --verbose...
+                          Increase logging verbosity
+                  -q, --quiet...
+                          Decrease logging verbosity
+                  -h, --help
+                          Print help
+            "};
+
+            // when
+            cmd.args(["pcb", "configure-panel-sizing", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
     }
 
-    #[test]
-    fn help_for_create_pcb() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    mod project_help {
+        use assert_cmd::Command;
+        use indoc::indoc;
+        use predicates::prelude::{predicate, PredicateBooleanExt};
+        use util::test::print;
 
-        // and
-        let expected_output = indoc! {"
-            Create a PCB file
-            
-            Usage: planner_cli <--project <PROJECT_NAME>> create-pcb [OPTIONS] --name <NAME> --units <UNITS> --design [<DESIGN>...]
-            
-            Options:
-                  --name <NAME>           Name of the PCB, e.g. 'panel_1'
-                  --units <UNITS>         The number of individual PCB units. 1 = single, >1 = panel
-                  --design [<DESIGN>...]  The mapping of designs to units e.g. '1=design_a,2=design_b,3=design_a,4=design_b'. unit is 1-based
-              -v, --verbose...            Increase logging verbosity
-              -q, --quiet...              Decrease logging verbosity
-              -h, --help                  Print help
-        "};
+        #[test]
+        fn no_args() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
-        // when
-        cmd.args(["create-pcb", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+            // and
+            let expected_output = indoc! {"
+                Project mode
+                
+                Usage: planner_cli project [OPTIONS] --project <PROJECT_NAME> <COMMAND>
+                
+                Commands:
+                  create                          Create a new job
+                  add-pcb                         Add a PCB file to the project
+                  assign-variant-to-unit          Assign a design variant to a PCB unit
+                  assign-process-to-parts         Assign a process to parts
+                  create-phase                    Create a phase
+                  assign-placements-to-phase      Assign placements to a phase
+                  assign-feeder-to-load-out-item  Assign feeder to load-out item
+                  set-placement-ordering          Set placement ordering for a phase
+                  generate-artifacts              Generate artifacts
+                  record-phase-operation          Record phase operation
+                  record-placements-operation     Record placements operation
+                  reset-operations                Reset operations
+                  help                            Print this message or the help of the given subcommand(s)
+                
+                Options:
+                      --path <PATH>             Path [default: .]
+                      --project <PROJECT_NAME>  Project name
+                  -v, --verbose...              Increase logging verbosity
+                  -q, --quiet...                Decrease logging verbosity
+                  -h, --help                    Print help
+            "};
+
+            // when
+            cmd.args(&["project"])
+                // then
+                .assert()
+                .failure()
+                .stderr(print("stderr").and(predicate::str::diff(expected_output)))
+                .stdout(print("stdout"));
+        }
+
+        #[test]
+        fn help_for_create() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Create a new job
+
+                Usage: planner_cli project --project <PROJECT_NAME> create [OPTIONS]
+
+                Options:
+                  -v, --verbose...  Increase logging verbosity
+                  -q, --quiet...    Decrease logging verbosity
+                  -h, --help        Print help
+            "};
+
+            // when
+            cmd.args(["project", "create", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_add_pcb() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Add a PCB file to the project
+
+                Usage: planner_cli project --project <PROJECT_NAME> add-pcb [OPTIONS] --file <FILE_REFERENCE>
+
+                Options:
+                      --file <FILE_REFERENCE>  The path of the PCB, e.g. 'relative:<some_relative_path>' or '<some_absolute_path>' paths can be prefixed with `relative:` to make them relative to the project path
+                  -v, --verbose...             Increase logging verbosity
+                  -q, --quiet...               Decrease logging verbosity
+                  -h, --help                   Print help
+            "};
+
+            // when
+            cmd.args(["project", "add-pcb", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_assign_variant_to_unit() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Assign a design variant to a PCB unit
+
+                Usage: planner_cli project --project <PROJECT_NAME> assign-variant-to-unit [OPTIONS] --unit <OBJECT_PATH> --variant <VARIANT_NAME>
+
+                Options:
+                      --unit <OBJECT_PATH>      PCB unit path
+                      --variant <VARIANT_NAME>  Variant of the design
+                  -v, --verbose...              Increase logging verbosity
+                  -q, --quiet...                Decrease logging verbosity
+                  -h, --help                    Print help
+            "};
+
+            // when
+            cmd.args(["project", "assign-variant-to-unit", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_assign_process_to_parts() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Assign a process to parts
+
+                Usage: planner_cli project --project <PROJECT_NAME> assign-process-to-parts [OPTIONS] --process <PROCESS> --operation <OPERATION> --manufacturer <MANUFACTURER> --mpn <MPN>
+
+                Options:
+                      --process <PROCESS>            Process name
+                      --operation <OPERATION>        Operation [possible values: add, remove]
+                      --manufacturer <MANUFACTURER>  Manufacturer pattern (regexp)
+                      --mpn <MPN>                    Manufacturer part number (regexp)
+                  -v, --verbose...                   Increase logging verbosity
+                  -q, --quiet...                     Decrease logging verbosity
+                  -h, --help                         Print help
+            "};
+
+            // when
+            cmd.args(["project", "assign-process-to-parts", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_create_phase() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Create a phase
+
+                Usage: planner_cli project --project <PROJECT_NAME> create-phase [OPTIONS] --process <PROCESS> --reference <REFERENCE> --load-out <LOAD_OUT> --pcb-side <PCB_SIDE>
+
+                Options:
+                      --process <PROCESS>      Process name
+                      --reference <REFERENCE>  Phase reference (e.g. 'top_1')
+                      --load-out <LOAD_OUT>    Load-out source (e.g. 'load_out_1')
+                      --pcb-side <PCB_SIDE>    PCB side [possible values: top, bottom]
+                  -v, --verbose...             Increase logging verbosity
+                  -q, --quiet...               Decrease logging verbosity
+                  -h, --help                   Print help
+            "};
+
+            // when
+            cmd.args(["project", "create-phase", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_assign_placements_to_phase() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Assign placements to a phase
+
+                Usage: planner_cli project --project <PROJECT_NAME> assign-placements-to-phase [OPTIONS] --phase <PHASE> --operation <OPERATION> --placements <PLACEMENTS>
+
+                Options:
+                      --phase <PHASE>            Phase reference (e.g. 'top_1')
+                      --operation <OPERATION>    Operation [possible values: set, clear]
+                      --placements <PLACEMENTS>  Placements object path pattern (regexp)
+                  -v, --verbose...               Increase logging verbosity
+                  -q, --quiet...                 Decrease logging verbosity
+                  -h, --help                     Print help
+            "};
+
+            // when
+            cmd.args(["project", "assign-placements-to-phase", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_assign_feeder_to_load_out_item() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Assign feeder to load-out item
+
+                Usage: planner_cli project --project <PROJECT_NAME> assign-feeder-to-load-out-item [OPTIONS] --phase <PHASE> --feeder-reference <FEEDER_REFERENCE> --manufacturer <MANUFACTURER> --mpn <MPN>
+
+                Options:
+                      --phase <PHASE>                        Phase reference (e.g. 'top_1')
+                      --feeder-reference <FEEDER_REFERENCE>  Feeder reference (e.g. 'FEEDER_1')
+                      --manufacturer <MANUFACTURER>          Manufacturer pattern (regexp)
+                      --mpn <MPN>                            Manufacturer part number (regexp)
+                  -v, --verbose...                           Increase logging verbosity
+                  -q, --quiet...                             Decrease logging verbosity
+                  -h, --help                                 Print help
+            "};
+
+            // when
+            cmd.args(["project", "assign-feeder-to-load-out-item", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_set_placement_ordering() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Set placement ordering for a phase
+
+                Usage: planner_cli project --project <PROJECT_NAME> set-placement-ordering [OPTIONS] --phase <PHASE> --placement-orderings [<PLACEMENT_ORDERINGS>...]
+
+                Options:
+                      --phase <PHASE>
+                          Phase reference (e.g. 'top_1')
+                      --placement-orderings [<PLACEMENT_ORDERINGS>...]
+                          Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:ASC')
+                  -v, --verbose...
+                          Increase logging verbosity
+                  -q, --quiet...
+                          Decrease logging verbosity
+                  -h, --help
+                          Print help
+            "};
+
+            // when
+            cmd.args(["project", "set-placement-ordering", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_generate_artifacts() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Generate artifacts
+
+                Usage: planner_cli project --project <PROJECT_NAME> generate-artifacts [OPTIONS]
+
+                Options:
+                  -v, --verbose...  Increase logging verbosity
+                  -q, --quiet...    Decrease logging verbosity
+                  -h, --help        Print help
+            "};
+
+            // when
+            cmd.args(["project", "generate-artifacts", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_record_phase_operation() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Record phase operation
+
+                Usage: planner_cli project --project <PROJECT_NAME> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --task <TASK> --action <ACTION>
+
+                Options:
+                      --phase <PHASE>          Phase reference (e.g. 'top_1')
+                      --operation <OPERATION>  Operation reference
+                      --task <TASK>            The task to update
+                      --action <ACTION>        The task action to apply [possible values: start, complete, abandon]
+                  -v, --verbose...             Increase logging verbosity
+                  -q, --quiet...               Decrease logging verbosity
+                  -h, --help                   Print help
+            "};
+
+            // when
+            cmd.args(["project", "record-phase-operation", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_record_placements_operation() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Record placements operation
+
+                Usage: planner_cli project --project <PROJECT_NAME> record-placements-operation [OPTIONS] --object-path-patterns <OBJECT_PATH_PATTERNS>... --operation <OPERATION>
+
+                Options:
+                      --object-path-patterns <OBJECT_PATH_PATTERNS>...
+                          List of reference designators to apply the operation to
+                      --operation <OPERATION>
+                          The completed operation to apply [possible values: placed, skipped, reset]
+                  -v, --verbose...
+                          Increase logging verbosity
+                  -q, --quiet...
+                          Decrease logging verbosity
+                  -h, --help
+                          Print help
+            "};
+
+            // when
+            cmd.args(["project", "record-placements-operation", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_reset_operations() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Reset operations
+
+                Usage: planner_cli project --project <PROJECT_NAME> reset-operations [OPTIONS]
+
+                Options:
+                  -v, --verbose...  Increase logging verbosity
+                  -q, --quiet...    Decrease logging verbosity
+                  -h, --help        Print help
+            "};
+
+            // when
+            cmd.args(["project", "reset-operations", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+    }
+}
+
+/// calculate the offset for the bottom left position of a unit.
+///
+/// assumes the routing gap fully surrounds each unit
+/// i.e. does not assume routing goes into the rails
+/// a routing gap of 0 would be common for panels that use v-scoring and no routing.
+/// assumes the combination of unit map and design_sizings will result in a rectangular panel.
+/// assumes designs are not rotated.
+fn calculate_offset(
+    unit_map: &BTreeMap<PcbUnitIndex, DesignIndex>,
+    design_sizings: &Vec<TestDesignSizing>,
+    edge_rails: &Dimensions<f64>,
+    routing_gap: f64,
+    x_count: usize,
+    y_count: usize,
+    x_index: usize,
+    y_index: usize,
+) -> Vector2<f64> {
+    let units = x_count * y_count;
+    assert_eq!(units, unit_map.len());
+
+    let mut x_value = edge_rails.left + routing_gap;
+    let mut y_value = edge_rails.bottom + routing_gap;
+
+    for x in 0..x_index {
+        let map_index = y_index * x_count + x;
+
+        let design_sizing_index = unit_map
+            .get(&(map_index as PcbUnitIndex))
+            .unwrap();
+        let design_sizing = &design_sizings[*design_sizing_index];
+
+        x_value += design_sizing.size.x + routing_gap;
     }
 
-    #[test]
-    fn help_for_add_pcb() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    for y in 0..y_index {
+        let map_index = y * x_count + x_index;
 
-        // and
-        let expected_output = indoc! {"
-            Add a PCB file to the project
+        let design_sizing_index = unit_map
+            .get(&(map_index as PcbUnitIndex))
+            .unwrap();
+        let design_sizing = &design_sizings[*design_sizing_index];
 
-            Usage: planner_cli <--project <PROJECT_NAME>> add-pcb [OPTIONS] --file <FILE_REFERENCE>
-            
-            Options:
-                  --file <FILE_REFERENCE>  The path of the PCB, e.g. 'relative:<some_relative_path>' or '<some_absolute_path>' paths can be prefixed with `relative:` to make them relative to the project path
-              -v, --verbose...             Increase logging verbosity
-              -q, --quiet...               Decrease logging verbosity
-              -h, --help                   Print help
-        "};
-
-        // when
-        cmd.args(["add-pcb", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        y_value += design_sizing.size.y + routing_gap;
     }
 
-    #[test]
-    fn help_for_assign_variant_to_unit() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    Vector2::new(x_value, y_value)
+}
 
-        // and
-        let expected_output = indoc! {"
-            Assign a design variant to a PCB unit
+/// calculate the size of a panel.
+///
+/// assumes the routing gap fully surrounds each unit
+/// i.e. does not assume routing goes into the rails
+/// a routing gap of 0 would be common for panels that use v-scoring and no routing.
+///
+/// uses the first row of designs and first column of designs to calculate the size.
+/// assumes the combination of unit map and design_sizings will result in a rectangular panel.
+/// assumes designs are not rotated.
+fn calculate_size(
+    unit_map: &BTreeMap<PcbUnitIndex, DesignIndex>,
+    design_sizings: &Vec<TestDesignSizing>,
+    edge_rails: &Dimensions<f64>,
+    routing_gap: f64,
+    x_count: usize,
+    y_count: usize,
+) -> Vector2<f64> {
+    let units = x_count * y_count;
+    assert_eq!(units, unit_map.len());
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-variant-to-unit [OPTIONS] --unit <OBJECT_PATH> --variant <VARIANT_NAME>
+    let mut x_value = edge_rails.left;
+    let mut y_value = edge_rails.bottom;
 
-            Options:
-                  --unit <OBJECT_PATH>      PCB unit path
-                  --variant <VARIANT_NAME>  Variant of the design
-              -v, --verbose...              Increase logging verbosity
-              -q, --quiet...                Decrease logging verbosity
-              -h, --help                    Print help
-        "};
+    for x in 0..x_count {
+        let map_index = x;
 
-        // when
-        cmd.args(["assign-variant-to-unit", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        let design_sizing_index = unit_map
+            .get(&(map_index as PcbUnitIndex))
+            .unwrap();
+        let design_sizing = &design_sizings[*design_sizing_index];
+        x_value += routing_gap;
+        x_value += design_sizing.size.x;
     }
 
-    #[test]
-    fn help_for_assign_process_to_parts() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    for y in 0..y_count {
+        let map_index = y * x_count;
 
-        // and
-        let expected_output = indoc! {"
-            Assign a process to parts
+        let design_sizing_index = unit_map
+            .get(&(map_index as PcbUnitIndex))
+            .unwrap();
+        let design_sizing = &design_sizings[*design_sizing_index];
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-process-to-parts [OPTIONS] --process <PROCESS> --operation <OPERATION> --manufacturer <MANUFACTURER> --mpn <MPN>
-
-            Options:
-                  --process <PROCESS>            Process name
-                  --operation <OPERATION>        Operation [possible values: add, remove]
-                  --manufacturer <MANUFACTURER>  Manufacturer pattern (regexp)
-                  --mpn <MPN>                    Manufacturer part number (regexp)
-              -v, --verbose...                   Increase logging verbosity
-              -q, --quiet...                     Decrease logging verbosity
-              -h, --help                         Print help
-        "};
-
-        // when
-        cmd.args(["assign-process-to-parts", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        y_value += routing_gap;
+        y_value += design_sizing.size.y;
     }
 
-    #[test]
-    fn help_for_create_phase() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+    Vector2::new(
+        x_value + routing_gap + edge_rails.right,
+        y_value + routing_gap + edge_rails.top,
+    )
+}
 
-        // and
-        let expected_output = indoc! {"
-            Create a phase
+#[cfg(test)]
+mod sizing_tests {
+    use std::collections::BTreeMap;
 
-            Usage: planner_cli <--project <PROJECT_NAME>> create-phase [OPTIONS] --process <PROCESS> --reference <REFERENCE> --load-out <LOAD_OUT> --pcb-side <PCB_SIDE>
+    use nalgebra::Vector2;
+    use pnp::panel::Dimensions;
 
-            Options:
-                  --process <PROCESS>      Process name
-                  --reference <REFERENCE>  Phase reference (e.g. 'top_1')
-                  --load-out <LOAD_OUT>    Load-out source (e.g. 'load_out_1')
-                  --pcb-side <PCB_SIDE>    PCB side [possible values: top, bottom]
-              -v, --verbose...             Increase logging verbosity
-              -q, --quiet...               Decrease logging verbosity
-              -h, --help                   Print help
-        "};
-
-        // when
-        cmd.args(["create-phase", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
+    use crate::common::project_builder::TestDesignSizing;
+    use crate::{calculate_offset, calculate_size};
 
     #[test]
-    fn help_for_assign_placements_to_phase() {
+    pub fn panel_size_and_unit_offsets() {
         // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+        let edge_rails = Dimensions {
+            left: 10.0,
+            right: 10.0,
+            top: 5.0,
+            bottom: 5.0,
+        };
+        let routing_gap = 2.0;
 
-        // and
-        let expected_output = indoc! {"
-            Assign placements to a phase
+        let design_a_sizing = TestDesignSizing {
+            size: Vector2::new(60.0, 50.0),
+            origin: Vector2::new(30.0, 25.0),
+            offset: Default::default(),
+        };
+        let design_b_sizing = TestDesignSizing {
+            size: Vector2::new(40.0, 50.0),
+            origin: Vector2::new(20.0, 25.0),
+            offset: Default::default(),
+        };
+        let design_sizings = vec![design_a_sizing, design_b_sizing];
 
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-placements-to-phase [OPTIONS] --phase <PHASE> --operation <OPERATION> --placements <PLACEMENTS>
+        // layout:         unit_map:
+        //
+        // Row 2  : A,B,A    6,7,8
+        // Row 1  : A,B,A    3,4,5
+        // Row 0  : A,B,A    0,1,2
+        // Columns: 0 1 2
+        //
+        // A and B have equal heights, but different widths
 
-            Options:
-                  --phase <PHASE>            Phase reference (e.g. 'top_1')
-                  --operation <OPERATION>    Operation [possible values: set, clear]
-                  --placements <PLACEMENTS>  Placements object path pattern (regexp)
-              -v, --verbose...               Increase logging verbosity
-              -q, --quiet...                 Decrease logging verbosity
-              -h, --help                     Print help
-        "};
+        let unit_map = BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 0), (4, 1), (5, 0), (6, 0), (7, 1), (8, 0)]);
 
         // when
-        cmd.args(["assign-placements-to-phase", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
+        let size = calculate_size(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3);
+        let offsets = vec![
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 0, 0),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 1, 0),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 2, 0),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 0, 1),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 1, 1),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 2, 1),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 0, 2),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 1, 2),
+            calculate_offset(&unit_map, &design_sizings, &edge_rails, routing_gap, 3, 3, 2, 2),
+        ];
 
-    #[test]
-    fn help_for_assign_feeder_to_load_out_item() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Assign feeder to load-out item
-
-            Usage: planner_cli <--project <PROJECT_NAME>> assign-feeder-to-load-out-item [OPTIONS] --phase <PHASE> --feeder-reference <FEEDER_REFERENCE> --manufacturer <MANUFACTURER> --mpn <MPN>
-
-            Options:
-                  --phase <PHASE>                        Phase reference (e.g. 'top_1')
-                  --feeder-reference <FEEDER_REFERENCE>  Feeder reference (e.g. 'FEEDER_1')
-                  --manufacturer <MANUFACTURER>          Manufacturer pattern (regexp)
-                  --mpn <MPN>                            Manufacturer part number (regexp)
-              -v, --verbose...                           Increase logging verbosity
-              -q, --quiet...                             Decrease logging verbosity
-              -h, --help                                 Print help
-        "};
-
-        // when
-        cmd.args(["assign-feeder-to-load-out-item", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-
-    #[test]
-    fn help_for_set_placement_ordering() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Set placement ordering for a phase
-
-            Usage: planner_cli <--project <PROJECT_NAME>> set-placement-ordering [OPTIONS] --phase <PHASE> --placement-orderings [<PLACEMENT_ORDERINGS>...]
-
-            Options:
-                  --phase <PHASE>
-                      Phase reference (e.g. 'top_1')
-                  --placement-orderings [<PLACEMENT_ORDERINGS>...]
-                      Orderings (e.g. 'PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:ASC')
-              -v, --verbose...
-                      Increase logging verbosity
-              -q, --quiet...
-                      Decrease logging verbosity
-              -h, --help
-                      Print help
-        "};
-
-        // when
-        cmd.args(["set-placement-ordering", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-
-    #[test]
-    fn help_for_generate_artifacts() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Generate artifacts
-
-            Usage: planner_cli <--project <PROJECT_NAME>> generate-artifacts [OPTIONS]
-
-            Options:
-              -v, --verbose...  Increase logging verbosity
-              -q, --quiet...    Decrease logging verbosity
-              -h, --help        Print help
-        "};
-
-        // when
-        cmd.args(["generate-artifacts", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-
-    #[test]
-    fn help_for_record_phase_operation() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Record phase operation
-
-            Usage: planner_cli <--project <PROJECT_NAME>> record-phase-operation [OPTIONS] --phase <PHASE> --operation <OPERATION> --task <TASK> --action <ACTION>
-
-            Options:
-                  --phase <PHASE>          Phase reference (e.g. 'top_1')
-                  --operation <OPERATION>  Operation reference
-                  --task <TASK>            The task to update
-                  --action <ACTION>        The task action to apply [possible values: start, complete, abandon]
-              -v, --verbose...             Increase logging verbosity
-              -q, --quiet...               Decrease logging verbosity
-              -h, --help                   Print help
-        "};
-
-        // when
-        cmd.args(["record-phase-operation", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-
-    #[test]
-    fn help_for_record_placements_operation() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Record placements operation
-
-            Usage: planner_cli <--project <PROJECT_NAME>> record-placements-operation [OPTIONS] --object-path-patterns <OBJECT_PATH_PATTERNS>... --operation <OPERATION>
-
-            Options:
-                  --object-path-patterns <OBJECT_PATH_PATTERNS>...
-                      List of reference designators to apply the operation to
-                  --operation <OPERATION>
-                      The completed operation to apply [possible values: placed, skipped, reset]
-              -v, --verbose...
-                      Increase logging verbosity
-              -q, --quiet...
-                      Decrease logging verbosity
-              -h, --help
-                      Print help
-        "};
-
-        // when
-        cmd.args(["record-placements-operation", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-
-    #[test]
-    fn help_for_reset_operations() {
-        // given
-        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
-
-        // and
-        let expected_output = indoc! {"
-            Reset operations
-
-            Usage: planner_cli <--project <PROJECT_NAME>> reset-operations [OPTIONS]
-
-            Options:
-              -v, --verbose...  Increase logging verbosity
-              -q, --quiet...    Decrease logging verbosity
-              -h, --help        Print help
-        "};
-
-        // when
-        cmd.args(["reset-operations", "--help"])
-            // then
-            .assert()
-            .success()
-            .stderr(print("stderr"))
-            .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        // then
+        assert_eq!(size, Vector2::new(188.0, 168.0));
+        assert_eq!(offsets, vec![
+            Vector2::new(10.0 + 2.0, 5.0 + 2.0),
+            Vector2::new(10.0 + 2.0 + 60.0 + 2.0, 5.0 + 2.0),
+            Vector2::new(10.0 + 2.0 + 60.0 + 2.0 + 40.0 + 2.0, 5.0 + 2.0),
+            Vector2::new(10.0 + 2.0, 5.0 + 2.0 + 50.0 + 2.0),
+            Vector2::new(10.0 + 2.0 + 60.0 + 2.0, 5.0 + 2.0 + 50.0 + 2.0),
+            Vector2::new(10.0 + 2.0 + 60.0 + 2.0 + 40.0 + 2.0, 5.0 + 2.0 + 50.0 + 2.0),
+            Vector2::new(10.0 + 2.0, 5.0 + 2.0 + 50.0 + 2.0 + 50.0 + 2.0),
+            Vector2::new(10.0 + 2.0 + 60.0 + 2.0, 5.0 + 2.0 + 50.0 + 2.0 + 50.0 + 2.0),
+            Vector2::new(
+                10.0 + 2.0 + 60.0 + 2.0 + 40.0 + 2.0,
+                5.0 + 2.0 + 50.0 + 2.0 + 50.0 + 2.0
+            ),
+        ]);
     }
 }

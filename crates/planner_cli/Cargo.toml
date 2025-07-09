@@ -10,9 +10,9 @@ markdown = ["planner_app/markdown"]
 testing = ["markdown"]
 
 [dependencies]
-cli = { path = "../cli", features = ["tracing"]}
+cli = { path = "../cli", features = ["tracing"] }
 # FIXME remove planning dependency?
-planning = { path = "../planning"}
+planning = { path = "../planning" }
 planner_app = { path = "../planner_app" }
 pnp = { path = "../pnp"}
 stores = { path = "../stores"}
@@ -25,23 +25,23 @@ regex = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-
+rust_decimal = { workspace = true }
+nalgebra = { workspace = true }
 serde = { workspace = true }
 
 crux_core = { workspace = true }
 crossbeam-channel = { workspace = true }
 
 [dev-dependencies]
-util = { path = "../util", features = ["testing"]}
+planner_cli = { path = ".", features = ["testing"] }
 
+util = { path = "../util", features = ["testing"] }
 assert_cmd = { workspace = true  }
 tempfile = { workspace = true  }
 indoc = { workspace = true  }
 predicates = { workspace = true   }
 csv = { workspace = true  }
-rust_decimal = { workspace = true }
 rust_decimal_macros = { workspace = true }
-nalgebra = { workspace = true }
 serde = { workspace = true , features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

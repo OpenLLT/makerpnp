@@ -492,12 +492,13 @@ impl UiComponent for Pcb {
                 name,
                 units,
             } => {
-                debug!("Creating pcb. path: {:?}", self.path);
+                debug!("Creating PCB. path: {:?}", self.path);
                 self.planner_core_service
                     .update(Event::CreatePcb {
                         name,
                         units,
                         path: path.clone(),
+                        unit_map: None,
                     })
                     .when_ok(key, |_| {
                         Some(PcbUiCommand::Created {
@@ -514,7 +515,7 @@ impl UiComponent for Pcb {
                 Some(PcbAction::Task(key, Task::batch(tasks)))
             }
             PcbUiCommand::Load => {
-                debug!("Loading pcb. path: {:?}", self.path);
+                debug!("Loading PCB. path: {:?}", self.path);
 
                 let path = self.path.clone();
 
@@ -525,7 +526,7 @@ impl UiComponent for Pcb {
                     .when_ok(key, |_| Some(PcbUiCommand::Loaded))
             }
             PcbUiCommand::Loaded => {
-                debug!("Loaded pcb. path: {:?}", self.path);
+                debug!("Loaded PCB. path: {:?}", self.path);
 
                 let task1 = self.show_explorer(self.path.clone());
                 let task2 = self.show_configuration(self.path.clone());
@@ -533,7 +534,7 @@ impl UiComponent for Pcb {
                 Some(PcbAction::Task(key, Task::batch(tasks)))
             }
             PcbUiCommand::Save => {
-                debug!("Saving pcb. path: {:?}", self.path);
+                debug!("Saving PCB. path: {:?}", self.path);
 
                 let path = self.path.clone();
 
@@ -544,7 +545,7 @@ impl UiComponent for Pcb {
                     .when_ok(key, |_| Some(PcbUiCommand::Saved))
             }
             PcbUiCommand::Saved => {
-                debug!("Saved pcb. path: {:?}", self.path);
+                debug!("Saved PCB. path: {:?}", self.path);
                 None
             }
             PcbUiCommand::Error(error) => {
@@ -555,7 +556,7 @@ impl UiComponent for Pcb {
             PcbUiCommand::PcbView(view) => {
                 match view {
                     PcbView::PcbOverview(pcb_overview) => {
-                        debug!("Received pcb overview.");
+                        debug!("Received PCB overview.");
 
                         let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
 

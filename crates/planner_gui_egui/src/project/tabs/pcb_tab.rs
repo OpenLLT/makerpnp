@@ -130,7 +130,7 @@ impl UiComponent for PcbTabUi {
         //
         // designs table
         //
-        ui.label(tr!("project-pcb-designs-header"));
+        ui.heading(tr!("project-pcb-designs-header"));
 
         // TODO put this in a resizable container, minimum height, full width.
         egui_extras::TableBuilder::new(ui)
@@ -159,6 +159,8 @@ impl UiComponent for PcbTabUi {
                     })
                 }
             });
+
+        ui.separator();
     }
 
     #[profiling::function]

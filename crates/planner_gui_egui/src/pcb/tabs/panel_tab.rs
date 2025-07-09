@@ -5,7 +5,7 @@ use std::sync::mpsc::Sender;
 use derivative::Derivative;
 use eframe::emath::Vec2;
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, Ui, WidgetText};
+use egui::{Resize, Style, Ui, WidgetText};
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -14,12 +14,16 @@ use gerber_viewer::gerber_types::{
 };
 use math::ops::Ops2D;
 use nalgebra::{Point, Point2, Vector2};
+use num_traits::{FromPrimitive, ToPrimitive};
 use planner_app::{
-    DesignSizing, Dimensions, FiducialParameters, GerberFileFunction, PanelSizing, PcbOverview, PcbSide, PcbUnitIndex,
-    PcbUnitPositioning, Unit,
+    DesignSizing, Dimensions, FiducialParameters, GerberFileFunction, PanelSizing, PcbOrientation, PcbOverview,
+    PcbSide, PcbUnitIndex, PcbUnitPositioning, Unit,
 };
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use tracing::{debug, trace};
 
+use crate::i18n::conversions::pcb_orientation_pitch_flip_to_i18n_key;
 use crate::pcb::tabs::PcbTabContext;
 use crate::pcb::tabs::panel_tab::gerber_builder::GerberBuilder;
 use crate::pcb::tabs::panel_tab::gerber_util::{
@@ -172,15 +176,17 @@ impl PanelTabUi {
 
             Self::top_bottom_controls(state, &sender, ui);
             ui.separator();
-            Self::panel_size_controls(&panel_sizing, &sender, ui);
+            Self::orientation_controls(&pcb_overview.orientation, state, &sender, ui);
             ui.separator();
-            Self::edge_rails_controls(&panel_sizing, &sender, ui);
+            Self::panel_size_controls(panel_sizing, &sender, ui);
+            ui.separator();
+            Self::edge_rails_controls(panel_sizing, &sender, ui);
             ui.separator();
             Self::fiducials_controls(panel_sizing, state, &sender, text_height, ui);
             ui.separator();
-            Self::design_configuration_controls(&panel_sizing, pcb_overview, &sender, text_height, ui);
+            Self::design_configuration_controls(panel_sizing, pcb_overview, &sender, text_height, ui);
             ui.separator();
-            Self::unit_positions_controls(&panel_sizing, &pcb_overview, &sender, text_height, ui);
+            Self::unit_positions_controls(panel_sizing, pcb_overview, &sender, text_height, ui);
         });
     }
 
@@ -219,10 +225,52 @@ impl PanelTabUi {
                             .expect("sent");
                     }
                 });
-
-            // TODO add mirroring vertical/horizontal dropdown for top/bottom
-            // TODO add rotation for panel?
         });
+    }
+
+    /// show assembly orientation controls
+    fn orientation_controls(
+        pcb_orientation: &PcbOrientation,
+        _state: &PanelTabUiState,
+        _sender: &Sender<PanelTabUiCommand>,
+        ui: &mut Ui,
+    ) {
+        //
+        // orientation
+        //
+
+        ui.label(tr!("pcb-panel-tab-panel-orientation-header"));
+        ui.horizontal(|ui| {
+            // TODO allow orientation/flipping to be changed from the UI.
+            egui::Frame::group(&Style {
+                ..Style::default()
+            })
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.label(tr!("pcb-side-top"));
+
+                    ui.label(tr!(pcb_orientation_pitch_flip_to_i18n_key(
+                        pcb_orientation.top.pitch_flipped
+                    )))
+                    .on_hover_text(tr!("pcb-orientation-pitch-flip-tooltip"));
+                    ui.label(tr!("pcb-orientation-rotation", { rotation: pcb_orientation.top.rotation.to_string() }))
+                });
+            });
+            egui::Frame::group(&Style::default()).show(ui, |ui| {
+                ui.vertical(|ui| {
+                    ui.label(tr!("pcb-side-bottom"));
+
+                    ui.label(tr!(pcb_orientation_pitch_flip_to_i18n_key(
+                        pcb_orientation.bottom.pitch_flipped
+                    )))
+                    .on_hover_text(tr!("pcb-orientation-pitch-flip-tooltip"));
+                    ui.label(
+                        tr!("pcb-orientation-rotation", { rotation: pcb_orientation.bottom.rotation.to_string() }),
+                    );
+                });
+            });
+        });
+        ui.label(tr!("pcb-orientation-pitch-flip-help"));
     }
 
     fn panel_size_controls(panel_sizing: &PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
@@ -786,7 +834,8 @@ impl PanelTabUi {
                                                 row.col(|ui| {
                                                     let mut degrees = pcb_unit_positioning
                                                         .rotation
-                                                        .to_degrees();
+                                                        .to_f64()
+                                                        .unwrap_or(0.0);
 
                                                     ui.add(
                                                         egui::DragValue::new(&mut degrees)
@@ -797,9 +846,9 @@ impl PanelTabUi {
                                                     );
 
                                                     // wrap round to 0 again.
-                                                    degrees = degrees % 360.0;
+                                                    let degrees = Decimal::from_f64(degrees).unwrap() % dec!(360);
 
-                                                    pcb_unit_positioning.rotation = degrees.to_radians();
+                                                    pcb_unit_positioning.rotation = degrees;
                                                 });
 
                                                 row.col(|ui| {
@@ -1180,7 +1229,11 @@ fn build_panel_preview_commands(
             .add_x(pcb_unit_positioning.offset.x)
             .add_y(pcb_unit_positioning.offset.y);
         let unit_size = design_sizing.size;
-        let unit_rotation = pcb_unit_positioning.rotation;
+        let unit_rotation = pcb_unit_positioning
+            .rotation
+            .to_f64()
+            .unwrap_or(0.0)
+            .to_radians();
 
         let (rotated_origin, rotated_vectors) = make_rotated_box_path(&unit_origin, &unit_size, unit_rotation);
 
@@ -1371,7 +1424,8 @@ mod test {
 
     use indoc::indoc;
     use nalgebra::{Point2, Vector2};
-    use planner_app::{PcbOverview, Unit};
+    use planner_app::{PcbOrientation, PcbOverview, Unit};
+    use rust_decimal_macros::dec;
 
     use crate::pcb::tabs::panel_tab::{
         DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, build_panel_preview_commands,
@@ -1392,19 +1446,19 @@ mod test {
             pcb_unit_positionings: vec![
                 PcbUnitPositioning {
                     offset: Vector2::new(5.0, 12.0),
-                    rotation: 0.0,
+                    rotation: dec!(0.0),
                 },
                 PcbUnitPositioning {
                     offset: Vector2::new(55.0, 12.0),
-                    rotation: 0.0,
+                    rotation: dec!(0.0),
                 },
                 PcbUnitPositioning {
                     offset: Vector2::new(5.0, 40.0),
-                    rotation: 0.0,
+                    rotation: dec!(0.0),
                 },
                 PcbUnitPositioning {
                     offset: Vector2::new(55.0, 40.0),
-                    rotation: 0.0,
+                    rotation: dec!(0.0),
                 },
             ],
             design_sizings: vec![
@@ -1455,6 +1509,7 @@ mod test {
             unit_map: HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]),
             pcb_gerbers: vec![],
             design_gerbers: vec![],
+            orientation: PcbOrientation::default(),
         };
 
         // and
