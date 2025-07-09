@@ -3,9 +3,10 @@ use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
-use nalgebra::{Point2, Vector2};
+use nalgebra::Vector2;
 use planning::design::{DesignIndex, DesignName};
 use planning::file::FileReference;
+use planning::pcb::PcbOrientation;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;
@@ -190,13 +191,15 @@ pub struct TestPcb {
     pub unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
 
     pub panel_sizing: TestPanelSizing,
+
+    pub orientation: PcbOrientation,
 }
 
 #[serde_as]
 #[derive(Debug, serde::Serialize)]
 pub struct TestPanelSizing {
     pub units: Unit,
-    pub size: Point2<f64>,
+    pub size: Vector2<f64>,
     pub edge_rails: Dimensions<f64>,
     pub fiducials: Vec<TestFiducialParameters>,
     pub design_sizings: Vec<TestDesignSizing>,
@@ -210,18 +213,18 @@ pub struct TestFiducialParameters {
     pub copper_diameter: f64,
 }
 
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Debug, Clone)]
 pub struct TestDesignSizing {
-    pub origin: Vector2<f64>,
-    pub offset: Vector2<f64>,
     pub size: Vector2<f64>,
+    pub offset: Vector2<f64>,
+    pub origin: Vector2<f64>,
 }
 
-#[derive(serde::Serialize, Debug)]
+#[derive(serde::Serialize, Debug, Clone)]
 pub struct TestPcbUnitPositioning {
     pub offset: Vector2<f64>,
-    /// anti-clockwise positive radians
-    pub rotation: f64,
+    /// anti-clockwise positive degrees
+    pub rotation: Decimal,
 }
 
 #[serde_as]
@@ -414,6 +417,7 @@ pub struct TestPlacementState {
     #[serde_as(as = "DisplayFromStr")]
     pub unit_path: ObjectPath,
     pub placement: TestPlacement,
+    pub unit_position: TestUnitPosition,
     pub operation_status: PlacementStatus,
     pub project_status: ProjectPlacementStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -425,6 +429,7 @@ impl TestPlacementState {
     pub fn new(
         unit_path: &str,
         placement: TestPlacement,
+        unit_position: TestUnitPosition,
         operation_status: PlacementStatus,
         project_status: ProjectPlacementStatus,
         phase: Option<&str>,
@@ -432,6 +437,7 @@ impl TestPlacementState {
         TestPlacementState {
             unit_path: ObjectPath::from_str(unit_path).unwrap(),
             placement,
+            unit_position,
             operation_status,
             project_status,
             phase: phase.map(|phase| Reference::from_str(phase).unwrap()),
@@ -470,6 +476,22 @@ impl TestPlacement {
             },
             place,
             pcb_side,
+            x,
+            y,
+            rotation,
+        }
+    }
+}
+#[derive(Debug, serde::Serialize)]
+pub struct TestUnitPosition {
+    pub x: Decimal,
+    pub y: Decimal,
+    pub rotation: Decimal,
+}
+
+impl TestUnitPosition {
+    pub fn new(x: Decimal, y: Decimal, rotation: Decimal) -> TestUnitPosition {
+        TestUnitPosition {
             x,
             y,
             rotation,

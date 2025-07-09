@@ -10,6 +10,7 @@ use thiserror::Error;
 use util::sorting::SortOrder;
 
 use crate::design::DesignVariant;
+use crate::pcb::UnitPlacementPosition;
 use crate::phase::PhaseReference;
 
 #[serde_as]
@@ -18,6 +19,8 @@ pub struct PlacementState {
     #[serde_as(as = "DisplayFromStr")]
     pub unit_path: ObjectPath,
     pub placement: Placement,
+    #[serde(default)]
+    pub unit_position: UnitPlacementPosition,
     pub operation_status: PlacementStatus,
     /// Status of the placement in the project
     pub project_status: ProjectPlacementStatus,

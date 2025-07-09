@@ -7,7 +7,7 @@ use planner_app::{Effect, Event};
 use tracing::trace;
 
 use crate::core::Core;
-use crate::opts::{build_project_file_path, EventError, Opts};
+use crate::opts::{build_project_file_path, ModeCommand, Opts, PcbCommand, ProjectCommand};
 
 mod core;
 mod opts;
@@ -19,29 +19,33 @@ fn main() -> anyhow::Result<()> {
 
     cli::tracing::configure_tracing(opts.trace.clone(), opts.verbose.clone())?;
 
-    let project_name = opts.project.clone().unwrap();
-    let directory = opts.path.clone();
+    let core = core::new();
 
-    let path = build_project_file_path(&project_name, &directory);
+    let event = match &opts.command {
+        ModeCommand::Project(project_args) => {
+            if !matches!(project_args.command, ProjectCommand::Create { .. }) {
+                let project_name = &project_args.project;
+                let directory = project_args.path.clone();
 
-    let event: Result<Event, _> = Event::try_from(opts);
-
-    match event {
-        Ok(event) => {
-            let core = core::new();
-
-            let should_load_first = !matches!(event, Event::CreateProject { .. });
-            if should_load_first {
+                let path = build_project_file_path(project_name, &directory);
                 run_loop(&core, Event::Load {
                     path,
                 })?;
             }
-
-            run_loop(&core, event)?;
+            Event::try_from(opts)?
         }
-        // clap configuration prevents this
-        Err(EventError::MissingProjectName) => unreachable!(),
-    }
+        ModeCommand::Pcb(pcb_args) => {
+            if !matches!(pcb_args.command, PcbCommand::Create { .. }) {
+                let path = pcb_args.pcb_file.clone();
+                run_loop(&core, Event::LoadPcb {
+                    path,
+                })?;
+            }
+            Event::try_from(opts)?
+        }
+    };
+
+    run_loop(&core, event)?;
 
     Ok(())
 }

@@ -66,6 +66,14 @@ impl From<&str> for DesignName {
     }
 }
 
+impl TryFrom<String> for DesignName {
+    type Error = DesignNameError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(DesignName(value))
+    }
+}
+
 impl Deref for DesignName {
     type Target = str;
 

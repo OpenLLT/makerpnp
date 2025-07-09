@@ -122,11 +122,17 @@ pcb-configuration-header = Configuración
 pcb-configuration-detail-name = Nombre: { $name }
 
 pcb-panel-tab-label = Panelización de PCB
+pcb-panel-tab-panel-orientation-header = Orientación del montaje
 pcb-panel-tab-panel-size-header = Tamaño del panel
 pcb-panel-tab-panel-edge-rails-header = Raíles de borde
 pcb-panel-tab-panel-fiducials-header = Fiduciales
 pcb-panel-tab-panel-design-configuration-header = Configuración de diseño
 pcb-panel-tab-panel-unit-positions-header = Posiciones de la unidad
+
+pcb-orientation-rotation = Rotación: { $rotacion }
+pcb-orientation-pitch-flip-help = Voltear significa: Sujetar la PCB por los lados izquierdo y derecho, y darle la vuelta de arriba a abajo (de atrás a delante o de Y+ a Y-), es decir, inclinarla 180 grados, sin girar la PCB ni en el eje de balanceo ni en el de guiñada.
+pcb-orientation-pitch-flipped-yes = Inclinación inclinada
+pcb-orientation-pitch-flipped-no = No inclinada
 
 pcb-explorer-tab-label = Explorador de PCB
 pcb-explorer-node-root = { $name }

@@ -22,7 +22,7 @@ pub struct Placement {
     /// Positive = Up
     pub y: Decimal,
     /// Positive values indicate anti-clockwise rotation
-    /// Range is >-180 to +180.
+    /// Range is >-180 to +180 degrees
     pub rotation: Decimal,
 }
 

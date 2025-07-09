@@ -25,7 +25,8 @@ regex = { workspace = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-
+rust_decimal = { workspace = true }
+nalgebra = { workspace = true }
 serde = { workspace = true }
 
 crux_core = { workspace = true }
@@ -40,9 +41,7 @@ tempfile = { workspace = true  }
 indoc = { workspace = true  }
 predicates = { workspace = true   }
 csv = { workspace = true  }
-rust_decimal = { workspace = true }
 rust_decimal_macros = { workspace = true }
-nalgebra = { workspace = true }
 serde = { workspace = true , features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

@@ -5,11 +5,17 @@ use std::path::PathBuf;
 use gerber::{detect_purpose, GerberFile, GerberFileFunction};
 use indexmap::IndexSet;
 use itertools::Itertools;
-use pnp::panel::PanelSizing;
+use math::angle::normalize_angle_deg_signed_decimal;
+use nalgebra::{Matrix3, Vector2};
+use pnp::panel::{DesignSizing, PanelSizing};
 use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
+use pnp::placement::Placement;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde_with::serde_as;
 use thiserror::Error;
-use tracing::{info, trace};
+use tracing::{debug, info, trace};
 
 use crate::design::{DesignIndex, DesignName};
 use crate::project::PcbOperationError;
@@ -68,6 +74,12 @@ pub struct Pcb {
 
     #[serde(default)]
     pub panel_sizing: PanelSizing,
+
+    /// The orientation of the PCB used for assembly.
+    ///
+    /// Used in the calculation of placement positions on individual units, and the presentation of gerbers.
+    #[serde(default)]
+    pub orientation: PcbOrientation,
 }
 
 #[derive(Error, Debug)]
@@ -87,6 +99,9 @@ pub enum PcbError {
         min: DesignIndex,
         max: DesignIndex,
     },
+
+    #[error("Missing unit positioning information for unit {unit}")]
+    MissingUnitPositioning { unit: PcbUnitIndex },
 }
 
 impl PartialEq for Pcb {
@@ -113,7 +128,53 @@ impl Pcb {
             pcb_gerbers: vec![],
             design_gerbers: Default::default(),
             panel_sizing: Default::default(),
+            orientation: PcbOrientation::default(),
         }
+    }
+
+    /// returns a transform matrix that can be applied to a placement to position it on the unit.
+    /// See [`PcbUnitTransform`]
+    pub fn build_unit_transform(
+        &self,
+        pcb_unit_index: PcbUnitIndex,
+        orientation: &PcbSideOrientation,
+    ) -> Result<PcbUnitTransform, PcbError> {
+        let design_index = *self
+            .unit_map
+            .get(&pcb_unit_index)
+            .ok_or(PcbError::UnitIndexOutOfRange {
+                index: pcb_unit_index,
+                min: 0,
+                max: self.units,
+            })?;
+        let design = self
+            .panel_sizing
+            .design_sizings
+            .get(design_index as usize)
+            .ok_or(PcbError::DesignIndexOutOfRange {
+                index: design_index,
+                min: 0,
+                max: self.design_names.len(),
+            })?;
+
+        let pcb_unit_positioning = self
+            .panel_sizing
+            .pcb_unit_positionings
+            .get(pcb_unit_index as usize)
+            .ok_or(PcbError::MissingUnitPositioning {
+                unit: pcb_unit_index,
+            })?;
+
+        Ok(PcbUnitTransform {
+            unit_offset: pcb_unit_positioning.offset,
+            unit_rotation: pcb_unit_positioning.rotation,
+
+            design_sizing: design.clone(),
+
+            orientation: orientation.clone(),
+
+            panel_size: self.panel_sizing.size,
+        })
     }
 
     /// returns true if the design exists
@@ -272,4 +333,223 @@ pub fn build_unit_to_design_index_mappping(
     trace!("unit_to_design_index_mapping: {:?}", unit_to_design_index_mapping);
 
     (design_names, unit_to_design_index_mapping)
+}
+
+/// A transform matrix that can be applied to a placement to position it on the unit.
+/// transform order: DesignSizing::offset, -DesignSizing::origin, unit_rotation, unit_offset, +DesignSizing::origin
+#[derive(Debug)]
+pub struct PcbUnitTransform {
+    /// (x,y)
+    pub unit_offset: Vector2<f64>,
+    /// rotation in degrees, positive is anti-clockwise
+    pub unit_rotation: Decimal,
+
+    pub design_sizing: DesignSizing,
+
+    pub orientation: PcbSideOrientation,
+
+    pub panel_size: Vector2<f64>,
+}
+
+impl PcbUnitTransform {
+    #[rustfmt::skip]
+    pub fn to_matrix(&self) -> Matrix3<f64> {
+        // Start with identity matrix
+        let mut matrix = Matrix3::identity();
+
+        // Translate design offset (which for an EDA offset of 10,10 would be specifed at -10,-10, no need to invert the sign.
+        let translate_offset = Matrix3::new(
+            1.0, 0.0, self.design_sizing.offset.x,
+            0.0, 1.0, self.design_sizing.offset.y,
+            0.0, 0.0, 1.0,
+        );
+        matrix = translate_offset * matrix;
+
+        // Translate to design origin (negative of design_sizing.origin)
+        let translation_to_origin = Matrix3::new(
+            1.0, 0.0, -self.design_sizing.origin.x,
+            0.0, 1.0, -self.design_sizing.origin.y,
+            0.0, 0.0, 1.0,
+        );
+        matrix = translation_to_origin * matrix;
+
+        // Apply unit rotation (anti-clockwise positive degrees)
+        let unit_rotation_radians = self.unit_rotation.to_f64().unwrap().to_radians();
+
+        let cos_theta = unit_rotation_radians.cos();
+        let sin_theta = unit_rotation_radians.sin();
+        let rotation = Matrix3::new(
+            cos_theta, -sin_theta, 0.0,
+            sin_theta, cos_theta, 0.0,
+            0.0, 0.0, 1.0
+        );
+        matrix = rotation * matrix;
+
+        // Apply unit offset
+        let unit_offset = Matrix3::new(
+            1.0,0.0,self.unit_offset.x,
+            0.0,1.0,self.unit_offset.y,
+            0.0,0.0,1.0,
+        );
+        matrix = unit_offset * matrix;
+
+        // Translate back from origin (positive of design_sizing.origin)
+        let translation_from_origin = Matrix3::new(
+            1.0, 0.0, self.design_sizing.origin.x,
+            0.0, 1.0, self.design_sizing.origin.y,
+            0.0, 0.0, 1.0,
+        );
+        matrix = translation_from_origin * matrix;
+
+        // Translate to panel center
+        let panel_center: Vector2<f64> = self.panel_size / 2.0;
+        let translation_to_panel_origin = Matrix3::new_translation(&-panel_center);
+        let translation_from_panel_origin = Matrix3::new_translation(&panel_center);
+        matrix = translation_to_panel_origin * matrix;
+
+        // Apply orientation rotation (anti-clockwise positive degrees)
+        let orientation_radians = self.orientation.rotation.to_f64().unwrap().to_radians();
+        let cos_theta = orientation_radians.cos();
+        let sin_theta = orientation_radians.sin();
+        let orientation_rotation = Matrix3::new(
+            cos_theta, -sin_theta, 0.0,
+            sin_theta, cos_theta, 0.0,
+            0.0, 0.0, 1.0
+        );
+        matrix = orientation_rotation * matrix;
+
+        // Apply orientation flipping
+        if self.orientation.pitch_flipped {
+            // aka 'Y-axis mirroring'
+            let pitch_flip_2d = Matrix3::new(
+                1.0, 0.0, 0.0,
+                0.0, -1.0, 0.0,
+                0.0, 0.0, 1.0
+            );
+            matrix = pitch_flip_2d * matrix;
+        }
+
+        // Translate from panel center
+        matrix = translation_from_panel_origin * matrix;
+
+        debug!("PcbUnitTransform {:?}, matrix: {:?}", self, matrix);
+
+        matrix
+    }
+
+    pub fn apply_to_placement_matrix(&self, placement: &Placement) -> UnitPlacementPosition {
+        // Get the transformation matrix
+        let transform_matrix = self.to_matrix();
+
+        // Convert placement position to homogeneous coordinates (x, y, 1)
+        let position = nalgebra::Vector3::new(
+            placement.x.to_f64().unwrap_or(0.0),
+            placement.y.to_f64().unwrap_or(0.0),
+            1.0,
+        );
+
+        // Apply the transformation matrix to the position
+        let transformed_position = transform_matrix * position;
+
+        //
+        // Handle rotation
+        //
+
+        let mut new_rotation = placement.rotation + self.orientation.rotation + self.unit_rotation;
+
+        // If pitch flipping, flip the rotation
+        if self.orientation.pitch_flipped {
+            new_rotation = dec!(180.0) - new_rotation;
+        }
+
+        // Normalize rotation to be within -180 to 180 degrees
+        let normalized_rotation = normalize_angle_deg_signed_decimal(new_rotation).normalize();
+
+        trace!(
+            "placement_rotation: {}, self.orientation.rotation: {}, unit_rotation: {}",
+            placement.rotation,
+            self.orientation.rotation,
+            self.unit_rotation
+        );
+        trace!(
+            "new_rotation: {}, normalized rotation: {}",
+            new_rotation,
+            normalized_rotation
+        );
+
+        let x = Decimal::try_from(transformed_position.x).unwrap_or_default();
+        let y = Decimal::try_from(transformed_position.y).unwrap_or_default();
+        let rotation = Decimal::try_from(normalized_rotation).unwrap_or_default();
+
+        UnitPlacementPosition {
+            x,
+            y,
+            rotation,
+        }
+    }
+}
+
+/// This describes the position of a placement on a panel unit, after the placement coordinates and rotation have been
+/// transformed by a PcbUnitTransform.
+///
+/// Uses the same coordinate scheme as Placement.
+#[derive(
+    Debug,
+    Default,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd
+)]
+pub struct UnitPlacementPosition {
+    /// Positive = Right
+    pub x: Decimal,
+    /// Positive = Up
+    pub y: Decimal,
+
+    /// Positive values indicate anti-clockwise rotation
+    /// Range is >-180 to +180 degrees
+    pub rotation: Decimal,
+}
+
+/// Defines the orientation for a PCB as positioned in the machine, for each side.
+///
+/// Used when transforming placement coordinates and component rotations.
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+pub struct PcbOrientation {
+    pub top: PcbSideOrientation,
+    pub bottom: PcbSideOrientation,
+}
+
+/// The default orientation for the bottom is to hold the PCB by the left and right sides, then flip it over top-to-bottom
+/// i.e. pitch 180 degrees, without rotating the PCB on either roll or yaw axis.
+///
+/// In the physical world this pitch-flipping happens in 3D space, but the coordinates are in 2D space.
+/// and is referred to as y-mirroring.  similarly, a left-to-right roll flip would be x-mirroring in 2D space.
+impl Default for PcbOrientation {
+    fn default() -> Self {
+        Self {
+            top: PcbSideOrientation {
+                pitch_flipped: false,
+                rotation: Decimal::from(0),
+            },
+            bottom: PcbSideOrientation {
+                pitch_flipped: true,
+                rotation: Decimal::from(0),
+            },
+        }
+    }
+}
+
+/// Specifies how the PCB should be positioned in the machine.
+///
+/// Transform order: rotation, pitch flip (y-mirroring),
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
+pub struct PcbSideOrientation {
+    /// aka 'Y-axis mirroring'
+    pub pitch_flipped: bool,
+    /// In degrees, counter-clockwise positive
+    pub rotation: Decimal,
 }

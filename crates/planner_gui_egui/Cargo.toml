@@ -82,6 +82,7 @@ nalgebra = { workspace = true, features = ["std"] }
 
 # math
 rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
 
 [dev-dependencies]
 indoc = { workspace = true }

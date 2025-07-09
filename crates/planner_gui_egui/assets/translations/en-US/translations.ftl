@@ -122,11 +122,17 @@ pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
 
 pcb-panel-tab-label = Panelization
+pcb-panel-tab-panel-orientation-header = Assembly orientation
 pcb-panel-tab-panel-size-header = Panel size
 pcb-panel-tab-panel-edge-rails-header = Edge rails
 pcb-panel-tab-panel-fiducials-header = Fiducials
 pcb-panel-tab-panel-design-configuration-header = Design configuration
 pcb-panel-tab-panel-unit-positions-header = Unit positions
+
+pcb-orientation-rotation = Rotation: { $rotation }
+pcb-orientation-pitch-flip-tooltip = Pitch flipped means: Hold the PCB by the left and right sides, then flip it over top-to-bottom (aka back-to-front or Y+ to Y-) i.e. pitch 180 degrees, without rotating the PCB on either roll or yaw axis.
+pcb-orientation-pitch-flipped-yes = Pitch flipped
+pcb-orientation-pitch-flipped-no = Not flipped
 
 pcb-explorer-tab-label = PCB Explorer
 pcb-explorer-node-root = { $name }
@@ -195,7 +201,6 @@ form-common-input-left = Left
 form-common-input-right = Right
 form-common-input-mask-diameter = Mask ⌀
 form-common-input-copper-diameter = Copper ⌀
-
 
 form-common-button-assign-selected = Assign selected
 form-common-button-unassign-selected = Unassign selected

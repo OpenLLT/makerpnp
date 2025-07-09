@@ -12,10 +12,12 @@ use crux_core::{render, App, Command};
 use gerber::GerberFile;
 pub use gerber::GerberFileFunction;
 use indexmap::IndexSet;
+use nalgebra::Vector2;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
+pub use planning::pcb::PcbOrientation;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
@@ -28,7 +30,9 @@ pub use planning::process::ProcessReference;
 pub use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
-use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectRefreshResult};
+use planning::project::{
+    PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectRefreshResult,
+};
 pub use planning::variant::VariantName;
 use planning::{file, project};
 pub use pnp::load_out::LoadOutItem;
@@ -246,6 +250,8 @@ pub struct PcbOverview {
 
     /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
     pub design_gerbers: Vec<Vec<PcbGerberItem>>,
+
+    pub orientation: PcbOrientation,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -563,6 +569,7 @@ pub enum Event {
         name: String,
         units: u16,
         path: PathBuf,
+        unit_map: Option<BTreeMap<PcbUnitNumber, DesignName>>,
     },
     LoadPcb {
         path: PathBuf,
@@ -576,9 +583,19 @@ pub enum Event {
         designs: Vec<DesignName>,
         unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
     },
+    /// Takes a fully-configured PanelSizing
     ApplyPanelSizing {
         path: PathBuf,
         panel_sizing: PanelSizing,
+    },
+    /// Updates the panel sizing, based on optional arguments.
+    ApplyPartialPanelSizing {
+        path: PathBuf,
+        edge_rails: Option<Dimensions<f64>>,
+        size: Option<Vector2<f64>>,
+        fiducials: Option<Vec<FiducialParameters>>,
+        design_sizings: Option<HashMap<DesignName, DesignSizing>>,
+        pcb_unit_positionings: Option<HashMap<PcbUnitNumber, PcbUnitPositioning>>,
     },
     AddGerberFiles {
         path: PathBuf,
@@ -672,7 +689,7 @@ impl Planner {
 
                 file::save(project, path).map_err(AppError::IoError)?;
 
-                info!("Saved. path: {:?}", path);
+                info!("Saved project. path: {:?}", path);
                 *modified = false;
 
                 Ok(render::render())
@@ -699,11 +716,12 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::CreatePcb {
+                path: pcb_path,
                 name,
                 units,
-                path: pcb_path,
+                unit_map,
             } => Box::new(move |model: &mut Model| {
-                Self::create_and_add_pcb(name, units, BTreeMap::default(), model, &pcb_path)?;
+                Self::create_and_add_pcb(name, units, unit_map.unwrap_or_default(), model, &pcb_path)?;
 
                 Ok(render::render())
             }),
@@ -819,11 +837,105 @@ impl Planner {
                 // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
                 Ok(render::render())
             }),
+            Event::ApplyPartialPanelSizing {
+                path: pcb_path,
+                edge_rails,
+                size,
+                fiducials,
+                design_sizings,
+                pcb_unit_positionings,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+
+                info!(
+                    "Applying partial panel sizing. pcb_path: {:?}, edge_rails: {:?}, size: {:?}, fiducials: {:?}, design_sizings: {:?}, pcb_unit_positionings: {:?}",
+                    pcb_path, edge_rails, size, fiducials, design_sizings, pcb_unit_positionings
+                );
+
+                if let Some(mut design_sizings) = design_sizings {
+                    let design_count = design_sizings.len();
+                    let expected_design_count = pcb.design_names.len();
+                    if design_count != expected_design_count {
+                        return Err(AppError::PcbOperationError(
+                            PcbOperationError::DesignSizingCountMismatch {
+                                expected: expected_design_count,
+                                actual: design_count,
+                            },
+                        ));
+                    }
+
+                    let design_sizings = pcb
+                        .design_names
+                        .iter()
+                        .map(|design_name| {
+                            design_sizings
+                                .remove(design_name)
+                                .ok_or(AppError::PcbOperationError(PcbOperationError::MissingDesignSizing(
+                                    design_name.to_string(),
+                                )))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    pcb.panel_sizing.design_sizings = design_sizings;
+                    *modified = true;
+                }
+
+                if let Some(mut pcb_unit_positionings) = pcb_unit_positionings {
+                    let pcb_unit_count = pcb_unit_positionings.len() as u16;
+                    let expected_pcb_unit_count = pcb.units;
+                    if pcb_unit_count != expected_pcb_unit_count {
+                        return Err(AppError::PcbOperationError(
+                            PcbOperationError::UnitSizingCountMismatch {
+                                expected: expected_pcb_unit_count,
+                                actual: pcb_unit_count,
+                            },
+                        ));
+                    }
+
+                    let pcb_unit_positionings = (1..=pcb_unit_count)
+                        .map(|pcb_unit_index| {
+                            pcb_unit_positionings
+                                .remove(&pcb_unit_index)
+                                .ok_or(AppError::PcbOperationError(
+                                    PcbOperationError::MissingPcbUnitPositioning(pcb_unit_index),
+                                ))
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+
+                    pcb.panel_sizing.pcb_unit_positionings = pcb_unit_positionings;
+                    *modified = true;
+                }
+
+                if let Some(edge_rails) = edge_rails {
+                    pcb.panel_sizing.edge_rails = edge_rails;
+                    *modified = true;
+                }
+
+                if let Some(size) = size {
+                    pcb.panel_sizing.size = size;
+                    *modified = true;
+                }
+
+                if let Some(fiducials) = fiducials {
+                    pcb.panel_sizing.fiducials = fiducials;
+                    *modified = true;
+                }
+
+                // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
+                Ok(render::render())
+            }),
             Event::LoadPcb {
                 path,
             } => Box::new(move |model: &mut Model| {
                 // Note: doesn't require a project.
-                info!("Load pcb. path: {:?}", &path);
+                info!("Load PCB. path: {:?}", &path);
 
                 model.load_pcb(&path)?;
 
@@ -833,9 +945,11 @@ impl Planner {
                 path,
             } => Box::new(move |model: &mut Model| {
                 // Note: doesn't require a project.
-                info!("Save pcb. path: {:?}", &path);
+                info!("Save PCB. path: {:?}", &path);
 
                 model.save_pcb(&path)?;
+
+                info!("Saved PCB. path: {:?}", path);
 
                 Ok(render::render())
             }),
@@ -846,11 +960,11 @@ impl Planner {
                         modified,
                     } = model_pcb;
 
-                    info!("Save pcb. path: {:?}", path);
+                    info!("Save PCB. path: {:?}", path);
 
                     file::save(pcb, &path).map_err(AppError::IoError)?;
 
-                    info!("Saved. path: {:?}", path);
+                    info!("Saved PCB. path: {:?}", path);
                     *modified = false;
                 }
 
@@ -907,7 +1021,7 @@ impl Planner {
                     .map_err(AppError::OperationError)?;
                 *modified |= true;
 
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
                 *modified |= refresh_result.modified;
 
                 Ok(render::render())
@@ -923,7 +1037,7 @@ impl Planner {
                     pcbs,
                     ..,
                 ) = { Self::model_project_and_pcbs(model) }?;
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
                 *modified |= refresh_result.modified;
 
                 Ok(render::render())
@@ -950,7 +1064,7 @@ impl Planner {
                     .map_err(|cause| AppError::ProcessError(cause.into()))?
                     .clone();
 
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
                 *modified |= refresh_result.modified;
 
                 *modified |= project::update_applicable_processes(
@@ -1012,7 +1126,7 @@ impl Planner {
                     ..,
                 ) = { Self::model_project_and_pcbs(model) }?;
 
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
                 *modified |= refresh_result.modified;
 
                 let phase = project
@@ -1144,7 +1258,7 @@ impl Planner {
                     ..,
                 ) = { Self::model_project_and_pcbs(model) }?;
 
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::OperationError)?;
+                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
                 *modified |= refresh_result.modified;
 
                 *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
@@ -1417,6 +1531,7 @@ impl Planner {
                     unit_map,
                     pcb_gerbers,
                     design_gerbers,
+                    orientation: pcb.orientation.clone(),
                 };
 
                 Ok(pcb_view_renderer::view(PcbView::PcbOverview(pcb_overview)))
@@ -1926,7 +2041,7 @@ impl Planner {
                 modified: true,
             });
 
-        model.save_pcb(&pcb_path)?;
+        model.save_pcb(pcb_path)?;
         Ok(())
     }
 
@@ -2030,6 +2145,8 @@ enum AppError {
     OperationRequiresProject,
     #[error("Operation error, cause: {0}")]
     OperationError(anyhow::Error),
+    #[error("Project error, cause: {0}")]
+    ProjectError(ProjectError),
     #[error("Process error. cause: {0}")]
     ProcessError(anyhow::Error),
     #[error("Part error. cause: {0}")]
@@ -2048,16 +2165,24 @@ enum AppError {
 }
 
 impl Planner {
-    fn refresh_project(project: &mut Project, pcbs: &[&Pcb], path: &PathBuf) -> anyhow::Result<ProjectRefreshResult> {
+    fn refresh_project(
+        project: &mut Project,
+        pcbs: &[&Pcb],
+        path: &PathBuf,
+    ) -> Result<ProjectRefreshResult, ProjectError> {
         let directory = path.parent().unwrap();
 
         let unique_design_variants = project.unique_design_variants(pcbs);
-        let design_variant_placement_map = stores::placements::load_all_placements(unique_design_variants, directory)?;
+
+        let design_variant_placement_map = stores::placements::load_all_placements(unique_design_variants, directory)
+            .map_err(ProjectError::UnableToLoadPlacements)?;
         let refresh_result = project::refresh_from_design_variants(project, pcbs, design_variant_placement_map);
 
-        trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
+        if let Ok(refresh_result) = &refresh_result {
+            trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
+        }
 
-        Ok(refresh_result)
+        refresh_result
     }
 }
 

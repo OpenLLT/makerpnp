@@ -311,17 +311,17 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .cmp(&row_r.placement_state.placement.part.mpn),
             ROTATION_COL => row_l
                 .placement_state
-                .placement
+                .unit_position
                 .rotation
                 .cmp(&row_r.placement_state.placement.rotation),
             X_COL => row_l
                 .placement_state
-                .placement
+                .unit_position
                 .x
                 .cmp(&row_r.placement_state.placement.x),
             Y_COL => row_l
                 .placement_state
-                .placement
+                .unit_position
                 .y
                 .cmp(&row_r.placement_state.placement.y),
             PCB_SIDE_COL => row_l
@@ -387,9 +387,14 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     .manufacturer,
             ),
             MPN_COL => ui.label(&row.placement_state.placement.part.mpn),
-            ROTATION_COL => ui.label(format!("{}", &row.placement_state.placement.rotation)),
-            X_COL => ui.label(format!("{}", &row.placement_state.placement.x)),
-            Y_COL => ui.label(format!("{}", &row.placement_state.placement.y)),
+            ROTATION_COL => ui.label(format!(
+                "{}",
+                &row.placement_state
+                    .unit_position
+                    .rotation
+            )),
+            X_COL => ui.label(format!("{}", &row.placement_state.unit_position.x)),
+            Y_COL => ui.label(format!("{}", &row.placement_state.unit_position.y)),
             PCB_SIDE_COL => {
                 let key = pcb_side_to_i18n_key(&row.placement_state.placement.pcb_side);
                 ui.label(tr!(key))
@@ -520,17 +525,17 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .clone_from(&src.placement_state.placement.part.mpn),
             ROTATION_COL => dst
                 .placement_state
-                .placement
+                .unit_position
                 .rotation
                 .clone_from(&src.placement_state.placement.rotation),
             X_COL => dst
                 .placement_state
-                .placement
+                .unit_position
                 .x
                 .clone_from(&src.placement_state.placement.x),
             Y_COL => dst
                 .placement_state
-                .placement
+                .unit_position
                 .y
                 .clone_from(&src.placement_state.placement.y),
             PCB_SIDE_COL => dst
@@ -572,6 +577,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     y: Default::default(),
                     rotation: Default::default(),
                 },
+                unit_position: Default::default(),
                 operation_status: PlacementStatus::Pending,
                 project_status: ProjectPlacementStatus::Unused,
                 phase: None,

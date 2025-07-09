@@ -80,3 +80,10 @@ pub fn gerber_file_function_to_i18n_key(function: &GerberFileFunction) -> &'stat
         GerberFileFunction::Other(_) => "gerber-file-function-other",
     }
 }
+
+pub fn pcb_orientation_pitch_flip_to_i18n_key(pitch_flip: bool) -> &'static str {
+    match pitch_flip {
+        true => "pcb-orientation-pitch-flipped-yes",
+        false => "pcb-orientation-pitch-flipped-no",
+    }
+}
