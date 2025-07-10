@@ -123,6 +123,7 @@ impl PanelTabUi {
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         self.pcb_overview.replace(pcb_overview);
+        self.update_panel_preview();
     }
 
     pub fn update_panel_sizing(&mut self, panel_sizing: PanelSizing) {
