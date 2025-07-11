@@ -608,6 +608,10 @@ pub enum Event {
         design: Option<DesignName>,
         files: Vec<PathBuf>,
     },
+    RefreshGerberFiles {
+        path: PathBuf,
+        design: Option<DesignName>,
+    },
 
     //
     // PCB views
@@ -1407,6 +1411,31 @@ impl Planner {
                 if !unremoved_files.is_empty() {
                     warn!("Unable to remove the following gerbers. files: {:?}", unremoved_files);
                 }
+                *modified |= was_modified;
+
+                Ok(render::render())
+            }),
+            Event::RefreshGerberFiles {
+                path: pcb_path,
+                design,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+
+                debug!(
+                    "Refreshing gerbers from pcb. pcb_file: {:?}, design: {:?}",
+                    pcb_path, design
+                );
+                let was_modified = pcb
+                    .update_gerbers(design, vec![])
+                    .map_err(|e| AppError::PcbOperationError(PcbOperationError::PcbError(e)))?;
+
                 *modified |= was_modified;
 
                 Ok(render::render())

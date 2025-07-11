@@ -155,6 +155,7 @@ form-button-add = Añadir
 form-button-remove = Quitar
 form-button-apply = Aplicar
 form-button-reset = Restablecer
+form-button-refresh = Actualizar
 
 form-configure-pcb-input-units = Units
 form-configure-pcb-group-unit-map = Mapa de unidades

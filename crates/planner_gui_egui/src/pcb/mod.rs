@@ -771,6 +771,36 @@ impl UiComponent for Pcb {
                             Err(error_action) => Some(error_action),
                         }
                     }
+                    Some(ConfigurationTabUiAction::RefreshGerberFiles {
+                        path,
+                        design,
+                    }) => {
+                        match self
+                            .planner_core_service
+                            .update(Event::RefreshGerberFiles {
+                                path: path.clone(),
+                                design,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<_>>();
+
+                                let additional_tasks = vec![Task::done(PcbAction::UiCommand(
+                                    PcbUiCommand::RequestPcbView(PcbViewRequest::Overview {
+                                        path,
+                                    }),
+                                ))];
+                                tasks.extend(additional_tasks);
+
+                                Some(PcbAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
                 }
             }
             PcbUiCommand::PanelTabUiCommand(command) => {

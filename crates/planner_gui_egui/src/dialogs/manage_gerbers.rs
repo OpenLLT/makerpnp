@@ -43,6 +43,7 @@ pub enum ManagerGerbersModalUiCommand {
     Remove { index: usize },
     Add,
     GerberFilesPicked { picked_files: Vec<PathBuf> },
+    Refresh,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +51,7 @@ pub enum ManagerGerberModalAction {
     CloseDialog,
     RemoveGerberFiles { files: Vec<PathBuf> },
     AddGerberFiles { files: Vec<PathBuf> },
+    RefreshGerberFiles,
 }
 
 impl UiComponent for ManageGerbersModal {
@@ -179,6 +181,13 @@ impl UiComponent for ManageGerbersModal {
                         self.component
                             .send(ManagerGerbersModalUiCommand::Add);
                     }
+                    if ui
+                        .button(tr!("form-button-refresh"))
+                        .clicked()
+                    {
+                        self.component
+                            .send(ManagerGerbersModalUiCommand::Refresh);
+                    }
                 },
                 |ui| {
                     if ui
@@ -216,6 +225,7 @@ impl UiComponent for ManageGerbersModal {
                     .pick_files();
                 None
             }
+            ManagerGerbersModalUiCommand::Refresh => Some(ManagerGerberModalAction::RefreshGerberFiles),
             ManagerGerbersModalUiCommand::GerberFilesPicked {
                 picked_files,
             } => Some(ManagerGerberModalAction::AddGerberFiles {

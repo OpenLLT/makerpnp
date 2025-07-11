@@ -13,7 +13,7 @@ use tracing::{error, info, trace};
 #[cfg(test)]
 mod testing;
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct GerberFile {
     pub file: PathBuf,
 
@@ -146,7 +146,7 @@ pub enum DetectionError {
 /// `%TF.FileFunction,AssemblyDrawing,Top*%`
 /// Also looks for `G04 #@! <attribute>` comments containing `FileAttributes`
 #[allow(dead_code)]
-pub fn detect_purpose(path: PathBuf) -> Result<GerberFileFunction, DetectionError> {
+pub fn detect_purpose(path: &PathBuf) -> Result<GerberFileFunction, DetectionError> {
     let file = std::fs::File::open(&path).map_err(DetectionError::IoError)?;
     let reader = BufReader::new(file);
 
@@ -238,7 +238,7 @@ mod detect_purpose_tests {
         drop(file);
 
         // when
-        let result = detect_purpose(temp_file_path);
+        let result = detect_purpose(&temp_file_path);
 
         // then
         println!("detection result: {:#?}", result);

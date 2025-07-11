@@ -866,6 +866,10 @@ pub enum ConfigurationTabUiAction {
         design: Option<DesignName>,
         files: Vec<PathBuf>,
     },
+    RefreshGerberFiles {
+        path: PathBuf,
+        design: Option<DesignName>,
+    },
     Reset,
     Apply(PcbUnitConfigurationArgs),
 }
@@ -1165,6 +1169,13 @@ impl UiComponent for ConfigurationUi {
                                 path: pcb_overview.path.clone(),
                                 design,
                                 files,
+                            })
+                        }
+                        Some(ManagerGerberModalAction::RefreshGerberFiles) => {
+                            debug!("refreshing gerber files. mode: {:?}", mode);
+                            Some(ConfigurationTabUiAction::RefreshGerberFiles {
+                                path: pcb_overview.path.clone(),
+                                design,
                             })
                         }
                     }

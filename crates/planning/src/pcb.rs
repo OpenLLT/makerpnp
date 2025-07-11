@@ -205,30 +205,24 @@ impl Pcb {
         let gerbers = self.gerbers_for_pcb_or_design(design)?;
         let mut modified = false;
 
+        let mut new_gerbers = gerbers.clone();
+
         for (file, optional_function) in files {
-            if let Some(existing_gerber) = gerbers
-                .iter_mut()
-                .find(|candidate| candidate.file.eq(&file))
-            {
-                if let Some(function) = optional_function {
-                    // change it
-                    existing_gerber.function = Some(function);
-                    modified |= true;
-                }
-            } else {
-                // add it
+            new_gerbers.push(GerberFile {
+                file,
+                function: optional_function,
+            });
+        }
 
-                let function = optional_function.or_else(|| {
-                    // try and detect the purpose, otherwise leave it as None
-                    detect_purpose(file.clone()).ok()
-                });
+        for gerber in new_gerbers.iter_mut() {
+            let new_purpose = detect_purpose(&gerber.file).ok();
+            gerber.function = new_purpose;
+        }
 
-                gerbers.push(GerberFile {
-                    file,
-                    function,
-                });
-                modified |= true;
-            }
+        if gerbers.iter().ne(new_gerbers.iter()) {
+            info!("Updated gerbers. old:\n{:?}, new:\n{:?}", gerbers, new_gerbers);
+            *gerbers = new_gerbers;
+            modified |= true;
         }
 
         Ok(modified)
