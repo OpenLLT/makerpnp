@@ -1,7 +1,10 @@
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-use gerber_types::{Command, ExtendedCode, ExtendedPosition, FileAttribute, FileFunction, Position};
+use gerber_types::{
+    Command, CommentContent, ExtendedCode, ExtendedPosition, FileAttribute, FileFunction, FunctionCode, GCode,
+    Position, StandardComment,
+};
 use pnp::pcb::PcbSide;
 use thiserror::Error;
 use tracing::{error, info, trace};
@@ -141,6 +144,7 @@ pub enum DetectionError {
 /// Only looks at the first 20 lines of the gerber file.
 /// Looks for 'TF' FileFunction attributes. e.g.
 /// `%TF.FileFunction,AssemblyDrawing,Top*%`
+/// Also looks for `G04 #@! <attribute>` comments containing `FileAttributes`
 #[allow(dead_code)]
 pub fn detect_purpose(path: PathBuf) -> Result<GerberFileFunction, DetectionError> {
     let file = std::fs::File::open(&path).map_err(DetectionError::IoError)?;
@@ -175,6 +179,9 @@ pub fn detect_purpose(path: PathBuf) -> Result<GerberFileFunction, DetectionErro
             Ok(Command::ExtendedCode(ExtendedCode::FileAttribute(FileAttribute::FileFunction(file_function)))) => {
                 Some(file_function.as_gerber_file_function())
             }
+            Ok(Command::FunctionCode(FunctionCode::GCode(GCode::Comment(CommentContent::Standard(
+                StandardComment::FileAttribute(FileAttribute::FileFunction(file_function)),
+            ))))) => Some(file_function.as_gerber_file_function()),
             _ => None,
         })
         .inspect(|gerber_file_function| {
@@ -188,14 +195,21 @@ mod detect_purpose_tests {
     use std::fs::File;
     use std::io::Write;
 
-    use gerber_types::{Command, ExtendedCode, FileAttribute, GenerationSoftware, GerberCode};
+    use gerber_types::{Command, ExtendedCode, FileAttribute, FunctionCode, GenerationSoftware, GerberCode};
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::*;
     use crate::testing::logging_init;
 
-    #[test]
-    pub fn test_detect_purpose() {
+    #[rstest]
+    #[case(Command::ExtendedCode(ExtendedCode::FileAttribute(FileAttribute::FileFunction(
+        FileFunction::AssemblyDrawing(Position::Top),
+    ))))]
+    #[case(Command::FunctionCode(FunctionCode::GCode(GCode::Comment(CommentContent::Standard(
+        StandardComment::FileAttribute(FileAttribute::FileFunction(FileFunction::AssemblyDrawing(Position::Top),))
+    )))))]
+    pub fn test_detect_purpose(#[case] file_function_command: Command) {
         // given
         logging_init();
 
@@ -214,9 +228,7 @@ mod detect_purpose_tests {
             Command::ExtendedCode(ExtendedCode::FileAttribute(FileAttribute::GenerationSoftware(
                 generation_software,
             ))),
-            Command::ExtendedCode(ExtendedCode::FileAttribute(FileAttribute::FileFunction(
-                FileFunction::AssemblyDrawing(Position::Top),
-            ))),
+            file_function_command,
         ];
 
         commands
