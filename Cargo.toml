@@ -128,13 +128,13 @@ crossbeam-channel = { version = "0.5.15" }
 
 # Gerber rendering, types and parser
 # Note, these three crates are tightly coupled, ensure that only one of each appears in the dependency tree.
-gerber_viewer = { version = "0.1.0"}
+gerber_viewer = { version = "0.3.0"}
 #gerber_viewer = { git = "https://github.com/makerpnp/gerber_viewer.git", rev = "ef23948e76b3c7639123513d8a465cc92269b9a3" }
 #gerber_viewer = { path = "../gerber-viewer" }
-gerber-types = { version = "0.4.0"}
+gerber-types = { version = "0.6.0"}
 #gerber-types = { git = "https://github.com/makerpnp/gerber-types.git", rev = "357215682b77093c3693efa4fe9d74076c1685fa"}
 #gerber-types = { path = "../gerber-types" }
-gerber_parser = { version = "0.2.0"}
+gerber_parser = { version = "0.3.0"}
 #gerber_parser = { git = "https://github.com/makerpnp/gerber-parser.git", rev = "abcd8bcef8eb4d40d1ebf53d33bbb13d8c30825f"}
 #gerber_parser = { path = "../gerber-parser" }
 

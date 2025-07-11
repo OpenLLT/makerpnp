@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::io::BufWriter;
 use std::sync::mpsc::Sender;
@@ -10,7 +11,8 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use gerber_viewer::gerber_types::{
-    Aperture, Circle, Command, CoordinateFormat, GerberCode, GerberError, InterpolationMode,
+    Aperture, Circle, Command, CoordinateFormat, ExtendedCode, GerberCode, GerberError, ImageMirroring, ImageOffset,
+    ImageRotation, InterpolationMode,
 };
 use math::ops::Ops2D;
 use nalgebra::{Point, Point2, Vector2};
@@ -101,7 +103,7 @@ impl PanelTabUi {
         // FIXME probably the gerber viewer UI needs different args now
         let args = GerberViewerUiInstanceArgs {
             mode: GerberViewerMode::Panel,
-            pcb_side: None,
+            pcb_side: Some(PcbSide::Top),
         };
 
         let mut gerber_viewer_ui = GerberViewerUi::new(args);
@@ -901,10 +903,14 @@ impl PanelTabUi {
 
         let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
 
-        if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview) {
+        if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview, self.panel_tab_ui_state.pcb_side)
+        {
             dump_gerber_source(&commands);
             gerber_viewer_ui.clear_layers();
-            gerber_viewer_ui.add_layer(Some(GerberFileFunction::Other(None)), commands);
+            gerber_viewer_ui.add_layer(
+                Some(GerberFileFunction::Other(Some(self.panel_tab_ui_state.pcb_side))),
+                commands,
+            );
         } else {
             // TODO show an error message if the gerber preview could not be generated
         }
@@ -1158,6 +1164,7 @@ impl IntoGerberUnit for Unit {
 fn build_panel_preview_commands(
     panel_sizing: &PanelSizing,
     pcb_overview: &PcbOverview,
+    side: PcbSide,
 ) -> Result<Vec<Command>, GerberError> {
     // FUTURE generate multiple, real, gerber layers instead of a 'preview' layer
     //        i.e. 'board outline, top mask, top copper layers, bottom mask, bottom copper layer, v-score/cut (rails)'
@@ -1167,6 +1174,29 @@ fn build_panel_preview_commands(
     let mut gerber_builder = GerberBuilder::new()
         .with_units(panel_sizing.units.into_gerber_unit())
         .with_coordinate_format(coordinate_format);
+
+    let orientation = match side {
+        PcbSide::Top => &pcb_overview.orientation.top,
+        PcbSide::Bottom => &pcb_overview.orientation.bottom,
+    };
+    if orientation.pitch_flipped {
+        gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::MirrorImage(ImageMirroring::B)));
+        gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::OffsetImage(ImageOffset {
+            a: 0.0,
+            b: -panel_sizing.size.y,
+        })));
+    }
+
+    let orientation_map = HashMap::from([
+        (dec!(0.0), ImageRotation::None),
+        (dec!(90.0), ImageRotation::CCW_90),
+        (dec!(180.0), ImageRotation::CCW_180),
+        (dec!(270.0), ImageRotation::CCW_270),
+    ]);
+
+    if let Some(rotation) = orientation_map.get(&orientation.rotation) {
+        gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::RotateImage(*rotation)));
+    }
 
     gerber_builder.set_interpolation_mode(InterpolationMode::Linear);
     let drawing_aperture_code = gerber_builder.define_aperture(Aperture::Circle(Circle {
@@ -1425,7 +1455,7 @@ mod test {
 
     use indoc::indoc;
     use nalgebra::{Point2, Vector2};
-    use planner_app::{PcbOrientation, PcbOverview, Unit};
+    use planner_app::{PcbOrientation, PcbOverview, PcbSide, Unit};
     use rust_decimal_macros::dec;
 
     use crate::pcb::tabs::panel_tab::{
@@ -1433,6 +1463,7 @@ mod test {
         gerber_commands_to_source,
     };
 
+    // TODO expand this test to cover the Top and Bottom, currently it only checks the output for `PcbSide::Top`
     #[test]
     pub fn test_build_panel_preview_layer() {
         // given
@@ -1518,6 +1549,7 @@ mod test {
             r#"
             %MOMM*%
             %FSLAX46Y46*%
+            %IR0*%
             G01*
             %ADD10C,0.1*%
             D10*
@@ -1559,7 +1591,7 @@ mod test {
         );
 
         // when
-        let commands = build_panel_preview_commands(&panel_sizing, &pcb_overview).unwrap();
+        let commands = build_panel_preview_commands(&panel_sizing, &pcb_overview, PcbSide::Top).unwrap();
 
         // then
         let source = gerber_commands_to_source(&commands);
