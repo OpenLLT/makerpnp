@@ -649,7 +649,7 @@ impl UiComponent for AppTabs {
         DockArea::new(&mut tree)
             .id(ui.id().with("app-tabs"))
             .style(Style::from_egui(ctx.style().as_ref()))
-            .show(ctx, &mut app_tab_viewer);
+            .show_inside(ui, &mut app_tab_viewer);
     }
 
     #[profiling::function]
