@@ -207,7 +207,7 @@ impl PanelTabUi {
                 })
                 .show_ui(ui, |ui| {
                     if ui
-                        .add(egui::SelectableLabel::new(
+                        .add(egui::Button::selectable(
                             state.pcb_side == PcbSide::Top,
                             tr!("form-common-choice-pcb-side-top"),
                         ))
@@ -218,7 +218,7 @@ impl PanelTabUi {
                             .expect("sent");
                     }
                     if ui
-                        .add(egui::SelectableLabel::new(
+                        .add(egui::Button::selectable(
                             state.pcb_side == PcbSide::Bottom,
                             tr!("form-common-choice-pcb-side-bottom"),
                         ))

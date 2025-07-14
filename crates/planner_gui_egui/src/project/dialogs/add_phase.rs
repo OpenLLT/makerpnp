@@ -146,7 +146,7 @@ impl AddPhaseModal {
                                     })
                                     .show_ui(ui, |ui| {
                                         if ui
-                                            .add(egui::SelectableLabel::new(
+                                            .add(egui::Button::selectable(
                                                 side == Some(PcbSideChoice::Top),
                                                 tr!("form-common-choice-pcb-side-top"),
                                             ))
@@ -157,7 +157,7 @@ impl AddPhaseModal {
                                                 .expect("sent");
                                         }
                                         if ui
-                                            .add(egui::SelectableLabel::new(
+                                            .add(egui::Button::selectable(
                                                 side == Some(PcbSideChoice::Bottom),
                                                 tr!("form-common-choice-pcb-side-bottom"),
                                             ))
@@ -189,7 +189,7 @@ impl AddPhaseModal {
                                     .show_ui(ui, move |ui| {
                                         for selectable_process in self.processes.iter() {
                                             if ui
-                                                .add(egui::SelectableLabel::new(
+                                                .add(egui::Button::selectable(
                                                     process
                                                         .as_ref()
                                                         .is_some_and(|selected_process| {

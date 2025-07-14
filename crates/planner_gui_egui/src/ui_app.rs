@@ -608,7 +608,7 @@ impl eframe::App for UiApp {
             profiling::scope!("ui::top_panel");
             // The top panel is often a good place for a menu bar:
 
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 egui::Sides::new().show(
                     ui,
                     |ui| {
@@ -641,7 +641,7 @@ impl eframe::App for UiApp {
                                 let sender = self.app_state().command_sender.clone();
 
                                 if ui
-                                    .add(egui::SelectableLabel::new(
+                                    .add(egui::Button::selectable(
                                         theme_preference.eq(&ThemePreference::Dark),
                                         tr!("theme-button-dark"),
                                     ))
@@ -652,7 +652,7 @@ impl eframe::App for UiApp {
                                         .expect("sent");
                                 }
                                 if ui
-                                    .add(egui::SelectableLabel::new(
+                                    .add(egui::Button::selectable(
                                         theme_preference.eq(&ThemePreference::Light),
                                         tr!("theme-button-light"),
                                     ))
@@ -663,7 +663,7 @@ impl eframe::App for UiApp {
                                         .expect("sent");
                                 }
                                 if ui
-                                    .add(egui::SelectableLabel::new(
+                                    .add(egui::Button::selectable(
                                         theme_preference.eq(&ThemePreference::System),
                                         tr!("theme-button-system"),
                                     ))
@@ -686,7 +686,7 @@ impl eframe::App for UiApp {
                                 for other_language in egui_i18n::languages() {
                                     let sender = self.app_state().command_sender.clone();
                                     if ui
-                                        .add(egui::SelectableLabel::new(
+                                        .add(egui::Button::selectable(
                                             other_language.eq(&language),
                                             tr!(&format_language_key(&other_language)),
                                         ))

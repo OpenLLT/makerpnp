@@ -209,7 +209,7 @@ impl UiComponent for PhaseTabUi {
                                     .show_ui(ui, |ui| {
                                         for action in actions {
                                             if ui
-                                                .add(egui::SelectableLabel::new(
+                                                .add(egui::Button::selectable(
                                                     false,
                                                     format!("{:?}", action).to_string(),
                                                 ))

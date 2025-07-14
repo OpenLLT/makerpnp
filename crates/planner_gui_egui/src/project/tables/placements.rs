@@ -441,7 +441,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                             //       to do anything useful with the row as there is probably no API to access the
                             //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
                             if ui
-                                .add(egui::SelectableLabel::new(
+                                .add(egui::Button::selectable(
                                     row.placement_state.phase.is_none(),
                                     tr!("form-common-combo-none")
                                 ))
@@ -454,7 +454,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                                 .filter(|phase|row.placement_state.placement.pcb_side.eq(&phase.pcb_side))
                             {
                                 if ui
-                                    .add(egui::SelectableLabel::new(
+                                    .add(egui::Button::selectable(
                                         matches!(&row.placement_state.phase, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
                                         phase.phase_reference.to_string(),
                                     ))

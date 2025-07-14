@@ -404,10 +404,9 @@ impl eframe::App for GerberViewer {
         });
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("🗁 Add layers...").clicked() {
-                        ui.close_menu();
                         self.add_layer_files();
                     }
                     ui.add_enabled_ui(self.state.is_some(), |ui| {
@@ -415,16 +414,13 @@ impl eframe::App for GerberViewer {
                             .button("🔃 Reload all layers")
                             .clicked()
                         {
-                            ui.close_menu();
                             self.reload_all_layer_files();
                         }
                         if ui.button("Close all").clicked() {
-                            ui.close_menu();
                             self.close_all();
                         }
                     });
                     if ui.button("Quit").clicked() {
-                        ui.close_menu();
                         self.handle_quit(ui.ctx());
                     }
                 });
@@ -436,7 +432,6 @@ impl eframe::App for GerberViewer {
                 });
                 ui.menu_button("Help", |ui| {
                     if ui.button("About").clicked() {
-                        ui.close_menu();
                         self.show_about_modal();
                     }
                 })

@@ -278,7 +278,7 @@ impl UnitAssignmentsTabUi {
                                         .show_ui(ui, |ui| {
                                             for available_design_name in &pcb_overview.designs {
                                                 if ui
-                                                    .add(egui::SelectableLabel::new(
+                                                    .add(egui::Button::selectable(
                                                         matches!(design_name.as_ref(), Some(design_name) if design_name.eq(&available_design_name)),
                                                         available_design_name.to_string(),
                                                     ))

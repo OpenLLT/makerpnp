@@ -3,8 +3,8 @@ use std::collections::btree_map::{Iter, IterMut};
 use std::marker::PhantomData;
 
 use egui::{Id, Ui, WidgetText};
-use egui_dock::tab_viewer::OnCloseResponse;
 use egui_dock::TabViewer;
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
