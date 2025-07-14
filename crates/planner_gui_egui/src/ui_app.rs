@@ -2,7 +2,8 @@ use std::mem::MaybeUninit;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use egui::{CentralPanel, ThemePreference};
+use eframe::epaint::Color32;
+use egui::{CentralPanel, Frame, ThemePreference};
 use egui_i18n::tr;
 use egui_mobius::slot::Slot;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
@@ -758,9 +759,15 @@ impl eframe::App for UiApp {
             // FIXME remove this when `on_close` bugs in egui_dock are fixed.
             app_tabs.cleanup_tabs(&mut tab_context);
 
-            CentralPanel::default().show(ctx, |ui| {
-                app_tabs.ui(ui, &mut tab_context);
-            });
+            CentralPanel::default()
+                .frame(
+                    Frame::central_panel(&ctx.style())
+                        .inner_margin(0.)
+                        .fill(Color32::TRANSPARENT),
+                )
+                .show(ctx, |ui| {
+                    app_tabs.ui(ui, &mut tab_context);
+                });
         }
 
         let mut app_state = self.app_state();
