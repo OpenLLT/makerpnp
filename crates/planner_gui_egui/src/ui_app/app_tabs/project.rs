@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -88,12 +89,12 @@ impl Tab for ProjectTab {
         UiComponent::ui(self, ui, &mut project_tab_context);
     }
 
-    fn on_close(&mut self, _tab_key: &TabKey, _tab_context: &mut Self::Context) -> bool {
+    fn on_close(&mut self, _tab_key: &TabKey, _tab_context: &mut Self::Context) -> OnCloseResponse {
         debug!("closing project. key: {:?}", self.project_key);
         let mut projects = _tab_context.projects.lock().unwrap();
         projects.remove(self.project_key);
 
-        true
+        OnCloseResponse::Close
     }
 }
 

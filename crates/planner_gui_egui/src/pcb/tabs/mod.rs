@@ -1,5 +1,6 @@
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 
 use crate::pcb::{PcbTabKind, PcbUiState};
@@ -106,7 +107,7 @@ impl Tab for PcbTabKind {
         }
     }
 
-    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         match self {
             PcbTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             PcbTabKind::Configuration(tab) => tab.on_close(tab_key, context),

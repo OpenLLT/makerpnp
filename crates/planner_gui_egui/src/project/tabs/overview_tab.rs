@@ -1,4 +1,5 @@
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use planner_app::ProjectOverview;
 
@@ -79,7 +80,7 @@ impl Tab for OverviewTab {
         UiComponent::ui(&state.overview_ui, ui, &mut OverviewTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }

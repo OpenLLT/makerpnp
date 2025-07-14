@@ -1,6 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 
 use crate::project::{ProjectTabKind, ProjectUiState};
@@ -122,7 +123,7 @@ impl Tab for ProjectTabKind {
         }
     }
 
-    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         match self {
             ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),

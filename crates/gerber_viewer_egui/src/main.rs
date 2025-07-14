@@ -164,7 +164,7 @@ impl GerberViewState {
 
             let matrix = image_transform_matrix * render_transform_matrix * layer_matrix;
 
-            let layer_bbox = layer_bbox.apply_transform_matrix(matrix);
+            let layer_bbox = layer_bbox.apply_transform_matrix(&matrix);
 
             debug!("layer bbox: {:?}", layer_bbox);
             bbox.min.x = f64::min(bbox.min.x, layer_bbox.min.x);

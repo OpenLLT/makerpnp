@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, TextEdit, Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -1206,7 +1207,7 @@ impl Tab for ConfigurationTab {
         );
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }

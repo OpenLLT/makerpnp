@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::Column;
 use egui_i18n::tr;
 use planner_app::{PcbOverview, ProjectPcbOverview};
@@ -221,7 +222,7 @@ impl Tab for PcbTab {
         UiComponent::ui(pcb_ui, ui, &mut PcbTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         let mut state = context.state.lock().unwrap();
         if let Some(_pcb_ui) = state
             .pcb_tab_uis
@@ -229,6 +230,6 @@ impl Tab for PcbTab {
         {
             debug!("removed orphaned pcb ui. pcb_index: {}", self.pcb_index);
         }
-        true
+        OnCloseResponse::Close
     }
 }

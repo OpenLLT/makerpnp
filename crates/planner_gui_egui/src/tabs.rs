@@ -3,6 +3,7 @@ use std::collections::btree_map::{Iter, IterMut};
 use std::marker::PhantomData;
 
 use egui::{Id, Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_dock::TabViewer;
 use egui_mobius::types::Value;
 use serde::{Deserialize, Serialize};
@@ -66,9 +67,9 @@ impl<'b, Context, TabKind: Tab<Context = Context>> Tabs<TabKind, Context> {
             let retain = tab_keys.contains(tab_key);
 
             if !retain {
-                let can_close = tab.on_close(tab_key, tab_context);
+                let close_response = tab.on_close(tab_key, tab_context);
 
-                if can_close {
+                if matches!(close_response, OnCloseResponse::Close) {
                     info!(
                         "Removing orphaned tab, not in retain list. tab_keys: {:?}, key: {:?}",
                         tab_keys, tab_key
@@ -98,8 +99,8 @@ pub trait Tab {
     // return 'true' to allow the tab to be closed, 'false' to prevent closing.
     // FIXME due to bugs in egui_dock, this is not always called, see related FIXMEs in the codebase
     //       do NOT rely on this method for now, workarounds are required.
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 
     // FUTURE consider adding 'is_modified' method?
@@ -133,7 +134,7 @@ impl<'a, TabContext, TabKind: Tab<Context = TabContext>> TabViewer for AppTabVie
         }
     }
 
-    fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
+    fn on_close(&mut self, tab: &mut Self::Tab) -> OnCloseResponse {
         // FIXME this isn't called when the 'close all' button in the tab bar is used.
         //       reported to maintainer - https://discord.com/channels/900275882684477440/1075333382290026567/1339624259697246348
         debug!("closing tab, id: {:?}", tab);
@@ -141,11 +142,10 @@ impl<'a, TabContext, TabKind: Tab<Context = TabContext>> TabViewer for AppTabVie
         let mut tabs = self.tabs.lock().unwrap();
 
         let tab_instance = tabs.tabs.get_mut(tab).unwrap();
-        let allow_close = tab_instance.on_close(tab, self.context);
-        if allow_close {
+        let close_response = tab_instance.on_close(tab, self.context);
+        if matches!(close_response, OnCloseResponse::Close) {
             let _removed = tabs.tabs.remove(tab);
         }
-
-        allow_close
+        close_response
     }
 }

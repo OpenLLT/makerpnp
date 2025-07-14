@@ -6,6 +6,7 @@ use derivative::Derivative;
 use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, TextEdit, Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -1201,7 +1202,7 @@ impl Tab for UnitAssignmentsTab {
         UiComponent::ui(unit_assignments_ui, ui, &mut UnitAssignmentsTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         let mut state = context.state.lock().unwrap();
         if let Some(_unit_assignments_ui) = state
             .unit_assignment_tab_uis
@@ -1209,6 +1210,6 @@ impl Tab for UnitAssignmentsTab {
         {
             debug!("removed orphaned unit assignments ui. pcb_index: {}", self.pcb_index);
         }
-        true
+        OnCloseResponse::Close
     }
 }

@@ -7,6 +7,7 @@ use derivative::Derivative;
 use eframe::emath::Vec2;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Resize, Style, Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -1118,8 +1119,8 @@ impl Tab for PanelTab {
         UiComponent::ui(&state.panel_tab_ui, ui, &mut PanelTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }
 

@@ -5,6 +5,7 @@ use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
 use egui_data_table::DataTable;
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
@@ -211,7 +212,7 @@ impl Tab for LoadOutTab {
         UiComponent::ui(load_out_ui, ui, &mut LoadOutTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         let mut state = context.state.lock().unwrap();
         if let Some(_load_out_ui) = state
             .load_out_tab_uis
@@ -222,6 +223,6 @@ impl Tab for LoadOutTab {
                 &self.load_out_source
             );
         }
-        true
+        OnCloseResponse::Close
     }
 }

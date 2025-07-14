@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::Value;
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -83,12 +84,12 @@ impl Tab for PcbTab {
         UiComponent::ui(self, ui, &mut pcb_tab_context);
     }
 
-    fn on_close(&mut self, _tab_key: &TabKey, _tab_context: &mut Self::Context) -> bool {
+    fn on_close(&mut self, _tab_key: &TabKey, _tab_context: &mut Self::Context) -> OnCloseResponse {
         debug!("closing pcb. key: {:?}", self.pcb_key);
         let mut pcbs = _tab_context.pcbs.lock().unwrap();
         pcbs.remove(self.pcb_key);
 
-        true
+        OnCloseResponse::Close
     }
 }
 

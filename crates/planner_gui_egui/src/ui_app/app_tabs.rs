@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
 use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -78,7 +79,7 @@ impl Tab for TabKind {
         UiComponent::ui(self, ui, &mut (tab_key.clone(), context));
     }
 
-    fn on_close(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         match self {
             TabKind::Home(tab, _) => {
                 let mut home_tab_context = HomeTabContext {

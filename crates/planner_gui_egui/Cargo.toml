@@ -34,16 +34,12 @@ eframe = { workspace = true, default-features = false, features = [
 ] }
 egui_taffy = {  workspace = true }
 egui-i18n = { workspace = true }
-egui_dock = { version = "0.16.0", features = ["serde"]}
+egui_dock = { workspace = true, features = ["serde"]}
 egui_mobius = { workspace = true, features = ["serde"] }
 egui_material_icons = { workspace = true }
 egui_extras = { workspace = true }
-# need 'opened' functionality
-#egui_ltreeview = { git = "https://github.com/MakerPnP/egui_ltreeview.git", rev ="9ddc522493f2420744714097bc783c659228a318", features = ["persistence", "serde"]}
 egui_ltreeview = { workspace = true, features = ["persistence", "serde"] }
-#egui-data-table = { workspace = true }
-egui-data-table = { git = "https://github.com/kang-sw/egui-data-table.git", rev ="024fc65" }
-#egui-data-table = { git = "https://github.com/MakerPnP/egui-data-table.git", rev ="024fc6579b9e8ad273124dd8b0719ec2921e0d16" }
+egui-data-table = { workspace = true }
 egui_double_slider = { workspace = true }
 egui_vertical_stack = { workspace = true }
 egui_tool_windows = { workspace = true, features = ["persistence"] }

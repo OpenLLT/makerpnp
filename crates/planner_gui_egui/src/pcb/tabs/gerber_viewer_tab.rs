@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use planner_app::PcbOverview;
@@ -276,7 +277,7 @@ impl Tab for GerberViewerTab {
         UiComponent::ui(instance, ui, &mut GerberViewerTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }

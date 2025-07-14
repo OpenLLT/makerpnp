@@ -1,5 +1,6 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use planner_app::{
     ObjectPath, OperationReference, OperationStatus, PhaseOverview, PhasePlacements, PhaseReference, PlacementState,
@@ -384,11 +385,11 @@ impl Tab for PhaseTab {
         UiComponent::ui(phase_ui, ui, &mut PhaseTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> bool {
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         let mut state = context.state.lock().unwrap();
         if let Some(_phase_ui) = state.phases_tab_uis.remove(&self.phase) {
             debug!("removed orphaned phase ui. phase: {:?}", &self.phase);
         }
-        true
+        OnCloseResponse::Close
     }
 }

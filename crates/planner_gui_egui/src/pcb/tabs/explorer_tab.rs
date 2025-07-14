@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use egui_ltreeview::{Action, NodeBuilder, TreeView, TreeViewState};
 use egui_mobius::types::Value;
@@ -287,7 +288,7 @@ impl Tab for ExplorerTab {
         UiComponent::ui(&state.explorer_tab_ui, ui, &mut ExplorerTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }

@@ -5,6 +5,7 @@ use derivative::Derivative;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
 use egui_data_table::DataTable;
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{Part, PartStates, ProcessReference};
@@ -183,7 +184,7 @@ impl Tab for PartsTab {
         UiComponent::ui(&state.parts_tab_ui, ui, &mut PartsTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }

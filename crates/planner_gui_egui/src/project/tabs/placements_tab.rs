@@ -1,5 +1,6 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
+use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use planner_app::{ObjectPath, PhaseOverview, PlacementState, PlacementsList};
 use tracing::trace;
@@ -126,7 +127,7 @@ impl Tab for PlacementsTab {
         UiComponent::ui(&state.placements_ui, ui, &mut PlacementsTabUiContext::default());
     }
 
-    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> bool {
-        true
+    fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
+        OnCloseResponse::Close
     }
 }
