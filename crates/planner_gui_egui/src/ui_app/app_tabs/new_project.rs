@@ -12,7 +12,7 @@ use validator::Validate;
 
 use crate::file_picker::Picker;
 use crate::forms::Form;
-use crate::forms::transforms::no_transform;
+use crate::forms::transforms::{no_transform, resize_x_transform};
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -190,7 +190,7 @@ impl NewProjectTab {
                                             .interactive(false)
                                             .ui(ui)
                                     },
-                                    no_transform,
+                                    resize_x_transform,
                                 );
 
                                 if tui

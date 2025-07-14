@@ -15,7 +15,7 @@ use validator::{Validate, ValidationError};
 
 use crate::file_picker::Picker;
 use crate::forms::Form;
-use crate::forms::transforms::no_transform;
+use crate::forms::transforms::resize_x_transform;
 use crate::project::dialogs::PcbSideChoice;
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -111,7 +111,7 @@ impl AddPhaseModal {
                                             .interactive(false)
                                             .ui(ui)
                                     },
-                                    no_transform,
+                                    resize_x_transform,
                                 );
 
                                 if tui

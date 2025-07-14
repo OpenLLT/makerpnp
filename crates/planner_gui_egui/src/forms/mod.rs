@@ -9,7 +9,7 @@ use egui_taffy::{Tui, TuiBuilderLogic};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
 use validator::{ValidateArgs, ValidationError, ValidationErrors};
 
-use crate::forms::transforms::no_transform;
+use crate::forms::transforms::resize_x_transform;
 
 /// transient helper
 pub struct Form<F, C> {
@@ -144,7 +144,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
             })
             .ui_add_manual(
                 |ui| ui_builder(ui, self.fields.lock().unwrap(), self.sender.clone()),
-                no_transform,
+                resize_x_transform,
             );
         });
 
@@ -284,8 +284,15 @@ pub mod transforms {
     use egui::{Response, Ui};
     use egui_taffy::TuiContainerResponse;
 
-    pub fn no_transform(value: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
-        value
+    pub fn no_transform(response: TuiContainerResponse<Response>, _ui: &Ui) -> TuiContainerResponse<Response> {
+        response
+    }
+
+    pub fn resize_x_transform(mut response: TuiContainerResponse<Response>, ui: &Ui) -> TuiContainerResponse<Response> {
+        let available_width = ui.available_width();
+        response.min_size.x = 10.0;
+        response.max_size.x = available_width;
+        response
     }
 }
 
