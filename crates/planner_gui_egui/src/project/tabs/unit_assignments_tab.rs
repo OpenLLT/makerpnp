@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
-use eframe::epaint::{Color32, StrokeKind};
+use eframe::emath::Rect;
+use eframe::epaint::{Color32, CornerRadius, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, TextEdit, Ui, Widget, WidgetText};
+use egui::{Resize, TextEdit, Ui, Vec2, Widget, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
@@ -328,7 +329,7 @@ impl UnitAssignmentsTabUi {
                                             .send(UnitAssignmentsTabUiCommand::VariantNameChanged(variant_name_clone))
                                             .expect("sent")
                                     }
-                                    
+
                                     response
                                 }, resize_x_transform);
 
@@ -372,7 +373,6 @@ impl UnitAssignmentsTabUi {
                         //
                         // available design variants
                         //
-
                         tui.style(Style {
                             flex_grow: 1.0,
                             size: Size {
@@ -381,91 +381,94 @@ impl UnitAssignmentsTabUi {
                             },
                             ..default_style()
                         })
-                        .add(|tui: &mut Tui| {
-                            tui.ui_infinite(|ui: &mut Ui| {
-                                Resize::default()
-                                    .resizable([false, true])
-                                    .default_size(ui.available_size())
-                                    .min_width(ui.available_width())
-                                    .max_width(ui.available_width())
-                                    .max_height(Self::TABLE_HEIGHT_MAX)
-                                    .show(ui, |ui| {
-                                        // HACK: search codebase for 'HACK: table-resize-hack' for details
-                                        egui::Frame::new()
-                                            .outer_margin(4.0)
-                                            .show(ui, |ui| {
-                                                ui.style_mut().interaction.selectable_labels = false;
+                            .add(|tui: &mut Tui| {
+                                let available_size = container_size(tui);
 
-                                                let fields = self.fields.lock().unwrap();
+                                tui.ui_finite(|ui: &mut Ui| {
+                                    Resize::default()
+                                        .resizable([false, true])
+                                        .default_size(available_size)
+                                        .min_width(available_size.x)
+                                        .max_width(available_size.x)
+                                        .max_height(Self::TABLE_HEIGHT_MAX)
+                                        .show(ui, |ui| {
+                                            // HACK: search codebase for 'HACK: table-resize-hack' for details
+                                            egui::Frame::new()
+                                                .outer_margin(4.0)
+                                                .show(ui, |ui| {
+                                                    ui.style_mut().interaction.selectable_labels = false;
 
-                                                let text_height = egui::TextStyle::Body
-                                                    .resolve(ui.style())
-                                                    .size
-                                                    .max(ui.spacing().interact_size.y);
+                                                    let fields = self.fields.lock().unwrap();
 
-                                                let table_response = TableBuilder::new(ui)
-                                                    .striped(true)
-                                                    .resizable(true)
-                                                    .auto_shrink([false, false])
-                                                    .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                                    .sense(egui::Sense::click())
-                                                    .column(Column::auto())
-                                                    .column(Column::remainder())
-                                                    .header(20.0, |mut header| {
-                                                        header.col(|ui| {
-                                                            ui.strong(tr!("table-design-variants-column-design"));
-                                                        });
-                                                        header.col(|ui| {
-                                                            ui.strong(tr!("table-design-variants-column-variant"));
-                                                        });
-                                                    })
-                                                    .body(|mut body| {
-                                                        let mut design_variant_selected_index = fields.design_variant_selected_index;
-                                                        for (
-                                                            row_index,
-                                                            DesignVariant {
-                                                                design_name,
-                                                                variant_name,
-                                                            },
-                                                        ) in fields
-                                                            .design_variants
-                                                            .iter()
-                                                            .enumerate()
-                                                        {
-                                                            body.row(text_height, |mut row| {
-                                                                let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
+                                                    let text_height = egui::TextStyle::Body
+                                                        .resolve(ui.style())
+                                                        .size
+                                                        .max(ui.spacing().interact_size.y);
 
-                                                                row.set_selected(is_selected);
-
-                                                                row.col(|ui| {
-                                                                    ui.label(design_name.to_string());
-                                                                });
-
-                                                                row.col(|ui| {
-                                                                    ui.label(variant_name.to_string());
-                                                                });
-
-                                                                if row.response().clicked() {
-                                                                    match is_selected {
-                                                                        true => design_variant_selected_index = None,
-                                                                        false => design_variant_selected_index = Some(row_index),
-                                                                    }
-                                                                }
+                                                    let table_response = TableBuilder::new(ui)
+                                                        .striped(true)
+                                                        .resizable(true)
+                                                        .auto_shrink([false, false])
+                                                        .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                                        .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                                        .sense(egui::Sense::click())
+                                                        .column(Column::auto())
+                                                        .column(Column::remainder())
+                                                        .header(20.0, |mut header| {
+                                                            header.col(|ui| {
+                                                                ui.strong(tr!("table-design-variants-column-design"));
                                                             });
-                                                        }
-                                                        if fields.design_variant_selected_index != design_variant_selected_index {
-                                                            self.component.send(UnitAssignmentsTabUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
-                                                        }
-                                                    });
-                                                if Self::TABLE_DEBUG_MODE {
-                                                    ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
-                                                    ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
-                                                }
-                                            });
-                                    });
+                                                            header.col(|ui| {
+                                                                ui.strong(tr!("table-design-variants-column-variant"));
+                                                            });
+                                                        })
+                                                        .body(|mut body| {
+                                                            let mut design_variant_selected_index = fields.design_variant_selected_index;
+                                                            for (
+                                                                row_index,
+                                                                DesignVariant {
+                                                                    design_name,
+                                                                    variant_name,
+                                                                },
+                                                            ) in fields
+                                                                .design_variants
+                                                                .iter()
+                                                                .enumerate()
+                                                            {
+                                                                body.row(text_height, |mut row| {
+                                                                    let is_selected = matches!(design_variant_selected_index, Some(selected_index) if selected_index == row_index);
+
+                                                                    row.set_selected(is_selected);
+
+                                                                    row.col(|ui| {
+                                                                        ui.label(design_name.to_string());
+                                                                    });
+
+                                                                    row.col(|ui| {
+                                                                        ui.label(variant_name.to_string());
+                                                                    });
+
+                                                                    if row.response().clicked() {
+                                                                        match is_selected {
+                                                                            true => design_variant_selected_index = None,
+                                                                            false => design_variant_selected_index = Some(row_index),
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                            if fields.design_variant_selected_index != design_variant_selected_index {
+                                                                self.component.send(UnitAssignmentsTabUiCommand::DesignVariantSelectionChanged(design_variant_selected_index));
+                                                            }
+                                                        });
+                                                    if Self::TABLE_DEBUG_MODE {
+                                                        ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                                        ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
+                                                    }
+                                                });
+                                        });
+                                        //ui.response()
+                                });
                             });
-                        });
 
                         //
                         // unit range
@@ -627,101 +630,102 @@ impl UnitAssignmentsTabUi {
                             },
                             ..container_style()
                         })
-                        .add(|tui| {
-                            tui.ui_infinite(|ui: &mut Ui| {
-                                Resize::default()
-                                    .resizable([false, true])
-                                    .default_size(ui.available_size())
-                                    .min_width(ui.available_width())
-                                    .max_height(Self::TABLE_HEIGHT_MAX)
-                                    .max_width(ui.available_width())
-                                    .show(ui, |ui| {
-                                        // HACK: search codebase for 'HACK: table-resize-hack' for details
-                                        egui::Frame::new()
-                                            .outer_margin(4.0)
-                                            .show(ui, |ui| {
-                                                ui.style_mut().interaction.selectable_labels = false;
+                            .add(|tui| {
+                                let available_size = container_size(tui);
 
-                                                let mut fields = self.fields.lock().unwrap();
+                                tui.ui_finite(|ui: &mut Ui| {
+                                    Resize::default()
+                                        .resizable([false, true])
+                                        .default_size(available_size)
+                                        .min_width(available_size.x)
+                                        .max_width(available_size.x)
+                                        .max_height(Self::TABLE_HEIGHT_MAX)
+                                        .show(ui, |ui| {
+                                            // HACK: search codebase for 'HACK: table-resize-hack' for details
+                                            egui::Frame::new()
+                                                .outer_margin(4.0)
+                                                .show(ui, |ui| {
+                                                    ui.style_mut().interaction.selectable_labels = false;
 
-                                                let text_height = egui::TextStyle::Body
-                                                    .resolve(ui.style())
-                                                    .size
-                                                    .max(ui.spacing().interact_size.y);
+                                                    let mut fields = self.fields.lock().unwrap();
 
-                                                let table_response = TableBuilder::new(ui)
-                                                    .auto_shrink([false, false])
-                                                    .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                                                    .striped(true)
-                                                    .resizable(true)
-                                                    .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                                                    .sense(egui::Sense::click())
-                                                    .column(Column::auto())
-                                                    .column(Column::auto())
-                                                    .column(Column::remainder())
-                                                    .header(20.0, |mut header| {
-                                                        header.col(|ui| {
-                                                            ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
-                                                        });
-                                                        header.col(|ui| {
-                                                            ui.strong(tr!("table-unit-assignments-column-design"));
-                                                        });
-                                                        header.col(|ui| {
-                                                            ui.strong(tr!("table-unit-assignments-column-variant"));
-                                                        });
-                                                    })
-                                                    .body(|mut body| {
-                                                        let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
-                                                        for (pcb_unit_index, (design_index, assigned_variant_name)) in
-                                                            fields.variant_map.iter().enumerate()
-                                                        {
-                                                            body.row(text_height, |mut row| {
-                                                                let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
-                                                                row.set_selected(is_selected);
+                                                    let text_height = egui::TextStyle::Body
+                                                        .resolve(ui.style())
+                                                        .size
+                                                        .max(ui.spacing().interact_size.y);
 
-                                                                row.col(|ui| {
-                                                                    ui.label((pcb_unit_index + 1).to_string());
-                                                                });
-
-                                                                row.col(|ui| {
-                                                                    let label = design_index
-                                                                        .map(|design_index| pcb_overview.designs[design_index].to_string())
-                                                                        .unwrap_or(tr!("assignment-unassigned"));
-                                                                    ui.label(label);
-                                                                });
-
-                                                                row.col(|ui| {
-                                                                    let label = assigned_variant_name
-                                                                        .clone()
-                                                                        .map(|variant_name| variant_name.to_string())
-                                                                        .unwrap_or(tr!("assignment-unassigned"));
-                                                                    ui.label(label);
-                                                                });
-
-                                                                if row.response().clicked() {
-                                                                    match is_selected {
-                                                                        true => {
-                                                                            variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
-                                                                        }
-                                                                        false => variant_map_selected_indexes.push(pcb_unit_index),
-                                                                    }
-                                                                }
+                                                    let table_response = TableBuilder::new(ui)
+                                                        .auto_shrink([false, false])
+                                                        .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+                                                        .striped(true)
+                                                        .resizable(true)
+                                                        .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+                                                        .sense(egui::Sense::click())
+                                                        .column(Column::auto())
+                                                        .column(Column::auto())
+                                                        .column(Column::remainder())
+                                                        .header(20.0, |mut header| {
+                                                            header.col(|ui| {
+                                                                ui.strong(tr!("table-unit-assignments-column-pcb-unit"));
                                                             });
-                                                        }
-                                                        fields.variant_map_selected_indexes = variant_map_selected_indexes;
-                                                    });
+                                                            header.col(|ui| {
+                                                                ui.strong(tr!("table-unit-assignments-column-design"));
+                                                            });
+                                                            header.col(|ui| {
+                                                                ui.strong(tr!("table-unit-assignments-column-variant"));
+                                                            });
+                                                        })
+                                                        .body(|mut body| {
+                                                            let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
+                                                            for (pcb_unit_index, (design_index, assigned_variant_name)) in
+                                                                fields.variant_map.iter().enumerate()
+                                                            {
+                                                                body.row(text_height, |mut row| {
+                                                                    let is_selected = variant_map_selected_indexes.contains(&pcb_unit_index);
+                                                                    row.set_selected(is_selected);
 
-                                                if Self::TABLE_DEBUG_MODE {
-                                                    ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
-                                                    ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
-                                                }
-                                            });
-                                    });
+                                                                    row.col(|ui| {
+                                                                        ui.label((pcb_unit_index + 1).to_string());
+                                                                    });
 
-                                ui.response()
+                                                                    row.col(|ui| {
+                                                                        let label = design_index
+                                                                            .map(|design_index| pcb_overview.designs[design_index].to_string())
+                                                                            .unwrap_or(tr!("assignment-unassigned"));
+                                                                        ui.label(label);
+                                                                    });
+
+                                                                    row.col(|ui| {
+                                                                        let label = assigned_variant_name
+                                                                            .clone()
+                                                                            .map(|variant_name| variant_name.to_string())
+                                                                            .unwrap_or(tr!("assignment-unassigned"));
+                                                                        ui.label(label);
+                                                                    });
+
+                                                                    if row.response().clicked() {
+                                                                        match is_selected {
+                                                                            true => {
+                                                                                variant_map_selected_indexes.retain(|&x| x != pcb_unit_index)
+                                                                            }
+                                                                            false => variant_map_selected_indexes.push(pcb_unit_index),
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                            fields.variant_map_selected_indexes = variant_map_selected_indexes;
+                                                        });
+
+                                                    if Self::TABLE_DEBUG_MODE {
+                                                        ui.painter().rect_stroke(table_response.inner_rect, 0.0, (1.0, Color32::CYAN), StrokeKind::Inside);
+                                                        ui.painter().rect_stroke(ui.response().rect, 0.0, (1.0, Color32::ORANGE), StrokeKind::Inside);
+                                                    }
+                                                });
+                                        });
+
+                                    ui.response()
+                                });
                             });
-                        });
-
                         //
                         // button row
                         //
@@ -1216,4 +1220,37 @@ impl Tab for UnitAssignmentsTab {
         }
         OnCloseResponse::Close
     }
+}
+
+pub fn debug_rect(ui: &mut Ui, rect: Rect, debug_color: Color32) {
+    let debug_stroke = egui::Stroke::new(1.0, debug_color);
+    ui.painter().rect(
+        rect,
+        CornerRadius::ZERO,
+        Color32::TRANSPARENT,
+        debug_stroke,
+        egui::StrokeKind::Outside,
+    );
+}
+
+// FIXME this is a best-effort attempt to make the table resize smaller and larger with the window
+//       ideally the min size should be set based on the parent rect, but after hours of struggling
+//       a solution was not found, so we use the clip-rect instead, and hope this is good enough for
+//       the current use-cases.
+pub fn container_size(tui: &mut Tui) -> Vec2 {
+    let parent_rect = tui.taffy_container().parent_rect();
+    let container_rect = tui
+        .taffy_container()
+        .full_container_without_border_and_padding();
+
+    let ui = tui.egui_ui_mut();
+    let clip_rect = ui.clip_rect();
+    let size_rect = container_rect.intersect(clip_rect);
+
+    debug_rect(ui, parent_rect, Color32::RED);
+    debug_rect(ui, container_rect, Color32::MAGENTA);
+    debug_rect(ui, clip_rect, Color32::YELLOW);
+    debug_rect(ui, size_rect, Color32::GREEN);
+
+    size_rect.size()
 }
