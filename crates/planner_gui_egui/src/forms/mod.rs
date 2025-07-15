@@ -219,6 +219,7 @@ impl<'v_a, F: ValidateArgs<'v_a>, C> Form<F, C> {
         })
         .add(|tui| {
             tui.style(Style {
+                flex_grow: 1.0,
                 display: Display::Flex,
                 flex_direction: FlexDirection::Column,
                 ..inner_style()
