@@ -291,7 +291,7 @@ pub mod transforms {
 
     pub fn resize_x_transform(mut response: TuiContainerResponse<Response>, ui: &Ui) -> TuiContainerResponse<Response> {
         let available_width = ui.available_width();
-        response.min_size.x = 10.0;
+        response.min_size.x = 100.0;
         response.max_size.x = available_width;
         response
     }
