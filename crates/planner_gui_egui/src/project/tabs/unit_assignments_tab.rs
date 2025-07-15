@@ -5,7 +5,7 @@ use std::str::FromStr;
 use derivative::Derivative;
 use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, TextEdit, Ui, WidgetText};
+use egui::{Resize, TextEdit, Ui, Widget, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
@@ -23,6 +23,7 @@ use util::range_utils::RangeIntoUsize;
 use validator::{Validate, ValidationError};
 
 use crate::forms::Form;
+use crate::forms::transforms::resize_x_transform;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -309,15 +310,15 @@ impl UnitAssignmentsTabUi {
                                     },
                                     ..default_style()
                                 })
-                                .ui(|ui| {
+                                .ui_add_manual(|ui| {
                                     let fields = self.fields.lock().unwrap();
                                     let sender = self.component.sender.clone();
 
                                     let mut variant_name_clone = fields.variant_name.clone();
-                                    TextEdit::singleline(&mut variant_name_clone)
+                                    let response = TextEdit::singleline(&mut variant_name_clone)
                                         .hint_text(tr!("form-create-unit-assignment-input-variant-name-placeholder"))
                                         .desired_width(ui.available_width())
-                                        .show(ui);
+                                        .ui(ui);
 
                                     if !fields
                                         .variant_name
@@ -327,7 +328,9 @@ impl UnitAssignmentsTabUi {
                                             .send(UnitAssignmentsTabUiCommand::VariantNameChanged(variant_name_clone))
                                             .expect("sent")
                                     }
-                                });
+                                    
+                                    response
+                                }, resize_x_transform);
 
                                 let is_design_variant_ok = {
                                     let fields = self.fields.lock().unwrap();
