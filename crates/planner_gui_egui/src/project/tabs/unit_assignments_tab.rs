@@ -486,57 +486,58 @@ impl UnitAssignmentsTabUi {
                                         flex_grow: 1.0,
                                         ..container_style()
                                     })
-                                    .add(|tui| {
-                                        tui.style(Style {
-                                            flex_grow: 1.0,
-                                            ..default_style()
-                                        })
-                                        .ui(|ui|{
-                                                // always 0 the first sizing pass
-                                                let available_width = ui.available_width();
-                                                let width = if ui.is_sizing_pass() {
-                                                    200.0
-                                                } else {
-                                                    available_width
-                                                };
-                                                // FIXME make the width auto-size
-                                                let double_slider = DoubleSlider::new(
-                                                    &mut pcb_unit_start,
-                                                    &mut pcb_unit_end,
-                                                    1..=pcb_overview.units,
-                                                )
-                                                    .separation_distance(0)
-                                                    .width(width);
+                                        .add(|tui| {
+                                            tui.style(Style {
+                                                flex_grow: 1.0,
+                                                ..default_style()
+                                            })
+                                                .ui_add_manual(|ui| {
+                                                    // always 0 the first sizing pass
+                                                    let available_width = ui.available_width();
+                                                    let width = if ui.is_sizing_pass() {
+                                                        200.0
+                                                    } else {
+                                                        available_width
+                                                    };
+                                                    // FIXME make the width auto-size
+                                                    let response = DoubleSlider::new(
+                                                        &mut pcb_unit_start,
+                                                        &mut pcb_unit_end,
+                                                        1..=pcb_overview.units,
+                                                    )
+                                                        .separation_distance(0)
+                                                        .width(width)
+                                                        .ui(ui);
 
-                                                ui.add(double_slider);
-                                            }
-                                        );
+                                                    response
+                                                }, resize_x_transform
+                                                );
 
-                                        tui.style(Style {
-                                            flex_grow: 0.0,
-                                            min_size: Size {
-                                                width: length(50.0),
-                                                height: auto(),
-                                            },
-                                            ..default_style()
-                                        })
-                                        .ui_add(
-                                            egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end)
-                                        );
+                                            tui.style(Style {
+                                                flex_grow: 0.0,
+                                                min_size: Size {
+                                                    width: length(50.0),
+                                                    height: auto(),
+                                                },
+                                                ..default_style()
+                                            })
+                                                .ui_add(
+                                                    egui::DragValue::new(&mut pcb_unit_start).range(1..=pcb_unit_end)
+                                                );
 
-                                        tui.style(Style {
-                                            flex_grow: 0.0,
-                                            min_size: Size {
-                                                width: length(50.0),
-                                                height: auto(),
-                                            },
-                                            ..default_style()
-                                        })
-                                        .ui_add(
-                                            egui::DragValue::new(&mut pcb_unit_end)
-                                                .range(pcb_unit_start..=pcb_overview.units)
-                                        );
-                                    });
+                                            tui.style(Style {
+                                                flex_grow: 0.0,
+                                                min_size: Size {
+                                                    width: length(50.0),
+                                                    height: auto(),
+                                                },
+                                                ..default_style()
+                                            })
+                                                .ui_add(
+                                                    egui::DragValue::new(&mut pcb_unit_end)
+                                                        .range(pcb_unit_start..=pcb_overview.units)
+                                                );
+                                        });
 
                                     let pcb_unit_range = RangeInclusive::new(pcb_unit_start, pcb_unit_end);
 
