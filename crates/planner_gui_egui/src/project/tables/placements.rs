@@ -234,6 +234,10 @@ mod columns {
 use columns::*;
 
 impl RowViewer<PlacementsRow> for PlacementsRowViewer {
+    fn on_highlight_change(&mut self, highlighted: &[&PlacementsRow], _unhighlighted: &[&PlacementsRow]) {
+        debug!("highlight change: {:?}", highlighted);
+    }
+
     fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {
         let _ = column;
         if is_last_visible_column {

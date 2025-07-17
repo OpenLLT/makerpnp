@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use derivative::Derivative;
+use eframe::epaint::Color32;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
@@ -23,6 +24,8 @@ pub struct GerberViewerTabUi {
     #[derivative(Debug = "ignore")]
     gerber_viewer_ui: GerberViewerUi,
 
+    coord_input: (String, String),
+
     pub component: ComponentState<GerberViewerTabUiCommand>,
 }
 
@@ -43,6 +46,7 @@ impl GerberViewerTabUi {
         Self {
             gerber_viewer_ui,
             component,
+            coord_input: Default::default(),
         }
     }
 
@@ -169,6 +173,8 @@ impl GerberViewerTabUi {
 pub enum GerberViewerTabUiCommand {
     None,
     GerberViewerUiCommand(GerberViewerUiCommand),
+    GoToClicked(f64, f64),
+    CoordinatesChanged(String, String),
 }
 
 #[derive(Debug, Clone)]
@@ -199,8 +205,66 @@ impl UiComponent for GerberViewerTabUi {
             egui_tool_windows::ToolWindows::new().windows(ui, {
                 move |builder| {
                     builder
-                        .add_window(tool_windows_id.with("layers"))
+                        .add_window(tool_windows_id.with("actions"))
                         .default_pos([20.0, 20.0])
+                        .default_size([200.0, 60.0])
+                        .show("Actions".to_string(), {
+                            // TODO TRANSLATE
+                            let mut x_coord = self.coord_input.0.clone();
+                            let mut y_coord = self.coord_input.1.clone();
+                            let sender = self.component.sender.clone();
+
+                            move |ui| {
+                                ui.horizontal(|ui| {
+                                    let mut coordinates_changed = false;
+
+                                    let x_is_valid = x_coord.parse::<f64>().is_ok();
+
+                                    let mut x_editor = egui::TextEdit::singleline(&mut x_coord)
+                                        .desired_width(50.0)
+                                        .hint_text("X"); // TODO translate
+
+                                    if !x_is_valid {
+                                        x_editor = x_editor.background_color(Color32::DARK_RED);
+                                    }
+                                    coordinates_changed |= ui.add(x_editor).changed();
+
+                                    let y_is_valid = y_coord.parse::<f64>().is_ok();
+
+                                    let mut y_editor = egui::TextEdit::singleline(&mut y_coord)
+                                        .desired_width(50.0)
+                                        .hint_text("Y"); // TODO translate
+                                    if !y_is_valid {
+                                        y_editor = y_editor.background_color(Color32::DARK_RED);
+                                    }
+                                    coordinates_changed |= ui.add(y_editor).changed();
+
+                                    let x = x_coord.parse::<f64>();
+                                    let y = y_coord.parse::<f64>();
+
+                                    let enabled = x.is_ok() && y.is_ok();
+
+                                    if coordinates_changed {
+                                        sender
+                                            .send(GerberViewerTabUiCommand::CoordinatesChanged(x_coord, y_coord))
+                                            .expect("sent");
+                                    }
+
+                                    ui.add_enabled_ui(enabled, |ui| {
+                                        if ui.button("⛶ Go To").clicked() {
+                                            // Safety: ui is disabled unless x and y are `Result::ok`
+                                            sender
+                                                .send(GerberViewerTabUiCommand::GoToClicked(x.unwrap(), y.unwrap()))
+                                                .expect("sent");
+                                        }
+                                    });
+                                });
+                            }
+                        });
+
+                    builder
+                        .add_window(tool_windows_id.with("layers"))
+                        .default_pos([20.0, 80.0])
                         .default_size([200.0, 200.0])
                         .show(tr!("pcb-gerber-viewer-layers-window-title"), {
                             let layers_binding = self.gerber_viewer_ui.layers();
@@ -209,7 +273,7 @@ impl UiComponent for GerberViewerTabUi {
 
                                 Self::show_layers_table(ui, &layers_map);
                             }
-                        })
+                        });
                 }
             });
         });
@@ -231,6 +295,16 @@ impl UiComponent for GerberViewerTabUi {
                     None => None,
                     Some(GerberViewerUiAction::None) => Some(GerberViewerTabUiAction::None),
                 }
+            }
+            GerberViewerTabUiCommand::GoToClicked(x, y) => {
+                self.gerber_viewer_ui
+                    .component
+                    .send(GerberViewerUiCommand::LocateView(x, y));
+                None
+            }
+            GerberViewerTabUiCommand::CoordinatesChanged(x, y) => {
+                self.coord_input = (x.to_string(), y.to_string());
+                None
             }
         }
     }

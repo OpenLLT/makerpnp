@@ -5,9 +5,9 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use derivative::Derivative;
-use eframe::emath::Rect;
+use eframe::emath::{Rect, Vec2};
 use eframe::epaint::Color32;
-use egui::Ui;
+use egui::{Pos2, Ui};
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
@@ -19,7 +19,7 @@ use indexmap::IndexMap;
 use indexmap::map::Entry;
 use planner_app::{DesignIndex, GerberFileFunction, PcbOverview, PcbSide};
 use thiserror::Error;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::ui_component::{ComponentState, UiComponent};
 
@@ -282,6 +282,16 @@ impl GerberViewerUi {
 
         Ok((gerber_doc, commands))
     }
+
+    /// X and Y are in GERBER units.
+    pub fn locate_view(&mut self, x: f64, y: f64) {
+        let ui_state = self.gerber_ui_state.lock().unwrap();
+        let center_screen_pos = ui_state.center_screen_pos;
+
+        let mut gerber_state = self.gerber_state.lock().unwrap();
+        let point = Pos2::new(x as f32, y as f32);
+        gerber_state.locate_view(point, center_screen_pos);
+    }
 }
 
 #[derive(Debug)]
@@ -374,6 +384,15 @@ impl GerberViewState {
             .fit_view(viewport, &self.bounding_box, INITIAL_GERBER_AREA_PERCENT);
         self.needs_view_centering = false;
     }
+
+    fn locate_view(&mut self, point: Pos2, center_screen_pos: Pos2) {
+        trace!("locate view. x: {}, y: {}", point.x, point.y);
+        self.view.translation = Vec2::new(
+            center_screen_pos.x - (point.x * self.view.scale),
+            center_screen_pos.y + (point.y * self.view.scale),
+        );
+        trace!("view translation (after): {:?}", self.view.translation);
+    }
 }
 
 #[derive(Error, Debug)]
@@ -403,6 +422,7 @@ impl LayerViewState {
 #[derive(Debug, Clone)]
 pub enum GerberViewerUiCommand {
     None,
+    LocateView(f64, f64),
 }
 
 #[derive(Debug, Clone)]
@@ -465,6 +485,11 @@ impl UiComponent for GerberViewerUi {
     ) -> Option<Self::UiAction> {
         match command {
             GerberViewerUiCommand::None => Some(GerberViewerUiAction::None),
+            GerberViewerUiCommand::LocateView(x, y) => {
+                self.locate_view(x, y);
+
+                None
+            }
         }
     }
 }
