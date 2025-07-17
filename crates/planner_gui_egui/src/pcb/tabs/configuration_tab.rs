@@ -25,6 +25,7 @@ use crate::forms::Form;
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
+use crate::ui_util::tui_container_size;
 
 #[derive(Debug)]
 enum ManagerGerbersModalMode {
@@ -190,12 +191,14 @@ impl ConfigurationUi {
                                 ..default_style()
                             })
                                 .add(|tui: &mut Tui| {
-                                    tui.ui_infinite(|ui: &mut Ui| {
+                                    let available_size = tui_container_size(tui);
+
+                                    tui.ui_finite(|ui: &mut Ui| {
                                         Resize::default()
                                             .resizable([false, true])
-                                            .default_size(ui.available_size())
-                                            .min_width(ui.available_width())
-                                            .max_width(ui.available_width())
+                                            .default_size(available_size)
+                                            .min_width(available_size.x)
+                                            .max_width(available_size.x)
                                             .max_height(Self::TABLE_HEIGHT_MAX)
                                             .show(ui, |ui| {
                                                 // HACK: search codebase for 'HACK: table-resize-hack' for details
@@ -456,13 +459,15 @@ impl ConfigurationUi {
                                 ..container_style()
                             })
                                 .add(|tui| {
-                                    tui.ui_infinite(|ui: &mut Ui| {
+                                    let available_size = tui_container_size(tui);
+
+                                    tui.ui_finite(|ui: &mut Ui| {
                                         Resize::default()
                                             .resizable([false, true])
-                                            .default_size(ui.available_size())
-                                            .min_width(ui.available_width())
+                                            .default_size(available_size)
+                                            .min_width(available_size.x)
+                                            .max_width(available_size.x)
                                             .max_height(Self::TABLE_HEIGHT_MAX)
-                                            .max_width(ui.available_width())
                                             .show(ui, |ui| {
                                                 // HACK: search codebase for 'HACK: table-resize-hack' for details
                                                 egui::Frame::new()

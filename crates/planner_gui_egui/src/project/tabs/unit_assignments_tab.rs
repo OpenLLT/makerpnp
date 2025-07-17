@@ -3,10 +3,9 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use derivative::Derivative;
-use eframe::emath::Rect;
-use eframe::epaint::{Color32, CornerRadius, StrokeKind};
+use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, TextEdit, Ui, Vec2, Widget, WidgetText};
+use egui::{Resize, TextEdit, Ui, Widget, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
@@ -28,7 +27,7 @@ use crate::forms::transforms::resize_x_transform;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
-
+use crate::ui_util::tui_container_size;
 // FIXME fix various 'indentation' issues (aka padding/margin/gap/etc.)  Some of the controls are not aligned with the
 //      table borders.
 
@@ -382,7 +381,7 @@ impl UnitAssignmentsTabUi {
                             ..default_style()
                         })
                             .add(|tui: &mut Tui| {
-                                let available_size = container_size(tui);
+                                let available_size = tui_container_size(tui);
 
                                 tui.ui_finite(|ui: &mut Ui| {
                                     Resize::default()
@@ -631,7 +630,7 @@ impl UnitAssignmentsTabUi {
                             ..container_style()
                         })
                             .add(|tui| {
-                                let available_size = container_size(tui);
+                                let available_size = tui_container_size(tui);
 
                                 tui.ui_finite(|ui: &mut Ui| {
                                     Resize::default()
@@ -1220,37 +1219,4 @@ impl Tab for UnitAssignmentsTab {
         }
         OnCloseResponse::Close
     }
-}
-
-pub fn debug_rect(ui: &mut Ui, rect: Rect, debug_color: Color32) {
-    let debug_stroke = egui::Stroke::new(1.0, debug_color);
-    ui.painter().rect(
-        rect,
-        CornerRadius::ZERO,
-        Color32::TRANSPARENT,
-        debug_stroke,
-        egui::StrokeKind::Outside,
-    );
-}
-
-// FIXME this is a best-effort attempt to make the table resize smaller and larger with the window
-//       ideally the min size should be set based on the parent rect, but after hours of struggling
-//       a solution was not found, so we use the clip-rect instead, and hope this is good enough for
-//       the current use-cases.
-pub fn container_size(tui: &mut Tui) -> Vec2 {
-    let parent_rect = tui.taffy_container().parent_rect();
-    let container_rect = tui
-        .taffy_container()
-        .full_container_without_border_and_padding();
-
-    let ui = tui.egui_ui_mut();
-    let clip_rect = ui.clip_rect();
-    let size_rect = container_rect.intersect(clip_rect);
-
-    debug_rect(ui, parent_rect, Color32::RED);
-    debug_rect(ui, container_rect, Color32::MAGENTA);
-    debug_rect(ui, clip_rect, Color32::YELLOW);
-    debug_rect(ui, size_rect, Color32::GREEN);
-
-    size_rect.size()
 }
