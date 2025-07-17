@@ -359,6 +359,7 @@ impl GerberViewer {
                 *doc = gerber_doc;
             }
         }
+        state.request_bbox_reset();
     }
 
     pub fn close_all(&mut self) {
