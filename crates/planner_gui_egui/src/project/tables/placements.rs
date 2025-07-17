@@ -9,10 +9,12 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
+use nalgebra::Vector2;
 use planner_app::{
     ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, PlacementsItem,
     ProjectPlacementStatus, Reference,
 };
+use rust_decimal::Decimal;
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -94,6 +96,13 @@ pub enum PlacementsTableUiCommand {
         old_row: PlacementsRow,
     },
     FilterCommand(FilterUiCommand),
+    LocatePlacement {
+        /// Full object path of the component
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +114,13 @@ pub enum PlacementsTableUiAction {
         old_placement: PlacementState,
     },
     RequestRepaint,
+    LocatePlacement {
+        /// Full object path of the component
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -173,6 +189,17 @@ impl UiComponent for PlacementsTableUi {
                     None
                 }
             }
+            PlacementsTableUiCommand::LocatePlacement {
+                object_path,
+                pcb_side,
+                placement_coordinate,
+                unit_coordinate,
+            } => Some(PlacementsTableUiAction::LocatePlacement {
+                object_path,
+                pcb_side,
+                placement_coordinate,
+                unit_coordinate,
+            }),
         }
     }
 }
@@ -234,8 +261,21 @@ mod columns {
 use columns::*;
 
 impl RowViewer<PlacementsRow> for PlacementsRowViewer {
-    fn on_highlight_change(&mut self, highlighted: &[&PlacementsRow], _unhighlighted: &[&PlacementsRow]) {
-        debug!("highlight change: {:?}", highlighted);
+    fn on_highlight_cell(&mut self, row: &PlacementsRow, column: usize) {
+        debug!("highlight cell: {:?}, column: {:?}", row, column);
+
+        self.sender
+            .send(PlacementsTableUiCommand::LocatePlacement {
+                object_path: row.object_path.clone(),
+                pcb_side: row
+                    .placement_state
+                    .placement
+                    .pcb_side
+                    .clone(),
+                placement_coordinate: Vector2::new(row.placement_state.placement.x, row.placement_state.placement.y),
+                unit_coordinate: Vector2::new(row.placement_state.unit_position.x, row.placement_state.unit_position.y),
+            })
+            .expect("sent");
     }
 
     fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {

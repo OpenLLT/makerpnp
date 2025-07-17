@@ -31,7 +31,7 @@ pub use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
 use planning::project::{
-    PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectRefreshResult,
+    PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectPcb, ProjectRefreshResult,
 };
 pub use planning::variant::VariantName;
 use planning::{file, project};
@@ -348,6 +348,8 @@ pub enum Arg {
 pub struct ProjectOverview {
     pub name: String,
     pub processes: Vec<ProcessReference>,
+
+    pub pcbs: Vec<ProjectPcb>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
@@ -1459,6 +1461,7 @@ impl Planner {
                         .iter()
                         .map(|process| process.reference.clone())
                         .collect(),
+                    pcbs: project.pcbs.to_vec(),
                 };
                 Ok(project_view_renderer::view(ProjectView::Overview(overview)))
             }),

@@ -5,12 +5,14 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
+use nalgebra::Vector2;
 use planner_app::{
-    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbUnitIndex, PcbView, PcbViewRequest,
+    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
     PhaseOverview, PhaseReference, PlacementOperation, PlacementState, PlacementStatus, ProcessReference,
     ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
+use rust_decimal::Decimal;
 use slotmap::new_key_type;
 use tabs::explorer_tab::{ExplorerTab, ExplorerTabUi, ExplorerTabUiAction, ExplorerTabUiCommand, ExplorerTabUiContext};
 use tabs::load_out_tab::{LoadOutTab, LoadOutTabUi, LoadOutTabUiAction, LoadOutTabUiCommand, LoadOutTabUiContext};
@@ -58,6 +60,13 @@ pub enum ProjectAction {
     UiCommand(ProjectUiCommand),
     ShowPcb(PathBuf),
     RequestRepaint,
+    LocateComponent {
+        pcb_file: PathBuf,
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 #[derive(Derivative)]
@@ -76,6 +85,9 @@ pub struct Project {
 
     /// initially empty until the OverviewView has been received and processed.
     processes: Vec<ProcessReference>,
+
+    /// initially empty until the OverviewView has been received and processed.
+    pcbs: Vec<PathBuf>,
 
     /// initially empty, requires fetching the PhaseOverviewView for each phase before it can be used.
     phases: Vec<PhaseOverview>,
@@ -144,6 +156,7 @@ impl Project {
             project_ui_state,
             modified: false,
             pcbs_modified: false,
+            pcbs: Default::default(),
             errors: Default::default(),
             processes: Default::default(),
             phases: Default::default(),
@@ -648,6 +661,14 @@ impl Project {
         self.processes = project_overview.processes.clone();
     }
 
+    pub fn update_pcbs(&mut self, project_overview: &ProjectOverview) {
+        self.pcbs = project_overview
+            .pcbs
+            .iter()
+            .map(|pcb| pcb.pcb_file.build_path(&self.path))
+            .collect();
+    }
+
     #[must_use]
     fn update_placement(
         planner_core_service: &mut PlannerCoreService,
@@ -827,6 +848,30 @@ impl Project {
                 tasks.push(task);
             }
         }
+    }
+
+    fn locate_component(
+        &self,
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    ) -> Option<ProjectAction> {
+        let (pcb_number, unit_number) = object_path
+            .pcb_instance_and_unit()
+            .unwrap();
+
+        let (pcb_index, _unit_index) = (pcb_number - 1, unit_number - 1);
+
+        self.pcbs
+            .get(pcb_index as usize)
+            .map(|pcb_file| ProjectAction::LocateComponent {
+                pcb_file: pcb_file.clone(),
+                object_path,
+                pcb_side,
+                placement_coordinate,
+                unit_coordinate,
+            })
     }
 }
 
@@ -1032,6 +1077,7 @@ impl UiComponent for Project {
                     ProjectView::Overview(project_overview) => {
                         trace!("project overview: {:?}", project_overview);
                         self.update_processes(&project_overview);
+                        self.update_pcbs(&project_overview);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         state.name = Some(project_overview.name.clone());
@@ -1580,6 +1626,12 @@ impl UiComponent for Project {
                             action,
                         })
                         .when_ok(key, |_| Some(ProjectUiCommand::RefreshPhase(phase))),
+                    Some(PhaseTabUiAction::LocatePlacement {
+                        object_path,
+                        pcb_side,
+                        placement_coordinate,
+                        unit_coordinate,
+                    }) => self.locate_component(object_path, pcb_side, placement_coordinate, unit_coordinate),
                 }
             }
             ProjectUiCommand::LoadOutTabUiCommand {
@@ -1646,6 +1698,12 @@ impl UiComponent for Project {
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
+                    Some(PlacementsTabUiAction::LocatePlacement {
+                        object_path,
+                        pcb_side,
+                        placement_coordinate,
+                        unit_coordinate,
+                    }) => self.locate_component(object_path, pcb_side, placement_coordinate, unit_coordinate),
                     None => None,
                 }
             }

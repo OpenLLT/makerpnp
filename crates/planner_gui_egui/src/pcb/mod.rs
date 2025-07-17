@@ -5,8 +5,10 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{DesignIndex, Event, PcbSide, PcbView, PcbViewRequest};
+use nalgebra::Vector2;
+use planner_app::{DesignIndex, Event, ObjectPath, PcbSide, PcbView, PcbViewRequest};
 use regex::Regex;
+use rust_decimal::Decimal;
 use slotmap::new_key_type;
 use tabs::configuration_tab::{
     ConfigurationTab, ConfigurationTabUiAction, ConfigurationTabUiCommand, ConfigurationTabUiContext, ConfigurationUi,
@@ -108,6 +110,10 @@ impl Pcb {
         commands.insert(0, initial_command);
 
         (instance, commands)
+    }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
     }
 
     fn configure_tabs(&mut self, key: PcbKey) -> Vec<PcbUiCommand> {
@@ -447,6 +453,12 @@ pub enum PcbUiCommand {
 
     ShowPanel,
     PanelTabUiCommand(PanelTabUiCommand),
+    LocateComponent {
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 pub struct PcbContext {
@@ -844,6 +856,24 @@ impl UiComponent for Pcb {
                     Some(GerberViewerTabUiAction::None) => None,
                     None => None,
                 }
+            }
+            PcbUiCommand::LocateComponent {
+                object_path,
+                pcb_side,
+                placement_coordinate,
+                unit_coordinate,
+            } => {
+                let tabs = self.pcb_tabs.lock().unwrap();
+
+                // TODO find the applicable tabs based on the object path and the PCB side.
+                // TODO send a message each applicable tab
+
+                println!(
+                    "pcb: {:?}, object_path: {:?}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
+                    self.path, object_path, pcb_side, placement_coordinate, unit_coordinate
+                );
+
+                None
             }
         }
     }

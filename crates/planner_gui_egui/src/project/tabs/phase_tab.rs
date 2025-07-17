@@ -2,11 +2,13 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
+use nalgebra::Vector2;
 use planner_app::{
-    ObjectPath, OperationReference, OperationStatus, PhaseOverview, PhasePlacements, PhaseReference, PlacementState,
-    Reference, TaskAction, TaskReference, TaskStatus,
+    ObjectPath, OperationReference, OperationStatus, PcbSide, PhaseOverview, PhasePlacements, PhaseReference,
+    PlacementState, Reference, TaskAction, TaskReference, TaskStatus,
 };
 use regex::Regex;
+use rust_decimal::Decimal;
 use tracing::{debug, trace};
 
 use crate::i18n::conversions::{process_operation_status_to_i18n_key, process_task_status_to_i18n_key};
@@ -102,6 +104,14 @@ pub enum PhaseTabUiAction {
         operation: OperationReference,
         task: TaskReference,
         action: TaskAction,
+    },
+    LocatePlacement {
+        /// Full object path of the component
+        object_path: ObjectPath,
+
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
     },
 }
 
@@ -285,6 +295,17 @@ impl UiComponent for PhaseTabUi {
                         object_path,
                         new_placement,
                         old_placement,
+                    }),
+                    Some(PlacementsTableUiAction::LocatePlacement {
+                        object_path,
+                        pcb_side,
+                        placement_coordinate,
+                        unit_coordinate,
+                    }) => Some(PhaseTabUiAction::LocatePlacement {
+                        object_path,
+                        pcb_side,
+                        placement_coordinate,
+                        unit_coordinate,
                     }),
                     None => None,
                 }

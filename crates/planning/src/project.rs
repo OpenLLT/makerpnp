@@ -281,7 +281,7 @@ impl Project {
 }
 
 #[serde_as]
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub struct ProjectPcb {
     pub pcb_file: FileReference,

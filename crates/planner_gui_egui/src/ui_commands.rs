@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use egui::{Context, ThemePreference};
 use egui_mobius::types::Value;
+use nalgebra::Vector2;
+use planner_app::{ObjectPath, PcbSide};
+use rust_decimal::Decimal;
 use tracing::{debug, trace};
 
 use crate::config::Config;
@@ -35,6 +38,13 @@ pub enum UiCommand {
     LangageChanged(String),
     ThemeChanged(ThemePreference),
     ShowPcb(PathBuf),
+    LocateComponent {
+        pcb_file: PathBuf,
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 // TODO perhaps the return type of this method be `Task<Result<UiCommand, UiAppError>>`
@@ -94,6 +104,32 @@ pub fn handle_command(
             } else {
                 Task::done(UiCommand::OpenPcbFile(path))
             }
+        }
+        UiCommand::LocateComponent {
+            pcb_file,
+            object_path,
+            pcb_side,
+            placement_coordinate,
+            unit_coordinate,
+        } => {
+            let app_state = app_state.lock().unwrap();
+
+            let pcbs = app_state.pcbs.lock().unwrap();
+            let pcb = pcbs
+                .iter()
+                .find(|(_candidate_key, candidate_pcb)| candidate_pcb.path().eq(&pcb_file));
+
+            if let Some((pcb_key, pcb)) = pcb {
+                pcb.component
+                    .send((pcb_key, PcbUiCommand::LocateComponent {
+                        object_path,
+                        pcb_side,
+                        placement_coordinate,
+                        unit_coordinate,
+                    }))
+            }
+
+            Task::none()
         }
 
         UiCommand::TabCommand {
@@ -228,6 +264,19 @@ pub fn handle_command(
                             Task::none()
                         }
                         ProjectTabAction::ShowPcb(path) => Task::done(UiCommand::ShowPcb(path)),
+                        ProjectTabAction::LocateComponent {
+                            pcb_file,
+                            object_path,
+                            pcb_side,
+                            placement_coordinate,
+                            unit_coordinate,
+                        } => Task::done(UiCommand::LocateComponent {
+                            pcb_file,
+                            object_path,
+                            pcb_side,
+                            placement_coordinate,
+                            unit_coordinate,
+                        }),
                     },
                 },
             }
