@@ -11,6 +11,7 @@ members = [
     "crates/criteria",
     "crates/cli",
     "crates/eda",
+    "crates/eda_units",
     "crates/gerber",
     "crates/gerber_viewer_egui",
     "crates/i18n",

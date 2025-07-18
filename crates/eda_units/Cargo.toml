@@ -1,0 +1,25 @@
+[package]
+name = "eda_units"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+serde = ["dep:serde"]
+gerber = ["dep:gerber-types"]
+
+[dependencies]
+# Math
+nalgebra = { workspace = true }
+rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
+
+# serialization
+serde = { workspace = true, features = ["derive"], optional = true }
+
+# Gerber
+gerber-types = { workspace = true, optional = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+serde_json = { workspace = true }
+
