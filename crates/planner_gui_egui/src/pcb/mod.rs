@@ -6,7 +6,7 @@ use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
 use nalgebra::Vector2;
-use planner_app::{DesignIndex, Event, ObjectPath, PcbSide, PcbView, PcbViewRequest};
+use planner_app::{DesignIndex, Event, ObjectPath, PcbOverview, PcbSide, PcbView, PcbViewRequest};
 use regex::Regex;
 use rust_decimal::Decimal;
 use slotmap::new_key_type;
@@ -54,6 +54,7 @@ pub struct Pcb {
 
     path: PathBuf,
     modified: bool,
+    pcb_overview: Option<PcbOverview>,
 
     pcb_tabs: Value<PcbTabs>,
 
@@ -102,6 +103,7 @@ impl Pcb {
             pcb_ui_state,
             path,
             modified: false,
+            pcb_overview: None,
             component,
             pcb_tabs,
         };
@@ -587,7 +589,9 @@ impl UiComponent for Pcb {
                             .update_pcb_overview(pcb_overview.clone());
                         pcb_ui_state
                             .panel_tab_ui
-                            .update_pcb_overview(pcb_overview);
+                            .update_pcb_overview(pcb_overview.clone());
+
+                        self.pcb_overview = Some(pcb_overview);
                     }
                     PcbView::PanelSizing(panel_sizing) => {
                         debug!("Received panel sizing.");
@@ -841,14 +845,16 @@ impl UiComponent for Pcb {
                 args,
                 command,
             } => {
-                let context = &mut GerberViewerTabUiContext::default();
+                let context = &mut GerberViewerTabUiContext {
+                    args,
+                };
 
                 let gerber_viewer_ui_action = self
                     .pcb_ui_state
                     .lock()
                     .unwrap()
                     .gerber_viewer_tab_uis
-                    .get_mut(&args)
+                    .get_mut(&context.args)
                     .unwrap()
                     .update(command, context);
 
@@ -865,13 +871,52 @@ impl UiComponent for Pcb {
             } => {
                 let tabs = self.pcb_tabs.lock().unwrap();
 
-                // TODO find the applicable tabs based on the object path and the PCB side.
-                // TODO send a message each applicable tab
-
-                println!(
+                trace!(
                     "pcb: {:?}, object_path: {:?}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
                     self.path, object_path, pcb_side, placement_coordinate, unit_coordinate
                 );
+
+                if let Some(pcb_overview) = &self.pcb_overview {
+                    let (pcb_number, unit_number) = object_path
+                        .pcb_instance_and_unit()
+                        .unwrap();
+                    let (_pcb_index, unit_index) = (pcb_number - 1, unit_number - 1);
+
+                    if let Some(design_index) = pcb_overview.unit_map.get(&unit_index) {
+                        let tab_keys = tabs.filter_map(|(candidate_tab_key, candidate_tab)|{
+                            match candidate_tab {
+                                PcbTabKind::GerberViewer(gerber_viewer_tab)
+                                    if matches!(gerber_viewer_tab.args.mode, GerberViewerMode::Design(candidate_index) if candidate_index.eq(design_index))
+                                => {
+                                    Some(candidate_tab_key.clone())
+                                }
+                                _ => None
+                            }
+                        });
+
+                        let pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+
+                        for tab_key in tab_keys {
+                            tabs.with_tab_mut(&tab_key, |tab| {
+                                let PcbTabKind::GerberViewer(tab) = tab else { return };
+
+                                if let Some(gerber_viewer_ui) = pcb_ui_state
+                                    .gerber_viewer_tab_uis
+                                    .get(&tab.args)
+                                {
+                                    gerber_viewer_ui
+                                        .component
+                                        .send(GerberViewerTabUiCommand::LocateComponent {
+                                            object_path: object_path.clone(),
+                                            pcb_side,
+                                            placement_coordinate,
+                                            unit_coordinate,
+                                        })
+                                }
+                            })
+                        }
+                    }
+                }
 
                 None
             }

@@ -6,7 +6,10 @@ use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use planner_app::PcbOverview;
+use nalgebra::Vector2;
+use num_traits::ToPrimitive;
+use planner_app::{ObjectPath, PcbOverview, PcbSide};
+use rust_decimal::Decimal;
 use tracing::trace;
 
 use crate::i18n::conversions::{gerber_file_function_to_i18n_key, pcb_side_to_i18n_key};
@@ -175,6 +178,12 @@ pub enum GerberViewerTabUiCommand {
     GerberViewerUiCommand(GerberViewerUiCommand),
     GoToClicked(f64, f64),
     CoordinatesChanged(String, String),
+    LocateComponent {
+        object_path: ObjectPath,
+        pcb_side: PcbSide,
+        placement_coordinate: Vector2<Decimal>,
+        unit_coordinate: Vector2<Decimal>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -182,8 +191,10 @@ pub enum GerberViewerTabUiAction {
     None,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct GerberViewerTabUiContext {}
+#[derive(Debug, Clone)]
+pub struct GerberViewerTabUiContext {
+    pub args: GerberViewerUiInstanceArgs,
+}
 
 impl UiComponent for GerberViewerTabUi {
     type UiContext<'context> = GerberViewerTabUiContext;
@@ -306,6 +317,25 @@ impl UiComponent for GerberViewerTabUi {
                 self.coord_input = (x.to_string(), y.to_string());
                 None
             }
+            GerberViewerTabUiCommand::LocateComponent {
+                object_path,
+                pcb_side,
+                placement_coordinate,
+                unit_coordinate,
+            } => {
+                let (x, y) = match _context.args.mode {
+                    GerberViewerMode::Panel => (unit_coordinate.x, unit_coordinate.y),
+                    GerberViewerMode::Design(_) => (placement_coordinate.x, placement_coordinate.y),
+                };
+
+                self.gerber_viewer_ui
+                    .component
+                    .send(GerberViewerUiCommand::LocateView(
+                        x.to_f64().unwrap_or_default(),
+                        y.to_f64().unwrap_or_default(),
+                    ));
+                None
+            }
         }
     }
 }
@@ -348,7 +378,9 @@ impl Tab for GerberViewerTab {
             return;
         };
 
-        UiComponent::ui(instance, ui, &mut GerberViewerTabUiContext::default());
+        UiComponent::ui(instance, ui, &mut GerberViewerTabUiContext {
+            args: self.args.clone(),
+        });
     }
 
     fn on_close<'a>(&mut self, _tab_key: &TabKey, _context: &mut Self::Context) -> OnCloseResponse {
