@@ -843,12 +843,13 @@ impl eframe::App for GerberViewer {
                     for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
                         ui.horizontal(|ui| {
                             ui.color_edit_button_srgba(&mut layer_view_state.color);
+                            let height = ui.min_size().y;
 
                             let mut changed = false;
                             let mut origin = layer_view_state.transform.origin + layer_view_state.transform.offset;
 
                             changed |= ui
-                                .add_sized([50.0, 10.0], |ui: &mut Ui| {
+                                .add_sized([50.0, height], |ui: &mut Ui| {
                                     ui.drag_angle(&mut layer_view_state.transform.rotation)
                                 })
                                 .changed();
@@ -858,11 +859,20 @@ impl eframe::App for GerberViewer {
                                 .changed();
 
                             changed |= ui
-                                .add(egui::DragValue::new(&mut origin.x))
+                                .add_sized([50.0, height], |ui: &mut Ui| {
+                                    ui.add(egui::DragValue::new(&mut origin.x)
+                                        .fixed_decimals(4)
+                                        .speed(STEP_SPEED * STEP_SCALE))
+                                })
                                 .changed();
 
                             changed |= ui
-                                .add(egui::DragValue::new(&mut layer_view_state.transform.offset.x))
+                                .add_sized([50.0, height], |ui: &mut Ui| {
+                                    ui.add(egui::DragValue::new(&mut layer_view_state.transform.offset.x)
+                                        .fixed_decimals(4)
+                                        .speed(STEP_SPEED * STEP_SCALE)
+                                    )
+                                })
                                 .changed();
 
                             changed |= ui
@@ -870,11 +880,30 @@ impl eframe::App for GerberViewer {
                                 .changed();
 
                             changed |= ui
-                                .add(egui::DragValue::new(&mut origin.y))
+                                .add_sized([50.0, height], |ui: &mut Ui| {
+                                    ui.add(egui::DragValue::new(&mut origin.y)
+                                        .fixed_decimals(4)
+                                        .speed(STEP_SPEED * STEP_SCALE)
+                                    )
+                                })
                                 .changed();
 
                             changed |= ui
-                                .add(egui::DragValue::new(&mut layer_view_state.transform.offset.y))
+                                .add_sized([50.0, height], |ui: &mut Ui| {
+                                    ui.add(egui::DragValue::new(&mut layer_view_state.transform.offset.y)
+                                        .fixed_decimals(4)
+                                        .speed(STEP_SPEED * STEP_SCALE)
+                                    )
+                                })
+                                .changed();
+
+                            changed |= ui
+                                .add_sized([50.0, height], |ui: &mut Ui| {
+                                    ui.add(egui::DragValue::new(&mut layer_view_state.transform.scale)
+                                        .fixed_decimals(4)
+                                        .range(0.0..=100.0)
+                                        .speed(STEP_SPEED * STEP_SCALE))
+                                })
                                 .changed();
 
                             changed |= ui
