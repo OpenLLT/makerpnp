@@ -883,15 +883,15 @@ impl UiComponent for Pcb {
                     let (_pcb_index, unit_index) = (pcb_number - 1, unit_number - 1);
 
                     if let Some(design_index) = pcb_overview.unit_map.get(&unit_index) {
-                        let tab_keys = tabs.filter_map(|(candidate_tab_key, candidate_tab)|{
-                            match candidate_tab {
-                                PcbTabKind::GerberViewer(gerber_viewer_tab)
-                                    if matches!(gerber_viewer_tab.args.mode, GerberViewerMode::Design(candidate_index) if candidate_index.eq(design_index))
-                                => {
+                        let tab_keys = tabs.filter_map(|(candidate_tab_key, candidate_tab)| match candidate_tab {
+                            PcbTabKind::GerberViewer(gerber_viewer_tab) => match gerber_viewer_tab.args.mode {
+                                GerberViewerMode::Design(candidate_index) if candidate_index.eq(design_index) => {
                                     Some(candidate_tab_key.clone())
                                 }
-                                _ => None
-                            }
+                                GerberViewerMode::Panel => Some(candidate_tab_key.clone()),
+                                _ => None,
+                            },
+                            _ => None,
                         });
 
                         let pcb_ui_state = self.pcb_ui_state.lock().unwrap();

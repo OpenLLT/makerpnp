@@ -285,11 +285,10 @@ impl GerberViewerUi {
 
     /// X and Y are in GERBER units.
     pub fn locate_view(&mut self, mut x: f64, y: f64) {
-        
         if matches!(self.args.pcb_side, Some(PcbSide::Bottom)) {
             x = -x;
         }
-        
+
         let ui_state = self.gerber_ui_state.lock().unwrap();
         let center_screen_pos = ui_state.center_screen_pos;
 
@@ -427,6 +426,7 @@ impl LayerViewState {
 #[derive(Debug, Clone)]
 pub enum GerberViewerUiCommand {
     None,
+    // x y coordinates in MM
     LocateView(f64, f64),
 }
 
