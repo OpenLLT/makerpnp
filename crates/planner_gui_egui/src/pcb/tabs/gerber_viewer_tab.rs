@@ -323,6 +323,11 @@ impl UiComponent for GerberViewerTabUi {
                 placement_coordinate,
                 unit_coordinate,
             } => {
+                
+                if matches!(_context.args.pcb_side, Some(candidate_pcb_side) if candidate_pcb_side.ne(&pcb_side)) {
+                    return None;
+                }
+                
                 let (x, y) = match _context.args.mode {
                     GerberViewerMode::Panel => (unit_coordinate.x, unit_coordinate.y),
                     GerberViewerMode::Design(_) => (placement_coordinate.x, placement_coordinate.y),
