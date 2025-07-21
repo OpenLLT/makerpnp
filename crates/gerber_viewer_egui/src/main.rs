@@ -26,7 +26,7 @@ use gerber_viewer::{
     DisplayInfo, GerberLayer, GerberRenderer, Mirroring, RenderConfiguration, draw_crosshair, draw_outline,
     generate_pastel_color,
 };
-use log::{error, info, trace};
+use log::{debug, error, info, trace};
 use logging::AppLogItem;
 use nalgebra::{Point2, Vector2};
 use rfd::FileDialog;
@@ -319,12 +319,22 @@ impl GerberViewer {
                 state.ui_state.origin_screen_pos
             );
 
+            let target_unit_system = UnitSystem::from_gerber_unit(&state.layers.first().unwrap().3.units);
+
             let painter = ui.painter().with_clip_rect(viewport);
-            for (_, layer_view_state, layer, _doc) in state.layers.iter() {
+            for (index, (_, layer_view_state, layer, doc)) in state.layers.iter().enumerate() {
                 if layer_view_state.enabled {
-                    let layer_transform = layer_view_state
-                        .transform
-                        .combine(&state.transform);
+                    let layer_transform = layer_view_state.transform;
+
+                    let mut unit_aligned_layer_transform = layer_transform;
+                    if index > 0 {
+                        // scale this layer to match the unit system used by the first layer
+                        let layer_unit_system = UnitSystem::from_gerber_unit(&doc.units);
+                        let scale = layer_unit_system.scale_f64_for(target_unit_system);
+                        unit_aligned_layer_transform.scale *= scale;
+                    }
+
+                    let transform = unit_aligned_layer_transform.combine(&state.transform);
 
                     GerberRenderer::default().paint_layer(
                         &painter,
@@ -332,7 +342,7 @@ impl GerberViewer {
                         layer,
                         layer_view_state.color,
                         &self.config,
-                        &layer_transform,
+                        &transform,
                     );
                 }
             }
