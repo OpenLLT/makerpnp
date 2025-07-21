@@ -175,10 +175,22 @@ impl GerberViewer {
         let state = state_guard.get_or_insert_default();
 
         let layer_count = state.layers.len();
+
+        let scale = state
+            .layers
+            .first()
+            .map(|(_, _, _, first_layer_doc)| {
+                let target_unit_system = UnitSystem::from_gerber_unit(&first_layer_doc.units);
+                // scale this layer to match the unit system used by the first layer
+                let layer_unit_system = UnitSystem::from_gerber_unit(&gerber_doc.units);
+                layer_unit_system.scale_f64_for(target_unit_system)
+            })
+            .unwrap_or(1.0);
+
         let color = generate_pastel_color(layer_count as u64);
 
         let layer = GerberLayer::new(commands);
-        let layer_view_state = LayerViewState::new(color);
+        let layer_view_state = LayerViewState::new(color, scale);
 
         state.add_layer(path, layer_view_state, layer, gerber_doc);
 
@@ -319,20 +331,13 @@ impl GerberViewer {
                 state.ui_state.origin_screen_pos
             );
 
-            let target_unit_system = UnitSystem::from_gerber_unit(&state.layers.first().unwrap().3.units);
-
             let painter = ui.painter().with_clip_rect(viewport);
-            for (index, (_, layer_view_state, layer, doc)) in state.layers.iter().enumerate() {
+            for (_, layer_view_state, layer, _doc) in state.layers.iter() {
                 if layer_view_state.enabled {
                     let layer_transform = layer_view_state.transform;
 
                     let mut unit_aligned_layer_transform = layer_transform;
-                    if index > 0 {
-                        // scale this layer to match the unit system used by the first layer
-                        let layer_unit_system = UnitSystem::from_gerber_unit(&doc.units);
-                        let scale = layer_unit_system.scale_f64_for(target_unit_system);
-                        unit_aligned_layer_transform.scale *= scale;
-                    }
+                    unit_aligned_layer_transform.scale *= layer_view_state.unit_system_scale_factor;
 
                     let transform = unit_aligned_layer_transform.combine(&state.transform);
 

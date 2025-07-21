@@ -90,9 +90,12 @@ impl GerberViewState {
         {
             let layer_bbox = &layer.bounding_box();
 
+            let mut unit_aligned_layer_transform = layer_view_state.transform;
+            unit_aligned_layer_transform.scale *= layer_view_state.unit_system_scale_factor;
+
             let image_transform_matrix = layer.image_transform().to_matrix();
             let render_transform_matrix = self.transform.to_matrix();
-            let layer_matrix = layer_view_state.transform.to_matrix();
+            let layer_matrix = unit_aligned_layer_transform.to_matrix();
 
             let matrix = image_transform_matrix * render_transform_matrix * layer_matrix;
 
@@ -190,14 +193,17 @@ pub struct LayerViewState {
     pub enabled: bool,
     pub color: Color32,
     pub transform: GerberTransform,
+    /// always 1.0 for the first layer
+    pub unit_system_scale_factor: f64,
 }
 
 impl LayerViewState {
-    pub fn new(color: Color32) -> Self {
+    pub fn new(color: Color32, unit_system_scale_factor: f64) -> Self {
         Self {
             enabled: true,
             color,
             transform: GerberTransform::default(),
+            unit_system_scale_factor,
         }
     }
 }
