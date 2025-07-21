@@ -19,26 +19,25 @@ pub enum UnitSystem {
 }
 
 impl UnitSystem {
+    /// Returns the number of nanometers in one unit of this unit system
+    fn nm_per_unit(&self) -> u32 {
+        match self {
+            UnitSystem::Inches => 25_400_000,
+            UnitSystem::Millimeters => 1_000_000,
+            UnitSystem::Mils => 25_400,
+            UnitSystem::Si => 10_000,
+        }
+    }
+
     /// Convert nanometers (as i32) to a Decimal value in this unit system
     pub fn from_nm_decimal(&self, nm_value: i32) -> Decimal {
         let nm_decimal = Decimal::from(nm_value);
-
-        match self {
-            UnitSystem::Inches => nm_decimal / Decimal::from(25_400_000),
-            UnitSystem::Millimeters => nm_decimal / Decimal::from(1_000_000),
-            UnitSystem::Mils => nm_decimal / Decimal::from(25_400),
-            UnitSystem::Si => nm_decimal / Decimal::from(10_000),
-        }
+        nm_decimal / Decimal::from(self.nm_per_unit())
     }
 
     /// Convert a Decimal value from this unit system to nanometers (as i32)
     pub fn to_nm_decimal(&self, value: Decimal) -> i32 {
-        let nm_decimal = match self {
-            UnitSystem::Inches => value * Decimal::from(25_400_000),
-            UnitSystem::Millimeters => value * Decimal::from(1_000_000),
-            UnitSystem::Mils => value * Decimal::from(25_400),
-            UnitSystem::Si => value * Decimal::from(10_000),
-        };
+        let nm_decimal = value * Decimal::from(self.nm_per_unit());
 
         // Round to nearest nanometer and convert to i32
         if nm_decimal > Decimal::from(i32::MAX) {
@@ -52,12 +51,7 @@ impl UnitSystem {
 
     /// Convert a value from this unit system to nanometers (internal representation)
     pub fn to_nm_f64(&self, value: f64) -> i32 {
-        let result = match self {
-            UnitSystem::Inches => value * 25_400_000.0,
-            UnitSystem::Millimeters => value * 1_000_000.0,
-            UnitSystem::Mils => value * 25_400.0,
-            UnitSystem::Si => value * 10_000.0, // 1 Si (丝) = 0.01 mm = 10,000 nm
-        };
+        let result = value * self.nm_per_unit() as f64;
 
         // Clamp to i32 range to prevent overflow
         if result > i32::MAX as f64 {
@@ -71,12 +65,7 @@ impl UnitSystem {
 
     /// Convert a value from nanometers to this unit system
     pub fn from_nm_f64(&self, value: i32) -> f64 {
-        match self {
-            UnitSystem::Inches => value as f64 / 25_400_000.0,
-            UnitSystem::Millimeters => value as f64 / 1_000_000.0,
-            UnitSystem::Mils => value as f64 / 25_400.0,
-            UnitSystem::Si => value as f64 / 10_000.0, // 1 Si (丝) = 0.01 mm = 10,000 nm
-        }
+        value as f64 / self.nm_per_unit() as f64
     }
 
     /// Get a display string for this unit system
@@ -101,46 +90,12 @@ impl UnitSystem {
 
     /// Calculate the scale factor to convert from this unit system to another unit system using f64
     pub fn scale_f64_for(&self, to: UnitSystem) -> f64 {
-        // Get the number of nm in one unit of the source unit system
-        let from_nm = match self {
-            UnitSystem::Inches => 25_400_000.0,
-            UnitSystem::Millimeters => 1_000_000.0,
-            UnitSystem::Mils => 25_400.0,
-            UnitSystem::Si => 10_000.0,
-        };
-
-        // Get the number of nm in one unit of the target unit system
-        let to_nm = match to {
-            UnitSystem::Inches => 25_400_000.0,
-            UnitSystem::Millimeters => 1_000_000.0,
-            UnitSystem::Mils => 25_400.0,
-            UnitSystem::Si => 10_000.0,
-        };
-
-        // The scale factor is the ratio of the nm values
-        from_nm / to_nm
+        self.nm_per_unit() as f64 / to.nm_per_unit() as f64
     }
 
     /// Calculate the scale factor to convert from this unit system to another unit system using Decimal
     pub fn scale_decimal_for(&self, to: UnitSystem) -> Decimal {
-        // Get the number of nm in one unit of the source unit system
-        let from_nm = match self {
-            UnitSystem::Inches => Decimal::from(25_400_000),
-            UnitSystem::Millimeters => Decimal::from(1_000_000),
-            UnitSystem::Mils => Decimal::from(25_400),
-            UnitSystem::Si => Decimal::from(10_000),
-        };
-
-        // Get the number of nm in one unit of the target unit system
-        let to_nm = match to {
-            UnitSystem::Inches => Decimal::from(25_400_000),
-            UnitSystem::Millimeters => Decimal::from(1_000_000),
-            UnitSystem::Mils => Decimal::from(25_400),
-            UnitSystem::Si => Decimal::from(10_000),
-        };
-
-        // The scale factor is the ratio of the nm values
-        from_nm / to_nm
+        Decimal::from(self.nm_per_unit()) / Decimal::from(to.nm_per_unit())
     }
 
     #[cfg(feature = "gerber")]
