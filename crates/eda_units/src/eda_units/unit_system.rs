@@ -101,7 +101,7 @@ impl UnitSystem {
 
     #[cfg(feature = "gerber")]
     /// Get the unit system from a gerber file unit
-    pub fn from_gerber_unit(unit: Option<gerber_types::Unit>) -> Self {
+    pub fn from_gerber_unit(unit: &Option<gerber_types::Unit>) -> Self {
         match unit {
             Some(gerber_types::Unit::Inches) => UnitSystem::Inches,
             Some(gerber_types::Unit::Millimeters) => UnitSystem::Millimeters,
@@ -185,6 +185,6 @@ mod tests {
     #[case(Some(gerber_types::Unit::Millimeters), UnitSystem::Millimeters)]
     #[case(None, UnitSystem::Millimeters)]
     fn test_from_gerber_unit(#[case] gerber_unit: Option<gerber_types::Unit>, #[case] expected: UnitSystem) {
-        assert_eq!(UnitSystem::from_gerber_unit(gerber_unit), expected);
+        assert_eq!(UnitSystem::from_gerber_unit(&gerber_unit), expected);
     }
 }
