@@ -4,7 +4,9 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext, DimensionUnitVector2Ext};
+use eda_units::eda_units::dimension_unit::{
+    DimensionUnit, DimensionUnitPoint2, DimensionUnitPoint2Ext, DimensionUnitVector2Ext,
+};
 use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
@@ -623,27 +625,25 @@ impl GerberViewer {
                             let state = self.state.lock().unwrap();
 
                             if let Some(state) = &*state {
-                                let unit_text = match state.layers.first().unwrap().3.units {
-                                    Some(Unit::Millimeters) => "MM",
-                                    Some(Unit::Inches) => "Inches",
-                                    None => "Unknown Units",
-                                };
-                                ui.label(format!("Layer units: {}", unit_text));
-
                                 ui.separator();
+                                let gerber_units = UnitSystem::from_gerber_unit(&state.layers.first().unwrap().3.units);
 
                                 let (x, y) = state
                                     .ui_state
                                     .cursor_gerber_coords
                                     .map(|position| {
-                                        fn format_coord(coord: f64) -> String {
-                                            format!("{:.3}", coord)
+                                        fn format_coord(coord: DimensionUnit) -> String {
+                                            format!("{}", coord)
                                         }
-                                        (format_coord(position.x), format_coord(position.y))
+
+                                        let source_point =
+                                            DimensionUnitPoint2::new_dim_f64(position.x, position.y, gerber_units);
+                                        let target_point = source_point.in_unit_system(self.unit_system);
+                                        (format_coord(target_point.x), format_coord(target_point.y))
                                     })
                                     .unwrap_or(("N/A".to_string(), "N/A".to_string()));
 
-                                ui.label(format!("Cursor: X={} Y={} {}", x, y, unit_text));
+                                ui.label(format!("Cursor: X={} Y={}", x, y));
                             } else {
                                 ui.label("No file loaded");
                             }
