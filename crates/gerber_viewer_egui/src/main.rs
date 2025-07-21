@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
 use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext, DimensionUnitVector2Ext};
 use eda_units::eda_units::unit_system::UnitSystem;
@@ -54,7 +55,7 @@ fn main() -> eframe::Result<()> {
     )
 }
 struct GerberViewer {
-    state: Option<GerberViewState>,
+    state: Arc<Mutex<Option<GerberViewState>>>,
     log: Vec<AppLogItem>,
     coord_input: (String, String),
     unit_system: UnitSystem,
@@ -97,12 +98,6 @@ impl eframe::App for GerberViewer {
                 self.bottom_panel_content(ctx, ui);
             });
 
-        egui::SidePanel::left("left_panel")
-            .resizable(true)
-            .show(ctx, |ui| {
-                self.side_panel_content(ctx, ui);
-            });
-
         egui::CentralPanel::default().show(ctx, |ui| {
             self.central_panel_content(ui);
         });
@@ -122,7 +117,7 @@ impl GerberViewer {
         _cc.egui_ctx
             .style_mut(|style| style.spacing.scroll = ScrollStyle::solid());
         Self {
-            state: None,
+            state: Arc::new(Mutex::new(None)),
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             config: RenderConfiguration::default(),
@@ -174,7 +169,8 @@ impl GerberViewer {
     pub fn add_gerber_layer_from_file(&mut self, path: PathBuf) -> Result<(), AppError> {
         let (gerber_doc, commands) = Self::parse_gerber(&mut self.log, &path)?;
 
-        let state = self.state.get_or_insert_default();
+        let mut state_guard = self.state.lock().unwrap();
+        let state = state_guard.get_or_insert_default();
 
         let layer_count = state.layers.len();
         let color = generate_pastel_color(layer_count as u64);
@@ -234,7 +230,9 @@ impl GerberViewer {
     }
 
     pub fn reload_all_layer_files(&mut self) {
-        let Some(state) = &mut self.state else { return };
+        let mut state_guard = self.state.lock().unwrap();
+
+        let Some(state) = &mut *state_guard else { return };
 
         for (path, _layer_state, layer, doc) in state.layers.iter_mut() {
             if let Ok((gerber_doc, commands)) = Self::parse_gerber(&mut self.log, &path) {
@@ -246,7 +244,9 @@ impl GerberViewer {
     }
 
     pub fn close_all(&mut self) {
-        self.state = None;
+        let mut state_guard = self.state.lock().unwrap();
+
+        *state_guard = None;
     }
 
     //
@@ -278,7 +278,7 @@ impl GerberViewer {
     //
 
     fn central_panel_content(&mut self, ui: &mut Ui) {
-        if let Some(state) = &mut self.state {
+        if let Some(state) = &mut *self.state.lock().unwrap() {
             let response = ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::drag());
             let viewport = response.rect;
 
@@ -367,6 +367,9 @@ impl GerberViewer {
                         ..default_style()
                     })
                     .add(|tui| {
+                        tui.egui_style_mut()
+                            .interaction
+                            .selectable_labels = false;
                         tui.label(
                             RichText::new("MakerPnP")
                                 .size(48.0)
@@ -380,10 +383,27 @@ impl GerberViewer {
                     });
                 });
         }
+
+        let tool_windows_id = ui.id();
+        egui_tool_windows::ToolWindows::new().windows(ui, {
+            move |builder| {
+                builder
+                    .add_window(tool_windows_id.with("actions"))
+                    .default_pos([20.0, 20.0])
+                    .default_size([400.0, 200.0])
+                    .show("Layers".to_string(), {
+                        let state = self.state.clone();
+
+                        move |ui| {
+                            Self::layer_view_content(state, ui);
+                        }
+                    });
+            }
+        });
     }
 
-    fn side_panel_content(&mut self, ctx: &Context, ui: &mut Ui) {
-        if let Some(state) = &mut self.state {
+    fn layer_view_content(state: Arc<Mutex<Option<GerberViewState>>>, ui: &mut Ui) {
+        if let Some(state) = &mut *state.lock().unwrap() {
             let mut request_bbox_reset = false;
             for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
                 ui.horizontal(|ui| {
@@ -478,7 +498,7 @@ impl GerberViewer {
 
             if request_bbox_reset {
                 state.request_bbox_reset();
-                ctx.request_repaint();
+                ui.ctx().request_repaint();
             }
         } else {
             ui.centered_and_justified(|ui| {
@@ -597,7 +617,9 @@ impl GerberViewer {
                 .add_with_background_color(|tui| {
                     tui.ui(|ui| {
                         ui.horizontal(|ui| {
-                            if let Some(state) = &self.state {
+                            let state = self.state.lock().unwrap();
+
+                            if let Some(state) = &*state {
                                 let unit_text = match state.layers.first().unwrap().3.units {
                                     Some(Unit::Millimeters) => "MM",
                                     Some(Unit::Inches) => "Inches",
@@ -634,7 +656,10 @@ impl GerberViewer {
                 if ui.button("🗁 Add layers...").clicked() {
                     self.add_layer_files();
                 }
-                ui.add_enabled_ui(self.state.is_some(), |ui| {
+
+                let have_state = self.state.lock().unwrap().is_some();
+
+                ui.add_enabled_ui(have_state, |ui| {
                     if ui
                         .button("🔃 Reload all layers")
                         .clicked()
@@ -675,7 +700,8 @@ impl GerberViewer {
             if ui.button("🗁").clicked() {
                 self.add_layer_files();
             }
-            ui.add_enabled_ui(self.state.is_some(), |ui| {
+            let have_state = self.state.lock().unwrap().is_some();
+            ui.add_enabled_ui(have_state, |ui| {
                 if ui.button("🔃").clicked() {
                     self.reload_all_layer_files();
                 }
@@ -690,7 +716,7 @@ impl GerberViewer {
 
             ui.separator();
 
-            ui.add_enabled_ui(self.state.is_some(), |ui| {
+            ui.add_enabled_ui(have_state, |ui| {
                 let x_is_valid = self
                     .coord_input
                     .0
@@ -724,13 +750,15 @@ impl GerberViewer {
 
                 let source_unit_system = self.unit_system;
 
+                let mut state = self.state.lock().unwrap();
+
                 ui.add_enabled_ui(enabled, |ui| {
                     if ui.button("⛶ Go To").clicked() {
                         // Safety: ui is disabled unless x and y are `Result::ok`
                         let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
                         let point = Point2::<DimensionUnit>::new_dim_f64(*x, *y, source_unit_system);
 
-                        self.state
+                        state
                             .as_mut()
                             .unwrap()
                             .locate_view(point);
@@ -740,7 +768,7 @@ impl GerberViewer {
                         let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
                         let vector = Vector2::<DimensionUnit>::new_dim_f64(*x, *y, source_unit_system);
 
-                        self.state
+                        state
                             .as_mut()
                             .unwrap()
                             .move_view(vector);
@@ -752,8 +780,7 @@ impl GerberViewer {
                 let mut changed = false;
 
                 ui.label("Zoom:");
-                let zoom: Option<(f32, Unit)> = self
-                    .state
+                let zoom: Option<(f32, Unit)> = state
                     .as_mut()
                     .map(|state| {
                         state
@@ -780,8 +807,7 @@ impl GerberViewer {
                     .add(egui::DragValue::new(&mut zoom_level))
                     .changed();
 
-                let mut translation = self
-                    .state
+                let mut translation = state
                     .as_ref()
                     .map_or(Vec2::ZERO, |state| state.view.translation);
                 ui.label("X:");
@@ -804,7 +830,7 @@ impl GerberViewer {
                         .speed(STEP_SPEED * STEP_SCALE),
                 );
 
-                let target_design_origin = self.state.as_ref().map_or(
+                let target_design_origin = state.as_ref().map_or(
                     Vector2::<DimensionUnit>::new_dim_f64(0.0, 0.0, self.unit_system),
                     |state| {
                         let vector = state.transform.origin + state.transform.offset;
@@ -819,15 +845,14 @@ impl GerberViewer {
                 ui.label("Y:");
                 changed |= unit_system_drag_value(ui, &mut design_origin.y, self.step).changed();
 
-                let mut rotation = self
-                    .state
+                let mut rotation = state
                     .as_ref()
                     .map_or(0.0, |state| state.transform.rotation);
                 changed |= ui.drag_angle(&mut rotation).changed();
 
                 ui.separator();
 
-                let target_design_offset = self.state.as_ref().map_or(
+                let target_design_offset = state.as_ref().map_or(
                     Vector2::<DimensionUnit>::new_dim_f64(0.0, 0.0, self.unit_system),
                     |state| {
                         let vector = state.transform.offset;
@@ -845,8 +870,7 @@ impl GerberViewer {
                 ui.separator();
 
                 ui.label("Mirror");
-                let mut mirroring = self
-                    .state
+                let mut mirroring = state
                     .as_ref()
                     .map_or(Mirroring::default(), |state| state.transform.mirroring);
                 changed |= ui
@@ -857,7 +881,7 @@ impl GerberViewer {
                     .changed();
 
                 if changed {
-                    if let Some(state) = &mut self.state {
+                    if let Some(state) = &mut *state {
                         match zoom {
                             Some((initial_zoom_level, units)) if zoom_level != initial_zoom_level => {
                                 state
@@ -884,7 +908,7 @@ impl GerberViewer {
                 }
 
                 if ui.button("Reset").clicked() {
-                    self.state.as_mut().unwrap().reset();
+                    state.as_mut().unwrap().reset();
                     self.step = DEFAULT_STEP;
                     ctx.request_repaint();
                 }
@@ -892,7 +916,7 @@ impl GerberViewer {
                 ui.separator();
 
                 if ui.button("Fit").clicked() {
-                    self.state
+                    state
                         .as_mut()
                         .unwrap()
                         .request_fit_view();
@@ -900,7 +924,7 @@ impl GerberViewer {
                 }
 
                 if ui.button("Center").clicked() {
-                    self.state
+                    state
                         .as_mut()
                         .unwrap()
                         .request_center_view();

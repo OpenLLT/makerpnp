@@ -14,6 +14,7 @@ eframe = { workspace = true, features = ["default"] }
 epaint = { workspace = true }
 egui_extras = { workspace = true }
 egui_taffy = { workspace = true }
+egui_tool_windows = { workspace = true }
 
 # File Dialog
 rfd = { workspace = true }

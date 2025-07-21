@@ -2414,6 +2414,7 @@ dependencies = [
  "egui",
  "egui_extras",
  "egui_taffy",
+ "egui_tool_windows",
  "env_logger",
  "epaint",
  "gerber_viewer",
