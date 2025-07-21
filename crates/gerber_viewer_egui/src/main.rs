@@ -3,6 +3,7 @@ use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::style::ScrollStyle;
@@ -55,6 +56,7 @@ struct GerberViewer {
     state: Option<GerberViewState>,
     log: Vec<AppLogItem>,
     coord_input: (String, String),
+    unit_system: UnitSystem,
 
     enable_bounding_box_outline: bool,
 
@@ -124,6 +126,7 @@ impl GerberViewer {
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             config: RenderConfiguration::default(),
             enable_bounding_box_outline: true,
+            unit_system: UnitSystem::Millimeters,
 
             is_about_modal_open: false,
             step: DEFAULT_STEP,
@@ -650,6 +653,13 @@ impl GerberViewer {
                 ui.checkbox(&mut self.config.use_shape_numbering, "＃ Shape numbering");
                 ui.checkbox(&mut self.config.use_vertex_numbering, "＃ Vertex numbering (polygons)");
                 ui.checkbox(&mut self.enable_bounding_box_outline, "☐ Draw bounding box");
+
+                ui.menu_button("Units...", |ui| {
+                    ui.radio_value(&mut self.unit_system, UnitSystem::Millimeters, "Millimeters");
+                    ui.radio_value(&mut self.unit_system, UnitSystem::Inches, "Inches");
+                    ui.radio_value(&mut self.unit_system, UnitSystem::Mils, "Mils");
+                    ui.radio_value(&mut self.unit_system, UnitSystem::Si, "Si (丝)");
+                })
             });
             ui.menu_button("Help", |ui| {
                 if ui.button("About").clicked() {
