@@ -405,7 +405,7 @@ impl GerberViewer {
     fn layer_view_content(state: Arc<Mutex<Option<GerberViewState>>>, ui: &mut Ui) {
         if let Some(state) = &mut *state.lock().unwrap() {
             let mut request_bbox_reset = false;
-            for (path, layer_view_state, _layer, _doc) in state.layers.iter_mut() {
+            for (path, layer_view_state, _layer, doc) in state.layers.iter_mut() {
                 ui.horizontal(|ui| {
                     ui.color_edit_button_srgba(&mut layer_view_state.color);
                     let height = ui.min_size().y;
@@ -487,6 +487,9 @@ impl GerberViewer {
                                 .to_string(),
                         )
                         .clicked();
+
+                    let layer_units = UnitSystem::from_gerber_unit(&doc.units);
+                    ui.label(layer_units.display_name());
 
                     if changed {
                         layer_view_state.transform.origin = origin - layer_view_state.transform.offset;
