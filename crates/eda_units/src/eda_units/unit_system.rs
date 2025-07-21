@@ -99,6 +99,50 @@ impl UnitSystem {
         }
     }
 
+    /// Calculate the scale factor to convert from this unit system to another unit system using f64
+    pub fn scale_f64_for(&self, to: UnitSystem) -> f64 {
+        // Get the number of nm in one unit of the source unit system
+        let from_nm = match self {
+            UnitSystem::Inches => 25_400_000.0,
+            UnitSystem::Millimeters => 1_000_000.0,
+            UnitSystem::Mils => 25_400.0,
+            UnitSystem::Si => 10_000.0,
+        };
+
+        // Get the number of nm in one unit of the target unit system
+        let to_nm = match to {
+            UnitSystem::Inches => 25_400_000.0,
+            UnitSystem::Millimeters => 1_000_000.0,
+            UnitSystem::Mils => 25_400.0,
+            UnitSystem::Si => 10_000.0,
+        };
+
+        // The scale factor is the ratio of the nm values
+        from_nm / to_nm
+    }
+
+    /// Calculate the scale factor to convert from this unit system to another unit system using Decimal
+    pub fn scale_decimal_for(&self, to: UnitSystem) -> Decimal {
+        // Get the number of nm in one unit of the source unit system
+        let from_nm = match self {
+            UnitSystem::Inches => Decimal::from(25_400_000),
+            UnitSystem::Millimeters => Decimal::from(1_000_000),
+            UnitSystem::Mils => Decimal::from(25_400),
+            UnitSystem::Si => Decimal::from(10_000),
+        };
+
+        // Get the number of nm in one unit of the target unit system
+        let to_nm = match to {
+            UnitSystem::Inches => Decimal::from(25_400_000),
+            UnitSystem::Millimeters => Decimal::from(1_000_000),
+            UnitSystem::Mils => Decimal::from(25_400),
+            UnitSystem::Si => Decimal::from(10_000),
+        };
+
+        // The scale factor is the ratio of the nm values
+        from_nm / to_nm
+    }
+
     #[cfg(feature = "gerber")]
     /// Get the unit system from a gerber file unit
     pub fn from_gerber_unit(unit: &Option<gerber_types::Unit>) -> Self {
@@ -118,11 +162,6 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use super::*;
-
-    // Helper function to check if two f64 values are approximately equal
-    fn approx_eq(a: f64, b: f64, epsilon: f64) -> bool {
-        (a - b).abs() < epsilon
-    }
 
     #[test]
     fn test_unit_system_default_precision() {
@@ -187,4 +226,109 @@ mod tests {
     fn test_from_gerber_unit(#[case] gerber_unit: Option<gerber_types::Unit>, #[case] expected: UnitSystem) {
         assert_eq!(UnitSystem::from_gerber_unit(&gerber_unit), expected);
     }
+}
+
+#[cfg(test)]
+mod conversion_tests {
+    use rstest::rstest;
+    use rust_decimal_macros::dec;
+
+    use super::*;
+
+    #[rstest]
+    #[case(UnitSystem::Inches, UnitSystem::Millimeters, 25.4)]
+    #[case(UnitSystem::Millimeters, UnitSystem::Inches, 1.0/25.4)]
+    #[case(UnitSystem::Inches, UnitSystem::Mils, 1000.0)]
+    #[case(UnitSystem::Mils, UnitSystem::Inches, 0.001)]
+    #[case(UnitSystem::Millimeters, UnitSystem::Si, 100.0)]
+    #[case(UnitSystem::Si, UnitSystem::Millimeters, 0.01)]
+    #[case(UnitSystem::Mils, UnitSystem::Millimeters, 0.0254)]
+    #[case(UnitSystem::Si, UnitSystem::Mils, 0.01 * 1000.0 / 25.4)]
+    fn test_scale_f64_for(#[case] from: UnitSystem, #[case] to: UnitSystem, #[case] expected: f64) {
+        let result = from.scale_f64_for(to);
+        assert!(
+            approx_eq(result, expected, 1e-10),
+            "Expected {:.10} but got {:.10}",
+            expected,
+            result
+        );
+    }
+
+    #[rstest]
+    #[case(UnitSystem::Inches, UnitSystem::Millimeters, dec!(25.4))]
+    #[case(UnitSystem::Millimeters, UnitSystem::Inches, dec!(1) / dec!(25.4))]
+    #[case(UnitSystem::Inches, UnitSystem::Mils, dec!(1000))]
+    #[case(UnitSystem::Mils, UnitSystem::Inches, dec!(0.001))]
+    #[case(UnitSystem::Millimeters, UnitSystem::Si, dec!(100))]
+    #[case(UnitSystem::Si, UnitSystem::Millimeters, dec!(0.01))]
+    #[case(UnitSystem::Mils, UnitSystem::Millimeters, dec!(0.0254))]
+    fn test_scale_decimal_for(#[case] from: UnitSystem, #[case] to: UnitSystem, #[case] expected: Decimal) {
+        let result = from.scale_decimal_for(to);
+        // For Decimal, we can use exact comparison
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_self_conversion() {
+        // Converting to the same unit system should always be 1.0
+        for unit in [
+            UnitSystem::Inches,
+            UnitSystem::Millimeters,
+            UnitSystem::Mils,
+            UnitSystem::Si,
+        ] {
+            assert_eq!(unit.scale_f64_for(unit), 1.0);
+            assert_eq!(unit.scale_decimal_for(unit), dec!(1));
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_conversions() {
+        // Converting from A to B and back to A should equal 1.0
+        let units = [
+            UnitSystem::Inches,
+            UnitSystem::Millimeters,
+            UnitSystem::Mils,
+            UnitSystem::Si,
+        ];
+
+        for &from in &units {
+            for &to in &units {
+                if from == to {
+                    continue;
+                }
+
+                let scale_there = from.scale_f64_for(to);
+                let scale_back = to.scale_f64_for(from);
+
+                assert!(
+                    approx_eq(scale_there * scale_back, 1.0, 1e-10),
+                    "Failed roundtrip from {:?} to {:?}",
+                    from,
+                    to
+                );
+
+                let decimal_there = from.scale_decimal_for(to);
+                let decimal_back = to.scale_decimal_for(from);
+
+                // Allow a small margin due to potential decimal rounding errors
+                let product = decimal_there * decimal_back;
+                assert!(
+                    product > dec!(0.9999) && product < dec!(1.0001),
+                    "Failed decimal roundtrip from {:?} to {:?}: {} * {} = {}",
+                    from,
+                    to,
+                    decimal_there,
+                    decimal_back,
+                    product
+                );
+            }
+        }
+    }
+}
+
+// Helper function to check if two f64 values are approximately equal
+#[cfg(test)]
+fn approx_eq(a: f64, b: f64, epsilon: f64) -> bool {
+    (a - b).abs() < epsilon
 }
