@@ -476,6 +476,26 @@ impl DimensionUnitVector2Ext for Vector2<DimensionUnit> {
     }
 }
 
+pub trait Point2DimensionUnitExt {
+    fn to_dimension_unit(&self, unit_system: UnitSystem) -> Point2<DimensionUnit>;
+}
+
+impl Point2DimensionUnitExt for Point2<f64> {
+    fn to_dimension_unit(&self, unit_system: UnitSystem) -> Point2<DimensionUnit> {
+        DimensionUnitPoint2::new_dim_f64(self.x, self.y, unit_system)
+    }
+}
+
+pub trait Vector2DimensionUnitExt {
+    fn to_dimension_unit(&self, unit_system: UnitSystem) -> Vector2<DimensionUnit>;
+}
+
+impl Vector2DimensionUnitExt for Vector2<f64> {
+    fn to_dimension_unit(&self, unit_system: UnitSystem) -> Vector2<DimensionUnit> {
+        DimensionUnitVector2::new_dim_f64(self.x, self.y, unit_system)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::f64::EPSILON;
@@ -777,7 +797,6 @@ mod dimension_unit_conversion_tests {
         assert!(approx_eq(dim.to_f64_in(UnitSystem::Millimeters), 25.4, 0.001));
         assert!(approx_eq(dim.to_f64_in(UnitSystem::Mils), 1000.0, 0.001));
     }
-
     // Helper function for approximately equal comparisons
     fn approx_eq(a: f64, b: f64, epsilon: f64) -> bool {
         (a - b).abs() < epsilon
@@ -963,5 +982,32 @@ mod dimension_point_vector_tests {
     // Helper function for approximately equal comparisons
     fn approx_eq(a: f64, b: f64, epsilon: f64) -> bool {
         (a - b).abs() < epsilon
+    }
+}
+
+#[cfg(test)]
+mod nalgebra_ext_trait_tests {
+    use super::*;
+
+    #[test]
+    fn from_point2() {
+        let result = Point2::new(1.0, 2.0).to_dimension_unit(UnitSystem::Millimeters);
+        let expected = DimensionUnitPoint2::new(
+            DimensionUnit::from_f64(1.0, UnitSystem::Millimeters),
+            DimensionUnit::from_f64(2.0, UnitSystem::Millimeters),
+        );
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn from_vector2() {
+        let result = Vector2::new(1.0, 2.0).to_dimension_unit(UnitSystem::Millimeters);
+        let expected = DimensionUnitVector2::new(
+            DimensionUnit::from_f64(1.0, UnitSystem::Millimeters),
+            DimensionUnit::from_f64(2.0, UnitSystem::Millimeters),
+        );
+
+        assert_eq!(result, expected);
     }
 }
