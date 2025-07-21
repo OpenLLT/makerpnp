@@ -884,7 +884,7 @@ impl GerberViewer {
                     Vector2::<DimensionUnit>::new_dim_f64(0.0, 0.0, self.unit_system),
                     |state| {
                         let vector = state.transform.offset;
-                        Vector2::<DimensionUnit>::new_dim_f64(vector.x, vector.y, self.unit_system)
+                        Vector2::<DimensionUnit>::new_dim_f64(vector.x, vector.y, state.target_unit_system)
                     },
                 );
                 let mut design_offset = target_design_offset.in_unit_system(self.unit_system);
@@ -923,9 +923,11 @@ impl GerberViewer {
                         let target_design_origin = design_origin.to_vector2(state.target_unit_system);
                         let target_design_offset = design_offset.to_vector2(state.target_unit_system);
 
+                        let target_design_origin = target_design_origin - target_design_offset;
+
                         state.view.translation = translation;
                         state.transform.offset = target_design_offset;
-                        state.transform.origin = target_design_origin - target_design_offset;
+                        state.transform.origin = target_design_origin;
                         state.transform.rotation = rotation;
                         state.transform.mirroring = mirroring;
 
