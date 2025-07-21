@@ -28,4 +28,4 @@ thiserror = { workspace = true }
 nalgebra = { workspace = true }
 
 # Units
-eda_units = { path = "../eda_units" }
+eda_units = { path = "../eda_units", features = ["gerber"] }

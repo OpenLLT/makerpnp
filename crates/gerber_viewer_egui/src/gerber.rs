@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
+use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext, DimensionUnitVector2Ext};
+use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::{Pos2, Rect, Vec2};
 use egui::Color32;
 use gerber_viewer::gerber_parser::GerberDoc;
-use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberTransform, Invert, Mirroring, ToPos2, ToVector, UiState, ViewState,
-};
-use log::{debug, trace};
+use gerber_viewer::{BoundingBox, GerberLayer, GerberTransform, Invert, Mirroring, ToPos2, UiState, ViewState};
+use log::{debug, info, trace};
+use nalgebra::{Point2, Vector2};
 
 use crate::{INITIAL_GERBER_AREA_PERCENT, Position, VECTOR_ZERO};
 
@@ -20,6 +21,7 @@ pub struct GerberViewState {
     pub(super) layers: Vec<(PathBuf, LayerViewState, GerberLayer, GerberDoc)>,
     pub(super) ui_state: UiState,
     pub(super) transform: GerberTransform,
+    pub(super) target_unit_system: UnitSystem,
 }
 
 impl Default for GerberViewState {
@@ -34,6 +36,7 @@ impl Default for GerberViewState {
             layers: vec![],
             transform: GerberTransform::default(),
             ui_state: Default::default(),
+            target_unit_system: UnitSystem::Millimeters,
         }
     }
 }
@@ -69,6 +72,11 @@ impl GerberViewState {
             .push((path, layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_fit_view();
+
+        let first_layer_gerber_unit_systems = self.layers.first().unwrap().3.units;
+        self.target_unit_system = UnitSystem::from_gerber_unit(&first_layer_gerber_unit_systems);
+
+        info!("target_unit_system: {:?}", self.target_unit_system);
     }
 
     pub fn update_bbox_from_layers(&mut self) {
@@ -142,14 +150,15 @@ impl GerberViewState {
         (gerber_pos * self.view.scale as f64).to_pos2() + self.view.translation
     }
 
-    /// X and Y are in GERBER units.
-    pub fn move_view(&mut self, position: Position) {
+    /// X and Y are in dimension units.
+    pub fn move_view(&mut self, position: Vector2<DimensionUnit>) {
         trace!("move view. x: {}, y: {}", position.x, position.y);
         trace!("view translation (before): {:?}", self.view.translation);
 
         let mut gerber_coords = self.screen_to_gerber_coords(self.view.translation.to_pos2());
-        gerber_coords += position.to_vector();
-        trace!("gerber_coords: {:?}", self.view.translation);
+        gerber_coords += position.to_vector2(self.target_unit_system);
+
+        trace!("gerber_coords: {:?}", gerber_coords);
         let screen_coords = self.gerber_to_screen_coords(gerber_coords);
 
         trace!("screen_cords: {:?}", screen_coords);
@@ -161,9 +170,14 @@ impl GerberViewState {
         trace!("view translation (after): {:?}", self.view.translation);
     }
 
-    /// X and Y are in GERBER units.
-    pub fn locate_view(&mut self, x: f64, y: f64) {
-        trace!("locate view. x: {}, y: {}", x, y);
+    /// X and Y are in dimension units.
+    pub fn locate_view(&mut self, point: Point2<DimensionUnit>) {
+        trace!("locate view. x: {}, y: {}", point.x, point.y);
+        let gerber_coords: Point2<DimensionUnit> = point.in_unit_system(self.target_unit_system);
+        trace!("gerber_coords: {:?}", gerber_coords);
+
+        let (x, y) = (gerber_coords.x.value_f64(), gerber_coords.y.value_f64());
+
         self.view.translation = Vec2::new(
             self.ui_state.center_screen_pos.x - (x as f32 * self.view.scale),
             self.ui_state.center_screen_pos.y + (y as f32 * self.view.scale),

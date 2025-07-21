@@ -3,11 +3,12 @@ use std::io;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext, DimensionUnitVector2Ext};
 use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::Vec2;
 use eframe::{CreationContext, NativeOptions, egui, run_native};
 use egui::style::ScrollStyle;
-use egui::{Color32, Context, Frame, Id, Modal, RichText, Ui};
+use egui::{Color32, Context, Frame, Id, Modal, Response, RichText, Ui};
 use egui_extras::{Column, TableBuilder};
 use egui_taffy::taffy::Dimension::Length;
 use egui_taffy::taffy::prelude::{auto, length, percent};
@@ -235,7 +236,7 @@ impl GerberViewer {
     pub fn reload_all_layer_files(&mut self) {
         let Some(state) = &mut self.state else { return };
 
-        for (path, _state, layer, doc) in state.layers.iter_mut() {
+        for (path, _layer_state, layer, doc) in state.layers.iter_mut() {
             if let Ok((gerber_doc, commands)) = Self::parse_gerber(&mut self.log, &path) {
                 *layer = GerberLayer::new(commands);
                 *doc = gerber_doc;
@@ -598,8 +599,8 @@ impl GerberViewer {
                         ui.horizontal(|ui| {
                             if let Some(state) = &self.state {
                                 let unit_text = match state.layers.first().unwrap().3.units {
-                                    Some(gerber_viewer::gerber_parser::gerber_types::Unit::Millimeters) => "MM",
-                                    Some(gerber_viewer::gerber_parser::gerber_types::Unit::Inches) => "Inches",
+                                    Some(Unit::Millimeters) => "MM",
+                                    Some(Unit::Inches) => "Inches",
                                     None => "Unknown Units",
                                 };
                                 ui.label(format!("Layer units: {}", unit_text));
@@ -721,22 +722,28 @@ impl GerberViewer {
 
                 let enabled = x.is_ok() && y.is_ok();
 
+                let source_unit_system = self.unit_system;
+
                 ui.add_enabled_ui(enabled, |ui| {
                     if ui.button("⛶ Go To").clicked() {
                         // Safety: ui is disabled unless x and y are `Result::ok`
                         let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                        let point = Point2::<DimensionUnit>::new_dim_f64(*x, *y, source_unit_system);
+
                         self.state
                             .as_mut()
                             .unwrap()
-                            .locate_view(*x, *y);
+                            .locate_view(point);
                     }
                     if ui.button("➡ Move by").clicked() {
                         // Safety: ui is disabled unless x and y are `Result::ok`
                         let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+                        let vector = Vector2::<DimensionUnit>::new_dim_f64(*x, *y, source_unit_system);
+
                         self.state
                             .as_mut()
                             .unwrap()
-                            .move_view(Position::new(*x, *y));
+                            .move_view(vector);
                     }
                 });
 
@@ -797,28 +804,20 @@ impl GerberViewer {
                         .speed(STEP_SPEED * STEP_SCALE),
                 );
 
-                let mut design_origin = self
-                    .state
-                    .as_ref()
-                    .map_or(VECTOR_ZERO, |state| state.transform.origin + state.transform.offset);
+                let target_design_origin = self.state.as_ref().map_or(
+                    Vector2::<DimensionUnit>::new_dim_f64(0.0, 0.0, self.unit_system),
+                    |state| {
+                        let vector = state.transform.origin + state.transform.offset;
+                        Vector2::<DimensionUnit>::new_dim_f64(vector.x, vector.y, state.target_unit_system)
+                    },
+                );
+                let mut design_origin = target_design_origin.in_unit_system(self.unit_system);
 
                 ui.label("Rotation/Mirror Origin X:");
-                changed |= ui
-                    .add(
-                        egui::DragValue::new(&mut design_origin.x)
-                            .fixed_decimals(2)
-                            .speed(self.step * STEP_SCALE),
-                    )
-                    .changed();
+                changed |= unit_system_drag_value(ui, &mut design_origin.x, self.step).changed();
 
                 ui.label("Y:");
-                changed |= ui
-                    .add(
-                        egui::DragValue::new(&mut design_origin.y)
-                            .fixed_decimals(2)
-                            .speed(self.step * STEP_SCALE),
-                    )
-                    .changed();
+                changed |= unit_system_drag_value(ui, &mut design_origin.y, self.step).changed();
 
                 let mut rotation = self
                     .state
@@ -828,27 +827,20 @@ impl GerberViewer {
 
                 ui.separator();
 
-                let mut design_offset = self
-                    .state
-                    .as_ref()
-                    .map_or(VECTOR_ZERO, |state| state.transform.offset);
+                let target_design_offset = self.state.as_ref().map_or(
+                    Vector2::<DimensionUnit>::new_dim_f64(0.0, 0.0, self.unit_system),
+                    |state| {
+                        let vector = state.transform.offset;
+                        Vector2::<DimensionUnit>::new_dim_f64(vector.x, vector.y, self.unit_system)
+                    },
+                );
+                let mut design_offset = target_design_offset.in_unit_system(self.unit_system);
+
                 ui.label("Design Offset X:");
-                changed |= ui
-                    .add(
-                        egui::DragValue::new(&mut design_offset.x)
-                            .fixed_decimals(2)
-                            .speed(self.step * STEP_SCALE),
-                    )
-                    .changed();
+                changed |= unit_system_drag_value(ui, &mut design_offset.x, self.step).changed();
 
                 ui.label("Y:");
-                changed |= ui
-                    .add(
-                        egui::DragValue::new(&mut design_offset.y)
-                            .fixed_decimals(2)
-                            .speed(self.step * STEP_SCALE),
-                    )
-                    .changed();
+                changed |= unit_system_drag_value(ui, &mut design_offset.y, self.step).changed();
 
                 ui.separator();
 
@@ -876,9 +868,12 @@ impl GerberViewer {
                             _ => {}
                         }
 
+                        let target_design_origin = design_origin.to_vector2(state.target_unit_system);
+                        let target_design_offset = design_offset.to_vector2(state.target_unit_system);
+
                         state.view.translation = translation;
-                        state.transform.offset = design_offset;
-                        state.transform.origin = design_origin - design_offset;
+                        state.transform.offset = target_design_offset;
+                        state.transform.origin = target_design_origin - target_design_offset;
                         state.transform.rotation = rotation;
                         state.transform.mirroring = mirroring;
 
@@ -980,4 +975,20 @@ enum AppError {
 
     #[error("Parser error. cause: {0:?}")]
     ParserError(ParseError),
+}
+
+fn unit_system_drag_value(ui: &mut egui::Ui, dimension_unit: &mut DimensionUnit, step: f64) -> Response {
+    let mut value = dimension_unit.value_f64();
+
+    let response = ui.add(
+        egui::DragValue::new(&mut value)
+            .fixed_decimals(dimension_unit.precision())
+            .speed(step * STEP_SCALE),
+    );
+
+    if response.changed() {
+        *dimension_unit = DimensionUnit::from_f64(value, dimension_unit.unit_system());
+    }
+
+    response
 }
