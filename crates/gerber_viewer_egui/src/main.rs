@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eda_units::eda_units::dimension_unit::{
-    DimensionUnit, DimensionUnitPoint2, DimensionUnitPoint2Ext, DimensionUnitVector2Ext,
+    DimensionUnit, DimensionUnitPoint2, DimensionUnitPoint2Ext, DimensionUnitVector2, DimensionUnitVector2Ext,
+    Point2DimensionUnitExt, Vector2DimensionUnitExt,
 };
 use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::Vec2;
@@ -23,8 +24,8 @@ use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
 use gerber_viewer::gerber_types::Unit;
 use gerber_viewer::{
-    DisplayInfo, GerberLayer, GerberRenderer, Mirroring, RenderConfiguration, draw_crosshair, draw_outline,
-    generate_pastel_color,
+    DisplayInfo, GerberLayer, GerberRenderer, GerberTransform, Mirroring, RenderConfiguration, draw_crosshair,
+    draw_outline, generate_pastel_color,
 };
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
@@ -53,7 +54,17 @@ fn main() -> eframe::Result<()> {
     run_native(
         "Gerber Viewer",
         native_options,
-        Box::new(|cc| Ok(Box::new(GerberViewer::new(cc)))),
+        Box::new(|cc| {
+            Ok(Box::new({
+                let mut gv = GerberViewer::new(cc);
+
+                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20230318-stencil files\SO12403056541\SO12403056541\so12403056541.gbr"#))?;
+                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20240308-manufacturing files\2436750A_Y11\ok\ts"#))?;
+                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20240308-manufacturing files\2436750A_Y11\ok\ko"#))?;
+
+                gv
+            }))
+        }),
     )
 }
 struct GerberViewer {
@@ -410,16 +421,18 @@ impl GerberViewer {
                     .default_size([400.0, 200.0])
                     .show("Layers".to_string(), {
                         let state = self.state.clone();
+                        let step = self.step;
+                        let unit_system = self.unit_system;
 
                         move |ui| {
-                            Self::layer_view_content(state, ui);
+                            Self::layer_view_content(state, ui, step, unit_system);
                         }
                     });
             }
         });
     }
 
-    fn layer_view_content(state: Arc<Mutex<Option<GerberViewState>>>, ui: &mut Ui) {
+    fn layer_view_content(state: Arc<Mutex<Option<GerberViewState>>>, ui: &mut Ui, step: f64, unit_system: UnitSystem) {
         if let Some(state) = &mut *state.lock().unwrap() {
             let mut request_bbox_reset = false;
             for (path, layer_view_state, _layer, doc) in state.layers.iter_mut() {
@@ -428,7 +441,17 @@ impl GerberViewer {
                     let height = ui.min_size().y;
 
                     let mut changed = false;
-                    let mut origin = layer_view_state.transform.origin + layer_view_state.transform.offset;
+                    let layer_unit_system = UnitSystem::from_gerber_unit(&doc.units);
+
+                    let origin: Vector2<f64> = layer_view_state.transform.origin + layer_view_state.transform.offset;
+                    let layer_origin: DimensionUnitVector2 = origin.to_dimension_unit(layer_unit_system);
+                    let mut origin = layer_origin.in_unit_system(unit_system);
+
+                    let layer_offset = layer_view_state
+                        .transform
+                        .offset
+                        .to_dimension_unit(layer_unit_system);
+                    let mut offset = layer_offset.in_unit_system(unit_system);
 
                     changed |= ui
                         .add_sized([50.0, height], |ui: &mut Ui| {
@@ -442,21 +465,13 @@ impl GerberViewer {
 
                     changed |= ui
                         .add_sized([50.0, height], |ui: &mut Ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut origin.x)
-                                    .fixed_decimals(4)
-                                    .speed(STEP_SPEED * STEP_SCALE),
-                            )
+                            unit_system_drag_value(ui, &mut origin.x, step)
                         })
                         .changed();
 
                     changed |= ui
                         .add_sized([50.0, height], |ui: &mut Ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut layer_view_state.transform.offset.x)
-                                    .fixed_decimals(4)
-                                    .speed(STEP_SPEED * STEP_SCALE),
-                            )
+                            unit_system_drag_value(ui, &mut offset.x, step)
                         })
                         .changed();
 
@@ -466,21 +481,13 @@ impl GerberViewer {
 
                     changed |= ui
                         .add_sized([50.0, height], |ui: &mut Ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut origin.y)
-                                    .fixed_decimals(4)
-                                    .speed(STEP_SPEED * STEP_SCALE),
-                            )
+                            unit_system_drag_value(ui, &mut origin.y, step)
                         })
                         .changed();
 
                     changed |= ui
                         .add_sized([50.0, height], |ui: &mut Ui| {
-                            ui.add(
-                                egui::DragValue::new(&mut layer_view_state.transform.offset.y)
-                                    .fixed_decimals(4)
-                                    .speed(STEP_SPEED * STEP_SCALE),
-                            )
+                            unit_system_drag_value(ui, &mut offset.y, step)
                         })
                         .changed();
 
@@ -505,11 +512,14 @@ impl GerberViewer {
                         )
                         .clicked();
 
-                    let layer_units = UnitSystem::from_gerber_unit(&doc.units);
-                    ui.label(layer_units.display_name());
+                    ui.label(layer_unit_system.display_name());
 
                     if changed {
-                        layer_view_state.transform.origin = origin - layer_view_state.transform.offset;
+                        let layer_origin = origin.to_vector2(layer_unit_system);
+                        let layer_offset = offset.to_vector2(layer_unit_system);
+
+                        layer_view_state.transform.offset = layer_offset;
+                        layer_view_state.transform.origin = layer_origin - layer_view_state.transform.offset;
 
                         request_bbox_reset = true;
                     }
@@ -918,6 +928,8 @@ impl GerberViewer {
                         state.transform.origin = target_design_origin - target_design_offset;
                         state.transform.rotation = rotation;
                         state.transform.mirroring = mirroring;
+
+                        debug!("transform: {:?}", state.transform);
 
                         state.request_bbox_reset();
                     }
