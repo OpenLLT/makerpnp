@@ -54,17 +54,7 @@ fn main() -> eframe::Result<()> {
     run_native(
         "Gerber Viewer",
         native_options,
-        Box::new(|cc| {
-            Ok(Box::new({
-                let mut gv = GerberViewer::new(cc);
-
-                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20230318-stencil files\SO12403056541\SO12403056541\so12403056541.gbr"#))?;
-                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20240308-manufacturing files\2436750A_Y11\ok\ts"#))?;
-                gv.add_gerber_layer_from_file(PathBuf::from(r#"D:\Users\Hydra\Documents\DipTrace\Projects\SPRacingH7NEO\Manufacturing\JLCPCB\20240308-manufacturing files\2436750A_Y11\ok\ko"#))?;
-
-                gv
-            }))
-        }),
+        Box::new(|cc| Ok(Box::new(GerberViewer::new(cc)))),
     )
 }
 struct GerberViewer {
