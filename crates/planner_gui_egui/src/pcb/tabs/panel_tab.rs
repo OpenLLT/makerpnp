@@ -912,6 +912,7 @@ impl PanelTabUi {
                 Some(GerberFileFunction::Other(Some(self.panel_tab_ui_state.pcb_side))),
                 commands,
             );
+            gerber_viewer_ui.request_center_view();
         } else {
             // TODO show an error message if the gerber preview could not be generated
         }

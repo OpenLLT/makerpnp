@@ -4265,6 +4265,7 @@ dependencies = [
  "async-std",
  "chrono",
  "derivative",
+ "eda_units",
  "eframe",
  "egui",
  "egui-data-table",

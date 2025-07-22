@@ -17,6 +17,7 @@ planner_app = { path = "../planner_app", features = ["markdown"] }
 
 util = { path = "../util" }
 math = { path = "../math" }
+eda_units = { path = "../eda_units", features = ["gerber"] }
 
 # tasks/async
 tokio = { workspace = true, features = ["full"]}

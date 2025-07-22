@@ -5,6 +5,8 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use derivative::Derivative;
+use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext};
+use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::{Rect, Vec2};
 use eframe::epaint::Color32;
 use egui::{Pos2, Ui};
@@ -17,6 +19,7 @@ use gerber_viewer::{
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
+use nalgebra::Point2;
 use planner_app::{DesignIndex, GerberFileFunction, PcbOverview, PcbSide};
 use thiserror::Error;
 use tracing::{debug, error, info, trace};
@@ -77,8 +80,6 @@ pub struct GerberViewerUi {
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
 
-    layers: Value<LayersMap>,
-
     pub component: ComponentState<GerberViewerUiCommand>,
 }
 
@@ -91,18 +92,22 @@ impl GerberViewerUi {
             gerber_state: Value::new(GerberViewState::new(layers.clone())),
             gerber_ui_state: Value::default(),
             component: Default::default(),
-            layers,
         }
     }
 
     pub fn layers(&self) -> Value<LayersMap> {
-        self.layers.clone()
+        self.gerber_state
+            .lock()
+            .unwrap()
+            .layers
+            .clone()
     }
 
     pub fn clear_layers(&mut self) {
-        let mut layers = self.layers.lock().unwrap();
-
-        layers.clear();
+        self.gerber_state
+            .lock()
+            .unwrap()
+            .update_layers(IndexMap::new());
     }
 
     pub fn add_layer(&mut self, function: Option<GerberFileFunction>, commands: Vec<Command>) {
@@ -111,6 +116,11 @@ impl GerberViewerUi {
         let (state, layer) = Self::build_gerber_layer_from_commands(0, commands);
 
         gerber_state.add_layer(None, function, state, layer, None);
+    }
+
+    pub fn request_center_view(&mut self) {
+        let mut gerber_state = self.gerber_state.lock().unwrap();
+        gerber_state.request_center_view();
     }
 
     pub fn update_layers_from_pcb_overview(&mut self, pcb_overview: PcbOverview) {
@@ -180,7 +190,7 @@ impl GerberViewerUi {
                 );
             }
 
-            gerber_state.layers.write(layers);
+            gerber_state.update_layers(layers);
             gerber_state.request_center_view();
         }
 
@@ -283,17 +293,16 @@ impl GerberViewerUi {
         Ok((gerber_doc, commands))
     }
 
-    /// X and Y are in GERBER units.
-    pub fn locate_view(&mut self, mut x: f64, y: f64) {
+    /// X and Y are in dimension units.
+    pub fn locate_view(&mut self, mut point: Point2<DimensionUnit>) {
         if matches!(self.args.pcb_side, Some(PcbSide::Bottom)) {
-            x = -x;
+            point.x = -point.x;
         }
 
         let ui_state = self.gerber_ui_state.lock().unwrap();
         let center_screen_pos = ui_state.center_screen_pos;
 
         let mut gerber_state = self.gerber_state.lock().unwrap();
-        let point = Pos2::new(x as f32, y as f32);
         gerber_state.locate_view(point, center_screen_pos);
     }
 }
@@ -307,6 +316,7 @@ struct GerberViewState {
     render_configuration: RenderConfiguration,
     layers: Value<LayersMap>,
     transform: GerberTransform,
+    target_unit_system: UnitSystem,
 }
 
 impl Default for GerberViewState {
@@ -319,6 +329,7 @@ impl Default for GerberViewState {
             render_configuration: RenderConfiguration::default(),
             layers: Default::default(),
             transform: GerberTransform::default(),
+            target_unit_system: UnitSystem::Millimeters,
         }
     }
 }
@@ -343,8 +354,28 @@ impl GerberViewState {
             .lock()
             .unwrap()
             .insert((path, function), (layer_view_state, layer, gerber_doc));
+        self.update_unit_system();
         self.update_bbox_from_layers();
-        self.request_center_view();
+    }
+
+    /// Must be called after manipulating `self.layers`
+    fn update_unit_system(&mut self) {
+        let layers = self.layers.lock().unwrap();
+        if let Some(((_, _), (_state, _layer, gerber_doc))) = layers.first() {
+            self.target_unit_system = gerber_doc
+                .as_ref()
+                .map_or(UnitSystem::Millimeters, |doc| {
+                    let first_layer_gerber_unit_systems = &doc.units;
+                    UnitSystem::from_gerber_unit(first_layer_gerber_unit_systems)
+                });
+            info!("target_unit_system: {:?}", self.target_unit_system);
+        }
+    }
+
+    pub fn update_layers(&mut self, layers: LayersMap) {
+        self.layers = Value::new(layers);
+        self.update_unit_system();
+        self.update_bbox_from_layers();
     }
 
     fn update_bbox_from_layers(&mut self) {
@@ -389,11 +420,16 @@ impl GerberViewState {
         self.needs_view_centering = false;
     }
 
-    fn locate_view(&mut self, point: Pos2, center_screen_pos: Pos2) {
+    fn locate_view(&mut self, point: Point2<DimensionUnit>, center_screen_pos: Pos2) {
         trace!("locate view. x: {}, y: {}", point.x, point.y);
+        let gerber_coords: Point2<DimensionUnit> = point.in_unit_system(self.target_unit_system);
+        trace!("gerber_coords: {:?}", gerber_coords);
+
+        let (x, y) = (gerber_coords.x.value_f64(), gerber_coords.y.value_f64());
+
         self.view.translation = Vec2::new(
-            center_screen_pos.x - (point.x * self.view.scale),
-            center_screen_pos.y + (point.y * self.view.scale),
+            center_screen_pos.x - (x as f32 * self.view.scale),
+            center_screen_pos.y + (y as f32 * self.view.scale),
         );
         trace!("view translation (after): {:?}", self.view.translation);
     }
@@ -426,8 +462,7 @@ impl LayerViewState {
 #[derive(Debug, Clone)]
 pub enum GerberViewerUiCommand {
     None,
-    // x y coordinates in MM
-    LocateView(f64, f64),
+    LocateView(Point2<DimensionUnit>),
 }
 
 #[derive(Debug, Clone)]
@@ -490,8 +525,8 @@ impl UiComponent for GerberViewerUi {
     ) -> Option<Self::UiAction> {
         match command {
             GerberViewerUiCommand::None => Some(GerberViewerUiAction::None),
-            GerberViewerUiCommand::LocateView(x, y) => {
-                self.locate_view(x, y);
+            GerberViewerUiCommand::LocateView(point) => {
+                self.locate_view(point);
 
                 None
             }

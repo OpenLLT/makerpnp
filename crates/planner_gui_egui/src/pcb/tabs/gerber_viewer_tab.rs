@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
 use derivative::Derivative;
+use eda_units::eda_units::dimension_unit::{DimensionUnitPoint2, DimensionUnitPoint2Ext};
+use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::epaint::Color32;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
@@ -28,6 +30,7 @@ pub struct GerberViewerTabUi {
     gerber_viewer_ui: GerberViewerUi,
 
     coord_input: (String, String),
+    unit_system: UnitSystem,
 
     pub component: ComponentState<GerberViewerTabUiCommand>,
 }
@@ -49,6 +52,8 @@ impl GerberViewerTabUi {
         Self {
             gerber_viewer_ui,
             component,
+            // TODO allow the user to change this
+            unit_system: UnitSystem::Millimeters,
             coord_input: Default::default(),
         }
     }
@@ -219,8 +224,8 @@ impl UiComponent for GerberViewerTabUi {
                         .add_window(tool_windows_id.with("actions"))
                         .default_pos([20.0, 20.0])
                         .default_size([200.0, 60.0])
+                        // TODO TRANSLATE
                         .show("Actions".to_string(), {
-                            // TODO TRANSLATE
                             let mut x_coord = self.coord_input.0.clone();
                             let mut y_coord = self.coord_input.1.clone();
                             let sender = self.component.sender.clone();
@@ -308,9 +313,10 @@ impl UiComponent for GerberViewerTabUi {
                 }
             }
             GerberViewerTabUiCommand::GoToClicked(x, y) => {
+                let point = DimensionUnitPoint2::new_dim_f64(x, y, self.unit_system);
                 self.gerber_viewer_ui
                     .component
-                    .send(GerberViewerUiCommand::LocateView(x, y));
+                    .send(GerberViewerUiCommand::LocateView(point));
                 None
             }
             GerberViewerTabUiCommand::CoordinatesChanged(x, y) => {
@@ -332,12 +338,15 @@ impl UiComponent for GerberViewerTabUi {
                     GerberViewerMode::Design(_) => (placement_coordinate.x, placement_coordinate.y),
                 };
 
+                let point = DimensionUnitPoint2::new_dim_f64(
+                    x.to_f64().unwrap_or_default(),
+                    y.to_f64().unwrap_or_default(),
+                    self.unit_system,
+                );
+
                 self.gerber_viewer_ui
                     .component
-                    .send(GerberViewerUiCommand::LocateView(
-                        x.to_f64().unwrap_or_default(),
-                        y.to_f64().unwrap_or_default(),
-                    ));
+                    .send(GerberViewerUiCommand::LocateView(point));
                 None
             }
         }
