@@ -68,15 +68,16 @@ impl GerberViewState {
         layer: GerberLayer,
         gerber_doc: GerberDoc,
     ) {
+        if self.layers.is_empty() {
+            self.target_unit_system = UnitSystem::from_gerber_unit(&gerber_doc.units);
+
+            info!("target_unit_system: {:?}", self.target_unit_system);
+        }
+
         self.layers
             .push((path, layer_view_state, layer, gerber_doc));
         self.update_bbox_from_layers();
         self.request_fit_view();
-
-        let first_layer_gerber_unit_systems = self.layers.first().unwrap().3.units;
-        self.target_unit_system = UnitSystem::from_gerber_unit(&first_layer_gerber_unit_systems);
-
-        info!("target_unit_system: {:?}", self.target_unit_system);
     }
 
     pub fn update_bbox_from_layers(&mut self) {
