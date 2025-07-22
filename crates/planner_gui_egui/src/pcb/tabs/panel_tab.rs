@@ -658,7 +658,7 @@ impl PanelTabUi {
                                             row.col(|ui| {
                                                 ui.add(
                                                     egui::DragValue::new(&mut design_sizing.offset.x)
-                                                        .range(0.0..=f64::MAX)
+                                                        .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
                                                             defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
@@ -668,7 +668,7 @@ impl PanelTabUi {
                                             row.col(|ui| {
                                                 ui.add(
                                                     egui::DragValue::new(&mut design_sizing.offset.y)
-                                                        .range(0.0..=f64::MAX)
+                                                        .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
                                                             defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
@@ -678,7 +678,7 @@ impl PanelTabUi {
                                             row.col(|ui| {
                                                 ui.add(
                                                     egui::DragValue::new(&mut design_sizing.origin.x)
-                                                        .range(0.0..=f64::MAX)
+                                                        .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
                                                             defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
@@ -688,7 +688,7 @@ impl PanelTabUi {
                                             row.col(|ui| {
                                                 ui.add(
                                                     egui::DragValue::new(&mut design_sizing.origin.y)
-                                                        .range(0.0..=f64::MAX)
+                                                        .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
                                                             defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
