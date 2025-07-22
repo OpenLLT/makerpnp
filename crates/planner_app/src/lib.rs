@@ -248,6 +248,11 @@ pub struct PcbOverview {
     /// The pcb itself can have gerbers
     pub pcb_gerbers: Vec<PcbGerberItem>,
 
+    /// In EDA tools like DipTrace, an offset can be specified when exporting gerbers, e.g. (10,5).
+    /// Use negative offsets here to relocate the gerber back to (0,0), e.g. (-10, -5)
+    #[serde(default)]
+    pub gerber_offset: Vector2<f64>,
+
     /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
     pub design_gerbers: Vec<Vec<PcbGerberItem>>,
 
@@ -1562,6 +1567,7 @@ impl Planner {
                     designs,
                     unit_map,
                     pcb_gerbers,
+                    gerber_offset: pcb.gerber_offset,
                     design_gerbers,
                     orientation: pcb.orientation.clone(),
                 };

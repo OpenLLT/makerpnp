@@ -1098,7 +1098,8 @@ mod placement_unit_positioning_tests {
         // given
         let mut project = Project::new("test".to_string());
 
-        let eda_export_offset = Vector2::new(dec!(10), dec!(10));
+        let eda_gerber_export_offset = Vector2::new(dec!(5), dec!(5));
+        let eda_placement_export_offset = Vector2::new(dec!(10), dec!(10));
 
         let placement1 = Placement {
             ref_des: "R1".into(),
@@ -1108,8 +1109,8 @@ mod placement_unit_positioning_tests {
             },
             place: true,
             pcb_side: PcbSide::Top,
-            x: eda_export_offset.x + dec!(10),
-            y: eda_export_offset.y + dec!(10),
+            x: eda_placement_export_offset.x + dec!(10),
+            y: eda_placement_export_offset.y + dec!(10),
             rotation: Decimal::from(45),
         };
 
@@ -1121,8 +1122,8 @@ mod placement_unit_positioning_tests {
             },
             place: true,
             pcb_side: PcbSide::Bottom,
-            x: eda_export_offset.x + dec!(10),
-            y: eda_export_offset.y + dec!(10),
+            x: eda_placement_export_offset.x + dec!(10),
+            y: eda_placement_export_offset.y + dec!(10),
             rotation: Decimal::from(-45),
         };
 
@@ -1231,17 +1232,36 @@ mod placement_unit_positioning_tests {
         let design_size: Vector2<f64> = [40.0, 40.0].into();
         // calculate the center of the design, to use as the origin for rotations/translations
         let design_center: Vector2<f64> = design_size / 2.0;
-        // use the opposite of the eda_export_offset, note the leading `-` sign.
-        let design_offset: Vector2<f64> = [
-            -eda_export_offset.x.to_f64().unwrap(),
-            -eda_export_offset.y.to_f64().unwrap(),
+        // use the opposite of the eda_gerber_export_offset, note the leading `-` sign.
+        let gerber_offset: Vector2<f64> = [
+            -eda_gerber_export_offset
+                .x
+                .to_f64()
+                .unwrap(),
+            -eda_gerber_export_offset
+                .y
+                .to_f64()
+                .unwrap(),
+        ]
+        .into();
+        // use the opposite of the eda_gerber_export_offset, note the leading `-` sign.
+        let placement_offset: Vector2<f64> = [
+            -eda_placement_export_offset
+                .x
+                .to_f64()
+                .unwrap(),
+            -eda_placement_export_offset
+                .y
+                .to_f64()
+                .unwrap(),
         ]
         .into();
 
         let design_sizing = DesignSizing {
             size: design_size,
             origin: design_center,
-            offset: design_offset,
+            gerber_offset,
+            placement_offset,
         };
 
         let edge_routing_gap = 0.0;

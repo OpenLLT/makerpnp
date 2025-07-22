@@ -190,6 +190,8 @@ pub struct TestPcb {
     #[serde(default)]
     pub unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
 
+    pub gerber_offset: Vector2<f64>,
+
     pub panel_sizing: TestPanelSizing,
 
     pub orientation: PcbOrientation,
@@ -216,7 +218,8 @@ pub struct TestFiducialParameters {
 #[derive(serde::Serialize, Debug, Clone)]
 pub struct TestDesignSizing {
     pub size: Vector2<f64>,
-    pub offset: Vector2<f64>,
+    pub gerber_offset: Vector2<f64>,
+    pub placement_offset: Vector2<f64>,
     pub origin: Vector2<f64>,
 }
 

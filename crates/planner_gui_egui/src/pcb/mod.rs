@@ -6,7 +6,8 @@ use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
 use nalgebra::Vector2;
-use planner_app::{DesignIndex, Event, ObjectPath, PcbOverview, PcbSide, PcbView, PcbViewRequest};
+use num_traits::FromPrimitive;
+use planner_app::{DesignIndex, Event, ObjectPath, PanelSizing, PcbOverview, PcbSide, PcbView, PcbViewRequest};
 use regex::Regex;
 use rust_decimal::Decimal;
 use slotmap::new_key_type;
@@ -54,7 +55,9 @@ pub struct Pcb {
 
     path: PathBuf,
     modified: bool,
+
     pcb_overview: Option<PcbOverview>,
+    panel_sizing: Option<PanelSizing>,
 
     pcb_tabs: Value<PcbTabs>,
 
@@ -94,8 +97,6 @@ impl Pcb {
 
         let pcb_ui_state = Value::new(PcbUiState::new(key, name, component_sender.clone()));
 
-        //let pcb_tabs = Value::new(PcbTabs::default());
-
         let core_service = PlannerCoreService::new();
 
         let mut instance = Self {
@@ -104,6 +105,7 @@ impl Pcb {
             path,
             modified: false,
             pcb_overview: None,
+            panel_sizing: None,
             component,
             pcb_tabs,
         };
@@ -600,7 +602,9 @@ impl UiComponent for Pcb {
 
                         pcb_ui_state
                             .panel_tab_ui
-                            .update_panel_sizing(panel_sizing);
+                            .update_panel_sizing(panel_sizing.clone());
+
+                        self.panel_sizing = Some(panel_sizing);
                     }
                 }
                 None
@@ -866,26 +870,48 @@ impl UiComponent for Pcb {
             PcbUiCommand::LocateComponent {
                 object_path,
                 pcb_side,
-                placement_coordinate,
-                unit_coordinate,
+                mut placement_coordinate,
+                mut unit_coordinate,
             } => {
                 let tabs = self.pcb_tabs.lock().unwrap();
 
                 trace!(
-                    "pcb: {:?}, object_path: {:?}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
+                    "Locate component. pcb: {:?}, object_path: {:?}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
                     self.path, object_path, pcb_side, placement_coordinate, unit_coordinate
                 );
 
-                if let Some(pcb_overview) = &self.pcb_overview {
+                if let (Some(pcb_overview), Some(panel_sizing)) = (&self.pcb_overview, &self.panel_sizing) {
                     let (pcb_number, unit_number) = object_path
                         .pcb_instance_and_unit()
                         .unwrap();
                     let (_pcb_index, unit_index) = (pcb_number - 1, unit_number - 1);
 
-                    if let Some(design_index) = pcb_overview.unit_map.get(&unit_index) {
+                    if let Some(&design_index) = pcb_overview.unit_map.get(&unit_index) {
+                        let design_sizing = &panel_sizing.design_sizings[design_index];
+                        trace!("design_sizing: {:?}", design_sizing);
+
+                        // Placement coordinates are as-exported in EDA tool - add the design placement offset (which is usually negative), subtract the design gerber offset (usually negative) to re-apply it.
+                        placement_coordinate += design_sizing
+                            .placement_offset
+                            .map(|value| Decimal::from_f64(value).unwrap_or_default())
+                            - design_sizing
+                                .gerber_offset
+                                .map(|value| Decimal::from_f64(value).unwrap_or_default());
+
+                        trace!("adjusted placement_coordinate: {:?}", placement_coordinate);
+
+                        // Unit coordinates are correct for PnP machine, but may not match the panel gerbers.
+                        // Add the panel gerber offset
+                        // FUTURE support panel rotation, currently users should crate PCB/panel definitions that match their panel gerbers.
+                        let panel_gerber_offset: Vector2<Decimal> = pcb_overview
+                            .gerber_offset
+                            .map(|value| Decimal::from_f64(value).unwrap_or_default());
+                        unit_coordinate += panel_gerber_offset;
+                        trace!("adjusted unit_coordinate: {:?}", unit_coordinate);
+
                         let tab_keys = tabs.filter_map(|(candidate_tab_key, candidate_tab)| match candidate_tab {
                             PcbTabKind::GerberViewer(gerber_viewer_tab) => match gerber_viewer_tab.args.mode {
-                                GerberViewerMode::Design(candidate_index) if candidate_index.eq(design_index) => {
+                                GerberViewerMode::Design(candidate_index) if candidate_index.eq(&design_index) => {
                                     Some(candidate_tab_key.clone())
                                 }
                                 GerberViewerMode::Panel => Some(candidate_tab_key.clone()),

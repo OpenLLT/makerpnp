@@ -208,7 +208,8 @@ mod pcb_unit_positioning {
 pub(crate) struct DesignSizingArgs {
     name: DesignName,
     origin: Vector2<Decimal>,
-    offset: Vector2<Decimal>,
+    gerber_offset: Vector2<Decimal>,
+    placement_offset: Vector2<Decimal>,
     size: Vector2<Decimal>,
 }
 
@@ -235,17 +236,22 @@ mod design_sizing {
         #[error("Invalid origin: {0}")]
         InvalidOrigin(String),
 
-        #[error("Missing offset")]
-        MissingOffset,
-        #[error("Invalid offset: {0}")]
-        InvalidOffset(String),
+        #[error("Missing gerber offset")]
+        MissingGerberOffset,
+        #[error("Invalid gerber offset: {0}")]
+        InvalidGerberOffset(String),
+
+        #[error("Missing placement offset")]
+        MissingPlacementOffset,
+        #[error("Invalid placement offset: {0}")]
+        InvalidPlacementOffset(String),
 
         #[error("Missing size")]
         MissingSize,
         #[error("Invalid size: {0}")]
         InvalidSize(String),
 
-        #[error("Invalid format, expected '<name>:origin=x=<x>,y=<y>:offset=x=<x>,y=<y>:size=x=<x>,y=<y>'")]
+        #[error("Invalid format, expected '<name>:origin=x=<x>,y=<y>:g_offset=x=<x>,y=<y>:p_offset=x=<x>,y=<y>:size=x=<x>,y=<y>'")]
         InvalidFormat(String),
     }
 
@@ -268,7 +274,7 @@ mod design_sizing {
 
         let parts = rest.split(':').peekable();
 
-        let required_keys = ["origin", "offset", "size"];
+        let required_keys = ["origin", "g_offset", "p_offset", "size"];
 
         let mut values: HashMap<&str, Vector2<Decimal>> = HashMap::with_capacity(required_keys.len());
 
@@ -283,7 +289,8 @@ mod design_sizing {
 
             let vector = vector2_decimal_parser(rest).map_err(|e| match label {
                 "origin" => DesignSizingParserError::InvalidOrigin(e),
-                "offset" => DesignSizingParserError::InvalidOffset(e),
+                "g_offset" => DesignSizingParserError::InvalidGerberOffset(e),
+                "p_offset" => DesignSizingParserError::InvalidPlacementOffset(e),
                 "size" => DesignSizingParserError::InvalidSize(e),
                 _ => unreachable!(),
             })?;
@@ -299,9 +306,12 @@ mod design_sizing {
             origin: values
                 .remove("origin")
                 .ok_or(DesignSizingParserError::MissingOrigin)?,
-            offset: values
-                .remove("offset")
-                .ok_or(DesignSizingParserError::MissingOffset)?,
+            gerber_offset: values
+                .remove("g_offset")
+                .ok_or(DesignSizingParserError::MissingGerberOffset)?,
+            placement_offset: values
+                .remove("p_offset")
+                .ok_or(DesignSizingParserError::MissingPlacementOffset)?,
             size: values
                 .remove("size")
                 .ok_or(DesignSizingParserError::MissingSize)?,
@@ -505,7 +515,20 @@ impl TryFrom<Opts> for Event {
                         .map(|args| {
                             (args.name, DesignSizing {
                                 size: Vector2::new(args.size.x.to_f64().unwrap(), args.size.y.to_f64().unwrap()),
-                                offset: Vector2::new(args.offset.x.to_f64().unwrap(), args.offset.y.to_f64().unwrap()),
+                                gerber_offset: Vector2::new(
+                                    args.gerber_offset.x.to_f64().unwrap(),
+                                    args.gerber_offset.y.to_f64().unwrap(),
+                                ),
+                                placement_offset: Vector2::new(
+                                    args.placement_offset
+                                        .x
+                                        .to_f64()
+                                        .unwrap(),
+                                    args.placement_offset
+                                        .y
+                                        .to_f64()
+                                        .unwrap(),
+                                ),
                                 origin: Vector2::new(args.origin.x.to_f64().unwrap(), args.origin.y.to_f64().unwrap()),
                             })
                         })

@@ -11,6 +11,7 @@ use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
+use gerber_viewer::ToPosition;
 use gerber_viewer::gerber_types::{
     Aperture, Circle, Command, CoordinateFormat, ExtendedCode, GerberCode, GerberError, ImageMirroring, ImageOffset,
     ImageRotation, InterpolationMode,
@@ -609,16 +610,24 @@ impl PanelTabUi {
                                 .column(Column::auto())
                                 .column(Column::auto())
                                 .column(Column::auto())
+                                .column(Column::auto())
+                                .column(Column::auto())
                                 .column(Column::remainder())
                                 .header(20.0, |mut header| {
                                     header.col(|ui| {
                                         ui.strong(tr!("table-design-layout-column-index"));
                                     });
                                     header.col(|ui| {
-                                        ui.strong(tr!("table-design-layout-column-x-offset"));
+                                        ui.strong(tr!("table-design-layout-column-x-placement-offset"));
                                     });
                                     header.col(|ui| {
-                                        ui.strong(tr!("table-design-layout-column-y-offset"));
+                                        ui.strong(tr!("table-design-layout-column-y-placement-offset"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-x-gerber-offset"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-design-layout-column-y-gerber-offset"));
                                     });
                                     header.col(|ui| {
                                         ui.strong(tr!("table-design-layout-column-x-origin"));
@@ -657,7 +666,7 @@ impl PanelTabUi {
 
                                             row.col(|ui| {
                                                 ui.add(
-                                                    egui::DragValue::new(&mut design_sizing.offset.x)
+                                                    egui::DragValue::new(&mut design_sizing.gerber_offset.x)
                                                         .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
@@ -667,7 +676,27 @@ impl PanelTabUi {
                                             });
                                             row.col(|ui| {
                                                 ui.add(
-                                                    egui::DragValue::new(&mut design_sizing.offset.y)
+                                                    egui::DragValue::new(&mut design_sizing.gerber_offset.y)
+                                                        .range(f64::MIN..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.placement_offset.x)
+                                                        .range(f64::MIN..=f64::MAX)
+                                                        .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
+                                                        .fixed_decimals(
+                                                            defaults::DRAG_SLIDER[&panel_sizing.units].fixed_decimals,
+                                                        ),
+                                                );
+                                            });
+                                            row.col(|ui| {
+                                                ui.add(
+                                                    egui::DragValue::new(&mut design_sizing.placement_offset.y)
                                                         .range(f64::MIN..=f64::MAX)
                                                         .speed(defaults::DRAG_SLIDER[&panel_sizing.units].speed)
                                                         .fixed_decimals(
@@ -1258,7 +1287,7 @@ fn build_panel_preview_commands(
 
         let design_sizing = &panel_sizing.design_sizings[*design_index];
 
-        let unit_origin = origin
+        let unit_position = origin
             .add_x(pcb_unit_positioning.offset.x)
             .add_y(pcb_unit_positioning.offset.y);
         let unit_size = design_sizing.size;
@@ -1268,7 +1297,12 @@ fn build_panel_preview_commands(
             .unwrap_or(0.0)
             .to_radians();
 
-        let (rotated_origin, rotated_vectors) = make_rotated_box_path(&unit_origin, &unit_size, unit_rotation);
+        let (rotated_origin, rotated_vectors) = make_rotated_box_path(
+            &unit_position,
+            &unit_size,
+            unit_rotation,
+            &design_sizing.origin.to_position(),
+        );
 
         // Now call gerber_path_commands with the rotated data
         gerber_builder.push_commands(gerber_path_commands(
@@ -1293,9 +1327,10 @@ fn build_panel_preview_commands(
 
 /// rotation is in radians, positive anti-clockwise
 fn make_rotated_box_path(
-    unit_origin: &Point2<f64>,
+    unit_position: &Point2<f64>,
     unit_size: &Vector2<f64>,
     rotation: f64,
+    design_origin: &Point2<f64>,
 ) -> (Point<f64, 2>, Vec<Vector2<f64>>) {
     // Create path vectors based on unit_size
     // For example, to create a path that forms a rectangle:
@@ -1306,24 +1341,25 @@ fn make_rotated_box_path(
         Vector2::new(0.0, -unit_size.y), // Move down, closing the rectangle
     ];
 
-    // Compute the center of the bounding box
-    let center_x = unit_origin.x + unit_size.x / 2.0;
-    let center_y = unit_origin.y + unit_size.y / 2.0;
+    // Calculate the center of rotation
+    // This is unit_position + design_origin
+    let rotation_center_x = unit_position.x + design_origin.x;
+    let rotation_center_y = unit_position.y + design_origin.y;
 
-    // Create the isometry for rotation around center:
-    // 1. Create a translation from center to origin
+    // Create the isometry for rotation around the calculated center:
+    // 1. Create a translation from rotation center to origin (0,0)
     // 2. Create a rotation
-    // 3. Create a translation back from origin to center
-    let translation_to_origin = nalgebra::Translation2::new(-center_x, -center_y);
+    // 3. Create a translation back from origin to rotation center
+    let translation_to_origin = nalgebra::Translation2::new(-rotation_center_x, -rotation_center_y);
     let rotation = nalgebra::Rotation2::new(rotation);
-    let translation_from_origin = nalgebra::Translation2::new(center_x, center_y);
+    let translation_from_origin = nalgebra::Translation2::new(rotation_center_x, rotation_center_y);
 
     // Combine these transformations into a single isometry
     // The order is important: first translate to origin, then rotate, then translate back
     let isometry = translation_from_origin * rotation * translation_to_origin;
 
     // Apply the isometry to the origin point to get the rotated origin
-    let rotated_origin = isometry.transform_point(&unit_origin);
+    let rotated_origin = isometry.transform_point(unit_position);
 
     // Apply rotation to the path vectors (direction only, not position)
     // For vectors, we only apply the rotation part, not the translation
@@ -1498,12 +1534,14 @@ mod test {
             design_sizings: vec![
                 DesignSizing {
                     origin: Default::default(),
-                    offset: Default::default(),
+                    gerber_offset: Default::default(),
+                    placement_offset: Default::default(),
                     size: Vector2::new(30.0, 25.0),
                 },
                 DesignSizing {
                     origin: Default::default(),
-                    offset: Default::default(),
+                    gerber_offset: Default::default(),
+                    placement_offset: Default::default(),
                     size: Vector2::new(40.0, 20.0),
                 },
             ],

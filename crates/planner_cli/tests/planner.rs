@@ -253,6 +253,7 @@ mod operation_sequence_1 {
             units: 4,
             design_names: vec!["design_a".into(), "design_b".into()],
             unit_map: BTreeMap::from_iter([(0, 0), (1, 1), (2, 0), (3, 1)]),
+            gerber_offset: Default::default(),
             panel_sizing: project::TestPanelSizing {
                 units: Default::default(),
                 size: Default::default(),
@@ -261,12 +262,14 @@ mod operation_sequence_1 {
                 design_sizings: vec![
                     TestDesignSizing {
                         origin: Default::default(),
-                        offset: Default::default(),
+                        gerber_offset: Default::default(),
+                        placement_offset: Default::default(),
                         size: Default::default(),
                     },
                     TestDesignSizing {
                         origin: Default::default(),
-                        offset: Default::default(),
+                        gerber_offset: Default::default(),
+                        placement_offset: Default::default(),
                         size: Default::default(),
                     },
                 ],
@@ -360,12 +363,14 @@ mod operation_sequence_1 {
         let design_a_sizing = TestDesignSizing {
             size: Vector2::new(60.0, 50.0),
             origin: Vector2::new(30.0, 25.0),
-            offset: Vector2::new(-10.0, -10.0),
+            gerber_offset: Vector2::new(-20.0, -20.0),
+            placement_offset: Vector2::new(-10.0, -10.0),
         };
         let design_b_sizing = TestDesignSizing {
             size: Vector2::new(40.0, 50.0),
             origin: Vector2::new(20.0, 25.0),
-            offset: Vector2::new(-10.0, -10.0),
+            gerber_offset: Vector2::new(-20.0, -20.0),
+            placement_offset: Vector2::new(-10.0, -10.0),
         };
         let design_sizings = vec![design_a_sizing, design_b_sizing];
 
@@ -398,6 +403,7 @@ mod operation_sequence_1 {
             units: 4,
             design_names: design_names.clone(),
             unit_map: unit_map.clone(),
+            gerber_offset: Default::default(),
             panel_sizing: project::TestPanelSizing {
                 units: Default::default(),
                 size,
@@ -422,12 +428,14 @@ mod operation_sequence_1 {
             .zip(design_names)
             .map(|(design_sizing, design_name)| {
                 format!(
-                    "--design-sizing {}:origin=x={},y={}:offset=x={},y={}:size=x={},y={}",
+                    "--design-sizing {}:origin=x={},y={}:g_offset=x={},y={}:p_offset=x={},y={}:size=x={},y={}",
                     design_name,
                     design_sizing.origin.x,
                     design_sizing.origin.y,
-                    design_sizing.offset.x,
-                    design_sizing.offset.y,
+                    design_sizing.gerber_offset.x,
+                    design_sizing.gerber_offset.y,
+                    design_sizing.placement_offset.x,
+                    design_sizing.placement_offset.y,
                     design_sizing.size.x,
                     design_sizing.size.y,
                 )
@@ -3833,12 +3841,14 @@ mod sizing_tests {
         let design_a_sizing = TestDesignSizing {
             size: Vector2::new(60.0, 50.0),
             origin: Vector2::new(30.0, 25.0),
-            offset: Default::default(),
+            gerber_offset: Default::default(),
+            placement_offset: Default::default(),
         };
         let design_b_sizing = TestDesignSizing {
             size: Vector2::new(40.0, 50.0),
             origin: Vector2::new(20.0, 25.0),
-            offset: Default::default(),
+            gerber_offset: Default::default(),
+            placement_offset: Default::default(),
         };
         let design_sizings = vec![design_a_sizing, design_b_sizing];
 

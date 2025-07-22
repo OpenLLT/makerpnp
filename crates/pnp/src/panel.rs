@@ -20,17 +20,21 @@ pub struct DesignSizing {
     /// x,y sizing of the design
     pub size: Vector2<f64>,
 
-    /// In EDA tools like DipTrace, a gerber offset can be specified when exporting gerbers, e.g. (10,5).
+    /// In EDA tools like DipTrace, an offset can be specified when exporting gerbers, e.g. (10,5).
     /// Use negative offsets here to relocate the gerber back to (0,0), e.g. (-10, -5)
-    pub offset: Vector2<f64>,
+    pub gerber_offset: Vector2<f64>,
+
+    /// In EDA tools like DipTrace, an offset can be specified when exporting placements, e.g. (10,5).
+    /// Use negative offsets here to relocate the placements back to (0,0), e.g. (-10, -5)
+    pub placement_offset: Vector2<f64>,
 
     /// For mirroring and rotation
     /// (aka Center Offset)
     ///
     /// Usually this value should be set to the center of the PCB outline's bounding box.
-    /// 
-    /// Must not include the eda export offset.
-    /// 
+    ///
+    /// Must not include any export offsets.
+    ///
     /// Examples:
     /// * 10x10mm pcb with coordinates (0,0) - (10,10), origin = (5,5)
     /// * 10x10mm pcb with coordinates (-5,-5) - (5,5), origin = (0,0)

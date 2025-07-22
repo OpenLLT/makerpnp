@@ -316,8 +316,10 @@ table-unit-assignments-column-design = Design name
 table-unit-assignments-column-variant = Variant name
 
 table-design-layout-column-index = #
-table-design-layout-column-x-offset = X offset
-table-design-layout-column-y-offset = Y offset
+table-design-layout-column-x-placement-offset = X placement offset
+table-design-layout-column-y-placement-offset = Y placement offset
+table-design-layout-column-x-gerber-offset = X gerber offset
+table-design-layout-column-y-gerber-offset = Y gerber offset
 table-design-layout-column-x-origin = X origin
 table-design-layout-column-y-origin = Y origin
 table-design-layout-column-x-size = X size

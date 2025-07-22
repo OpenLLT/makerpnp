@@ -299,7 +299,7 @@ impl UiComponent for GerberViewerTabUi {
     fn update<'context>(
         &mut self,
         command: Self::UiCommand,
-        _context: &mut Self::UiContext<'context>,
+        context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
         match command {
             GerberViewerTabUiCommand::None => Some(GerberViewerTabUiAction::None),
@@ -324,16 +324,21 @@ impl UiComponent for GerberViewerTabUi {
                 None
             }
             GerberViewerTabUiCommand::LocateComponent {
-                object_path: _object_path,
+                object_path,
                 pcb_side,
                 placement_coordinate,
                 unit_coordinate,
             } => {
-                if matches!(_context.args.pcb_side, Some(candidate_pcb_side) if candidate_pcb_side.ne(&pcb_side)) {
+                if matches!(context.args.pcb_side, Some(candidate_pcb_side) if candidate_pcb_side.ne(&pcb_side)) {
                     return None;
                 }
 
-                let (x, y) = match _context.args.mode {
+                trace!(
+                    "Locate Component. object_path: {}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
+                    object_path, pcb_side, placement_coordinate, unit_coordinate
+                );
+
+                let (x, y) = match context.args.mode {
                     GerberViewerMode::Panel => (unit_coordinate.x, unit_coordinate.y),
                     GerberViewerMode::Design(_) => (placement_coordinate.x, placement_coordinate.y),
                 };

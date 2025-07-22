@@ -64,6 +64,11 @@ pub struct Pcb {
     #[serde(default)]
     pub pcb_gerbers: Vec<GerberFile>,
 
+    /// In EDA tools like DipTrace, an offset can be specified when exporting gerbers, e.g. (10,5).
+    /// Use negative offsets here to relocate the gerber back to (0,0), e.g. (-10, -5)
+    #[serde(default)]
+    pub gerber_offset: Vector2<f64>,
+
     /// A set of gerbers for each design used on this PCB
     ///
     /// If the PCB only has one design, with no fiducials, then [`pcb_gerbers`] could be used.
@@ -126,6 +131,7 @@ impl Pcb {
             design_names,
             unit_map,
             pcb_gerbers: vec![],
+            gerber_offset: Default::default(),
             design_gerbers: Default::default(),
             panel_sizing: Default::default(),
             orientation: PcbOrientation::default(),
@@ -330,7 +336,7 @@ pub fn build_unit_to_design_index_mappping(
 }
 
 /// A transform matrix that can be applied to a placement to position it on the unit.
-/// transform order: DesignSizing::offset, -DesignSizing::origin, unit_rotation, unit_offset, +DesignSizing::origin
+/// transform order: DesignSizing::placement_offset, -DesignSizing::origin, unit_rotation, unit_offset, +DesignSizing::origin
 #[derive(Debug)]
 pub struct PcbUnitTransform {
     /// (x,y)
@@ -351,10 +357,11 @@ impl PcbUnitTransform {
         // Start with identity matrix
         let mut matrix = Matrix3::identity();
 
-        // Translate design offset (which for an EDA offset of 10,10 would be specifed at -10,-10, no need to invert the sign.
+        // Translate placement offset (which for an EDA offset of 10,10 would be specifed at -10,-10, no need to invert the sign.
+        // Note: /PLACEMENT/ offset *not* /GERBER/ offset here.
         let translate_offset = Matrix3::new(
-            1.0, 0.0, self.design_sizing.offset.x,
-            0.0, 1.0, self.design_sizing.offset.y,
+            1.0, 0.0, self.design_sizing.placement_offset.x,
+            0.0, 1.0, self.design_sizing.placement_offset.y,
             0.0, 0.0, 1.0,
         );
         matrix = translate_offset * matrix;
