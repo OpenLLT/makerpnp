@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use eda_units::eda_units::dimension_unit::{
     DimensionUnit, DimensionUnitPoint2, DimensionUnitPoint2Ext, DimensionUnitVector2, DimensionUnitVector2Ext,
-    Point2DimensionUnitExt, Vector2DimensionUnitExt,
+    Vector2DimensionUnitExt,
 };
 use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::Vec2;
@@ -24,8 +24,8 @@ use gerber_viewer::gerber_parser::parse;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError};
 use gerber_viewer::gerber_types::Unit;
 use gerber_viewer::{
-    DisplayInfo, GerberLayer, GerberRenderer, GerberTransform, Mirroring, RenderConfiguration, draw_crosshair,
-    draw_outline, generate_pastel_color,
+    DisplayInfo, GerberLayer, GerberRenderer, Mirroring, RenderConfiguration, draw_crosshair, draw_outline,
+    generate_pastel_color,
 };
 use log::{debug, error, info, trace};
 use logging::AppLogItem;
