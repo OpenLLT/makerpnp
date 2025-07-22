@@ -28,6 +28,12 @@ pub struct DesignSizing {
     /// (aka Center Offset)
     ///
     /// Usually this value should be set to the center of the PCB outline's bounding box.
+    /// 
+    /// Must not include the eda export offset.
+    /// 
+    /// Examples:
+    /// * 10x10mm pcb with coordinates (0,0) - (10,10), origin = (5,5)
+    /// * 10x10mm pcb with coordinates (-5,-5) - (5,5), origin = (0,0)
     pub origin: Vector2<f64>,
 }
 
