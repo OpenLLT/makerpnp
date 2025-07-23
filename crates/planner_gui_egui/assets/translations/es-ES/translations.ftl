@@ -158,11 +158,15 @@ form-button-reset = Restablecer
 form-button-refresh = Actualizar
 
 form-configure-pcb-input-units = Units
+form-configure-pcb-input-gerber-offset = Despl. de colocación
 form-configure-pcb-group-unit-map = Mapa de unidades
 form-configure-pcb-input-design-name = Nombre del diseño
 form-configure-pcb-input-design-name-placeholder = (p.ej. 'mi_eda_proyecto', para asignaciones de unidades)
 form-configure-pcb-input-pcb-unit-range = Rango de unidades
 form-configure-pcb-designs-button-gerbers = Gerbers...
+
+form-configure-pcb-gerber-offset-help = En el software EDA, se puede especificar un offset al exportar gerbers, por ejemplo (10,5).
+    Introduzca aquí desplazamientos negativos para reubicar los gerbers en (0,0), por ejemplo (-10, -5).
 
 form-create-unit-assignment-group-variant-map = Mapa de variantes
 form-create-unit-assignment-input-design-name = Nombre del diseño

@@ -587,6 +587,7 @@ pub enum Event {
     ApplyPcbUnitConfiguration {
         path: PathBuf,
         units: u16,
+        gerber_offset: Vector2<f64>,
         designs: Vec<DesignName>,
         unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
     },
@@ -739,6 +740,7 @@ impl Planner {
             Event::ApplyPcbUnitConfiguration {
                 path: pcb_path,
                 units,
+                gerber_offset: placement_offset,
                 designs,
                 unit_map,
             } => Box::new(move |model: &mut Model| {
@@ -788,6 +790,7 @@ impl Planner {
                 }
 
                 pcb.units = units;
+                pcb.gerber_offset = placement_offset;
                 pcb.unit_map = unit_map;
                 pcb.design_names = design_name_set;
 

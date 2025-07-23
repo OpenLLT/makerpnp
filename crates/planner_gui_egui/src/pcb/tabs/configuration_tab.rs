@@ -12,9 +12,10 @@ use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
-use egui_taffy::taffy::prelude::{auto, length, percent, span};
+use egui_taffy::taffy::prelude::{auto, fit_content, fr, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
+use nalgebra::Vector2;
 use planner_app::{DesignIndex, DesignName, GerberFileFunction, PcbOverview, PcbUnitIndex};
 use tracing::{debug, trace};
 use util::range_utils::{RangeIntoUsize, clamp_inclusive_range};
@@ -106,6 +107,99 @@ impl ConfigurationUi {
                         }
                     });
 
+
+                    form.add_field_tui(
+                        "gerber_offset",
+                        tr!("form-configure-pcb-input-gerber-offset"),
+                        tui,
+                        {
+                            move |tui: &mut Tui, fields, sender| {
+                                let mut gerber_offset_x = fields.gerber_offset.x;
+                                let mut gerber_offset_y = fields.gerber_offset.y;
+
+                                //
+                                // grid container
+                                //
+                                tui.style(Style {
+                                    flex_grow: 1.0,
+                                    display: Display::Grid,
+                                    grid_template_columns: vec![fit_content(percent(1.))],
+                                    grid_template_rows: vec![fr(1.)],
+
+                                    // ensure items are centered vertically on rows
+                                    align_items: Some(AlignItems::Center),
+                                    ..default_style()
+                                })
+                                    .add(|tui| {
+                                        //
+                                        // row 1
+                                        //
+                                        tui.style(Style {
+                                            display: Display::Flex,
+                                            align_content: Some(AlignContent::Stretch),
+                                            align_items: Some(AlignItems::Center),
+                                            flex_grow: 1.0,
+                                            ..container_style()
+                                        })
+                                            .add(|tui| {
+                                                tui.label(tr!("form-common-input-x"));
+
+                                                tui.style(Style {
+                                                    flex_grow: 0.0,
+                                                    min_size: Size {
+                                                        width: length(50.0),
+                                                        height: auto(),
+                                                    },
+                                                    ..default_style()
+                                                })
+                                                    .ui_add(
+                                                        egui::DragValue::new(&mut gerber_offset_x)
+                                                            .speed(0.05)
+                                                    );
+
+                                                tui.label(tr!("form-common-input-y"));
+
+                                                tui.style(Style {
+                                                    flex_grow: 0.0,
+                                                    min_size: Size {
+                                                        width: length(50.0),
+                                                        height: auto(),
+                                                    },
+                                                    ..default_style()
+                                                })
+                                                    .ui_add(
+                                                        egui::DragValue::new(&mut gerber_offset_y)
+                                                            .speed(0.05)
+                                                    );
+                                            });
+
+                                        //
+                                        // row 2
+                                        //
+                                        tui.style(Style {
+                                            display: Display::Flex,
+                                            align_content: Some(AlignContent::Stretch),
+                                            align_items: Some(AlignItems::Center),
+                                            flex_grow: 1.0,
+                                            ..container_style()
+                                        })
+                                            .add(|tui| {
+                                                tui.label(tr!("form-configure-pcb-gerber-offset-help"));
+                                            });
+
+
+                                        // end of grid container content
+                                    });
+
+                                let gerber_offset = Vector2::new(gerber_offset_x, gerber_offset_y);
+                                if fields.gerber_offset.ne(&gerber_offset) {
+                                    sender
+                                        .send(ConfigurationTabUiCommand::GerberOffsetChanged(gerber_offset))
+                                        .expect("sent");
+                                }
+                            }
+                        });
+
                     form.add_section_tui(
                         "unit_map",
                         tr!("form-configure-pcb-group-unit-map"),
@@ -114,69 +208,68 @@ impl ConfigurationUi {
                             //
                             // design controls row
                             //
-
-                            form.show_fields_vertical(tui, |form, tui| {
-                                tui.style(Style {
-                                    flex_grow: 1.0,
-                                    display: Display::Flex,
-                                    align_content: Some(AlignContent::Stretch),
-                                    // FIXME This `span` is only required because the `field_error` call also uses `grid_column: span(2)`, without it the width is ~50% of the horizontal space.
-                                    grid_column: span(2),
-                                    ..container_style()
-                                })
-                                    .add(|tui| {
-                                        tui.style(Style {
-                                            flex_grow: 0.0,
-                                            ..default_style()
-                                        })
-                                            .label(tr!("form-configure-pcb-input-design-name"));
-
-                                        tui.style(Style {
-                                            flex_grow: 0.6,
-                                            min_size: Size {
-                                                width: length(100.0),
-                                                height: auto(),
-                                            },
-                                            ..default_style()
-                                        })
-                                            .ui(|ui| {
-                                                let fields = self.fields.lock().unwrap();
-                                                let sender = self.component.sender.clone();
-
-                                                let mut design_name_clone = fields.design_name.clone();
-                                                TextEdit::singleline(&mut design_name_clone)
-                                                    .hint_text(tr!("form-configure-pcb-input-design-name-placeholder"))
-                                                    .desired_width(ui.available_width())
-                                                    .show(ui);
-
-                                                if !fields
-                                                    .design_name
-                                                    .eq(&design_name_clone)
-                                                {
-                                                    sender
-                                                        .send(ConfigurationTabUiCommand::DesignNameChanged(design_name_clone))
-                                                        .expect("sent")
-                                                }
-                                            });
-
-                                        let is_design_name_ok = matches!(form.field_validation_errors("design_name"), None);
-
-                                        if tui
-                                            .style(Style {
+                                form.show_fields_vertical(tui, |form, tui| {
+                                    tui.style(Style {
+                                        flex_grow: 1.0,
+                                        display: Display::Flex,
+                                        align_content: Some(AlignContent::Stretch),
+                                        // FIXME This `span` is only required because the `field_error` call also uses `grid_column: span(2)`, without it the width is ~50% of the horizontal space.
+                                        grid_column: span(2),
+                                        ..container_style()
+                                    })
+                                        .add(|tui| {
+                                            tui.style(Style {
                                                 flex_grow: 0.0,
                                                 ..default_style()
                                             })
-                                            .enabled_ui(is_design_name_ok)
-                                            .button(|tui| tui.label(tr!("form-common-button-add")))
-                                            .clicked()
-                                        {
-                                            self.component
-                                                .send(ConfigurationTabUiCommand::AddDesignClicked);
-                                        }
-                                    });
+                                                .label(tr!("form-configure-pcb-input-design-name"));
 
-                                form.field_error(tui, "design_name");
-                            });
+                                            tui.style(Style {
+                                                flex_grow: 0.6,
+                                                min_size: Size {
+                                                    width: length(100.0),
+                                                    height: auto(),
+                                                },
+                                                ..default_style()
+                                            })
+                                                .ui(|ui| {
+                                                    let fields = self.fields.lock().unwrap();
+                                                    let sender = self.component.sender.clone();
+
+                                                    let mut design_name_clone = fields.design_name.clone();
+                                                    TextEdit::singleline(&mut design_name_clone)
+                                                        .hint_text(tr!("form-configure-pcb-input-design-name-placeholder"))
+                                                        .desired_width(ui.available_width())
+                                                        .show(ui);
+
+                                                    if !fields
+                                                        .design_name
+                                                        .eq(&design_name_clone)
+                                                    {
+                                                        sender
+                                                            .send(ConfigurationTabUiCommand::DesignNameChanged(design_name_clone))
+                                                            .expect("sent")
+                                                    }
+                                                });
+
+                                            let is_design_name_ok = !self.fields.lock().unwrap().design_name.is_empty();
+
+                                            if tui
+                                                .style(Style {
+                                                    flex_grow: 0.0,
+                                                    ..default_style()
+                                                })
+                                                .enabled_ui(is_design_name_ok)
+                                                .button(|tui| tui.label(tr!("form-common-button-add")))
+                                                .clicked()
+                                            {
+                                                self.component
+                                                    .send(ConfigurationTabUiCommand::AddDesignClicked);
+                                            }
+                                        });
+
+                                    form.field_error(tui, "design_name");
+                                });
 
                             //
                             // available design variants
@@ -687,6 +780,7 @@ impl ConfigurationUi {
 
         fields.update_units(pcb_overview.units);
         fields.designs = pcb_overview.designs.clone();
+        fields.gerber_offset = pcb_overview.gerber_offset;
 
         // preserve the existing elements of the unit map if the new map has a smaller unit range (e.g. existing vec = 0..=10, new map = 0..=5)
         fields.unit_map = (0..max(fields.unit_map.len() as u16, pcb_overview.units))
@@ -714,9 +808,10 @@ pub struct DesignAssignmentsFields {
     #[validate(range(min = 1, max = u16::MAX, code = "form-input-error-range"))]
     units: u16,
 
+    gerber_offset: Vector2<f64>,
+
     /// allows the user to type in a design name, the current value is used when making assignments or
     /// sizing the unit_map
-    #[validate(length(min = 1, code = "form-input-error-length"))]
     design_name: String,
 
     pcb_unit_range: RangeInclusive<u16>,
@@ -737,6 +832,7 @@ impl Default for DesignAssignmentsFields {
 
         Self {
             units: MINIMUM_UNITS,
+            gerber_offset: Vector2::new(0.0, 0.0),
             designs: vec![],
             // See [`Self::grow_unit_map`]
             unit_map: vec![],
@@ -768,6 +864,7 @@ impl DesignAssignmentsFields {
 
         PcbUnitConfigurationArgs {
             units: self.units,
+            gerber_offset: self.gerber_offset,
             designs: self.designs.clone(),
             unit_map,
         }
@@ -837,6 +934,7 @@ pub enum ConfigurationTabUiCommand {
     ManageGerbersModalUiCommand(ManagerGerbersModalUiCommand),
 
     UnitsChanged(u16),
+    GerberOffsetChanged(Vector2<f64>),
     DesignNameChanged(String),
 
     PcbUnitRangeChanged(RangeInclusive<u16>),
@@ -886,6 +984,7 @@ pub struct ConfigurationTabUiContext {}
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PcbUnitConfigurationArgs {
     pub units: u16,
+    pub gerber_offset: Vector2<f64>,
     pub designs: Vec<DesignName>,
     pub unit_map: BTreeMap<PcbUnitIndex, DesignIndex>,
 }
@@ -988,16 +1087,18 @@ impl UiComponent for ConfigurationUi {
             //
             ConfigurationTabUiCommand::UnitsChanged(units) => {
                 let mut fields = self.fields.lock().unwrap();
-
                 fields.update_units(units);
-
+                None
+            }
+            ConfigurationTabUiCommand::GerberOffsetChanged(gerber_offset) => {
+                let mut fields = self.fields.lock().unwrap();
+                fields.gerber_offset = gerber_offset;
                 None
             }
             ConfigurationTabUiCommand::DesignNameChanged(name) => {
                 self.fields.lock().unwrap().design_name = name;
                 None
             }
-
             ConfigurationTabUiCommand::PcbUnitRangeChanged(value) => {
                 self.fields
                     .lock()

@@ -715,6 +715,7 @@ impl UiComponent for Pcb {
                         .update(Event::ApplyPcbUnitConfiguration {
                             path: self.path.clone(),
                             units: args.units,
+                            gerber_offset: args.gerber_offset,
                             designs: args.designs,
                             unit_map: args.unit_map,
                         })
