@@ -56,10 +56,7 @@ project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
 
 project-pcb-header = PCB
-# deprecated
 project-pcb-designs-header = Designs
-# deprecated
-project-pcb-designs-button-gerbers = Gerbers...
 
 project-placements-tab-label = Placements
 project-placements-header = Project placements
@@ -163,7 +160,8 @@ form-configure-pcb-group-unit-map = Unit mapping
 form-configure-pcb-input-design-name = Design name
 form-configure-pcb-input-design-name-placeholder = (e.g. 'my_eda_project', for unit assignments)
 form-configure-pcb-input-pcb-unit-range = Unit range
-form-configure-pcb-designs-button-gerbers = Gerbers...
+form-configure-pcb-button-panel-gerbers = Panel Gerbers...
+form-configure-pcb-button-design-gerbers = Design Gerbers...
 
 form-configure-pcb-gerber-offset-help = In EDA software, an offset can be specified when exporting gerbers, e.g. (10,5).
     Enter negative offsets here to relocate the gerbers back to (0,0), e.g. (-10, -5)

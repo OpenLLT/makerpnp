@@ -351,7 +351,7 @@ impl ConfigurationUi {
                                                                         row.col(|ui| {
                                                                             ui.add_enabled_ui(design_exists, |ui|{
                                                                                 if ui
-                                                                                    .button(tr!("form-configure-pcb-designs-button-gerbers"))
+                                                                                    .button(tr!("form-configure-pcb-button-design-gerbers"))
                                                                                     .clicked()
                                                                                 {
                                                                                     self.component
@@ -1018,13 +1018,15 @@ impl UiComponent for ConfigurationUi {
 
         ui.horizontal(|ui| {
             if ui
-                .button(tr!("form-configure-pcb-designs-button-gerbers"))
+                .button(tr!("form-configure-pcb-button-panel-gerbers"))
                 .clicked()
             {
                 self.component
                     .send(ConfigurationTabUiCommand::ManagePcbGerbersClicked);
             }
         });
+        
+        ui.separator();
 
         //
         // form
