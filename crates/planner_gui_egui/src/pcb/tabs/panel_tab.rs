@@ -11,11 +11,11 @@ use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use egui_mobius::Value;
-use gerber_viewer::ToPosition;
 use gerber_viewer::gerber_types::{
     Aperture, Circle, Command, CoordinateFormat, ExtendedCode, GerberCode, GerberError, ImageMirroring, ImageOffset,
     ImageRotation, InterpolationMode,
 };
+use gerber_viewer::{ToPosition, ToVector};
 use math::ops::Ops2D;
 use nalgebra::{Point, Point2, Vector2};
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -1236,7 +1236,9 @@ fn build_panel_preview_commands(
     }));
 
     gerber_builder.select_aperture(drawing_aperture_code);
-    let origin = Point2::new(0.0, 0.0);
+    // NOTE the '-' sign here, since the gerber offset is usually negative, we need to apply the same offset which
+    //      was used when exporting the gerber files.
+    let origin = -pcb_overview.gerber_offset.to_position();
 
     gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
 
@@ -1319,7 +1321,10 @@ fn build_panel_preview_commands(
     for fiducial in &panel_sizing.fiducials {
         let aperture_code = gerber_builder.define_circle_with_hole(fiducial.mask_diameter, fiducial.copper_diameter);
         gerber_builder.select_aperture(aperture_code);
-        gerber_builder.push_commands(gerber_point_commands(coordinate_format, fiducial.position)?);
+        gerber_builder.push_commands(gerber_point_commands(
+            coordinate_format,
+            origin + fiducial.position.to_vector(),
+        )?);
     }
 
     Ok(gerber_builder.as_commands())
@@ -1577,6 +1582,7 @@ mod test {
             path: Default::default(),
             name: "".to_string(),
             units: 4,
+            gerber_offset: Vector2::new(-10.0, -5.0),
             designs: vec!["DESIGN_A".into(), "DESIGN_B".into()],
             unit_map: HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]),
             pcb_gerbers: vec![],
@@ -1593,40 +1599,40 @@ mod test {
             G01*
             %ADD10C,0.1*%
             D10*
-            X0Y0D02*
-            X100000000Y0D01*
-            X100000000Y80000000D01*
-            X0Y80000000D01*
-            X0Y0D01*
-            X5000000Y0D02*
-            X5000000Y80000000D01*
-            X90000000Y0D02*
-            X90000000Y80000000D01*
-            X0Y12000000D02*
-            X100000000Y12000000D01*
-            X0Y74000000D02*
-            X100000000Y74000000D01*
-            X5000000Y12000000D02*
-            X35000000Y12000000D01*
-            X35000000Y37000000D01*
-            X5000000Y37000000D01*
-            X5000000Y12000000D01*
-            X55000000Y12000000D02*
-            X95000000Y12000000D01*
-            X95000000Y32000000D01*
-            X55000000Y32000000D01*
-            X55000000Y12000000D01*
-            X5000000Y40000000D02*
-            X45000000Y40000000D01*
-            X45000000Y60000000D01*
-            X5000000Y60000000D01*
-            X5000000Y40000000D01*
+            X10000000Y5000000D02*
+            X110000000Y5000000D01*
+            X110000000Y85000000D01*
+            X10000000Y85000000D01*
+            X10000000Y5000000D01*
+            X15000000Y5000000D02*
+            X15000000Y85000000D01*
+            X100000000Y5000000D02*
+            X100000000Y85000000D01*
+            X10000000Y17000000D02*
+            X110000000Y17000000D01*
+            X10000000Y79000000D02*
+            X110000000Y79000000D01*
+            X15000000Y17000000D02*
+            X45000000Y17000000D01*
+            X45000000Y42000000D01*
+            X15000000Y42000000D01*
+            X15000000Y17000000D01*
+            X65000000Y17000000D02*
+            X105000000Y17000000D01*
+            X105000000Y37000000D01*
+            X65000000Y37000000D01*
+            X65000000Y17000000D01*
+            X15000000Y45000000D02*
+            X55000000Y45000000D01*
+            X55000000Y65000000D01*
+            X15000000Y65000000D01*
+            X15000000Y45000000D01*
             %ADD11C,2X1*%
             D11*
-            X10000000Y6000000D03*
-            X90000000Y6000000D03*
-            X20000000Y77000000D03*
-            X90000000Y77000000D03*
+            X20000000Y11000000D03*
+            X100000000Y11000000D03*
+            X30000000Y82000000D03*
+            X100000000Y82000000D03*
         "#
         );
 
