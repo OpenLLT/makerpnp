@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use eframe::epaint::{Color32, StrokeKind};
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, TextEdit, Ui, WidgetText};
+use egui::{Resize, TextEdit, Ui, Widget, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_double_slider::DoubleSlider;
 use egui_extras::{Column, TableBuilder};
@@ -23,6 +23,7 @@ use validator::{Validate, ValidationError};
 
 use crate::dialogs::manage_gerbers::{ManageGerbersModal, ManagerGerberModalAction, ManagerGerbersModalUiCommand};
 use crate::forms::Form;
+use crate::forms::transforms::resize_x_transform;
 use crate::pcb::tabs::PcbTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -232,15 +233,15 @@ impl ConfigurationUi {
                                                 },
                                                 ..default_style()
                                             })
-                                                .ui(|ui| {
+                                                .ui_add_manual(|ui| {
                                                     let fields = self.fields.lock().unwrap();
                                                     let sender = self.component.sender.clone();
 
                                                     let mut design_name_clone = fields.design_name.clone();
-                                                    TextEdit::singleline(&mut design_name_clone)
+                                                    let response = TextEdit::singleline(&mut design_name_clone)
                                                         .hint_text(tr!("form-configure-pcb-input-design-name-placeholder"))
                                                         .desired_width(ui.available_width())
-                                                        .show(ui);
+                                                        .ui(ui);
 
                                                     if !fields
                                                         .design_name
@@ -250,7 +251,8 @@ impl ConfigurationUi {
                                                             .send(ConfigurationTabUiCommand::DesignNameChanged(design_name_clone))
                                                             .expect("sent")
                                                     }
-                                                });
+                                                    response
+                                                }, resize_x_transform);
 
                                             let is_design_name_ok = !self.fields.lock().unwrap().design_name.is_empty();
 
@@ -274,7 +276,6 @@ impl ConfigurationUi {
                             //
                             // available design variants
                             //
-
                             tui.style(Style {
                                 flex_grow: 1.0,
                                 size: Size {
@@ -416,7 +417,7 @@ impl ConfigurationUi {
                                                     flex_grow: 1.0,
                                                     ..default_style()
                                                 })
-                                                    .ui(|ui|{
+                                                    .ui_add_manual(|ui|{
                                                         // always 0 the first sizing pass
                                                         let available_width = ui.available_width();
                                                         let width = if ui.is_sizing_pass() {
@@ -424,17 +425,17 @@ impl ConfigurationUi {
                                                         } else {
                                                             available_width
                                                         };
-                                                        // FIXME make the width auto-size
-                                                        let double_slider = DoubleSlider::new(
+                                                        let response = DoubleSlider::new(
                                                             &mut pcb_unit_start,
                                                             &mut pcb_unit_end,
                                                             range.clone(),
                                                         )
                                                             .separation_distance(0)
-                                                            .width(width);
+                                                            .width(width)
+                                                            .ui(ui);
 
-                                                        ui.add(double_slider);
-                                                    }
+                                                        response
+                                                    }, resize_x_transform
                                                     );
 
                                                 tui.style(Style {
@@ -1025,7 +1026,7 @@ impl UiComponent for ConfigurationUi {
                     .send(ConfigurationTabUiCommand::ManagePcbGerbersClicked);
             }
         });
-        
+
         ui.separator();
 
         //

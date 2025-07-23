@@ -501,7 +501,6 @@ impl UnitAssignmentsTabUi {
                                                     } else {
                                                         available_width
                                                     };
-                                                    // FIXME make the width auto-size
                                                     let response = DoubleSlider::new(
                                                         &mut pcb_unit_start,
                                                         &mut pcb_unit_end,
