@@ -20,8 +20,8 @@ use math::ops::Ops2D;
 use nalgebra::{Point, Point2, Vector2};
 use num_traits::{FromPrimitive, ToPrimitive};
 use planner_app::{
-    DesignSizing, Dimensions, FiducialParameters, GerberFileFunction, PanelSizing, PcbOrientation, PcbOverview,
-    PcbSide, PcbUnitIndex, PcbUnitPositioning, Unit,
+    DesignIndex, DesignSizing, Dimensions, FiducialParameters, GerberFileFunction, PanelSizing, PcbAssemblyFlip,
+    PcbAssemblyOrientation, PcbOverview, PcbSide, PcbUnitIndex, PcbUnitPositioning, Unit,
 };
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
@@ -34,6 +34,7 @@ use crate::pcb::tabs::panel_tab::gerber_util::{
     gerber_line_commands, gerber_path_commands, gerber_point_commands, gerber_rectangle_commands,
 };
 use crate::tabs::{Tab, TabKey};
+use crate::task::Task;
 use crate::ui_component::{ComponentState, UiComponent};
 use crate::ui_components::gerber_viewer_ui::{
     GerberViewerMode, GerberViewerUi, GerberViewerUiAction, GerberViewerUiCommand, GerberViewerUiContext,
@@ -86,6 +87,7 @@ pub struct PanelTabUi {
 
     // (current, initial)
     panel_sizing: Option<(PanelSizing, PanelSizing)>,
+    assembly_orientation: Option<(PcbAssemblyOrientation, PcbAssemblyOrientation)>,
 
     panel_tab_ui_state: PanelTabUiState,
 
@@ -118,6 +120,7 @@ impl PanelTabUi {
 
         Self {
             panel_sizing: None,
+            assembly_orientation: None,
             pcb_overview: None,
             panel_tab_ui_state: Default::default(),
             gerber_viewer_ui: Value::new(gerber_viewer_ui),
@@ -126,6 +129,8 @@ impl PanelTabUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
+        self.assembly_orientation
+            .replace((pcb_overview.orientation.clone(), pcb_overview.orientation.clone()));
         self.pcb_overview.replace(pcb_overview);
         self.update_panel_preview();
     }
@@ -143,6 +148,8 @@ impl PanelTabUi {
         state: &PanelTabUiState,
         sender: Sender<PanelTabUiCommand>,
         pcb_overview: &PcbOverview,
+        assembly_orientation: &PcbAssemblyOrientation,
+        initial_assembly_orientation: &PcbAssemblyOrientation,
     ) {
         let text_height = egui::TextStyle::Body
             .resolve(ui.style())
@@ -150,7 +157,8 @@ impl PanelTabUi {
             .max(ui.spacing().interact_size.y);
 
         egui::ScrollArea::both().show(ui, |ui| {
-            let is_changed = panel_sizing != initial_panel_sizing;
+            let is_changed =
+                panel_sizing.ne(initial_panel_sizing) || assembly_orientation.ne(initial_assembly_orientation);
 
             egui::Sides::new().show(
                 ui,
@@ -181,7 +189,7 @@ impl PanelTabUi {
 
             Self::top_bottom_controls(state, &sender, ui);
             ui.separator();
-            Self::orientation_controls(&pcb_overview.orientation, state, &sender, ui);
+            Self::orientation_controls(&assembly_orientation, state, &sender, ui);
             ui.separator();
             Self::panel_size_controls(panel_sizing, &sender, ui);
             ui.separator();
@@ -235,14 +243,56 @@ impl PanelTabUi {
 
     /// show assembly orientation controls
     fn orientation_controls(
-        pcb_orientation: &PcbOrientation,
+        assembly_orientation: &PcbAssemblyOrientation,
         _state: &PanelTabUiState,
-        _sender: &Sender<PanelTabUiCommand>,
+        sender: &Sender<PanelTabUiCommand>,
         ui: &mut Ui,
     ) {
+        fn flip_ui(ui: &mut Ui, flip: &mut PcbAssemblyFlip, salt: &str) -> egui::Response {
+            let response = egui::ComboBox::from_id_salt(salt)
+                .selected_text(tr!(pcb_orientation_pitch_flip_to_i18n_key(*flip)))
+                .show_ui(ui, |ui| {
+                    if ui
+                        .add(egui::Button::selectable(
+                            *flip == PcbAssemblyFlip::None,
+                            tr!(pcb_orientation_pitch_flip_to_i18n_key(PcbAssemblyFlip::None)),
+                        ))
+                        .clicked()
+                    {
+                        *flip = PcbAssemblyFlip::None;
+                    }
+                    if ui
+                        .add(egui::Button::selectable(
+                            *flip == PcbAssemblyFlip::Pitch,
+                            tr!(pcb_orientation_pitch_flip_to_i18n_key(PcbAssemblyFlip::Pitch)),
+                        ))
+                        .clicked()
+                    {
+                        *flip = PcbAssemblyFlip::Pitch;
+                    }
+                    if ui
+                        .add(egui::Button::selectable(
+                            *flip == PcbAssemblyFlip::Roll,
+                            tr!(pcb_orientation_pitch_flip_to_i18n_key(PcbAssemblyFlip::Roll)),
+                        ))
+                        .clicked()
+                    {
+                        *flip = PcbAssemblyFlip::Roll;
+                    }
+                });
+
+            let response = response.response;
+
+            let response = response.on_hover_text(tr!("pcb-assembly-orientation-flip-tooltip"));
+
+            response
+        }
+
         //
         // orientation
         //
+
+        let mut new_assembly_orientation = assembly_orientation.clone();
 
         ui.label(tr!("pcb-panel-tab-panel-orientation-header"));
         ui.horizontal(|ui| {
@@ -254,28 +304,50 @@ impl PanelTabUi {
                 ui.vertical(|ui| {
                     ui.label(tr!("pcb-side-top"));
 
-                    ui.label(tr!(pcb_orientation_pitch_flip_to_i18n_key(
-                        pcb_orientation.top.pitch_flipped
-                    )))
-                    .on_hover_text(tr!("pcb-orientation-pitch-flip-tooltip"));
-                    ui.label(tr!("pcb-orientation-rotation", { rotation: pcb_orientation.top.rotation.to_string() }))
+                    flip_ui(ui, &mut new_assembly_orientation.top.flip, "top_flip");
+
+                    ui.label(tr!("pcb-assembly-orientation-rotation"));
+
+                    let mut rotation = new_assembly_orientation
+                        .top
+                        .rotation
+                        .to_f32()
+                        .unwrap()
+                        .to_radians();
+                    if ui.drag_angle(&mut rotation).changed() {
+                        new_assembly_orientation.top.rotation =
+                            Decimal::from_f32(rotation.to_degrees()).unwrap_or_default();
+                    }
                 });
             });
             egui::Frame::group(&Style::default()).show(ui, |ui| {
                 ui.vertical(|ui| {
                     ui.label(tr!("pcb-side-bottom"));
 
-                    ui.label(tr!(pcb_orientation_pitch_flip_to_i18n_key(
-                        pcb_orientation.bottom.pitch_flipped
-                    )))
-                    .on_hover_text(tr!("pcb-orientation-pitch-flip-tooltip"));
-                    ui.label(
-                        tr!("pcb-orientation-rotation", { rotation: pcb_orientation.bottom.rotation.to_string() }),
-                    );
+                    flip_ui(ui, &mut new_assembly_orientation.bottom.flip, "bottom_flip");
+
+                    ui.label(tr!("pcb-assembly-orientation-rotation"));
+
+                    let mut rotation = new_assembly_orientation
+                        .bottom
+                        .rotation
+                        .to_f32()
+                        .unwrap()
+                        .to_radians();
+                    if ui.drag_angle(&mut rotation).changed() {
+                        new_assembly_orientation.bottom.rotation =
+                            Decimal::from_f32(rotation.to_degrees()).unwrap_or_default();
+                    }
                 });
             });
         });
-        ui.label(tr!("pcb-orientation-pitch-flip-help"));
+        ui.label(tr!("pcb-assembly-orientation-flip-help"));
+
+        if new_assembly_orientation.ne(&assembly_orientation) {
+            sender
+                .send(PanelTabUiCommand::AssemblyOrientationChanged(new_assembly_orientation))
+                .expect("sent");
+        }
     }
 
     fn panel_size_controls(panel_sizing: &PanelSizing, sender: &Sender<PanelTabUiCommand>, ui: &mut Ui) {
@@ -927,14 +999,21 @@ impl PanelTabUi {
     }
 
     fn update_panel_preview(&mut self) {
-        let (Some((panel_sizing, _)), Some(pcb_overview)) = (&self.panel_sizing, &self.pcb_overview) else {
+        let (Some((panel_sizing, _)), Some((assembly_orientation, _)), Some(pcb_overview)) =
+            (&self.panel_sizing, &self.assembly_orientation, &self.pcb_overview)
+        else {
             return;
         };
 
         let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
 
-        if let Ok(commands) = build_panel_preview_commands(panel_sizing, pcb_overview, self.panel_tab_ui_state.pcb_side)
-        {
+        if let Ok(commands) = build_panel_preview_commands(
+            panel_sizing,
+            assembly_orientation,
+            &pcb_overview.gerber_offset,
+            self.panel_tab_ui_state.pcb_side,
+            &pcb_overview.unit_map,
+        ) {
             dump_gerber_source(&commands);
             gerber_viewer_ui.clear_layers();
             gerber_viewer_ui.add_layer(
@@ -951,7 +1030,9 @@ impl PanelTabUi {
 #[derive(Debug, Clone)]
 pub enum PanelTabUiCommand {
     None,
+
     PcbSideChanged(PcbSide),
+    AssemblyOrientationChanged(PcbAssemblyOrientation),
     NewFiducialChanged(FiducialParameters),
     AddFiducial(FiducialParameters),
     DeleteFiducial(usize),
@@ -970,15 +1051,23 @@ pub enum PanelTabUiCommand {
         pcb_unit_index: PcbUnitIndex,
         pcb_unit_positioning: PcbUnitPositioning,
     },
+
     Apply,
     Reset,
+
     PanelSizingSaved,
+    AssemblyOrientationSaved,
+    ApplyPanelSizing(PanelSizing),
+    ApplyAssemblyOrientation(PcbAssemblyOrientation),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum PanelTabUiAction {
     None,
-    Apply(PanelSizing),
+    ApplyPanelSizing(PanelSizing),
+    ApplyAssemblyOrientation(PcbAssemblyOrientation),
+    Task(Task<PanelTabUiCommand>),
+    UiCommand(PanelTabUiCommand),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -990,7 +1079,11 @@ impl UiComponent for PanelTabUi {
     type UiAction = PanelTabUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let (Some(pcb_overview), Some((panel_sizing, initial_panel_sizing))) = (&self.pcb_overview, &self.panel_sizing)
+        let (
+            Some(pcb_overview),
+            Some((panel_sizing, initial_panel_sizing)),
+            Some((assembly_orientation, initial_assembly_orientation)),
+        ) = (&self.pcb_overview, &self.panel_sizing, &self.assembly_orientation)
         else {
             ui.spinner();
             return;
@@ -1004,7 +1097,16 @@ impl UiComponent for PanelTabUi {
                 let state = &self.panel_tab_ui_state;
                 let sender = self.component.sender.clone();
 
-                Self::left_panel_content(ui, &panel_sizing, &initial_panel_sizing, state, sender, &pcb_overview);
+                Self::left_panel_content(
+                    ui,
+                    &panel_sizing,
+                    &initial_panel_sizing,
+                    state,
+                    sender,
+                    &pcb_overview,
+                    &assembly_orientation,
+                    &initial_assembly_orientation,
+                );
             });
 
         egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -1103,15 +1205,27 @@ impl UiComponent for PanelTabUi {
                 }
             }
             PanelTabUiCommand::Reset => {
-                if let Some((panel_sizing, initial_panel_sizing)) = &mut self.panel_sizing {
+                if let (
+                    Some((panel_sizing, initial_panel_sizing)),
+                    Some((assembly_orientation, initial_assembly_orientation)),
+                ) = (&mut self.panel_sizing, &mut self.assembly_orientation)
+                {
                     *panel_sizing = initial_panel_sizing.clone();
+                    *assembly_orientation = initial_assembly_orientation.clone();
                     update_panel_preview = true;
                 }
                 None
             }
             PanelTabUiCommand::Apply => {
-                if let Some((panel_sizing, _)) = &mut self.panel_sizing {
-                    Some(PanelTabUiAction::Apply(panel_sizing.clone()))
+                if let (Some((panel_sizing, _)), Some((assembly_orientation, _))) =
+                    (&mut self.panel_sizing, &mut self.assembly_orientation)
+                {
+                    Some(PanelTabUiAction::Task(Task::batch(vec![
+                        Task::done(PanelTabUiCommand::ApplyPanelSizing(panel_sizing.clone())),
+                        Task::done(PanelTabUiCommand::ApplyAssemblyOrientation(
+                            assembly_orientation.clone(),
+                        )),
+                    ])))
                 } else {
                     None
                 }
@@ -1121,6 +1235,25 @@ impl UiComponent for PanelTabUi {
                     *initial_panel_sizing = panel_sizing.clone();
                 }
                 None
+            }
+            PanelTabUiCommand::AssemblyOrientationChanged(new_assembly_orientation) => {
+                if let Some((assembly_orientation, _)) = &mut self.assembly_orientation {
+                    *assembly_orientation = new_assembly_orientation;
+                }
+                update_panel_preview = true;
+                None
+            }
+            PanelTabUiCommand::AssemblyOrientationSaved => {
+                if let Some((assembly_orientation, initial_assembly_orientation)) = &mut self.assembly_orientation {
+                    *initial_assembly_orientation = assembly_orientation.clone();
+                }
+                None
+            }
+            PanelTabUiCommand::ApplyPanelSizing(panel_ui_sizing) => {
+                Some(PanelTabUiAction::ApplyPanelSizing(panel_ui_sizing))
+            }
+            PanelTabUiCommand::ApplyAssemblyOrientation(assembly_orientation) => {
+                Some(PanelTabUiAction::ApplyAssemblyOrientation(assembly_orientation))
             }
         };
 
@@ -1194,8 +1327,10 @@ impl IntoGerberUnit for Unit {
 
 fn build_panel_preview_commands(
     panel_sizing: &PanelSizing,
-    pcb_overview: &PcbOverview,
+    assembly_orientation: &PcbAssemblyOrientation,
+    gerber_offset: &Vector2<f64>,
     side: PcbSide,
+    unit_map: &HashMap<PcbUnitIndex, DesignIndex>,
 ) -> Result<Vec<Command>, GerberError> {
     // FUTURE generate multiple, real, gerber layers instead of a 'preview' layer
     //        i.e. 'board outline, top mask, top copper layers, bottom mask, bottom copper layer, v-score/cut (rails)'
@@ -1207,15 +1342,26 @@ fn build_panel_preview_commands(
         .with_coordinate_format(coordinate_format);
 
     let orientation = match side {
-        PcbSide::Top => &pcb_overview.orientation.top,
-        PcbSide::Bottom => &pcb_overview.orientation.bottom,
+        PcbSide::Top => &assembly_orientation.top,
+        PcbSide::Bottom => &assembly_orientation.bottom,
     };
-    if orientation.pitch_flipped {
-        gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::MirrorImage(ImageMirroring::B)));
-        gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::OffsetImage(ImageOffset {
-            a: 0.0,
-            b: -panel_sizing.size.y,
-        })));
+
+    match orientation.flip {
+        PcbAssemblyFlip::None => {}
+        PcbAssemblyFlip::Pitch => {
+            gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::MirrorImage(ImageMirroring::B)));
+            gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::OffsetImage(ImageOffset {
+                a: 0.0,
+                b: -panel_sizing.size.y,
+            })));
+        }
+        PcbAssemblyFlip::Roll => {
+            gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::MirrorImage(ImageMirroring::A)));
+            gerber_builder.push_command(Command::ExtendedCode(ExtendedCode::OffsetImage(ImageOffset {
+                a: -panel_sizing.size.x,
+                b: 0.0,
+            })));
+        }
     }
 
     let orientation_map = HashMap::from([
@@ -1238,7 +1384,7 @@ fn build_panel_preview_commands(
     gerber_builder.select_aperture(drawing_aperture_code);
     // NOTE the '-' sign here, since the gerber offset is usually negative, we need to apply the same offset which
     //      was used when exporting the gerber files.
-    let origin = -pcb_overview.gerber_offset.to_position();
+    let origin = -gerber_offset.to_position();
 
     gerber_builder.push_commands(gerber_rectangle_commands(coordinate_format, origin, panel_sizing.size)?);
 
@@ -1280,10 +1426,7 @@ fn build_panel_preview_commands(
         .iter()
         .enumerate()
     {
-        let Some(design_index) = pcb_overview
-            .unit_map
-            .get(&(pcb_unit_index as PcbUnitIndex))
-        else {
+        let Some(design_index) = unit_map.get(&(pcb_unit_index as PcbUnitIndex)) else {
             continue;
         };
 
@@ -1498,7 +1641,7 @@ mod test {
 
     use indoc::indoc;
     use nalgebra::{Point2, Vector2};
-    use planner_app::{PcbOrientation, PcbOverview, PcbSide, Unit};
+    use planner_app::{PcbAssemblyOrientation, PcbSide, Unit};
     use rust_decimal_macros::dec;
 
     use crate::pcb::tabs::panel_tab::{
@@ -1577,18 +1720,9 @@ mod test {
             units: Unit::Millimeters,
         };
 
-        // and
-        let pcb_overview = PcbOverview {
-            path: Default::default(),
-            name: "".to_string(),
-            units: 4,
-            gerber_offset: Vector2::new(-10.0, -5.0),
-            designs: vec!["DESIGN_A".into(), "DESIGN_B".into()],
-            unit_map: HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]),
-            pcb_gerbers: vec![],
-            design_gerbers: vec![],
-            orientation: PcbOrientation::default(),
-        };
+        let unit_map = HashMap::from_iter([(0, 0), (1, 1), (2, 0), (2, 1)]);
+        let gerber_offset = Vector2::new(-10.0, -5.0);
+        let assembly_orientation = PcbAssemblyOrientation::default();
 
         // and
         let expected_source = indoc!(
@@ -1637,7 +1771,14 @@ mod test {
         );
 
         // when
-        let commands = build_panel_preview_commands(&panel_sizing, &pcb_overview, PcbSide::Top).unwrap();
+        let commands = build_panel_preview_commands(
+            &panel_sizing,
+            &assembly_orientation,
+            &gerber_offset,
+            PcbSide::Top,
+            &unit_map,
+        )
+        .unwrap();
 
         // then
         let source = gerber_commands_to_source(&commands);

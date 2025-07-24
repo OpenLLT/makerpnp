@@ -84,7 +84,7 @@ pub struct Pcb {
     ///
     /// Used in the calculation of placement positions on individual units, and the presentation of gerbers.
     #[serde(default)]
-    pub orientation: PcbOrientation,
+    pub orientation: PcbAssemblyOrientation,
 }
 
 #[derive(Error, Debug)]
@@ -134,7 +134,7 @@ impl Pcb {
             gerber_offset: Default::default(),
             design_gerbers: Default::default(),
             panel_sizing: Default::default(),
-            orientation: PcbOrientation::default(),
+            orientation: PcbAssemblyOrientation::default(),
         }
     }
 
@@ -143,7 +143,7 @@ impl Pcb {
     pub fn build_unit_transform(
         &self,
         pcb_unit_index: PcbUnitIndex,
-        orientation: &PcbSideOrientation,
+        orientation: &PcbSideAssemblyOrientation,
     ) -> Result<PcbUnitTransform, PcbError> {
         let design_index = *self
             .unit_map
@@ -346,7 +346,7 @@ pub struct PcbUnitTransform {
 
     pub design_sizing: DesignSizing,
 
-    pub orientation: PcbSideOrientation,
+    pub orientation: PcbSideAssemblyOrientation,
 
     pub panel_size: Vector2<f64>,
 }
@@ -420,14 +420,10 @@ impl PcbUnitTransform {
         matrix = orientation_rotation * matrix;
 
         // Apply orientation flipping
-        if self.orientation.pitch_flipped {
-            // aka 'Y-axis mirroring'
-            let pitch_flip_2d = Matrix3::new(
-                1.0, 0.0, 0.0,
-                0.0, -1.0, 0.0,
-                0.0, 0.0, 1.0
-            );
-            matrix = pitch_flip_2d * matrix;
+        if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
+            let flip_matrix: Matrix3<f64> = self.orientation.flip.into();
+            println!("flip_matrix: {:?}", flip_matrix);
+            matrix = flip_matrix * matrix;
         }
 
         // Translate from panel center
@@ -458,8 +454,8 @@ impl PcbUnitTransform {
 
         let mut new_rotation = placement.rotation + self.orientation.rotation + self.unit_rotation;
 
-        // If pitch flipping, flip the rotation
-        if self.orientation.pitch_flipped {
+        // If flip the rotation
+        if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
             new_rotation = dec!(180.0) - new_rotation;
         }
 
@@ -519,9 +515,9 @@ pub struct UnitPlacementPosition {
 ///
 /// Used when transforming placement coordinates and component rotations.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct PcbOrientation {
-    pub top: PcbSideOrientation,
-    pub bottom: PcbSideOrientation,
+pub struct PcbAssemblyOrientation {
+    pub top: PcbSideAssemblyOrientation,
+    pub bottom: PcbSideAssemblyOrientation,
 }
 
 /// The default orientation for the bottom is to hold the PCB by the left and right sides, then flip it over top-to-bottom
@@ -529,15 +525,15 @@ pub struct PcbOrientation {
 ///
 /// In the physical world this pitch-flipping happens in 3D space, but the coordinates are in 2D space.
 /// and is referred to as y-mirroring.  similarly, a left-to-right roll flip would be x-mirroring in 2D space.
-impl Default for PcbOrientation {
+impl Default for PcbAssemblyOrientation {
     fn default() -> Self {
         Self {
-            top: PcbSideOrientation {
-                pitch_flipped: false,
+            top: PcbSideAssemblyOrientation {
+                flip: PcbAssemblyFlip::None,
                 rotation: Decimal::from(0),
             },
-            bottom: PcbSideOrientation {
-                pitch_flipped: true,
+            bottom: PcbSideAssemblyOrientation {
+                flip: PcbAssemblyFlip::Pitch,
                 rotation: Decimal::from(0),
             },
         }
@@ -546,11 +542,96 @@ impl Default for PcbOrientation {
 
 /// Specifies how the PCB should be positioned in the machine.
 ///
-/// Transform order: rotation, pitch flip (y-mirroring),
+/// Transform order: rotation, flip (mirroring),
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub struct PcbSideOrientation {
-    /// aka 'Y-axis mirroring'
-    pub pitch_flipped: bool,
+pub struct PcbSideAssemblyOrientation {
+    pub flip: PcbAssemblyFlip,
     /// In degrees, counter-clockwise positive
     pub rotation: Decimal,
+}
+
+/// How to 'flip' a physical PCB.
+///
+/// We specifically do NOT use terms like 'mirror' or 'reflect' here because that is not what happens to the physical
+/// PCB in the real world.
+///
+/// Additionally, since there are inconsistencies between 'flip-along', 'flip-over', 'flip-about' and 'mirroring' and
+/// 'reflection' we use 'pitch' and 'roll' since they are unambiguous.
+///
+/// For clarity, this table describes the various different terminology used to describe flipping operations and how they relate to each other.
+///
+/// | Term           | Flip-over/about | Flip-along | Mirrored/Reflected axis | Matrix                             | Hold           | Result                       | Coordinate in | Coordinate out |
+/// | -------------- | --------------- | ---------- | ----------------------- | ---------------------------------- |--------------- | ---------------------------- | ------------- | -------------- |
+/// | Pitch flip     | x               | y          | y                       | [( 1, 0, 0), (0,-1, 0), (0, 0, 1)] | Left and right | Top edge becomes bottom edge | (1,1)         | ( 1,-1)        |
+/// | Roll flip      | y               | x          | x                       | [(-1, 0, 0), (0, 1, 0), (0, 0, 1)] | Top and bottom | Left edge becomes right edge | (1,1)         | (-1, 1)        |
+#[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq)]
+pub enum PcbAssemblyFlip {
+    None,
+    Pitch, // Flip about the X axis (negates Y)
+    Roll,  // Flip about the Y axis (negates X)
+}
+
+impl From<PcbAssemblyFlip> for Matrix3<f64> {
+    fn from(flip: PcbAssemblyFlip) -> Self {
+        match flip {
+            PcbAssemblyFlip::None => Matrix3::identity(),
+            PcbAssemblyFlip::Pitch => Matrix3::new(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0),
+            PcbAssemblyFlip::Roll => Matrix3::new(-1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+        }
+    }
+}
+
+#[cfg(test)]
+mod pcb_assembly_flip_tests {
+    use nalgebra::{Matrix3, Point2, Vector3};
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(
+        PcbAssemblyFlip::None,
+        Matrix3::identity(),
+        Point2::new(1.0, 2.0),
+        Point2::new(1.0, 2.0)
+    )]
+    #[case(
+        PcbAssemblyFlip::Roll,
+        Matrix3::new(-1.0, 0.0, 0.0,
+                      0.0, 1.0, 0.0,
+                      0.0, 0.0, 1.0),
+        Point2::new(1.0, 2.0),
+        Point2::new(-1.0, 2.0)
+    )]
+    #[case(
+        PcbAssemblyFlip::Pitch,
+        Matrix3::new(1.0, 0.0, 0.0,
+                     0.0, -1.0, 0.0,
+                     0.0, 0.0, 1.0),
+        Point2::new(1.0, 2.0),
+        Point2::new(1.0, -2.0)
+    )]
+    fn test_pcb_assembly_flip_matrix(
+        #[case] flip: PcbAssemblyFlip,
+        #[case] expected_matrix: Matrix3<f64>,
+        #[case] input: Point2<f64>,
+        #[case] expected_output: Point2<f64>,
+    ) {
+        let flip_matrix: Matrix3<f64> = flip.into();
+        assert_eq!(flip_matrix, expected_matrix);
+
+        let input_vec = Vector3::new(input.x, input.y, 1.0);
+        let result = flip_matrix * input_vec;
+        let result_point = Point2::new(result.x, result.y);
+
+        assert!(
+            (result_point.coords - expected_output.coords)
+                .abs()
+                .max()
+                < 1e-9,
+            "expected {:?}, got {:?}",
+            expected_output,
+            result_point
+        );
+    }
 }

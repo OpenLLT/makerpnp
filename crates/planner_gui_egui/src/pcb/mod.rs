@@ -342,6 +342,55 @@ impl Pcb {
             .iter()
             .find_map(|handler| handler(key, &navigation_path))
     }
+
+    fn handle_panel_tab_ui_action(
+        &mut self,
+        key: PcbKey,
+        panel_tab_ui_action: Option<PanelTabUiAction>,
+    ) -> Option<PcbAction> {
+        match panel_tab_ui_action {
+            None => None,
+            Some(PanelTabUiAction::None) => None,
+            Some(PanelTabUiAction::ApplyPanelSizing(panel_sizing)) => self
+                .planner_core_service
+                .update(Event::ApplyPanelSizing {
+                    path: self.path.clone(),
+                    panel_sizing,
+                })
+                .when_ok(key, |_| {
+                    Some(PcbUiCommand::PanelTabUiCommand(PanelTabUiCommand::PanelSizingSaved))
+                }),
+            Some(PanelTabUiAction::ApplyAssemblyOrientation(assembly_orientation)) => self
+                .planner_core_service
+                .update(Event::ApplyAssemblyOrientation {
+                    path: self.path.clone(),
+                    assembly_orientation,
+                })
+                .when_ok(key, |_| {
+                    Some(PcbUiCommand::PanelTabUiCommand(
+                        PanelTabUiCommand::AssemblyOrientationSaved,
+                    ))
+                }),
+            Some(PanelTabUiAction::Task(task)) => {
+                let task = task.map(|command| PcbAction::UiCommand(PcbUiCommand::PanelTabUiCommand(command)));
+
+                Some(PcbAction::Task(key, task))
+            }
+            Some(PanelTabUiAction::UiCommand(command)) => {
+                let context = &mut PanelTabUiContext::default();
+                let panel_tab_ui_action = self
+                    .pcb_ui_state
+                    .lock()
+                    .unwrap()
+                    .panel_tab_ui
+                    .update(command, context);
+
+                let action = self.handle_panel_tab_ui_action(key, panel_tab_ui_action);
+
+                action
+            }
+        }
+    }
 }
 
 #[derive(Derivative)]
@@ -832,19 +881,8 @@ impl UiComponent for Pcb {
                     .unwrap()
                     .panel_tab_ui
                     .update(command, context);
-                match panel_tab_ui_action {
-                    Some(PanelTabUiAction::None) => None,
-                    Some(PanelTabUiAction::Apply(panel_sizing)) => self
-                        .planner_core_service
-                        .update(Event::ApplyPanelSizing {
-                            path: self.path.clone(),
-                            panel_sizing,
-                        })
-                        .when_ok(key, |_| {
-                            Some(PcbUiCommand::PanelTabUiCommand(PanelTabUiCommand::PanelSizingSaved))
-                        }),
-                    None => None,
-                }
+
+                self.handle_panel_tab_ui_action(key, panel_tab_ui_action)
             }
             PcbUiCommand::GerberViewerTabUiCommand {
                 args,

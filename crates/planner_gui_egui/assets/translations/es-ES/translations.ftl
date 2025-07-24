@@ -126,10 +126,13 @@ pcb-panel-tab-panel-fiducials-header = Fiduciales
 pcb-panel-tab-panel-design-configuration-header = Configuración de diseño
 pcb-panel-tab-panel-unit-positions-header = Posiciones de la unidad
 
-pcb-orientation-rotation = Rotación: { $rotacion }
-pcb-orientation-pitch-flip-help = Voltear significa: Sujetar la PCB por los lados izquierdo y derecho, y darle la vuelta de arriba a abajo (de atrás a delante o de Y+ a Y-), es decir, inclinarla 180 grados, sin girar la PCB ni en el eje de balanceo ni en el de guiñada.
-pcb-orientation-pitch-flipped-yes = Inclinación inclinada
-pcb-orientation-pitch-flipped-no = No inclinada
+pcb-assembly-orientation-rotation = Rotación
+pcb-assembly-orientation-flip-tooltip = Terminología:
+    Roll = sujetar la pcb por arriba y por abajo y girar 180 grados a lo largo del eje Y (reflejar coordenadas X).
+    Pitch = sujetar la pcb por la izquierda y por la derecha y girar 180 grados a lo largo del eje X (reflejar coordenadas Y).
+pcb-assembly-orientation-flip-roll = Alabeo (reflejo X)
+pcb-assembly-orientation-flip-pitch = Cabeceo (reflejo Y)
+pcb-assembly-orientation-flip-none = Ninguno
 
 pcb-explorer-tab-label = Explorador de PCB
 pcb-explorer-node-root = { $name }

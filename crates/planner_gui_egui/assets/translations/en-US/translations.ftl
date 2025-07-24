@@ -126,10 +126,13 @@ pcb-panel-tab-panel-fiducials-header = Fiducials
 pcb-panel-tab-panel-design-configuration-header = Design configuration
 pcb-panel-tab-panel-unit-positions-header = Unit positions
 
-pcb-orientation-rotation = Rotation: { $rotation }
-pcb-orientation-pitch-flip-tooltip = Pitch flipped means: Hold the PCB by the left and right sides, then flip it over top-to-bottom (aka back-to-front or Y+ to Y-) i.e. pitch 180 degrees, without rotating the PCB on either roll or yaw axis.
-pcb-orientation-pitch-flipped-yes = Pitch flipped
-pcb-orientation-pitch-flipped-no = Not flipped
+pcb-assembly-orientation-rotation = Rotation
+pcb-assembly-orientation-flip-tooltip = Terminology:
+    Roll = hold pcb by top and bottom and rotate 180 degrees along the Y-axis (mirrors X coordinates).
+    Pitch = hold pcb by left and right and rotate 180 degrees along the X-axis (mirrors Y coordinates).
+pcb-assembly-orientation-flip-roll = Roll (X mirroring)
+pcb-assembly-orientation-flip-pitch = Pitch (Y mirroring)
+pcb-assembly-orientation-flip-none = None
 
 pcb-explorer-tab-label = PCB Explorer
 pcb-explorer-node-root = { $name }

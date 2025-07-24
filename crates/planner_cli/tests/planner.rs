@@ -23,7 +23,7 @@ mod operation_sequence_1 {
     use indoc::indoc;
     use nalgebra::Vector2;
     use planning::file::FileReference;
-    use planning::pcb::PcbOrientation;
+    use planning::pcb::PcbAssemblyOrientation;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
     use planning::process::TaskStatus;
     use pnp::object_path::ObjectPath;
@@ -292,7 +292,7 @@ mod operation_sequence_1 {
                     },
                 ],
             },
-            orientation: PcbOrientation::default(),
+            orientation: PcbAssemblyOrientation::default(),
         }
         .content();
 
@@ -412,7 +412,7 @@ mod operation_sequence_1 {
                 design_sizings: design_sizings.clone(),
                 pcb_unit_positionings: pcb_unit_positions.clone(),
             },
-            orientation: PcbOrientation::default(),
+            orientation: PcbAssemblyOrientation::default(),
         }
         .content();
 

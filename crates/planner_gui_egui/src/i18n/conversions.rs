@@ -1,6 +1,6 @@
 use planner_app::{
-    GerberFileFunction, OperationStatus, PcbSide, PlacementSortingMode, PlacementStatus, ProjectPlacementStatus,
-    TaskStatus,
+    GerberFileFunction, OperationStatus, PcbAssemblyFlip, PcbSide, PlacementSortingMode, PlacementStatus,
+    ProjectPlacementStatus, TaskStatus,
 };
 use util::sorting::SortOrder;
 
@@ -81,9 +81,10 @@ pub fn gerber_file_function_to_i18n_key(function: &GerberFileFunction) -> &'stat
     }
 }
 
-pub fn pcb_orientation_pitch_flip_to_i18n_key(pitch_flip: bool) -> &'static str {
-    match pitch_flip {
-        true => "pcb-orientation-pitch-flipped-yes",
-        false => "pcb-orientation-pitch-flipped-no",
+pub fn pcb_orientation_pitch_flip_to_i18n_key(flip: PcbAssemblyFlip) -> &'static str {
+    match flip {
+        PcbAssemblyFlip::None => "pcb-assembly-orientation-flip-none",
+        PcbAssemblyFlip::Pitch => "pcb-assembly-orientation-flip-pitch",
+        PcbAssemblyFlip::Roll => "pcb-assembly-orientation-flip-roll",
     }
 }

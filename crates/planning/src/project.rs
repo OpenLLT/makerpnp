@@ -1013,7 +1013,7 @@ mod placement_unit_positioning_tests {
     use tap::Tap;
 
     use super::*;
-    use crate::pcb::{PcbOrientation, PcbSideOrientation};
+    use crate::pcb::{PcbAssemblyFlip, PcbAssemblyOrientation, PcbSideAssemblyOrientation};
 
     macro_rules! make_x_y_rotation {
         ($x:expr, $y:expr, $rotation:expr) => {
@@ -1023,26 +1023,27 @@ mod placement_unit_positioning_tests {
 
     // abbreviations:
     // CCW = counter clock-wise
-    // PFLIP = pitch flip (y-axis mirroring)
+    // RFLIP = x-axis flip (y-axis mirroring)
+    // PFLIP = y-axis flip (x-axis mirroring)
 
-    const PCB_ORIENTATION_0_PFLIP: PcbOrientation = PcbOrientation {
-        top: PcbSideOrientation {
-            pitch_flipped: false,
+    const PCB_ORIENTATION_0_PFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
+        top: PcbSideAssemblyOrientation {
+            flip: PcbAssemblyFlip::None,
             rotation: dec!(0),
         },
-        bottom: PcbSideOrientation {
-            pitch_flipped: true,
+        bottom: PcbSideAssemblyOrientation {
+            flip: PcbAssemblyFlip::Pitch,
             rotation: dec!(0),
         },
     };
 
-    const PCB_ORIENTATION_CCW90_PFLIP: PcbOrientation = PcbOrientation {
-        top: PcbSideOrientation {
-            pitch_flipped: false,
+    const PCB_ORIENTATION_CCW90_PFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
+        top: PcbSideAssemblyOrientation {
+            flip: PcbAssemblyFlip::None,
             rotation: dec!(90),
         },
-        bottom: PcbSideOrientation {
-            pitch_flipped: true,
+        bottom: PcbSideAssemblyOrientation {
+            flip: PcbAssemblyFlip::Pitch,
             rotation: dec!(90),
         },
     };
@@ -1086,12 +1087,14 @@ mod placement_unit_positioning_tests {
         make_x_y_rotation!(70, 30, 135),
     ];
 
+    // TODO add test cases for roll flip
+
     #[rstest]
     #[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_0, CASE_1_EXPECTATIONS)]
     #[case(PCB_ORIENTATION_CCW90_PFLIP, UNIT_ROTATION_0, CASE_2_EXPECTATIONS)]
     #[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_90, CASE_3_EXPECTATIONS)]
     fn test_build_placement_unit_positions(
-        #[case] pcb_orientation: PcbOrientation,
+        #[case] pcb_orientation: PcbAssemblyOrientation,
         #[case] unit_rotation_degrees: Decimal,
         #[case] expectations: [[Decimal; 3]; 8],
     ) {
@@ -1215,7 +1218,7 @@ mod placement_unit_positioning_tests {
         //      # = edge routing gap,
         //      <n> = unit n (origin)
         //
-        // Note that when pitch flipped, the top edge becomes the bottom edge and the unit numbers are flipped too.
+        // Note that when x axis flipped (y mirrored / pitch), the top edge becomes the bottom edge and the unit numbers are flipped too.
         //
         // This is so that when you place components ONLY on a single unit of a panel, e.g. number 1, when you come to
         // place components on the bottom of the panel, the components are placed on the same unit.

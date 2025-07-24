@@ -17,8 +17,8 @@ use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
-pub use planning::pcb::PcbOrientation;
 use planning::pcb::{Pcb, PcbError};
+pub use planning::pcb::{PcbAssemblyFlip, PcbAssemblyOrientation};
 pub use planning::phase::PhaseReference;
 use planning::phase::{Phase, PhaseState};
 pub use planning::placement::PlacementSortingItem;
@@ -256,7 +256,7 @@ pub struct PcbOverview {
     /// The outer vector index is the design index, and each design can have multiple gerbers (nested vector),
     pub design_gerbers: Vec<Vec<PcbGerberItem>>,
 
-    pub orientation: PcbOrientation,
+    pub orientation: PcbAssemblyOrientation,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -605,6 +605,10 @@ pub enum Event {
         design_sizings: Option<HashMap<DesignName, DesignSizing>>,
         pcb_unit_positionings: Option<HashMap<PcbUnitNumber, PcbUnitPositioning>>,
     },
+    ApplyAssemblyOrientation {
+        path: PathBuf,
+        assembly_orientation: PcbAssemblyOrientation,
+    },
     AddGerberFiles {
         path: PathBuf,
         design: Option<DesignName>,
@@ -943,6 +947,29 @@ impl Planner {
                 }
 
                 // Once a PCB has been modified, any project using it needs to re-load it and handle inconsistencies.
+                Ok(render::render())
+            }),
+            Event::ApplyAssemblyOrientation {
+                path: pcb_path,
+                assembly_orientation,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+
+                info!(
+                    "Applying assembly orientation. pcb_path: {:?}, assembly_orientation: {:?}",
+                    pcb_path, assembly_orientation
+                );
+
+                pcb.orientation = assembly_orientation;
+                *modified = true;
+
                 Ok(render::render())
             }),
             Event::LoadPcb {

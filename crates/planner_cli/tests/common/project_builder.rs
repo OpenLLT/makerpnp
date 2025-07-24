@@ -6,7 +6,7 @@ use indexmap::{IndexMap, IndexSet};
 use nalgebra::Vector2;
 use planning::design::{DesignIndex, DesignName};
 use planning::file::FileReference;
-use planning::pcb::PcbOrientation;
+use planning::pcb::PcbAssemblyOrientation;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
 use planning::variant::VariantName;
@@ -194,7 +194,7 @@ pub struct TestPcb {
 
     pub panel_sizing: TestPanelSizing,
 
-    pub orientation: PcbOrientation,
+    pub orientation: PcbAssemblyOrientation,
 }
 
 #[serde_as]
