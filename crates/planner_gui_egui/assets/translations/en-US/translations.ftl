@@ -147,6 +147,7 @@ pcb-explorer-node-units-assignment-unassigned = { $pcb_number }: Unassigned
 pcb-gerber-viewer-tab-label-panel = Panel
 pcb-gerber-viewer-tab-label-design = Design ({ $index })
 pcb-gerber-viewer-layers-window-title = Layers
+pcb-gerber-viewer-input-go-to = Go to
 
 form-button-ok = Ok
 form-button-cancel = Cancel
@@ -345,6 +346,7 @@ table-fiducials-column-copper-diameter = Copper ⌀
 table-fiducials-column-actions = Actions
 
 common-value-not-available = N/A
+common-actions = Actions
 
 ratio = Ratio: { $numerator }: { $denominator }
 ratio-error = Ratio: N/A

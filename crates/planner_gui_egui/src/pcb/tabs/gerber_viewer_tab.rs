@@ -224,8 +224,7 @@ impl UiComponent for GerberViewerTabUi {
                         .add_window(tool_windows_id.with("actions"))
                         .default_pos([20.0, 20.0])
                         .default_size([200.0, 60.0])
-                        // TODO TRANSLATE
-                        .show("Actions".to_string(), {
+                        .show(tr!("common-actions"), {
                             let mut x_coord = self.coord_input.0.clone();
                             let mut y_coord = self.coord_input.1.clone();
                             let sender = self.component.sender.clone();
@@ -238,10 +237,10 @@ impl UiComponent for GerberViewerTabUi {
 
                                     let mut x_editor = egui::TextEdit::singleline(&mut x_coord)
                                         .desired_width(50.0)
-                                        .hint_text("X"); // TODO translate
+                                        .hint_text(tr!("form-common-input-x"));
 
                                     if !x_is_valid {
-                                        x_editor = x_editor.background_color(Color32::DARK_RED);
+                                        x_editor = x_editor.text_color(Color32::RED);
                                     }
                                     coordinates_changed |= ui.add(x_editor).changed();
 
@@ -249,9 +248,9 @@ impl UiComponent for GerberViewerTabUi {
 
                                     let mut y_editor = egui::TextEdit::singleline(&mut y_coord)
                                         .desired_width(50.0)
-                                        .hint_text("Y"); // TODO translate
+                                        .hint_text(tr!("form-common-input-y"));
                                     if !y_is_valid {
-                                        y_editor = y_editor.background_color(Color32::DARK_RED);
+                                        y_editor = y_editor.text_color(Color32::RED);
                                     }
                                     coordinates_changed |= ui.add(y_editor).changed();
 
@@ -267,7 +266,10 @@ impl UiComponent for GerberViewerTabUi {
                                     }
 
                                     ui.add_enabled_ui(enabled, |ui| {
-                                        if ui.button("⛶ Go To").clicked() {
+                                        if ui
+                                            .button(format!("⛶ {}", tr!("pcb-gerber-viewer-input-go-to")))
+                                            .clicked()
+                                        {
                                             // Safety: ui is disabled unless x and y are `Result::ok`
                                             sender
                                                 .send(GerberViewerTabUiCommand::GoToClicked(x.unwrap(), y.unwrap()))
