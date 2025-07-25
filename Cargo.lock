@@ -2375,9 +2375,9 @@ dependencies = [
 
 [[package]]
 name = "gerber_parser"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e941c1b82aa751cb6f504546a2a01bac0ca4d78509a041814f8f5215f63c2610"
+checksum = "52b362b1c8bc3e5f327283c6ee54730b872f3e91eb70035418e4bc9a978a78b9"
 dependencies = [
  "anyhow",
  "gerber-types",
@@ -2390,9 +2390,9 @@ dependencies = [
 
 [[package]]
 name = "gerber_viewer"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "988da9ef39f233b74d79cb77dd23c78b152270cb6a0b6ca2e940c87eabe33f7b"
+checksum = "4f8b4a9b5ebc719ba1b233e518866294907b5939e15237024947b3617600eb65"
 dependencies = [
  "egui",
  "gerber-types",
