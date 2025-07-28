@@ -6,6 +6,9 @@
 //! See the [`unit_transforms`] module which has extensive unit tests.
 //!
 //! Given the above, care must be taken to keep both sets of tests running during any refactoring.
+//!
+//! IMPORTANT: All the scenarios in this integration test should be easy to calculate using graph paper and tracing paper
+//! Rationale: these are the most common scenarios for a pcb panel.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -56,6 +59,17 @@ const PCB_ORIENTATION_0_PFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
     },
 };
 
+const PCB_ORIENTATION_0_RFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
+    top: PcbSideAssemblyOrientation {
+        flip: PcbAssemblyFlip::None,
+        rotation: dec!(0),
+    },
+    bottom: PcbSideAssemblyOrientation {
+        flip: PcbAssemblyFlip::Roll,
+        rotation: dec!(0),
+    },
+};
+
 const PCB_ORIENTATION_CCW90_PFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
     top: PcbSideAssemblyOrientation {
         flip: PcbAssemblyFlip::None,
@@ -67,11 +81,21 @@ const PCB_ORIENTATION_CCW90_PFLIP: PcbAssemblyOrientation = PcbAssemblyOrientati
     },
 };
 
+const PCB_ORIENTATION_CCW90_RFLIP: PcbAssemblyOrientation = PcbAssemblyOrientation {
+    top: PcbSideAssemblyOrientation {
+        flip: PcbAssemblyFlip::None,
+        rotation: dec!(90),
+    },
+    bottom: PcbSideAssemblyOrientation {
+        flip: PcbAssemblyFlip::Roll,
+        rotation: dec!(90),
+    },
+};
 const UNIT_ROTATION_0: Decimal = dec!(0.0);
 const UNIT_ROTATION_90: Decimal = dec!(90.0);
 
 #[rustfmt::skip]
-const CASE_1_EXPECTATIONS: [[Decimal; 3]; 8] = [
+const PANEL_PFLIP_0_UNIT_0_EXPECTATIONS: [[Decimal; 3]; 8] = [
     make_x_y_rotation!(10, 10, 45),
     make_x_y_rotation!(10, 70, -135),
     make_x_y_rotation!(50, 10, 45),
@@ -83,7 +107,43 @@ const CASE_1_EXPECTATIONS: [[Decimal; 3]; 8] = [
 ];
 
 #[rustfmt::skip]
-const CASE_2_EXPECTATIONS: [[Decimal; 3]; 8] = [
+const PANEL_PFLIP_0_UNIT_90_EXPECTATIONS: [[Decimal; 3]; 8] = [
+    make_x_y_rotation!(30, 10, 135),
+    make_x_y_rotation!(30, 70, -45),
+    make_x_y_rotation!(70, 10, 135),
+    make_x_y_rotation!(70, 70, -45),
+    make_x_y_rotation!(30, 50, 135),
+    make_x_y_rotation!(30, 30, -45),
+    make_x_y_rotation!(70, 50, 135),
+    make_x_y_rotation!(70, 30, -45),
+];
+
+#[rustfmt::skip]
+const PANEL_RFLIP_0_UNIT_0_EXPECTATIONS: [[Decimal; 3]; 8] = [
+    make_x_y_rotation!(10, 10, 45),
+    make_x_y_rotation!(70, 10, 45),
+    make_x_y_rotation!(50, 10, 45),
+    make_x_y_rotation!(30, 10, 45),
+    make_x_y_rotation!(10, 50, 45),
+    make_x_y_rotation!(70, 50, 45),
+    make_x_y_rotation!(50, 50, 45),
+    make_x_y_rotation!(30, 50, 45),
+];
+
+#[rustfmt::skip]
+const PANEL_RFLIP_0_UNIT_90_EXPECTATIONS: [[Decimal; 3]; 8] = [
+    make_x_y_rotation!(30, 10, 135),
+    make_x_y_rotation!(50, 10, 135),
+    make_x_y_rotation!(70, 10, 135),
+    make_x_y_rotation!(10, 10, 135),
+    make_x_y_rotation!(30, 50, 135),
+    make_x_y_rotation!(50, 50, 135),
+    make_x_y_rotation!(70, 50, 135),
+    make_x_y_rotation!(10, 50, 135),
+];
+
+#[rustfmt::skip]
+const PANEL_PFLIP_CCW90_UNIT_0_EXPECTATIONS: [[Decimal; 3]; 8] = [
     make_x_y_rotation!(70, 10, 135),
     make_x_y_rotation!(10, 10, -45),
     make_x_y_rotation!(70, 50, 135),
@@ -95,23 +155,24 @@ const CASE_2_EXPECTATIONS: [[Decimal; 3]; 8] = [
 ];
 
 #[rustfmt::skip]
-const CASE_3_EXPECTATIONS: [[Decimal; 3]; 8] = [
-    make_x_y_rotation!(30, 10, 135),
-    make_x_y_rotation!(30, 70, -45),
+const PANEL_RFLIP_CCW90_UNIT_0_EXPECTATIONS: [[Decimal; 3]; 8] = [
     make_x_y_rotation!(70, 10, 135),
-    make_x_y_rotation!(70, 70, -45),
-    make_x_y_rotation!(30, 50, 135),
-    make_x_y_rotation!(30, 30, -45),
+    make_x_y_rotation!(70, 70, 135),
     make_x_y_rotation!(70, 50, 135),
-    make_x_y_rotation!(70, 30, -45),
+    make_x_y_rotation!(70, 30, 135),
+    make_x_y_rotation!(30, 10, 135),
+    make_x_y_rotation!(30, 70, 135),
+    make_x_y_rotation!(30, 50, 135),
+    make_x_y_rotation!(30, 30, 135),
 ];
 
-// TODO add test cases for roll flip
-
 #[rstest]
-#[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_0, CASE_1_EXPECTATIONS)]
-#[case(PCB_ORIENTATION_CCW90_PFLIP, UNIT_ROTATION_0, CASE_2_EXPECTATIONS)]
-#[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_90, CASE_3_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_0, PANEL_PFLIP_0_UNIT_0_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_0_PFLIP, UNIT_ROTATION_90, PANEL_PFLIP_0_UNIT_90_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_0_RFLIP, UNIT_ROTATION_0, PANEL_RFLIP_0_UNIT_0_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_0_RFLIP, UNIT_ROTATION_90, PANEL_RFLIP_0_UNIT_90_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_CCW90_PFLIP, UNIT_ROTATION_0, PANEL_PFLIP_CCW90_UNIT_0_EXPECTATIONS)]
+#[case(PCB_ORIENTATION_CCW90_RFLIP, UNIT_ROTATION_0, PANEL_RFLIP_CCW90_UNIT_0_EXPECTATIONS)]
 fn test_build_placement_unit_positions(
     #[case] pcb_orientation: PcbAssemblyOrientation,
     #[case] unit_rotation_degrees: Decimal,

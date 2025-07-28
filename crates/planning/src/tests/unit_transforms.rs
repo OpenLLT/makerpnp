@@ -63,7 +63,7 @@ const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!
     unit_rotation: 0.0,
     assembly_flip: PcbAssemblyFlip::Roll,
     design_size: Vector2::new(50.0, 50.0),
-}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(40.0), y: dec!(20.0), rotation: dec!(180) })]
+}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(40.0), y: dec!(20.0), rotation: dec!(0) })]
 #[case::single_top_placement_offset(TransformTestCase {
     edge_rail_left_right: 0.0,
     edge_rail_top_bottom: 0.0,
@@ -107,7 +107,7 @@ const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!
     unit_rotation: 0.0,
     assembly_flip: PcbAssemblyFlip::Roll,
     design_size: Vector2::new(50.0, 50.0),
-}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(133.0), y: dec!(32.0), rotation: dec!(180) })]
+}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(133.0), y: dec!(32.0), rotation: dec!(0) })]
 #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
     edge_rail_left_right: 5.0,
     edge_rail_top_bottom: 10.0,
@@ -140,7 +140,7 @@ const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!
     unit_rotation: 0.0,
     assembly_flip: PcbAssemblyFlip::Roll,
     design_size: Vector2::new(50.0, 50.0),
-}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(142.12846301849606), y: dec!(116.67261889578035), rotation: dec!(-135) })]
+}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(142.12846301849606), y: dec!(116.67261889578035), rotation: dec!(45) })]
 #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
     edge_rail_left_right: 5.0,
     edge_rail_top_bottom: 10.0,
@@ -173,7 +173,7 @@ const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!
     unit_rotation: 270.0,
     assembly_flip: PcbAssemblyFlip::Roll,
     design_size: Vector2::new(50.0, 50.0),
-}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(120.91525958289964), y: dec!(123.74368670764582), rotation: dec!(135) })]
+}, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(120.91525958289964), y: dec!(123.74368670764582), rotation: dec!(-45) })]
 #[case::real_world(TransformTestCase {
     edge_rail_left_right: 5.0,
     edge_rail_top_bottom: 5.0,
@@ -206,7 +206,7 @@ const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!
     unit_rotation: 90.0,
     assembly_flip: PcbAssemblyFlip::Roll,
     design_size: Vector2::new(39.0, 39.0),
-}, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(103.25), rotation: dec!(0) })]
+}, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(103.25), rotation: dec!(180) })]
 fn apply_to_placement_matrix(
     #[case] test_case: TransformTestCase,
     #[case] placement_point: Point2<Decimal>,
@@ -376,10 +376,11 @@ fn apply_to_placement_matrix(
 
     // For rotation calculation, first apply flip effect on angle if needed (after rotation)
 
-    let mut flipped_rotation = placement1.rotation;
-    if !matches!(orientation.flip, PcbAssemblyFlip::None) {
-        flipped_rotation = dec!(180.0) - flipped_rotation;
-    }
+    let flipped_rotation = match orientation.flip {
+        PcbAssemblyFlip::None => placement1.rotation,
+        PcbAssemblyFlip::Pitch => dec!(180.0) - placement1.rotation,
+        PcbAssemblyFlip::Roll => dec!(360.0) - placement1.rotation,
+    };
 
     // Then apply the panel and unit rotations
     let new_rotation = flipped_rotation + panel_rotation_decimal + unit_rotation_decimal;

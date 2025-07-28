@@ -506,7 +506,8 @@ impl PcbUnitTransform {
 
         let flipped_rotation = match &self.orientation.flip {
             PcbAssemblyFlip::None => placement.rotation,
-            PcbAssemblyFlip::Pitch | PcbAssemblyFlip::Roll => dec!(180.0) - placement.rotation,
+            PcbAssemblyFlip::Pitch => dec!(180.0) - placement.rotation,
+            PcbAssemblyFlip::Roll => dec!(360.0) - placement.rotation,
         };
 
         let new_rotation = flipped_rotation + self.orientation.rotation + self.unit_rotation;
@@ -520,9 +521,10 @@ impl PcbUnitTransform {
             self.orientation.rotation,
             self.unit_rotation
         );
-        println!(
+        trace!(
             "new_rotation: {}, normalized rotation: {}",
-            new_rotation, normalized_rotation
+            new_rotation,
+            normalized_rotation
         );
 
         let x = Decimal::try_from(transformed_position.x).unwrap_or_default();
