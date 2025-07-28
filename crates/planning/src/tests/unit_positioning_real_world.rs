@@ -343,6 +343,10 @@ mod pcb_unit_transform_tests {
         design_size: Vector2<f64>,
     }
 
+    const PLACEMENT_POINT_TEST: Point2<Decimal> = Point2::new(dec!(10.0), dec!(20.0));
+    // SPRacingH7NEO, RefDes: SP52
+    const PLACEMENT_POINT_REAL_WORLD: Point2<Decimal> = Point2::new(dec!(10.8), dec!(14.25));
+
     #[rstest]
     #[case::single_top(TransformTestCase {
         edge_rail_left_right: 0.0,
@@ -354,7 +358,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(10.0), y: dec!(20.0), rotation: dec!(0) })]
     #[case::single_bottom_pitch_flipped(TransformTestCase {
         edge_rail_left_right: 0.0,
         edge_rail_top_bottom: 0.0,
@@ -365,7 +369,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(10.0), y: dec!(30.0), rotation: dec!(180) })]
     #[case::single_bottom_roll_flipped(TransformTestCase {
         edge_rail_left_right: 0.0,
         edge_rail_top_bottom: 0.0,
@@ -376,7 +380,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(40.0), y: dec!(20.0), rotation: dec!(180) })]
     #[case::single_top_placement_offset(TransformTestCase {
         edge_rail_left_right: 0.0,
         edge_rail_top_bottom: 0.0,
@@ -387,7 +391,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(10.0), y: dec!(20.0), rotation: dec!(0) })]
     #[case::rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -398,7 +402,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(17.0), y: dec!(32.0), rotation: dec!(0) })]
     #[case::rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -409,7 +413,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(17.0), y: dec!(68.0), rotation: dec!(180) })]
     #[case::rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -420,7 +424,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(133.0), y: dec!(32.0), rotation: dec!(180) })]
     #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -431,7 +435,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(60.10407640085654), y: dec!(34.648232278140824), rotation: dec!(45) })]
     #[case::rotated_rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -442,7 +446,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(60.10407640085654), y: dec!(142.12846301849606), rotation: dec!(135) })]
     #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -453,7 +457,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(116.67261889578035), y: dec!(34.648232278140824), rotation: dec!(135) })]
     #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -464,7 +468,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 270.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(50.0, 50.0),
-        })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(53.033008588991066), y: dec!(55.86143571373725), rotation: dec!(-45) })]
     #[case::rotated_rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -475,7 +479,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 270.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(53.033008588991066), y: dec!(120.91525958289964), rotation: dec!(-135) })]
     #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -486,7 +490,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 270.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(123.74368670764582), y: dec!(55.86143571373725), rotation: dec!(-135) })]
     #[case::real_world(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 5.0,
@@ -497,8 +501,30 @@ mod pcb_unit_transform_tests {
         unit_rotation: 90.0,
         assembly_flip: PcbAssemblyFlip::None,
         design_size: Vector2::new(39.0, 39.0),
-    })]
-    fn apply_to_placement_matrix(#[case] test_case: TransformTestCase) {
+    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(31.75), rotation: dec!(180) })]
+    #[case::real_world_pitch_flipped(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 5.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(135.0, 94.0),
+        panel_rotation: 90.0,
+        unit_rotation: 90.0,
+        assembly_flip: PcbAssemblyFlip::Pitch,
+        design_size: Vector2::new(39.0, 39.0),
+    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(103.25), rotation: dec!(0) })]
+    #[case::real_world_pitch_flipped(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 5.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(135.0, 94.0),
+        panel_rotation: 90.0,
+        unit_rotation: 90.0,
+        assembly_flip: PcbAssemblyFlip::Roll,
+        design_size: Vector2::new(39.0, 39.0),
+    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(17.799999999999997), y: dec!(31.75), rotation: dec!(0) })]
+    fn apply_to_placement_matrix(#[case] test_case: TransformTestCase, #[case] placement_point: Point2<Decimal>, #[case] known_good: UnitPlacementPosition) {
         let TransformTestCase {
             edge_rail_left_right,
             edge_rail_top_bottom,
@@ -552,8 +578,8 @@ mod pcb_unit_transform_tests {
             },
             place: true,
             pcb_side: PcbSide::Top,
-            x: eda_placement_export_offset.x + dec!(1.6),
-            y: eda_placement_export_offset.y + dec!(1.6),
+            x: eda_placement_export_offset.x + placement_point.x,
+            y: eda_placement_export_offset.y + placement_point.y,
             rotation: Decimal::from(0),
         };
 
@@ -700,16 +726,24 @@ mod pcb_unit_transform_tests {
 
         // then
 
-        // Use approximate equality with a small epsilon
-        let epsilon = Decimal::from_str("0.000000001").unwrap();
+        let equality_epsilon = Decimal::from_str("0.000000001").unwrap();
 
-        // Assert with our custom comparison
         assert!(
-            approx_eq_position(&result, &expected_result, epsilon),
+            approx_eq_position(&result, &expected_result, equality_epsilon),
             "Expected position close to {:?}, got {:?}",
             expected_result,
             result
         );
+
+        // Assert with our known-good value.
+        // This is a sanity check to ensure that our test and production code don't both become broken at the same time.
+        assert!(
+            approx_eq_position(&result, &known_good, equality_epsilon),
+            "Expected position is known-good {:?}, got {:?}",
+            known_good,
+            result
+        );
+
     }
 }
 
