@@ -446,7 +446,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(60.10407640085654), y: dec!(142.12846301849606), rotation: dec!(135) })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(34.648232278140824), y: dec!(60.10407640085654), rotation: dec!(-135) })]
     #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -457,7 +457,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 0.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(116.67261889578035), y: dec!(34.648232278140824), rotation: dec!(135) })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(142.12846301849606), y: dec!(116.67261889578035), rotation: dec!(-135) })]
     #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -479,7 +479,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 270.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(50.0, 50.0),
-    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(53.033008588991066), y: dec!(120.91525958289964), rotation: dec!(-135) })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(55.86143571373725), y: dec!(53.033008588991066), rotation: dec!(135) })]
     #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 10.0,
@@ -490,7 +490,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 270.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(50.0, 50.0),
-    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(123.74368670764582), y: dec!(55.86143571373725), rotation: dec!(-135) })]
+    }, PLACEMENT_POINT_TEST, UnitPlacementPosition { x: dec!(120.91525958289964), y: dec!(123.74368670764582), rotation: dec!(135) })]
     #[case::real_world(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 5.0,
@@ -512,7 +512,7 @@ mod pcb_unit_transform_tests {
         unit_rotation: 90.0,
         assembly_flip: PcbAssemblyFlip::Pitch,
         design_size: Vector2::new(39.0, 39.0),
-    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(103.25), rotation: dec!(0) })]
+    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(17.799999999999997), y: dec!(31.750000000000007), rotation: dec!(0) })]
     #[case::real_world_pitch_flipped(TransformTestCase {
         edge_rail_left_right: 5.0,
         edge_rail_top_bottom: 5.0,
@@ -523,8 +523,12 @@ mod pcb_unit_transform_tests {
         unit_rotation: 90.0,
         assembly_flip: PcbAssemblyFlip::Roll,
         design_size: Vector2::new(39.0, 39.0),
-    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(17.799999999999997), y: dec!(31.75), rotation: dec!(0) })]
-    fn apply_to_placement_matrix(#[case] test_case: TransformTestCase, #[case] placement_point: Point2<Decimal>, #[case] known_good: UnitPlacementPosition) {
+    }, PLACEMENT_POINT_REAL_WORLD, UnitPlacementPosition { x: dec!(76.2), y: dec!(103.25), rotation: dec!(0) })]
+    fn apply_to_placement_matrix(
+        #[case] test_case: TransformTestCase,
+        #[case] placement_point: Point2<Decimal>,
+        #[case] known_good: UnitPlacementPosition,
+    ) {
         let TransformTestCase {
             edge_rail_left_right,
             edge_rail_top_bottom,
@@ -612,29 +616,20 @@ mod pcb_unit_transform_tests {
             unit1_placement1_coords
         );
 
-        // apply rotation
-        let unit1_placement1_coords_rotated =
-            rotate_point_around_center(unit1_placement1_coords, panel_center, panel_rotation_radians);
-
-        println!(
-            "unit1_placement1_coords (after rotation): {:?}",
-            unit1_placement1_coords_rotated
-        );
-
-        // apply the appropriate flip transformation
+        // Apply the appropriate flip transformation
         let unit1_placement1_coords_flipped = match orientation.flip {
-            PcbAssemblyFlip::None => unit1_placement1_coords_rotated,
+            PcbAssemblyFlip::None => unit1_placement1_coords,
             PcbAssemblyFlip::Pitch => {
                 // Mirror y-coordinate around the center of the panel
                 let panel_center_y = panel_size.y / 2.0;
-                let distance_from_center = unit1_placement1_coords_rotated.y - panel_center_y;
-                Point2::new(unit1_placement1_coords_rotated.x, panel_center_y - distance_from_center)
+                let distance_from_center = unit1_placement1_coords.y - panel_center_y;
+                Point2::new(unit1_placement1_coords.x, panel_center_y - distance_from_center)
             }
             PcbAssemblyFlip::Roll => {
                 // Mirror x-coordinate around the center of the panel
                 let panel_center_x = panel_size.x / 2.0;
-                let distance_from_center = unit1_placement1_coords_rotated.x - panel_center_x;
-                Point2::new(panel_center_x - distance_from_center, unit1_placement1_coords_rotated.y)
+                let distance_from_center = unit1_placement1_coords.x - panel_center_x;
+                Point2::new(panel_center_x - distance_from_center, unit1_placement1_coords.y)
             }
         };
         println!(
@@ -685,17 +680,26 @@ mod pcb_unit_transform_tests {
         );
         println!("shift (test): {:?}", shift);
 
-        let unit1_placement1_coords_final = unit1_placement1_coords_flipped - shift;
+        let unit1_placement1_coords_after_rotation =
+            rotate_point_around_center(unit1_placement1_coords_flipped, panel_center, panel_rotation_radians);
+
+        println!(
+            "unit1_placement1_coords (after rotation): {:?}",
+            unit1_placement1_coords_after_rotation
+        );
+
+        let unit1_placement1_coords_final = unit1_placement1_coords_after_rotation - shift;
         println!("unit1_placement1_coords_final: {:?}", unit1_placement1_coords_final);
 
-        // For rotation calculation, first apply the panel and unit rotations
-        let rotated_angle = placement1.rotation + panel_rotation_decimal + unit_rotation_decimal;
+        // For rotation calculation, first apply flip effect on angle if needed (after rotation)
 
-        // Then apply flip effect on angle if needed (after rotation)
-        let mut new_rotation = rotated_angle;
+        let mut flipped_rotation = placement1.rotation;
         if !matches!(orientation.flip, PcbAssemblyFlip::None) {
-            new_rotation = dec!(180.0) - new_rotation;
+            flipped_rotation = dec!(180.0) - flipped_rotation;
         }
+
+        // Then apply the panel and unit rotations
+        let new_rotation = flipped_rotation + panel_rotation_decimal + unit_rotation_decimal;
 
         // Normalize rotation to be within -180 to 180 degrees
         let normalized_rotation = normalize_angle_deg_signed_decimal(new_rotation).normalize();
@@ -743,7 +747,6 @@ mod pcb_unit_transform_tests {
             known_good,
             result
         );
-
     }
 }
 

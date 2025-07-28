@@ -75,25 +75,25 @@ mod placement_unit_positioning_tests {
     #[rustfmt::skip]
     const CASE_2_EXPECTATIONS: [[Decimal; 3]; 8] = [
         make_x_y_rotation!(70, 10, 135),
-        make_x_y_rotation!(70, 70, 135),
+        make_x_y_rotation!(10, 10, -45),
         make_x_y_rotation!(70, 50, 135),
-        make_x_y_rotation!(70, 30, 135),
+        make_x_y_rotation!(10, 50, -45),
         make_x_y_rotation!(30, 10, 135),
-        make_x_y_rotation!(30, 70, 135),
+        make_x_y_rotation!(50, 10, -45),
         make_x_y_rotation!(30, 50, 135),
-        make_x_y_rotation!(30, 30, 135),
+        make_x_y_rotation!(50, 50, -45),
     ];
 
     #[rustfmt::skip]
     const CASE_3_EXPECTATIONS: [[Decimal; 3]; 8] = [
         make_x_y_rotation!(30, 10, 135),
-        make_x_y_rotation!(30, 70, 135),
+        make_x_y_rotation!(30, 70, -45),
         make_x_y_rotation!(70, 10, 135),
-        make_x_y_rotation!(70, 70, 135),
+        make_x_y_rotation!(70, 70, -45),
         make_x_y_rotation!(30, 50, 135),
-        make_x_y_rotation!(30, 30, 135),
+        make_x_y_rotation!(30, 30, -45),
         make_x_y_rotation!(70, 50, 135),
-        make_x_y_rotation!(70, 30, 135),
+        make_x_y_rotation!(70, 30, -45),
     ];
 
     // TODO add test cases for roll flip

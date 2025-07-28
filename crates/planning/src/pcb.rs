@@ -343,8 +343,8 @@ pub fn build_unit_to_design_index_mappping(
 /// unit_offset,
 /// +DesignSizing::origin,
 /// panel centering,
-/// orientation flip,
 /// orientation rotation,
+/// orientation flip,
 /// panel un-centering,
 /// shift to positive coordinates
 #[derive(Debug)]
@@ -418,6 +418,13 @@ impl PcbUnitTransform {
         let translation_from_panel_origin = Matrix3::new_translation(&panel_center);
         matrix = translation_to_panel_origin * matrix;
 
+        // Apply orientation flipping
+        if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
+            let flip_matrix: Matrix3<f64> = self.orientation.flip.into();
+            trace!("flip_matrix: {:?}", flip_matrix);
+            matrix = flip_matrix * matrix;
+        }
+
         // Apply orientation rotation (anti-clockwise positive degrees)
         let orientation_radians = self.orientation.rotation.to_f64().unwrap().to_radians();
         let cos_theta = orientation_radians.cos();
@@ -428,13 +435,6 @@ impl PcbUnitTransform {
             0.0, 0.0, 1.0
         );
         matrix = orientation_rotation * matrix;
-
-        // Apply orientation flipping
-        if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
-            let flip_matrix: Matrix3<f64> = self.orientation.flip.into();
-            trace!("flip_matrix: {:?}", flip_matrix);
-            matrix = flip_matrix * matrix;
-        }
 
         // Translate from panel center
         matrix = translation_from_panel_origin * matrix;
@@ -504,12 +504,12 @@ impl PcbUnitTransform {
         // Handle rotation
         //
 
-        let mut new_rotation = placement.rotation + self.orientation.rotation + self.unit_rotation;
+        let flipped_rotation = match &self.orientation.flip {
+            PcbAssemblyFlip::None => placement.rotation,
+            PcbAssemblyFlip::Pitch | PcbAssemblyFlip::Roll => dec!(180.0) - placement.rotation,
+        };
 
-        // If flip the rotation
-        if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
-            new_rotation = dec!(180.0) - new_rotation;
-        }
+        let new_rotation = flipped_rotation + self.orientation.rotation + self.unit_rotation;
 
         // Normalize rotation to be within -180 to 180 degrees
         let normalized_rotation = normalize_angle_deg_signed_decimal(new_rotation).normalize();
@@ -520,10 +520,9 @@ impl PcbUnitTransform {
             self.orientation.rotation,
             self.unit_rotation
         );
-        trace!(
+        println!(
             "new_rotation: {}, normalized rotation: {}",
-            new_rotation,
-            normalized_rotation
+            new_rotation, normalized_rotation
         );
 
         let x = Decimal::try_from(transformed_position.x).unwrap_or_default();
@@ -594,7 +593,7 @@ impl Default for PcbAssemblyOrientation {
 
 /// Specifies how the PCB should be positioned in the machine.
 ///
-/// Transform order: rotation, flip (mirroring),
+/// Transform order: flip (mirroring), rotation
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct PcbSideAssemblyOrientation {
     pub flip: PcbAssemblyFlip,
