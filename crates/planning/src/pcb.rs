@@ -6,7 +6,7 @@ use gerber::{detect_purpose, GerberFile, GerberFileFunction};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use math::angle::normalize_angle_deg_signed_decimal;
-use nalgebra::{Matrix3, Vector2};
+use nalgebra::{Matrix3, Vector2, Vector3};
 use pnp::panel::{DesignSizing, PanelSizing};
 use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
@@ -422,12 +422,54 @@ impl PcbUnitTransform {
         // Apply orientation flipping
         if !matches!(self.orientation.flip, PcbAssemblyFlip::None) {
             let flip_matrix: Matrix3<f64> = self.orientation.flip.into();
-            println!("flip_matrix: {:?}", flip_matrix);
+            trace!("flip_matrix: {:?}", flip_matrix);
             matrix = flip_matrix * matrix;
         }
 
         // Translate from panel center
         matrix = translation_from_panel_origin * matrix;
+
+        // Calculate bounding box for the rotated panel to ensure positive coordinates
+        let panel_corners = [
+            Vector2::new(0.0, 0.0),
+            Vector2::new(self.panel_size.x, 0.0),
+            Vector2::new(self.panel_size.x, self.panel_size.y),
+            Vector2::new(0.0, self.panel_size.y),
+        ];
+        trace!("panel_corners: {:?}", panel_corners);
+
+        // Rotate the corners using our current transformation matrix 
+        // (limiting to just the rotation part to avoid double-translation)
+        let rotated_corners: Vec<Vector3<f64>> = panel_corners
+            .iter()
+            .map(|&corner| {
+                // Apply only the rotation part of the matrix
+                let rotation_only = orientation_rotation *
+                    translation_to_panel_origin *
+                    Vector3::new(corner.x, corner.y, 1.0);
+
+                // Apply translation back from panel center
+                translation_from_panel_origin * rotation_only
+            })
+            .collect();
+
+        trace!("rotated_corners: {:?}", rotated_corners);
+
+        // Find minimum x and y to shift by
+
+        let shift = Vector2::new(
+            rotated_corners.iter().map(|p| p.x).fold(f64::INFINITY, f64::min),
+            rotated_corners.iter().map(|p| p.y).fold(f64::INFINITY, f64::min)
+        );
+        trace!("shift: {:?}", shift);
+
+        // Add translation to shift all points to positive quadrant
+        let shift_to_positive = Matrix3::new(
+            1.0, 0.0, -shift.x,
+            0.0, 1.0, -shift.y,
+            0.0, 0.0, 1.0
+        );
+        matrix = shift_to_positive * matrix;
 
         debug!("PcbUnitTransform {:?}, matrix: {:?}", self, matrix);
 

@@ -1,3 +1,7 @@
+use rust_decimal::Decimal;
+
+use crate::pcb::UnitPlacementPosition;
+
 #[cfg(test)]
 mod placement_unit_positioning_tests {
     use std::collections::BTreeMap;
@@ -11,7 +15,7 @@ mod placement_unit_positioning_tests {
     use pnp::part::Part;
     use pnp::pcb::{PcbSide, PcbUnitIndex};
     use pnp::placement::Placement;
-    use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+    use rust_decimal::prelude::ToPrimitive;
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use tap::Tap;
@@ -225,21 +229,6 @@ mod placement_unit_positioning_tests {
             ],
         };
 
-        let design_x = panel_sizing.edge_rails.top
-            + panel_sizing.design_sizings[0]
-                .placement_offset
-                .x;
-        let design_y = panel_sizing.edge_rails.left
-            + panel_sizing.design_sizings[0]
-                .placement_offset
-                .y;
-        let unit_1_x = panel_sizing.pcb_unit_positionings[0]
-            .offset
-            .x;
-        let unit_1_y = panel_sizing.pcb_unit_positionings[0]
-            .offset
-            .y;
-
         pcb1.panel_sizing = panel_sizing;
         pcb1.orientation = pcb_orientation;
 
@@ -278,11 +267,14 @@ mod placement_unit_positioning_tests {
         println!("placements: {:?}", placements);
 
         // and
-        let expectations: [[Decimal; 3]; 1] = [[
-            Decimal::from_f64(design_x + unit_1_x + 1.6).unwrap(),
-            Decimal::from_f64(design_y + unit_1_y + 1.6).unwrap(),
-            dec!(90.0),
-        ]];
+        let expectations: [[Decimal; 3]; 6] = [
+            [dec!(85.4), dec!(8.6), dec!(90.0)],
+            [dec!(85.4), dec!(49.6), dec!(90.0)],
+            [dec!(85.4), dec!(90.6), dec!(90.0)],
+            [dec!(44.40000000000001), dec!(8.6), dec!(90.0)],
+            [dec!(44.40000000000001), dec!(49.6), dec!(90.0)],
+            [dec!(44.40000000000001), dec!(90.6), dec!(90.0)],
+        ];
 
         let expected_result = BTreeMap::from_iter(
             expectations
@@ -322,6 +314,9 @@ mod placement_unit_positioning_tests {
 
 #[cfg(test)]
 mod pcb_unit_transform_tests {
+    use std::str::FromStr;
+
+    use math::angle::normalize_angle_deg_signed_decimal;
     use nalgebra::{Point2, Vector2};
     use pnp::panel::DesignSizing;
     use pnp::part::Part;
@@ -332,6 +327,7 @@ mod pcb_unit_transform_tests {
     use rust_decimal_macros::dec;
 
     use crate::pcb::{PcbAssemblyFlip, PcbSideAssemblyOrientation, PcbUnitTransform, UnitPlacementPosition};
+    use crate::tests::unit_positioning_real_world::approx_eq_position;
 
     #[test]
     pub fn apply_to_placement_matrix() {
@@ -345,7 +341,17 @@ mod pcb_unit_transform_tests {
         let panel_size = Vector2::new(135.0, 94.0);
         let panel_center = panel_size / 2.0;
         let panel_rotation = 45.0_f64;
+        let panel_rotation_decimal = Decimal::from_f64(panel_rotation).unwrap();
         let panel_rotation_radians = panel_rotation.to_radians();
+
+        let unit_rotation = 180.0_f64;
+        let unit_rotation_decimal = Decimal::from_f64(unit_rotation).unwrap();
+        let unit_rotation_radians = unit_rotation.to_radians();
+
+        let orientation = PcbSideAssemblyOrientation {
+            flip: PcbAssemblyFlip::None,
+            rotation: panel_rotation_decimal,
+        };
 
         println!("panel_center: {:?}", panel_center);
 
@@ -371,19 +377,28 @@ mod pcb_unit_transform_tests {
             rotation: Decimal::from(0),
         };
 
-        let unit1_placement1_coords = Point2::new(
-            unit_offset.x
-                + placement1.x.to_f64().unwrap()
+        // Update to account for unit rotation in our calculation
+        let placement_coords = Point2::new(
+            placement1.x.to_f64().unwrap()
                 + -eda_placement_export_offset
                     .x
                     .to_f64()
                     .unwrap(),
-            unit_offset.y
-                + placement1.y.to_f64().unwrap()
+            placement1.y.to_f64().unwrap()
                 + -eda_placement_export_offset
                     .y
                     .to_f64()
                     .unwrap(),
+        );
+
+        // First rotate around design origin for unit rotation
+        let placement_coords_after_unit_rotation =
+            rotate_point_around_center(placement_coords, design_sizing.origin, unit_rotation_radians);
+
+        // Then translate to unit position
+        let unit1_placement1_coords = Point2::new(
+            unit_offset.x + placement_coords_after_unit_rotation.x,
+            unit_offset.y + placement_coords_after_unit_rotation.y,
         );
 
         println!(
@@ -410,7 +425,7 @@ mod pcb_unit_transform_tests {
                 Point2::new(panel_size.x, panel_size.y),
                 Point2::new(0.0, panel_size.y),
             ];
-            println!("panel_corners: {:?}", panel_corners);
+            println!("panel_corners (test): {:?}", panel_corners);
 
             for point in panel_corners.iter_mut() {
                 *point = rotate_point_around_center(*point, panel_center, angle_radians)
@@ -420,7 +435,7 @@ mod pcb_unit_transform_tests {
         }
 
         let rotated_corners = rotate_panel_around_center(panel_size, panel_rotation_radians);
-        println!("rotated_corners: {:?}", rotated_corners);
+        println!("rotated_corners (test): {:?}", rotated_corners);
 
         let shift = Vector2::new(
             rotated_corners
@@ -432,7 +447,7 @@ mod pcb_unit_transform_tests {
                 .map(|p| p.y)
                 .fold(f64::INFINITY, f64::min),
         );
-        println!("shift: {:?}", shift);
+        println!("shift (test): {:?}", shift);
 
         let unit1_placement1_coords_after_rotation =
             rotate_point_around_center(unit1_placement1_coords, panel_center, panel_rotation_radians);
@@ -448,14 +463,27 @@ mod pcb_unit_transform_tests {
             unit1_placement1_coords_after_rotation_and_translation
         );
 
+        let mut new_rotation = placement1.rotation + panel_rotation_decimal + unit_rotation_decimal;
+
+        // If flip the rotation
+        if !matches!(orientation.flip, PcbAssemblyFlip::None) {
+            new_rotation = dec!(180.0) - new_rotation;
+        }
+
+        // Normalize rotation to be within -180 to 180 degrees
+        let normalized_rotation = normalize_angle_deg_signed_decimal(new_rotation).normalize();
+
+        let unit1_placement_rotation_decimal = normalized_rotation;
+        println!(
+            "unit1_placement_rotation_decimal: {:?}",
+            unit1_placement_rotation_decimal
+        );
+
         let transform = PcbUnitTransform {
             unit_offset,
-            unit_rotation: dec!(0.0),
+            unit_rotation: unit_rotation_decimal,
             design_sizing,
-            orientation: PcbSideAssemblyOrientation {
-                flip: PcbAssemblyFlip::None,
-                rotation: dec!(90.0),
-            },
+            orientation,
             panel_size,
         };
 
@@ -463,13 +491,35 @@ mod pcb_unit_transform_tests {
         let expected_result = UnitPlacementPosition {
             x: Decimal::from_f64(unit1_placement1_coords_after_rotation_and_translation.x).unwrap(),
             y: Decimal::from_f64(unit1_placement1_coords_after_rotation_and_translation.y).unwrap(),
-            rotation: dec!(90.0),
+            rotation: unit1_placement_rotation_decimal,
         };
 
         // when
         let result = transform.apply_to_placement_matrix(&placement1);
 
         // then
-        assert_eq!(result, expected_result);
+
+        // Use approximate equality with a small epsilon
+        let epsilon = Decimal::from_str("0.000000001").unwrap();
+
+        // Assert with our custom comparison
+        assert!(
+            approx_eq_position(&result, &expected_result, epsilon),
+            "Expected position close to {:?}, got {:?}",
+            expected_result,
+            result
+        );
     }
+}
+
+// Helper function for floating-point equality with tolerance
+fn approx_eq_decimal(a: Decimal, b: Decimal, epsilon: Decimal) -> bool {
+    (a - b).abs() <= epsilon
+}
+
+// Helper function to compare UnitPlacementPosition with tolerance
+fn approx_eq_position(a: &UnitPlacementPosition, b: &UnitPlacementPosition, epsilon: Decimal) -> bool {
+    approx_eq_decimal(a.x, b.x, epsilon)
+        && approx_eq_decimal(a.y, b.y, epsilon)
+        && approx_eq_decimal(a.rotation, b.rotation, epsilon)
 }
