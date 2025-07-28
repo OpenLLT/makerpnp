@@ -474,6 +474,7 @@ pub enum Event {
         units: u16,
         unit_map: BTreeMap<PcbUnitNumber, DesignName>,
     },
+    RefreshPcbs,
     SaveAllPcbs,
     AssignVariantToUnit {
         unit: ObjectPath,
@@ -991,6 +992,19 @@ impl Planner {
                 model.save_pcb(&path)?;
 
                 info!("Saved PCB. path: {:?}", path);
+
+                Ok(render::render())
+            }),
+            Event::RefreshPcbs => Box::new(move |model: &mut Model| {
+                let paths = model
+                    .model_pcbs
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                for path in paths.into_iter() {
+                    model.load_pcb(&path)?;
+                }
 
                 Ok(render::render())
             }),

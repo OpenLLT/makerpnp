@@ -8,7 +8,7 @@ pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
     AddPhaseClicked,
-    RefreshFromDesignVariantsClicked,
+    RefreshClicked,
     GenerateArtifactsClicked,
     RemoveUnusedPlacements,
 }
@@ -17,7 +17,7 @@ pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     PickPcbFile,
     ShowAddPhaseDialog,
-    RefreshFromDesignVariants,
+    Refresh,
     GenerateArtifacts,
     RemoveUnusedPlacements,
 }
@@ -52,11 +52,11 @@ impl UiComponent for ProjectToolbar {
                     .send(ProjectToolbarUiCommand::GenerateArtifactsClicked)
             }
             if ui
-                .button(tr!("project-toolbar-button-refresh-from-variants"))
+                .button(tr!("project-toolbar-button-refresh"))
                 .clicked()
             {
                 self.component
-                    .send(ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked)
+                    .send(ProjectToolbarUiCommand::RefreshClicked)
             }
             if ui
                 .button(tr!("project-toolbar-button-remove-unused-placements"))
@@ -90,9 +90,7 @@ impl UiComponent for ProjectToolbar {
     ) -> Option<Self::UiAction> {
         match command {
             ProjectToolbarUiCommand::ProjectExplorerClicked => Some(ProjectToolbarAction::ShowProjectExplorer),
-            ProjectToolbarUiCommand::RefreshFromDesignVariantsClicked => {
-                Some(ProjectToolbarAction::RefreshFromDesignVariants)
-            }
+            ProjectToolbarUiCommand::RefreshClicked => Some(ProjectToolbarAction::Refresh),
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::PickPcbFile),
             ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),

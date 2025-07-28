@@ -1263,10 +1263,12 @@ impl UiComponent for Project {
                         .planner_core_service
                         .update(Event::GenerateArtifacts)
                         .when_ok(key, |_| None),
-                    Some(ProjectToolbarAction::RefreshFromDesignVariants) => self
-                        .planner_core_service
-                        .update(Event::RefreshFromDesignVariants)
-                        .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed)),
+                    Some(ProjectToolbarAction::Refresh) => {
+                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RefreshPcbs)).chain(
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RefreshFromDesignVariants)),
+                        );
+                        Some(ProjectAction::Task(key, task))
+                    }
                     Some(ProjectToolbarAction::RemoveUnusedPlacements) => self
                         .planner_core_service
                         .update(Event::RemoveUsedPlacements {
@@ -1830,6 +1832,26 @@ impl UiComponent for Project {
                 ];
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
+
+            //
+            // other
+            //
+            ProjectUiCommand::RefreshFromDesignVariants => {
+                info!("Refreshing from design variants.");
+                self.planner_core_service
+                    .update(Event::RefreshFromDesignVariants)
+                    .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed))
+            }
+            ProjectUiCommand::RefreshPcbs => {
+                info!("Refreshing PCBs.");
+                self.planner_core_service
+                    .update(Event::RefreshPcbs)
+                    .when_ok(key, |_| Some(ProjectUiCommand::PcbsRefreshed))
+            }
+            ProjectUiCommand::PcbsRefreshed => {
+                info!("PCBs refreshed.");
+                None
+            }
         }
     }
 }
@@ -2013,6 +2035,9 @@ pub enum ProjectUiCommand {
         pcb_index: u16,
         command: UnitAssignmentsTabUiCommand,
     },
+    RefreshFromDesignVariants,
+    RefreshPcbs,
+    PcbsRefreshed,
 }
 
 fn project_path_from_view_path(view_path: &String) -> NavigationPath {
