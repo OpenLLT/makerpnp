@@ -1002,8 +1002,39 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::ProjectRefreshed => {
                 debug!("Project refreshed.");
-                // TODO anything that is using data from views, this requires ui components to subscribe to refresh events or something.
-                None
+
+                //
+                // Update anything that uses data from views
+                //
+
+                // FUTURE The current approach is to know exactly what needs to happen, however, the child elements/tabs
+                //        themselves should be responsible for taking appropriate actions, this requires ui components
+                //        to subscribe to refresh events or something and there is no mechanism for that yet.
+
+                //
+                // refresh placements
+                //
+
+                let task1 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::Placements,
+                )));
+
+                let phase_tasks = self
+                    .phases
+                    .iter()
+                    .map(|phase| {
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                            ProjectViewRequest::PhasePlacements {
+                                phase: phase.phase_reference.clone(),
+                            },
+                        )))
+                    })
+                    .collect::<Vec<_>>();
+
+                let mut tasks = vec![task1];
+                tasks.extend(phase_tasks);
+
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::SetModifiedState {
                 project_modified,
