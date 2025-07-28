@@ -322,6 +322,7 @@ mod pcb_unit_transform_tests {
     use pnp::part::Part;
     use pnp::pcb::PcbSide;
     use pnp::placement::Placement;
+    use rstest::rstest;
     use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
@@ -329,37 +330,39 @@ mod pcb_unit_transform_tests {
     use crate::pcb::{PcbAssemblyFlip, PcbSideAssemblyOrientation, PcbUnitTransform, UnitPlacementPosition};
     use crate::tests::unit_positioning_real_world::approx_eq_position;
 
-    #[test]
-    pub fn apply_to_placement_matrix() {
+    #[rstest]
+    #[case(5.0, 5.0, 2.0, Vector2::new(dec!(10), dec!(10)), Vector2::new(135.0, 94.0), 45.0, 180.0, PcbAssemblyFlip::None, Vector2::new(39.0, 39.0))]
+    pub fn apply_to_placement_matrix(
+        #[case] edge_rail_left_right: f64,
+        #[case] edge_rail_top_bottom: f64,
+        #[case] routing_gap: f64,
+        #[case] eda_placement_export_offset: Vector2<Decimal>,
+        #[case] panel_size: Vector2<f64>,
+        #[case] panel_rotation: f64,
+        #[case] unit_rotation: f64,
+        #[case] assembly_flip: PcbAssemblyFlip,
+        #[case] design_size: Vector2<f64>,
+    ) {
         // given
-
-        let edge_rail_top_bottom = 5.0;
-        let edge_rail_left_right = 5.0;
-        let routing_gap = 2.0;
-        let eda_placement_export_offset = Vector2::new(dec!(10), dec!(10));
-
-        let panel_size = Vector2::new(135.0, 94.0);
         let panel_center = panel_size / 2.0;
-        let panel_rotation = 45.0_f64;
         let panel_rotation_decimal = Decimal::from_f64(panel_rotation).unwrap();
         let panel_rotation_radians = panel_rotation.to_radians();
 
-        let unit_rotation = 180.0_f64;
         let unit_rotation_decimal = Decimal::from_f64(unit_rotation).unwrap();
         let unit_rotation_radians = unit_rotation.to_radians();
 
         let orientation = PcbSideAssemblyOrientation {
-            flip: PcbAssemblyFlip::None,
+            flip: assembly_flip,
             rotation: panel_rotation_decimal,
         };
 
         println!("panel_center: {:?}", panel_center);
 
         let design_sizing = DesignSizing {
-            size: Vector2::new(39.0, 39.0),
+            size: design_size,
             gerber_offset: Vector2::new(-5.0, -5.0),
             placement_offset: Vector2::new(-10.0, -10.0),
-            origin: Vector2::new(19.5, 19.5),
+            origin: Vector2::new(design_size.x / 2.0, design_size.y / 2.0),
         };
 
         let unit_offset = Vector2::new(edge_rail_left_right + routing_gap, edge_rail_top_bottom + routing_gap);
