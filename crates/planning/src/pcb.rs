@@ -336,7 +336,17 @@ pub fn build_unit_to_design_index_mappping(
 }
 
 /// A transform matrix that can be applied to a placement to position it on the unit.
-/// transform order: DesignSizing::placement_offset, -DesignSizing::origin, unit_rotation, unit_offset, +DesignSizing::origin
+/// transform order:
+/// DesignSizing::placement_offset,
+/// -DesignSizing::origin,
+/// unit_rotation,
+/// unit_offset,
+/// +DesignSizing::origin,
+/// panel centering,
+/// orientation flip,
+/// orientation rotation,
+/// panel un-centering,
+/// shift to positive coordinates
 #[derive(Debug)]
 pub struct PcbUnitTransform {
     /// (x,y)

@@ -330,19 +330,187 @@ mod pcb_unit_transform_tests {
     use crate::pcb::{PcbAssemblyFlip, PcbSideAssemblyOrientation, PcbUnitTransform, UnitPlacementPosition};
     use crate::tests::unit_positioning_real_world::approx_eq_position;
 
+    // Single structure for all test parameters
+    struct TransformTestCase {
+        edge_rail_left_right: f64,
+        edge_rail_top_bottom: f64,
+        routing_gap: f64,
+        eda_placement_export_offset: Vector2<Decimal>,
+        panel_size: Vector2<f64>,
+        panel_rotation: f64,
+        unit_rotation: f64,
+        assembly_flip: PcbAssemblyFlip,
+        design_size: Vector2<f64>,
+    }
+
     #[rstest]
-    #[case(5.0, 5.0, 2.0, Vector2::new(dec!(10), dec!(10)), Vector2::new(135.0, 94.0), 45.0, 180.0, PcbAssemblyFlip::None, Vector2::new(39.0, 39.0))]
-    pub fn apply_to_placement_matrix(
-        #[case] edge_rail_left_right: f64,
-        #[case] edge_rail_top_bottom: f64,
-        #[case] routing_gap: f64,
-        #[case] eda_placement_export_offset: Vector2<Decimal>,
-        #[case] panel_size: Vector2<f64>,
-        #[case] panel_rotation: f64,
-        #[case] unit_rotation: f64,
-        #[case] assembly_flip: PcbAssemblyFlip,
-        #[case] design_size: Vector2<f64>,
-    ) {
+    #[case::single_top(TransformTestCase {
+        edge_rail_left_right: 0.0,
+        edge_rail_top_bottom: 0.0,
+        routing_gap: 0.0,
+        eda_placement_export_offset: Vector2::new(dec!(0), dec!(0)),
+        panel_size: Vector2::new(50.0, 50.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::single_bottom_pitch_flipped(TransformTestCase {
+        edge_rail_left_right: 0.0,
+        edge_rail_top_bottom: 0.0,
+        routing_gap: 0.0,
+        eda_placement_export_offset: Vector2::new(dec!(0), dec!(0)),
+        panel_size: Vector2::new(50.0, 50.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Pitch,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::single_bottom_roll_flipped(TransformTestCase {
+        edge_rail_left_right: 0.0,
+        edge_rail_top_bottom: 0.0,
+        routing_gap: 0.0,
+        eda_placement_export_offset: Vector2::new(dec!(0), dec!(0)),
+        panel_size: Vector2::new(50.0, 50.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Roll,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::single_top_placement_offset(TransformTestCase {
+        edge_rail_left_right: 0.0,
+        edge_rail_top_bottom: 0.0,
+        routing_gap: 0.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(50.0, 50.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Pitch,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 0.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Roll,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rotated_rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Pitch,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 0.0,
+        assembly_flip: PcbAssemblyFlip::Roll,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rotated_rectangular_panel_top_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 270.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(50.0, 50.0),
+        })]
+    #[case::rotated_rectangular_panel_bottom_pitch_flipped_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 270.0,
+        assembly_flip: PcbAssemblyFlip::Pitch,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::rotated_rectangular_panel_bottom_roll_flipped_with_rails_and_routing_gap_and_placement_offset_and_rotated_units(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 10.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(150.0, 100.0),
+        panel_rotation: 45.0,
+        unit_rotation: 270.0,
+        assembly_flip: PcbAssemblyFlip::Roll,
+        design_size: Vector2::new(50.0, 50.0),
+    })]
+    #[case::real_world(TransformTestCase {
+        edge_rail_left_right: 5.0,
+        edge_rail_top_bottom: 5.0,
+        routing_gap: 2.0,
+        eda_placement_export_offset: Vector2::new(dec!(10), dec!(10)),
+        panel_size: Vector2::new(135.0, 94.0),
+        panel_rotation: 90.0,
+        unit_rotation: 90.0,
+        assembly_flip: PcbAssemblyFlip::None,
+        design_size: Vector2::new(39.0, 39.0),
+    })]
+    pub fn apply_to_placement_matrix(#[case] test_case: TransformTestCase) {
+        let TransformTestCase {
+            edge_rail_left_right,
+            edge_rail_top_bottom,
+            routing_gap,
+            eda_placement_export_offset,
+            panel_size,
+            panel_rotation,
+            unit_rotation,
+            assembly_flip,
+            design_size,
+        } = test_case;
+
         // given
         let panel_center = panel_size / 2.0;
         let panel_rotation_decimal = Decimal::from_f64(panel_rotation).unwrap();
@@ -361,7 +529,16 @@ mod pcb_unit_transform_tests {
         let design_sizing = DesignSizing {
             size: design_size,
             gerber_offset: Vector2::new(-5.0, -5.0),
-            placement_offset: Vector2::new(-10.0, -10.0),
+            placement_offset: Vector2::new(
+                -eda_placement_export_offset
+                    .x
+                    .to_f64()
+                    .unwrap(),
+                -eda_placement_export_offset
+                    .y
+                    .to_f64()
+                    .unwrap(),
+            ),
             origin: Vector2::new(design_size.x / 2.0, design_size.y / 2.0),
         };
 
@@ -405,8 +582,29 @@ mod pcb_unit_transform_tests {
         );
 
         println!(
-            "unit1_placement1_coords (before rotation): {:?}",
+            "unit1_placement1_coords (before rotation and flipping): {:?}",
             unit1_placement1_coords
+        );
+
+        // Apply the appropriate flip transformation
+        let unit1_placement1_coords_flipped = match orientation.flip {
+            PcbAssemblyFlip::None => unit1_placement1_coords,
+            PcbAssemblyFlip::Pitch => {
+                // Mirror y-coordinate around the center of the panel
+                let panel_center_y = panel_size.y / 2.0;
+                let distance_from_center = unit1_placement1_coords.y - panel_center_y;
+                Point2::new(unit1_placement1_coords.x, panel_center_y - distance_from_center)
+            }
+            PcbAssemblyFlip::Roll => {
+                // Mirror x-coordinate around the center of the panel
+                let panel_center_x = panel_size.x / 2.0;
+                let distance_from_center = unit1_placement1_coords.x - panel_center_x;
+                Point2::new(panel_center_x - distance_from_center, unit1_placement1_coords.y)
+            }
+        };
+        println!(
+            "unit1_placement1_coords (after flipping): {:?}",
+            unit1_placement1_coords_flipped
         );
 
         fn rotate_point_around_center(pt: Point2<f64>, center: Vector2<f64>, angle_radians: f64) -> Point2<f64> {
@@ -453,18 +651,15 @@ mod pcb_unit_transform_tests {
         println!("shift (test): {:?}", shift);
 
         let unit1_placement1_coords_after_rotation =
-            rotate_point_around_center(unit1_placement1_coords, panel_center, panel_rotation_radians);
+            rotate_point_around_center(unit1_placement1_coords_flipped, panel_center, panel_rotation_radians);
 
         println!(
             "unit1_placement1_coords (after rotation): {:?}",
             unit1_placement1_coords_after_rotation
         );
 
-        let unit1_placement1_coords_after_rotation_and_translation = unit1_placement1_coords_after_rotation - shift;
-        println!(
-            "unit1_placement1_coords (after rotation and translation): {:?}",
-            unit1_placement1_coords_after_rotation_and_translation
-        );
+        let unit1_placement1_coords_final = unit1_placement1_coords_after_rotation - shift;
+        println!("unit1_placement1_coords_final: {:?}", unit1_placement1_coords_final);
 
         let mut new_rotation = placement1.rotation + panel_rotation_decimal + unit_rotation_decimal;
 
@@ -492,8 +687,8 @@ mod pcb_unit_transform_tests {
 
         // and
         let expected_result = UnitPlacementPosition {
-            x: Decimal::from_f64(unit1_placement1_coords_after_rotation_and_translation.x).unwrap(),
-            y: Decimal::from_f64(unit1_placement1_coords_after_rotation_and_translation.y).unwrap(),
+            x: Decimal::from_f64(unit1_placement1_coords_final.x).unwrap(),
+            y: Decimal::from_f64(unit1_placement1_coords_final.y).unwrap(),
             rotation: unit1_placement_rotation_decimal,
         };
 
