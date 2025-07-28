@@ -13,3 +13,6 @@ pub mod report;
 pub mod variant;
 
 pub mod file;
+
+#[cfg(test)]
+pub mod tests;
