@@ -10,7 +10,7 @@ use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext
 use eda_units::eda_units::unit_system::UnitSystem;
 use eframe::emath::{Align2, Rect, Vec2};
 use eframe::epaint::{Color32, FontId};
-use egui::{Pos2, Ui};
+use egui::{Pos2, Stroke, Ui};
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
@@ -20,9 +20,10 @@ use gerber_viewer::{
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
-use nalgebra::Point2;
+use nalgebra::{Point2, Vector2};
 use planner_app::{
     DesignIndex, GerberFileFunction, PanelSizing, PcbAssemblyOrientation, PcbOverview, PcbSide, PcbUnitIndex,
+    PlacementPositionUnit,
 };
 use thiserror::Error;
 use tracing::{debug, error, info, trace};
@@ -84,6 +85,8 @@ pub struct GerberViewerUi {
     panel_sizing: Option<PanelSizing>,
     unit_map: Option<HashMap<PcbUnitIndex, DesignIndex>>,
 
+    placement_marker: Option<PlacementPositionUnit>,
+
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
 
@@ -100,6 +103,8 @@ impl GerberViewerUi {
             assembly_orientation: None,
             panel_sizing: None,
             unit_map: None,
+
+            placement_marker: None,
 
             gerber_state: Value::new(GerberViewState::new(layers.clone())),
             gerber_ui_state: Value::default(),
@@ -340,6 +345,15 @@ impl GerberViewerUi {
         let mut gerber_state = self.gerber_state.lock().unwrap();
         gerber_state.locate_view(point, center_screen_pos);
     }
+
+    /// rotation is in degrees.
+    pub fn show_placement_marker(&mut self, position: PlacementPositionUnit) {
+        self.placement_marker = Some(position);
+    }
+
+    pub fn clear_placement_marker(&mut self) {
+        self.placement_marker = None;
+    }
 }
 
 #[derive(Debug)]
@@ -498,6 +512,7 @@ impl LayerViewState {
 pub enum GerberViewerUiCommand {
     None,
     LocateView(Point2<DimensionUnit>),
+    ShowPlacementMarker(PlacementPositionUnit),
 }
 
 #[derive(Debug, Clone)]
@@ -534,53 +549,102 @@ impl UiComponent for GerberViewerUi {
         let painter = ui.painter().with_clip_rect(viewport);
 
         let mut request_draw_unit_unit_numbers = true;
+        let mut request_draw_placement_marker = self.placement_marker.is_some();
 
-        for (_path, (layer_view_state, layer, doc)) in state.layers.lock().unwrap().iter() {
+        let layers = state.layers.lock().unwrap();
+        let layer_count = layers.len();
+        for (index, (_path, (layer_view_state, layer, doc))) in layers.iter().enumerate() {
+            let is_last_layer = index == layer_count - 1;
+
             let layer_transform = layer_view_state
                 .transform
                 .combine(&state.transform);
 
-            let renderer = GerberRenderer::new(&state.render_configuration, state.view, &layer_transform, layer);
+            let units = doc.as_ref().and_then(|doc| doc.units);
+            let doc_unit_system = UnitSystem::from_gerber_unit(&units);
 
+            let renderer = GerberRenderer::new(&state.render_configuration, state.view, &layer_transform, layer);
             renderer.paint_layer(&painter, layer_view_state.color);
 
-            if request_draw_unit_unit_numbers {
-                request_draw_unit_unit_numbers = false;
+            if is_last_layer {
+                // draw on top of the last layer
 
-                // Draw unit numbers
-                if let (Some(panel_sizing), Some(unit_map)) = (&self.panel_sizing, &self.unit_map) {
-                    for (unit_index, unit_positioning) in panel_sizing
-                        .pcb_unit_positionings
-                        .iter()
-                        .enumerate()
-                    {
-                        let unit_number = unit_index as u32 + 1;
+                if request_draw_unit_unit_numbers {
+                    request_draw_unit_unit_numbers = false;
 
-                        let Some(design_index) = unit_map
-                            .get(&(unit_index as PcbUnitIndex))
-                            .cloned()
-                        else {
-                            continue;
-                        };
-                        let design_sizing = &panel_sizing.design_sizings[design_index];
+                    // Draw unit numbers
+                    if let (Some(panel_sizing), Some(unit_map)) = (&self.panel_sizing, &self.unit_map) {
+                        for (unit_index, unit_positioning) in panel_sizing
+                            .pcb_unit_positionings
+                            .iter()
+                            .enumerate()
+                        {
+                            let unit_number = unit_index as u32 + 1;
 
-                        let units = doc.as_ref().and_then(|doc| doc.units);
-                        let doc_unit_system = UnitSystem::from_gerber_unit(&units);
-                        let unit_center = unit_positioning.offset + (design_sizing.size / 2.0);
-                        let unit_center_mm = unit_center
-                            .to_position()
-                            .to_dimension_unit(UnitSystem::Millimeters);
-                        let position = unit_center_mm.to_point2(doc_unit_system);
+                            let Some(design_index) = unit_map
+                                .get(&(unit_index as PcbUnitIndex))
+                                .cloned()
+                            else {
+                                continue;
+                            };
+                            let design_sizing = &panel_sizing.design_sizings[design_index];
 
-                        let offset_screen_coords = renderer.gerber_to_screen_coordinates(&position);
+                            let unit_center = unit_positioning.offset + (design_sizing.size / 2.0);
+                            let unit_center_mm = unit_center
+                                .to_position()
+                                .to_dimension_unit(UnitSystem::Millimeters);
+                            let position_doc = unit_center_mm.to_point2(doc_unit_system);
 
-                        painter.text(
-                            offset_screen_coords,
-                            Align2::CENTER_CENTER,
-                            format!("{}", unit_number),
-                            FontId::monospace(32.0),
-                            layer_view_state.color.additive(),
+                            let offset_screen_coords = renderer.gerber_to_screen_coordinates(&position_doc);
+
+                            painter.text(
+                                offset_screen_coords,
+                                Align2::CENTER_CENTER,
+                                format!("{}", unit_number),
+                                FontId::monospace(32.0),
+                                layer_view_state.color.additive(),
+                            );
+                        }
+                    }
+                }
+
+                if request_draw_placement_marker {
+                    request_draw_placement_marker = false;
+                    if let Some(placement_marker_position) = &self.placement_marker {
+                        // a line vector in Millimeters, a rotation of 0 means straight up, gerber coords are positive up.
+                        let vector_mm = Vector2::new(0.0_f64, 0.5_f64);
+
+                        let rotation = placement_marker_position
+                            .rotation
+                            .to_radians_f64();
+
+                        // TODO discover and use the correct nalgebra rotation API to rotate the vector instead of this.
+                        let rotated_vector_mm = Vector2::new(
+                            vector_mm.x * rotation.cos() - vector_mm.y * rotation.sin(),
+                            vector_mm.x * rotation.sin() + vector_mm.y * rotation.cos(),
                         );
+
+                        let start_position_mm = placement_marker_position
+                            .coords
+                            .to_point2(UnitSystem::Millimeters);
+                        let end_position_mm = start_position_mm + rotated_vector_mm;
+
+                        let start_position_doc = start_position_mm
+                            .to_dimension_unit(UnitSystem::Millimeters)
+                            .to_point2(doc_unit_system);
+                        let end_position_doc = end_position_mm
+                            .to_dimension_unit(UnitSystem::Millimeters)
+                            .to_point2(doc_unit_system);
+
+                        let screen_start_position = renderer.gerber_to_screen_coordinates(&start_position_doc);
+                        let screen_end_position = renderer.gerber_to_screen_coordinates(&end_position_doc);
+
+                        let stroke = Stroke::new(4.0, Color32::RED);
+                        painter.line_segment([screen_start_position, screen_end_position], stroke);
+
+                        let stroke = Stroke::new(2.0, Color32::RED);
+                        let radius = screen_start_position.distance(screen_end_position);
+                        painter.circle_stroke(screen_start_position, radius, stroke);
                     }
                 }
             }
@@ -601,6 +665,11 @@ impl UiComponent for GerberViewerUi {
             GerberViewerUiCommand::None => Some(GerberViewerUiAction::None),
             GerberViewerUiCommand::LocateView(point) => {
                 self.locate_view(point);
+
+                None
+            }
+            GerberViewerUiCommand::ShowPlacementMarker(position) => {
+                self.show_placement_marker(position);
 
                 None
             }

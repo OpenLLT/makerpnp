@@ -8,10 +8,7 @@ use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
-use nalgebra::Vector2;
-use num_traits::ToPrimitive;
-use planner_app::{ObjectPath, PanelSizing, PcbOverview, PcbSide};
-use rust_decimal::Decimal;
+use planner_app::{ObjectPath, PanelSizing, PcbOverview, PcbSide, PlacementPositionUnit};
 use tracing::trace;
 
 use crate::i18n::conversions::{gerber_file_function_to_i18n_key, pcb_side_to_i18n_key};
@@ -191,8 +188,8 @@ pub enum GerberViewerTabUiCommand {
     LocateComponent {
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -333,32 +330,31 @@ impl UiComponent for GerberViewerTabUi {
             GerberViewerTabUiCommand::LocateComponent {
                 object_path,
                 pcb_side,
-                placement_coordinate,
-                unit_coordinate,
+                design_position,
+                unit_position,
             } => {
                 if matches!(context.args.pcb_side, Some(candidate_pcb_side) if candidate_pcb_side.ne(&pcb_side)) {
                     return None;
                 }
 
                 trace!(
-                    "Locate Component. object_path: {}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
-                    object_path, pcb_side, placement_coordinate, unit_coordinate
+                    "Locate Component. object_path: {}, pcb_side: {:?}, design_position: {:?}, unit_position: {:?}",
+                    object_path, pcb_side, design_position, unit_position
                 );
 
-                let (x, y) = match context.args.mode {
-                    GerberViewerMode::Panel => (unit_coordinate.x, unit_coordinate.y),
-                    GerberViewerMode::Design(_) => (placement_coordinate.x, placement_coordinate.y),
+                let position = match context.args.mode {
+                    GerberViewerMode::Panel => unit_position,
+                    GerberViewerMode::Design(_) => design_position,
                 };
 
-                let point = DimensionUnitPoint2::new_dim_f64(
-                    x.to_f64().unwrap_or_default(),
-                    y.to_f64().unwrap_or_default(),
-                    self.unit_system,
-                );
+                let coords = position.coords;
 
                 self.gerber_viewer_ui
                     .component
-                    .send(GerberViewerUiCommand::LocateView(point));
+                    .send(GerberViewerUiCommand::ShowPlacementMarker(position));
+                self.gerber_viewer_ui
+                    .component
+                    .send(GerberViewerUiCommand::LocateView(coords));
                 None
             }
         }

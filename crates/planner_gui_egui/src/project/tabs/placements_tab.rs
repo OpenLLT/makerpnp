@@ -2,9 +2,7 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
-use nalgebra::Vector2;
-use planner_app::{ObjectPath, PcbSide, PhaseOverview, PlacementState, PlacementsList};
-use rust_decimal::Decimal;
+use planner_app::{ObjectPath, PcbSide, PhaseOverview, PlacementPositionUnit, PlacementState, PlacementsList};
 use tracing::trace;
 
 use crate::project::tables::placements::{
@@ -70,8 +68,8 @@ pub enum PlacementsTabUiAction {
         /// Full object path of the component
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -117,13 +115,13 @@ impl UiComponent for PlacementsTabUi {
                     Some(PlacementsTableUiAction::LocatePlacement {
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
+                        design_position,
+                        unit_position,
                     }) => Some(PlacementsTabUiAction::LocatePlacement {
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
+                        design_position,
+                        unit_position,
                     }),
                     None => None,
                 }

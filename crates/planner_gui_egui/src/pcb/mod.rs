@@ -2,14 +2,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use derivative::Derivative;
+use eda_units::eda_units::dimension_unit::{
+    DimensionUnitPoint2, DimensionUnitPoint2Ext, DimensionUnitVector2, DimensionUnitVector2Ext,
+};
+use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use nalgebra::Vector2;
-use num_traits::FromPrimitive;
-use planner_app::{DesignIndex, Event, ObjectPath, PanelSizing, PcbOverview, PcbSide, PcbView, PcbViewRequest};
+use planner_app::{
+    DesignIndex, Event, ObjectPath, PanelSizing, PcbOverview, PcbSide, PcbView, PcbViewRequest, PlacementPositionUnit,
+};
 use regex::Regex;
-use rust_decimal::Decimal;
 use slotmap::new_key_type;
 use tabs::configuration_tab::{
     ConfigurationTab, ConfigurationTabUiAction, ConfigurationTabUiCommand, ConfigurationTabUiContext, ConfigurationUi,
@@ -519,8 +522,8 @@ pub enum PcbUiCommand {
     LocateComponent {
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -926,14 +929,14 @@ impl UiComponent for Pcb {
             PcbUiCommand::LocateComponent {
                 object_path,
                 pcb_side,
-                mut placement_coordinate,
-                mut unit_coordinate,
+                mut design_position,
+                mut unit_position,
             } => {
                 let tabs = self.pcb_tabs.lock().unwrap();
 
                 trace!(
-                    "Locate component. pcb: {:?}, object_path: {:?}, pcb_side: {:?}, placement_coordinate: {:?}, unit_coordinate: {:?}",
-                    self.path, object_path, pcb_side, placement_coordinate, unit_coordinate
+                    "Locate component. pcb: {:?}, object_path: {:?}, pcb_side: {:?}, design_position: {:?}, unit_position: {:?}",
+                    self.path, object_path, pcb_side, design_position, unit_position
                 );
 
                 if let (Some(pcb_overview), Some(panel_sizing)) = (&self.pcb_overview, &self.panel_sizing) {
@@ -946,24 +949,37 @@ impl UiComponent for Pcb {
                         let design_sizing = &panel_sizing.design_sizings[design_index];
                         trace!("design_sizing: {:?}", design_sizing);
 
-                        // Placement coordinates are as-exported in EDA tool - add the design placement offset (which is usually negative), subtract the design gerber offset (usually negative) to re-apply it.
-                        placement_coordinate += design_sizing
-                            .placement_offset
-                            .map(|value| Decimal::from_f64(value).unwrap_or_default())
-                            - design_sizing
-                                .gerber_offset
-                                .map(|value| Decimal::from_f64(value).unwrap_or_default());
+                        // FIXME hard-coded use of UnitSystem::Millimeters
+                        let placement_offset = DimensionUnitPoint2::new_dim_f64(
+                            design_sizing.placement_offset.x,
+                            design_sizing.placement_offset.y,
+                            UnitSystem::Millimeters,
+                        );
+                        let gerber_offset = DimensionUnitPoint2::new_dim_f64(
+                            design_sizing.gerber_offset.x,
+                            design_sizing.gerber_offset.y,
+                            UnitSystem::Millimeters,
+                        );
 
-                        trace!("adjusted placement_coordinate: {:?}", placement_coordinate);
+                        // Placement coordinates are as-exported in EDA tool - add the design placement offset (which is usually negative), subtract the design gerber offset (usually negative) to re-apply it.
+                        let eda_offset = placement_offset - gerber_offset;
+                        design_position.coords += eda_offset;
+
+                        trace!("adjusted design_position: {:?}", design_position);
 
                         // Unit coordinates are correct for PnP machine, but may not match the panel gerbers.
                         // Add the panel gerber offset
                         // FUTURE support panel rotation, currently users should crate PCB/panel definitions that match their panel gerbers.
-                        let panel_gerber_offset: Vector2<Decimal> = pcb_overview
-                            .gerber_offset
-                            .map(|value| Decimal::from_f64(value).unwrap_or_default());
-                        unit_coordinate += panel_gerber_offset;
-                        trace!("adjusted unit_coordinate: {:?}", unit_coordinate);
+                        // FIXME hard-coded use of UnitSystem::Millimeters
+                        let panel_gerber_offset = DimensionUnitVector2::new_dim_f64(
+                            pcb_overview.gerber_offset.x,
+                            pcb_overview.gerber_offset.y,
+                            UnitSystem::Millimeters,
+                        );
+
+                        unit_position.coords += panel_gerber_offset;
+
+                        trace!("adjusted unit_position: {:?}", unit_position);
 
                         let tab_keys = tabs.filter_map(|(candidate_tab_key, candidate_tab)| match candidate_tab {
                             PcbTabKind::GerberViewer(gerber_viewer_tab) => match gerber_viewer_tab.args.mode {
@@ -991,8 +1007,8 @@ impl UiComponent for Pcb {
                                         .send(GerberViewerTabUiCommand::LocateComponent {
                                             object_path: object_path.clone(),
                                             pcb_side,
-                                            placement_coordinate,
-                                            unit_coordinate,
+                                            design_position,
+                                            unit_position,
                                         })
                                 }
                             })

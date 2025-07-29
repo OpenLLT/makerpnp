@@ -1589,6 +1589,7 @@ version = "0.1.0"
 dependencies = [
  "gerber-types",
  "nalgebra",
+ "num-traits",
  "rstest",
  "rust_decimal",
  "rust_decimal_macros",
@@ -4348,6 +4349,7 @@ name = "pnp"
 version = "0.1.0"
 dependencies = [
  "derivative",
+ "eda_units",
  "lexical-sort",
  "math",
  "nalgebra",

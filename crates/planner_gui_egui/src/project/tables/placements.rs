@@ -9,12 +9,10 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use nalgebra::Vector2;
 use planner_app::{
-    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementState, PlacementStatus, PlacementsItem,
-    ProjectPlacementStatus, Reference,
+    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementPositionUnit, PlacementState, PlacementStatus,
+    PlacementsItem, ProjectPlacementStatus, Reference,
 };
-use rust_decimal::Decimal;
 use tracing::{debug, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -100,8 +98,8 @@ pub enum PlacementsTableUiCommand {
         /// Full object path of the component
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -118,8 +116,8 @@ pub enum PlacementsTableUiAction {
         /// Full object path of the component
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -192,13 +190,13 @@ impl UiComponent for PlacementsTableUi {
             PlacementsTableUiCommand::LocatePlacement {
                 object_path,
                 pcb_side,
-                placement_coordinate,
-                unit_coordinate,
+                design_position,
+                unit_position,
             } => Some(PlacementsTableUiAction::LocatePlacement {
                 object_path,
                 pcb_side,
-                placement_coordinate,
-                unit_coordinate,
+                design_position,
+                unit_position,
             }),
         }
     }
@@ -259,6 +257,9 @@ mod columns {
     pub const COLUMN_COUNT: usize = 13;
 }
 use columns::*;
+use eda_units::eda_units::angle::AngleUnit;
+use eda_units::eda_units::dimension_unit::{DimensionUnitPoint2, DimensionUnitPoint2Ext};
+use eda_units::eda_units::unit_system::UnitSystem;
 
 impl RowViewer<PlacementsRow> for PlacementsRowViewer {
     fn on_highlight_cell(&mut self, row: &PlacementsRow, column: usize) {
@@ -272,8 +273,28 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     .placement
                     .pcb_side
                     .clone(),
-                placement_coordinate: Vector2::new(row.placement_state.placement.x, row.placement_state.placement.y),
-                unit_coordinate: Vector2::new(row.placement_state.unit_position.x, row.placement_state.unit_position.y),
+                // FIXME hard-coded use of UnitSystem::Millimeters
+                design_position: PlacementPositionUnit::new(
+                    DimensionUnitPoint2::new_dim_decimal(
+                        row.placement_state.placement.x,
+                        row.placement_state.placement.y,
+                        UnitSystem::Millimeters,
+                    ),
+                    AngleUnit::new_degrees_decimal(row.placement_state.placement.rotation),
+                ),
+                // FIXME hard-coded use of UnitSystem::Millimeters
+                unit_position: PlacementPositionUnit::new(
+                    DimensionUnitPoint2::new_dim_decimal(
+                        row.placement_state.unit_position.x,
+                        row.placement_state.unit_position.y,
+                        UnitSystem::Millimeters,
+                    ),
+                    AngleUnit::new_degrees_decimal(
+                        row.placement_state
+                            .unit_position
+                            .rotation,
+                    ),
+                ),
             })
             .expect("sent");
     }

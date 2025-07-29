@@ -3,9 +3,7 @@ use std::path::PathBuf;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
-use nalgebra::Vector2;
-use planner_app::{ObjectPath, PcbSide};
-use rust_decimal::Decimal;
+use planner_app::{ObjectPath, PcbSide, PlacementPositionUnit};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
 use tracing::debug;
@@ -49,8 +47,8 @@ pub enum ProjectTabAction {
         pcb_file: PathBuf,
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -161,14 +159,14 @@ impl UiComponent for ProjectTab {
                         pcb_file,
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
+                        design_position,
+                        unit_position,
                     }) => Some(ProjectTabAction::LocateComponent {
                         pcb_file,
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
+                        design_position,
+                        unit_position,
                     }),
                 }
             }

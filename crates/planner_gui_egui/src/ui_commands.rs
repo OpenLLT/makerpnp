@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use egui::{Context, ThemePreference};
 use egui_mobius::types::Value;
-use nalgebra::Vector2;
-use planner_app::{ObjectPath, PcbSide};
-use rust_decimal::Decimal;
+use planner_app::{ObjectPath, PcbSide, PlacementPositionUnit};
 use tracing::{debug, trace};
 
 use crate::config::Config;
@@ -42,8 +40,8 @@ pub enum UiCommand {
         pcb_file: PathBuf,
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -109,8 +107,8 @@ pub fn handle_command(
             pcb_file,
             object_path,
             pcb_side,
-            placement_coordinate,
-            unit_coordinate,
+            design_position,
+            unit_position,
         } => {
             let app_state = app_state.lock().unwrap();
 
@@ -124,8 +122,8 @@ pub fn handle_command(
                     .send((pcb_key, PcbUiCommand::LocateComponent {
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
+                        design_position,
+                        unit_position,
                     }))
             }
 
@@ -268,14 +266,14 @@ pub fn handle_command(
                             pcb_file,
                             object_path,
                             pcb_side,
-                            placement_coordinate,
-                            unit_coordinate,
+                            design_position,
+                            unit_position,
                         } => Task::done(UiCommand::LocateComponent {
                             pcb_file,
                             object_path,
                             pcb_side,
-                            placement_coordinate,
-                            unit_coordinate,
+                            design_position,
+                            unit_position,
                         }),
                     },
                 },

@@ -5,14 +5,12 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value};
-use nalgebra::Vector2;
 use planner_app::{
     AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
-    PhaseOverview, PhaseReference, PlacementOperation, PlacementState, PlacementStatus, ProcessReference,
-    ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
+    PhaseOverview, PhaseReference, PlacementOperation, PlacementPositionUnit, PlacementState, PlacementStatus,
+    ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
-use rust_decimal::Decimal;
 use slotmap::new_key_type;
 use tabs::explorer_tab::{ExplorerTab, ExplorerTabUi, ExplorerTabUiAction, ExplorerTabUiCommand, ExplorerTabUiContext};
 use tabs::load_out_tab::{LoadOutTab, LoadOutTabUi, LoadOutTabUiAction, LoadOutTabUiCommand, LoadOutTabUiContext};
@@ -64,8 +62,8 @@ pub enum ProjectAction {
         pcb_file: PathBuf,
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     },
 }
 
@@ -854,8 +852,8 @@ impl Project {
         &self,
         object_path: ObjectPath,
         pcb_side: PcbSide,
-        placement_coordinate: Vector2<Decimal>,
-        unit_coordinate: Vector2<Decimal>,
+        design_position: PlacementPositionUnit,
+        unit_position: PlacementPositionUnit,
     ) -> Option<ProjectAction> {
         let (pcb_number, unit_number) = object_path
             .pcb_instance_and_unit()
@@ -869,8 +867,8 @@ impl Project {
                 pcb_file: pcb_file.clone(),
                 object_path,
                 pcb_side,
-                placement_coordinate,
-                unit_coordinate,
+                design_position,
+                unit_position,
             })
     }
 }
@@ -1662,9 +1660,9 @@ impl UiComponent for Project {
                     Some(PhaseTabUiAction::LocatePlacement {
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
-                    }) => self.locate_component(object_path, pcb_side, placement_coordinate, unit_coordinate),
+                        design_position,
+                        unit_position,
+                    }) => self.locate_component(object_path, pcb_side, design_position, unit_position),
                 }
             }
             ProjectUiCommand::LoadOutTabUiCommand {
@@ -1734,9 +1732,9 @@ impl UiComponent for Project {
                     Some(PlacementsTabUiAction::LocatePlacement {
                         object_path,
                         pcb_side,
-                        placement_coordinate,
-                        unit_coordinate,
-                    }) => self.locate_component(object_path, pcb_side, placement_coordinate, unit_coordinate),
+                        design_position,
+                        unit_position,
+                    }) => self.locate_component(object_path, pcb_side, design_position, unit_position),
                     None => None,
                 }
             }

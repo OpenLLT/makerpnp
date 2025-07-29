@@ -41,8 +41,8 @@ pub use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PanelSizing, 
 pub use pnp::part::Part;
 pub use pnp::pcb::PcbSide;
 pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
-pub use pnp::placement::Placement;
 pub use pnp::placement::RefDes;
+pub use pnp::placement::{Placement, PlacementPosition, PlacementPositionUnit};
 pub use pnp::reference::Reference;
 use regex::Regex;
 use serde_with::serde_as;

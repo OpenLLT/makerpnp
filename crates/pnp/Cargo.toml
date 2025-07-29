@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 math = { path = "../math"}
+eda_units = { path = "../eda_units", features = ["serde"]}
 
 thiserror = { workspace = true }
 rust_decimal = { workspace = true}
