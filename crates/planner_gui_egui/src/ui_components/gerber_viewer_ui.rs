@@ -548,7 +548,7 @@ impl UiComponent for GerberViewerUi {
 
         let painter = ui.painter().with_clip_rect(viewport);
 
-        let mut request_draw_unit_unit_numbers = true;
+        let mut request_draw_unit_unit_numbers = matches!(self.args.mode, GerberViewerMode::Panel);
         let mut request_draw_placement_marker = self.placement_marker.is_some();
 
         let layers = state.layers.lock().unwrap();
