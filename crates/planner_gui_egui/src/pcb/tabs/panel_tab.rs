@@ -129,13 +129,25 @@ impl PanelTabUi {
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
+        let assembly_orientation = pcb_overview.orientation.clone();
         self.assembly_orientation
-            .replace((pcb_overview.orientation.clone(), pcb_overview.orientation.clone()));
+            .replace((assembly_orientation.clone(), assembly_orientation.clone()));
+
+        {
+            let mut gerber_viewer_ui = self.gerber_viewer_ui.lock().unwrap();
+            gerber_viewer_ui.set_assembly_orientation(assembly_orientation);
+            gerber_viewer_ui.set_unit_map(pcb_overview.unit_map.clone());
+        }
+
         self.pcb_overview.replace(pcb_overview);
         self.update_panel_preview();
     }
 
     pub fn update_panel_sizing(&mut self, panel_sizing: PanelSizing) {
+        self.gerber_viewer_ui
+            .lock()
+            .unwrap()
+            .set_panel_sizing(panel_sizing.clone());
         self.panel_sizing
             .replace((panel_sizing.clone(), panel_sizing));
         self.update_panel_preview();

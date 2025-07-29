@@ -131,6 +131,10 @@ impl GerberViewerUi {
         self.assembly_orientation = Some(new_assembly_orientation);
     }
 
+    pub fn set_unit_map(&mut self, new_unit_map: HashMap<PcbUnitIndex, DesignIndex>) {
+        self.unit_map = Some(new_unit_map);
+    }
+
     pub fn add_layer(&mut self, function: Option<GerberFileFunction>, commands: Vec<Command>) {
         let mut gerber_state = self.gerber_state.lock().unwrap();
 
