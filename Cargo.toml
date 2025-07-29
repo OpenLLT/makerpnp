@@ -119,7 +119,7 @@ validator = { version = "0.20.0", features = ["derive"] }
 egui-i18n = { git = "https://github.com/makerpnp/egui-i18n", rev = "087c62591d8027b51641bf4bcf556106d17ea799", features = ["fluent"] }
 
 # testing
-rstest = { version = "0.25.0" }
+rstest = { version = "0.26.1" }
 assert_cmd = { version = "2.0.17" }
 assert_fs = { version = "1.1.3" }
 tempfile = { version = "3.10.1" }
