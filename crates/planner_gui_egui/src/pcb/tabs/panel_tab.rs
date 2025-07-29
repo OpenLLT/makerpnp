@@ -1016,6 +1016,8 @@ impl PanelTabUi {
         ) {
             dump_gerber_source(&commands);
             gerber_viewer_ui.clear_layers();
+            gerber_viewer_ui.set_panel_sizing(panel_sizing.clone());
+            gerber_viewer_ui.set_assembly_orientation(assembly_orientation.clone());
             gerber_viewer_ui.add_layer(
                 Some(GerberFileFunction::Other(Some(self.panel_tab_ui_state.pcb_side))),
                 commands,

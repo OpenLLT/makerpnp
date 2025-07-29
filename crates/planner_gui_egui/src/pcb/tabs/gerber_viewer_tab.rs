@@ -10,7 +10,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use nalgebra::Vector2;
 use num_traits::ToPrimitive;
-use planner_app::{ObjectPath, PcbOverview, PcbSide};
+use planner_app::{ObjectPath, PanelSizing, PcbOverview, PcbSide};
 use rust_decimal::Decimal;
 use tracing::trace;
 
@@ -61,6 +61,11 @@ impl GerberViewerTabUi {
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         self.gerber_viewer_ui
             .update_layers_from_pcb_overview(pcb_overview);
+    }
+
+    pub fn update_panel_sizing(&mut self, panel_sizing: PanelSizing) {
+        self.gerber_viewer_ui
+            .set_panel_sizing(panel_sizing);
     }
 
     fn show_layers_table(ui: &mut Ui, layers: &LayersMap) {

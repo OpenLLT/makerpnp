@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::hash::Hash;
 use std::io;
@@ -5,22 +6,24 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use derivative::Derivative;
-use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext};
+use eda_units::eda_units::dimension_unit::{DimensionUnit, DimensionUnitPoint2Ext, Point2DimensionUnitExt};
 use eda_units::eda_units::unit_system::UnitSystem;
-use eframe::emath::{Rect, Vec2};
-use eframe::epaint::Color32;
+use eframe::emath::{Align2, Rect, Vec2};
+use eframe::epaint::{Color32, FontId};
 use egui::{Pos2, Ui};
 use egui_mobius::Value;
 use gerber_viewer::gerber_parser::{GerberDoc, ParseError, parse};
 use gerber_viewer::gerber_types::Command;
 use gerber_viewer::{
-    BoundingBox, GerberLayer, GerberRenderer, GerberTransform, RenderConfiguration, UiState, ViewState, draw_crosshair,
-    generate_pastel_color,
+    BoundingBox, GerberLayer, GerberRenderer, GerberTransform, RenderConfiguration, ToPosition, UiState, ViewState,
+    draw_crosshair, generate_pastel_color,
 };
 use indexmap::IndexMap;
 use indexmap::map::Entry;
 use nalgebra::Point2;
-use planner_app::{DesignIndex, GerberFileFunction, PcbOverview, PcbSide};
+use planner_app::{
+    DesignIndex, GerberFileFunction, PanelSizing, PcbAssemblyOrientation, PcbOverview, PcbSide, PcbUnitIndex,
+};
 use thiserror::Error;
 use tracing::{debug, error, info, trace};
 
@@ -77,6 +80,10 @@ pub enum GerberViewerMode {
 pub struct GerberViewerUi {
     args: GerberViewerUiInstanceArgs,
 
+    assembly_orientation: Option<PcbAssemblyOrientation>,
+    panel_sizing: Option<PanelSizing>,
+    unit_map: Option<HashMap<PcbUnitIndex, DesignIndex>>,
+
     gerber_state: Value<GerberViewState>,
     gerber_ui_state: Value<UiState>,
 
@@ -89,8 +96,14 @@ impl GerberViewerUi {
 
         Self {
             args,
+
+            assembly_orientation: None,
+            panel_sizing: None,
+            unit_map: None,
+
             gerber_state: Value::new(GerberViewState::new(layers.clone())),
             gerber_ui_state: Value::default(),
+
             component: Default::default(),
         }
     }
@@ -110,6 +123,14 @@ impl GerberViewerUi {
             .update_layers(IndexMap::new());
     }
 
+    pub fn set_panel_sizing(&mut self, new_panel_sizing: PanelSizing) {
+        self.panel_sizing = Some(new_panel_sizing);
+    }
+
+    pub fn set_assembly_orientation(&mut self, new_assembly_orientation: PcbAssemblyOrientation) {
+        self.assembly_orientation = Some(new_assembly_orientation);
+    }
+
     pub fn add_layer(&mut self, function: Option<GerberFileFunction>, commands: Vec<Command>) {
         let mut gerber_state = self.gerber_state.lock().unwrap();
 
@@ -124,9 +145,19 @@ impl GerberViewerUi {
     }
 
     pub fn update_layers_from_pcb_overview(&mut self, pcb_overview: PcbOverview) {
-        let gerber_items = match self.args.mode {
-            GerberViewerMode::Panel => pcb_overview.pcb_gerbers.clone(),
-            GerberViewerMode::Design(design_index) => pcb_overview.design_gerbers[design_index].clone(),
+        let (new_orientation, new_pcb_gerbers, new_design_gerbers, unit_map) = (
+            pcb_overview.orientation,
+            pcb_overview.pcb_gerbers,
+            pcb_overview.design_gerbers,
+            pcb_overview.unit_map,
+        );
+
+        self.assembly_orientation = Some(new_orientation);
+        self.unit_map = Some(unit_map);
+
+        let gerber_items = match &self.args.mode {
+            GerberViewerMode::Panel => new_pcb_gerbers,
+            GerberViewerMode::Design(design_index) => new_design_gerbers[*design_index].clone(),
         };
 
         let gerber_items = gerber_items
@@ -497,19 +528,58 @@ impl UiComponent for GerberViewerUi {
         ui_state.update(ui, &viewport, &response, &mut state.view);
 
         let painter = ui.painter().with_clip_rect(viewport);
-        for (_path, (layer_view_state, layer, _doc)) in state.layers.lock().unwrap().iter() {
+
+        let mut request_draw_unit_unit_numbers = true;
+
+        for (_path, (layer_view_state, layer, doc)) in state.layers.lock().unwrap().iter() {
             let layer_transform = layer_view_state
                 .transform
                 .combine(&state.transform);
 
-            GerberRenderer::default().paint_layer(
-                &painter,
-                state.view,
-                layer,
-                layer_view_state.color,
-                &state.render_configuration,
-                &layer_transform,
-            );
+            let renderer = GerberRenderer::new(&state.render_configuration, state.view, &layer_transform, layer);
+
+            renderer.paint_layer(&painter, layer_view_state.color);
+
+            if request_draw_unit_unit_numbers {
+                request_draw_unit_unit_numbers = false;
+
+                // Draw unit numbers
+                if let (Some(panel_sizing), Some(unit_map)) = (&self.panel_sizing, &self.unit_map) {
+                    for (unit_index, unit_positioning) in panel_sizing
+                        .pcb_unit_positionings
+                        .iter()
+                        .enumerate()
+                    {
+                        let unit_number = unit_index as u32 + 1;
+
+                        let Some(design_index) = unit_map
+                            .get(&(unit_index as PcbUnitIndex))
+                            .cloned()
+                        else {
+                            continue;
+                        };
+                        let design_sizing = &panel_sizing.design_sizings[design_index];
+
+                        let units = doc.as_ref().and_then(|doc| doc.units);
+                        let doc_unit_system = UnitSystem::from_gerber_unit(&units);
+                        let unit_center = unit_positioning.offset + (design_sizing.size / 2.0);
+                        let unit_center_mm = unit_center
+                            .to_position()
+                            .to_dimension_unit(UnitSystem::Millimeters);
+                        let position = unit_center_mm.to_point2(doc_unit_system);
+
+                        let offset_screen_coords = renderer.gerber_to_screen_coordinates(&position);
+
+                        painter.text(
+                            offset_screen_coords,
+                            Align2::CENTER_CENTER,
+                            format!("{}", unit_number),
+                            FontId::monospace(32.0),
+                            layer_view_state.color.additive(),
+                        );
+                    }
+                }
+            }
         }
 
         // Draw origin crosshair

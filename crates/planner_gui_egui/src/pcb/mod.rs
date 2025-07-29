@@ -224,11 +224,21 @@ impl Pcb {
 
         match self.ensure_gerber_viewer(key, args) {
             false => None,
-            true => Some(Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
-                PcbViewRequest::Overview {
-                    path: self.path.clone(),
-                },
-            )))),
+            true => {
+                let task1 = Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                    PcbViewRequest::Overview {
+                        path: self.path.clone(),
+                    },
+                )));
+                let task2 = Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                    PcbViewRequest::Panel {
+                        path: self.path.clone(),
+                    },
+                )));
+
+                let tasks = vec![task1, task2];
+                Some(Task::batch(tasks))
+            }
         }
     }
 
@@ -652,6 +662,13 @@ impl UiComponent for Pcb {
                         pcb_ui_state
                             .panel_tab_ui
                             .update_panel_sizing(panel_sizing.clone());
+
+                        for gerber_viewer_ui in pcb_ui_state
+                            .gerber_viewer_tab_uis
+                            .values_mut()
+                        {
+                            gerber_viewer_ui.update_panel_sizing(panel_sizing.clone());
+                        }
 
                         self.panel_sizing = Some(panel_sizing);
                     }
