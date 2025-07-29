@@ -12,7 +12,7 @@ use crate::eda_units::dimension::Dimension;
 use crate::eda_units::unit_system::UnitSystem;
 
 /// A dimension value with associated unit system and precision
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DimensionUnit {
     /// The underlying dimension value

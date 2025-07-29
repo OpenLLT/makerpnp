@@ -8,6 +8,7 @@
 //! | **IPC-2581C**  | Manufacturing data exchange      | 0.0005 mm          | 0.000019685"          | 0.019685 mils       | 0.05 Si         | [IPC-2581C §3.8](https://www.ipc.org/TOC/IPC-2581C.pdf) |
 //! | **IPC-D-356**  | Bare-board test data             | 0.005–0.01 mm      | 0.00019685–0.0003937" | 0.19685–0.3937 mils | 0.5–1 Si        | [IPC-D-356D §5.2](https://www.ipc.org/TOC/IPC-D-356D.pdf) |
 
+pub mod angle;
 pub mod dimension;
 pub mod dimension_unit;
 pub mod unit_system;

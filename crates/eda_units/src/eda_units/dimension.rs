@@ -271,6 +271,8 @@ impl fmt::Display for Dimension {
     }
 }
 
+pub type DimensionPoint2 = Point2<Dimension>;
+
 // Extension trait for Point2<Dimension>
 pub trait DimensionPoint2Ext {
     /// Create a new Point2<Dimension> from x, y coordinates in the specified unit system
