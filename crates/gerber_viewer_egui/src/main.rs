@@ -63,7 +63,7 @@ struct GerberViewer {
     coord_input: (String, String),
     unit_system: UnitSystem,
 
-    enable_bounding_box_outline: bool,
+    use_bounding_box_outline: bool,
 
     is_about_modal_open: bool,
     step: f64,
@@ -124,7 +124,7 @@ impl GerberViewer {
             log: Vec::new(),
             coord_input: ("0.0".to_string(), "0.0".to_string()),
             config: RenderConfiguration::default(),
-            enable_bounding_box_outline: true,
+            use_bounding_box_outline: true,
             unit_system: UnitSystem::Millimeters,
 
             is_about_modal_open: false,
@@ -342,14 +342,8 @@ impl GerberViewer {
 
                     let transform = unit_aligned_layer_transform.combine(&state.transform);
 
-                    GerberRenderer::default().paint_layer(
-                        &painter,
-                        state.view,
-                        layer,
-                        layer_view_state.color,
-                        &self.config,
-                        &transform,
-                    );
+                    GerberRenderer::new(&self.config, state.view, &transform, layer)
+                        .paint_layer(&painter, layer_view_state.color);
                 }
             }
 
@@ -357,7 +351,7 @@ impl GerberViewer {
             draw_crosshair(&painter, state.ui_state.origin_screen_pos, Color32::BLUE);
             draw_crosshair(&painter, state.ui_state.center_screen_pos, Color32::LIGHT_GRAY);
 
-            if self.enable_bounding_box_outline && !bbox_screen_vertices.is_empty() {
+            if self.use_bounding_box_outline && !bbox_screen_vertices.is_empty() {
                 draw_outline(&painter, bbox_screen_vertices, Color32::RED);
             }
         } else {
@@ -694,9 +688,10 @@ impl GerberViewer {
             });
             ui.menu_button("View", |ui| {
                 ui.checkbox(&mut self.config.use_unique_shape_colors, "🎉 Unique shape colors");
+                ui.checkbox(&mut self.config.use_vertex_numbering, "# Vertex numbering (polygons)");
                 ui.checkbox(&mut self.config.use_shape_numbering, "＃ Shape numbering");
-                ui.checkbox(&mut self.config.use_vertex_numbering, "＃ Vertex numbering (polygons)");
-                ui.checkbox(&mut self.enable_bounding_box_outline, "☐ Draw bounding box");
+                ui.checkbox(&mut self.config.use_shape_bboxes, "◽ Shape bounding boxes");
+                ui.checkbox(&mut self.use_bounding_box_outline, "◻ Layer bounding box");
 
                 ui.menu_button("Units...", |ui| {
                     ui.radio_value(&mut self.unit_system, UnitSystem::Millimeters, "Millimeters");
@@ -727,10 +722,16 @@ impl GerberViewer {
 
             ui.separator();
 
-            ui.toggle_value(&mut self.config.use_unique_shape_colors, "🎉");
-            ui.toggle_value(&mut self.config.use_shape_numbering, "＃");
-            ui.toggle_value(&mut self.config.use_vertex_numbering, "＃");
-            ui.toggle_value(&mut self.enable_bounding_box_outline, "☐");
+            ui.toggle_value(&mut self.config.use_unique_shape_colors, "🎉")
+                .on_hover_text("Unique shape colors");
+            ui.toggle_value(&mut self.config.use_vertex_numbering, "#")
+                .on_hover_text("Vertex numbering");
+            ui.toggle_value(&mut self.config.use_shape_numbering, "＃")
+                .on_hover_text("Shape numbering");
+            ui.toggle_value(&mut self.config.use_shape_bboxes, "◽")
+                .on_hover_text("Shape bounding boxes");
+            ui.toggle_value(&mut self.use_bounding_box_outline, "◻")
+                .on_hover_text("Layer bounding box");
 
             ui.separator();
 
