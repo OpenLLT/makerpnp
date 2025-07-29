@@ -29,9 +29,7 @@ use tap::Tap;
 
 use crate::design::{DesignIndex, DesignName};
 use crate::file::FileReference;
-use crate::pcb::{
-    Pcb, PcbAssemblyFlip, PcbAssemblyOrientation, PcbSideAssemblyOrientation, PcbUnitTransform, UnitPlacementPosition,
-};
+use crate::pcb::{Pcb, PcbAssemblyFlip, PcbAssemblyOrientation, PcbSideAssemblyOrientation, UnitPlacementPosition};
 use crate::phase::PhaseReference;
 use crate::placement::{PlacementState, PlacementStatus, ProjectPlacementStatus};
 use crate::project::{build_placement_unit_positions, Project, ProjectPcb};
