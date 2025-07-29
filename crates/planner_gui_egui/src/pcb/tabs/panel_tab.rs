@@ -1073,6 +1073,7 @@ pub enum PanelTabUiCommand {
     AssemblyOrientationSaved,
     ApplyPanelSizing(PanelSizing),
     ApplyAssemblyOrientation(PcbAssemblyOrientation),
+    RefreshPcbRequested,
 }
 
 #[derive(Debug)]
@@ -1082,6 +1083,7 @@ pub enum PanelTabUiAction {
     ApplyAssemblyOrientation(PcbAssemblyOrientation),
     Task(Task<PanelTabUiCommand>),
     UiCommand(PanelTabUiCommand),
+    RefreshPcb,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1239,6 +1241,7 @@ impl UiComponent for PanelTabUi {
                         Task::done(PanelTabUiCommand::ApplyAssemblyOrientation(
                             assembly_orientation.clone(),
                         )),
+                        Task::done(PanelTabUiCommand::RefreshPcbRequested),
                     ])))
                 } else {
                     None
@@ -1269,6 +1272,7 @@ impl UiComponent for PanelTabUi {
             PanelTabUiCommand::ApplyAssemblyOrientation(assembly_orientation) => {
                 Some(PanelTabUiAction::ApplyAssemblyOrientation(assembly_orientation))
             }
+            PanelTabUiCommand::RefreshPcbRequested => Some(PanelTabUiAction::RefreshPcb),
         };
 
         if update_panel_preview {

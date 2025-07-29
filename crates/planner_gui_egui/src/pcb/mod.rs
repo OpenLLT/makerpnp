@@ -402,6 +402,10 @@ impl Pcb {
 
                 action
             }
+            Some(PanelTabUiAction::RefreshPcb) => Some(PcbAction::Task(
+                key,
+                Task::done(PcbAction::UiCommand(PcbUiCommand::RefreshPcb)),
+            )),
         }
     }
 }
@@ -525,6 +529,7 @@ pub enum PcbUiCommand {
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
     },
+    RefreshPcb,
 }
 
 pub struct PcbContext {
@@ -630,6 +635,21 @@ impl UiComponent for Pcb {
                 error!("PCB error. error: {:?}", error);
                 // TODO show a dialog for PCB errors
                 None
+            }
+            PcbUiCommand::RefreshPcb => {
+                let task1 = Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                    PcbViewRequest::Overview {
+                        path: self.path.clone(),
+                    },
+                )));
+                let task2 = Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                    PcbViewRequest::Panel {
+                        path: self.path.clone(),
+                    },
+                )));
+                let tasks = vec![task1, task2];
+
+                Some(PcbAction::Task(key, Task::batch(tasks)))
             }
             PcbUiCommand::PcbView(view) => {
                 match view {
