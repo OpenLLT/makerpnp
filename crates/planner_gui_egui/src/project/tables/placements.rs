@@ -383,12 +383,12 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .placement_state
                 .unit_position
                 .x
-                .cmp(&row_r.placement_state.placement.x),
+                .cmp(&row_r.placement_state.unit_position.x),
             Y_COL => row_l
                 .placement_state
                 .unit_position
                 .y
-                .cmp(&row_r.placement_state.placement.y),
+                .cmp(&row_r.placement_state.unit_position.y),
             PCB_SIDE_COL => row_l
                 .placement_state
                 .placement
