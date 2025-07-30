@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -9,6 +10,7 @@ use egui_data_table::{DataTable, RowViewer};
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
+use num_traits::ToPrimitive;
 use planner_app::{
     ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementPositionUnit, PlacementState, PlacementStatus,
     PlacementsItem, ProjectPlacementStatus, Reference,
@@ -56,7 +58,11 @@ impl PlacementsTableUi {
                     ordering,
                 },
             )
+            .skip(40)
+            .take(40)
             .collect::<Vec<_>>();
+
+        println!("rows:\n{:?}", rows);
 
         match &mut *part_states_table {
             None => {
@@ -146,6 +152,7 @@ impl UiComponent for PlacementsTableUi {
 
         ui.separator();
 
+        println!("frame!");
         let table_renderer = egui_data_table::Renderer::new(table, viewer)
             .with_style_modify(|style| {
                 style.auto_shrink = [false, false].into();
@@ -239,22 +246,22 @@ impl PlacementsRowViewer {
 }
 
 mod columns {
-    pub const OBJECT_PATH_COL: usize = 0;
-    pub const ORDERING_COL: usize = 1;
-    pub const REF_DES_COL: usize = 2;
-    pub const PLACE_COL: usize = 3;
-    pub const MANUFACTURER_COL: usize = 4;
-    pub const MPN_COL: usize = 5;
-    pub const ROTATION_COL: usize = 6;
-    pub const X_COL: usize = 7;
-    pub const Y_COL: usize = 8;
+    pub const X_COL: usize = 0;
+    pub const Y_COL: usize = 1;
+    pub const OBJECT_PATH_COL: usize = 2;
+    pub const ORDERING_COL: usize = 3;
+    pub const REF_DES_COL: usize = 4;
+    pub const PLACE_COL: usize = 5;
+    pub const MANUFACTURER_COL: usize = 6;
+    pub const MPN_COL: usize = 7;
+    pub const ROTATION_COL: usize = 8;
     pub const PCB_SIDE_COL: usize = 9;
     pub const PHASE_COL: usize = 10;
     pub const PLACED_COL: usize = 11;
     pub const STATUS_COL: usize = 12;
 
     /// count of columns
-    pub const COLUMN_COUNT: usize = 13;
+    pub const COLUMN_COUNT: usize = 2;
 }
 use columns::*;
 use eda_units::eda_units::angle::AngleUnit;
@@ -379,11 +386,27 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                 .unit_position
                 .rotation
                 .cmp(&row_r.placement_state.placement.rotation),
-            X_COL => row_l
-                .placement_state
-                .unit_position
-                .x
-                .cmp(&row_r.placement_state.placement.x),
+            X_COL => {
+                let l = &row_l.placement_state.unit_position.x;
+                let r = &row_r.placement_state.unit_position.x;
+                println!("l: {:?}, r: {:?}", l, r);
+                let ordering1 = l.cmp(r);
+                println!("ordering1: {:?}", ordering1);
+                
+                println!("l: {:?}, r: {:?}", &row_l.placement_state.unit_position.x, &row_r.placement_state.unit_position.x);
+                let ordering2 = row_l
+                    .placement_state
+                    .unit_position
+                    .x
+                    .cmp(&row_r.placement_state.placement.x);
+
+                println!("ordering2: {:?}", ordering2);
+
+                if ordering1 != ordering2 {
+                    panic!("ordering1: {:?}, ordering2: {:?}", ordering1, ordering2);
+                }
+                ordering1
+            },
             Y_COL => row_l
                 .placement_state
                 .unit_position
@@ -458,7 +481,10 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
                     .unit_position
                     .rotation
             )),
-            X_COL => ui.label(format!("{}", &row.placement_state.unit_position.x)),
+            X_COL => {
+                println!("{}, {}", &row.placement_state.unit_position.x, &row.placement_state.unit_position.y);
+                ui.label(format!("{}", &row.placement_state.unit_position.x))
+            },
             Y_COL => ui.label(format!("{}", &row.placement_state.unit_position.y)),
             PCB_SIDE_COL => {
                 let key = pcb_side_to_i18n_key(&row.placement_state.placement.pcb_side);
