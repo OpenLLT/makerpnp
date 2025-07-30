@@ -11,6 +11,7 @@ pnp = { path = "../pnp" }
 util = { path = "../util" }
 math = { path = "../math" }
 gerber = { path = "../gerber" }
+eda_units = { path = "../eda_units", features = ["serde"]}
 
 anyhow = { workspace = true }
 thiserror = { workspace = true }
@@ -41,3 +42,6 @@ itertools = { workspace = true }
 [dev-dependencies]
 rstest = { workspace = true }
 tap = { workspace = true }
+
+# to enable the default implementations on some structures
+pnp = { path = "../pnp", features = ["testing"]}

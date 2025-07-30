@@ -16,6 +16,8 @@ use crate::phase::PhaseReference;
 #[serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq)]
 pub struct PlacementState {
+    // FUTURE consider removing `unit_path`, it may be redundant since the map that holds the stats has the path
+    //        it's also a common source of confusion in the test and leads to additional code and debug output
     #[serde_as(as = "DisplayFromStr")]
     pub unit_path: ObjectPath,
     pub placement: Placement,
@@ -30,10 +32,30 @@ pub struct PlacementState {
     pub phase: Option<PhaseReference>,
 }
 
+#[cfg(test)]
+impl Default for PlacementState {
+    fn default() -> Self {
+        Self {
+            unit_path: Default::default(),
+            placement: Default::default(),
+            unit_position: Default::default(),
+            operation_status: PlacementStatus::Pending,
+            project_status: ProjectPlacementStatus::Used,
+            phase: None,
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProjectPlacementStatus {
     Used,
     Unused,
+}
+
+impl Default for ProjectPlacementStatus {
+    fn default() -> Self {
+        Self::Used
+    }
 }
 
 impl Display for ProjectPlacementStatus {
@@ -45,6 +67,9 @@ impl Display for ProjectPlacementStatus {
     }
 }
 
+/// Sorting modes, these are meant to be combined.
+///
+/// example scenario: sort by: Pcb, then PcbUnitYX, then Feeder Reference, then RefDes.
 #[derive(
     Debug,
     Clone,
@@ -58,16 +83,27 @@ impl Display for ProjectPlacementStatus {
 )]
 pub enum PlacementSortingMode {
     FeederReference,
+    /// The pcb instance
+    Pcb,
+    /// Just the pcb unit number without the pcb instance
     PcbUnit,
+    /// Up then across (ignores pcb instance and pcb unit)
+    PcbUnitXY,
+    /// Right then up (ignores pcb instance and pcb unit)
+    PcbUnitYX,
     RefDes,
-    // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, DESIGN_X, DESIGN_Y, PANEL_X, PANEL_Y, DESCRIPTION
+    // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, PANEL_XY, PANEL_YX, DESCRIPTION
+    //        Note: PANEL_XY and PANEL_YX are for when you have a job with multiple PCBs.
 }
 
 impl Display for PlacementSortingMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::FeederReference => write!(f, "FeederReference"),
+            Self::Pcb => write!(f, "Pcb"),
             Self::PcbUnit => write!(f, "PcbUnit"),
+            Self::PcbUnitXY => write!(f, "PcbUnitXY"),
+            Self::PcbUnitYX => write!(f, "PcbUnitYX"),
             Self::RefDes => write!(f, "RefDes"),
         }
     }
@@ -118,9 +154,15 @@ pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant,
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PlacementStatus {
+    Pending,
     Placed,
     Skipped,
-    Pending,
+}
+
+impl Default for PlacementStatus {
+    fn default() -> Self {
+        Self::Pending
+    }
 }
 
 impl Display for PlacementStatus {

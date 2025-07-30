@@ -30,16 +30,23 @@ impl SortOrderArg {
 #[value(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlacementSortingModeArg {
     FeederReference,
+    Pcb,
     PcbUnit,
+    PcbUnitXY,
+    PcbUnitYX,
     RefDes,
     // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, DESIGN_X, DESIGN_Y, PANEL_X, PANEL_Y, DESCRIPTION
+    //        HEIGHT, AREA, REFDES are the most immediately useful
 }
 
 impl PlacementSortingModeArg {
     pub fn to_placement_sorting_mode(&self) -> PlacementSortingMode {
         match self {
             PlacementSortingModeArg::FeederReference => PlacementSortingMode::FeederReference,
+            PlacementSortingModeArg::Pcb => PlacementSortingMode::Pcb,
             PlacementSortingModeArg::PcbUnit => PlacementSortingMode::PcbUnit,
+            PlacementSortingModeArg::PcbUnitXY => PlacementSortingMode::PcbUnitXY,
+            PlacementSortingModeArg::PcbUnitYX => PlacementSortingMode::PcbUnitYX,
             PlacementSortingModeArg::RefDes => PlacementSortingMode::RefDes,
         }
     }

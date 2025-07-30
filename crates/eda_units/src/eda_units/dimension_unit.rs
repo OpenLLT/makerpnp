@@ -316,6 +316,15 @@ impl PartialOrd for DimensionUnit {
     }
 }
 
+impl Ord for DimensionUnit {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.dimension
+            .cmp(&other.dimension)
+            .then(self.unit_system.cmp(&other.unit_system))
+            .then(self.precision.cmp(&other.precision))
+    }
+}
+
 /// Conversion traits from f64 to DimensionUnit
 impl From<(f64, UnitSystem)> for DimensionUnit {
     fn from((value, unit_system): (f64, UnitSystem)) -> Self {
@@ -342,6 +351,9 @@ pub trait DimensionUnitPoint2Ext {
     fn new_dim_f64(x: f64, y: f64, unit_system: UnitSystem) -> Self;
     fn new_dim_decimal(x: Decimal, y: Decimal, unit_system: UnitSystem) -> Self;
 
+    fn new_dim_point2_f64(point: Point2<f64>, unit_system: UnitSystem) -> Self;
+    fn new_dim_point2_decimal(point: Point2<Decimal>, unit_system: UnitSystem) -> Self;
+
     /// Convert to Point2<f64> in the specified unit system
     fn to_point2(&self, unit_system: UnitSystem) -> Point2<f64>;
 
@@ -364,6 +376,20 @@ impl DimensionUnitPoint2Ext for Point2<DimensionUnit> {
         Point2::new(
             DimensionUnit::from_decimal(x, unit_system),
             DimensionUnit::from_decimal(y, unit_system),
+        )
+    }
+
+    fn new_dim_point2_f64(point: Point2<f64>, unit_system: UnitSystem) -> Self {
+        Point2::new(
+            DimensionUnit::from_f64(point.x, unit_system),
+            DimensionUnit::from_f64(point.y, unit_system),
+        )
+    }
+
+    fn new_dim_point2_decimal(point: Point2<Decimal>, unit_system: UnitSystem) -> Self {
+        Point2::new(
+            DimensionUnit::from_decimal(point.x, unit_system),
+            DimensionUnit::from_decimal(point.y, unit_system),
         )
     }
 
@@ -412,6 +438,10 @@ pub trait DimensionUnitVector2Ext {
     fn new_dim_f64(x: f64, y: f64, unit_system: UnitSystem) -> Self;
     fn new_dim_decimal(x: Decimal, y: Decimal, unit_system: UnitSystem) -> Self;
 
+    fn new_dim_vector2_f64(vector: Vector2<f64>, unit_system: UnitSystem) -> Self;
+
+    fn new_dim_vector2_decimal(vector: Vector2<Decimal>, unit_system: UnitSystem) -> Self;
+
     /// Convert to Vector2<f64> in the specified unit system
     fn to_vector2(&self, unit_system: UnitSystem) -> Vector2<f64>;
 
@@ -434,6 +464,20 @@ impl DimensionUnitVector2Ext for Vector2<DimensionUnit> {
         Vector2::new(
             DimensionUnit::from_decimal(x, unit_system),
             DimensionUnit::from_decimal(y, unit_system),
+        )
+    }
+
+    fn new_dim_vector2_f64(vector: Vector2<f64>, unit_system: UnitSystem) -> Self {
+        Vector2::new(
+            DimensionUnit::from_f64(vector.x, unit_system),
+            DimensionUnit::from_f64(vector.y, unit_system),
+        )
+    }
+
+    fn new_dim_vector2_decimal(vector: Vector2<Decimal>, unit_system: UnitSystem) -> Self {
+        Vector2::new(
+            DimensionUnit::from_decimal(vector.x, unit_system),
+            DimensionUnit::from_decimal(vector.y, unit_system),
         )
     }
 

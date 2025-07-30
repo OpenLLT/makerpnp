@@ -3,6 +3,9 @@ name = "pnp"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+testing = []
+
 [dependencies]
 math = { path = "../math"}
 eda_units = { path = "../eda_units", features = ["serde"]}
@@ -18,4 +21,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 
 [dev-dependencies]
+pnp = { path = ".", features = ["testing"] }
 rstest = { workspace = true }
+

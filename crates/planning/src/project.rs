@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use anyhow::Error;
 use csv::QuoteStyle;
+use eda_units::eda_units::dimension_unit::{DimensionUnitVector2, DimensionUnitVector2Ext};
+use eda_units::eda_units::unit_system::UnitSystem;
 use heck::ToShoutySnakeCase;
 use indexmap::IndexSet;
 use pnp;
@@ -549,7 +551,7 @@ pub fn generate_artifacts(
             .get(reference)
             .unwrap();
 
-        generate_phase_artifacts(project, phase, load_out_items.as_slice(), directory, &mut issues)?;
+        generate_phase_artifacts(project, pcbs, phase, load_out_items.as_slice(), directory, &mut issues)?;
     }
 
     let report = report::project_generate_report(project, pcbs, &phase_load_out_items_map, &mut issues);
@@ -574,6 +576,7 @@ pub fn generate_artifacts(
 
 fn generate_phase_artifacts(
     project: &Project,
+    pcbs: &[&Pcb],
     phase: &Phase,
     load_out_items: &[LoadOutItem],
     directory: &Path,
@@ -588,7 +591,14 @@ fn generate_phase_artifacts(
         })
         .collect();
 
-    sort_placements(&mut placement_states, &phase.placement_orderings, load_out_items);
+    let pcb_unit_positioning_map = build_pcbs_unit_positioning_map(pcbs);
+
+    sort_placements(
+        &mut placement_states,
+        &phase.placement_orderings,
+        load_out_items,
+        &pcb_unit_positioning_map,
+    );
 
     for (_object_path, placement_state) in placement_states.iter() {
         let feeder_reference =
@@ -623,10 +633,33 @@ fn generate_phase_artifacts(
     Ok(())
 }
 
+/// returns a vector containing a vector of unit positions.
+/// where the index of the first vector matches in the index of the pcbs
+/// and where the index of the second vector matches the index of the unit for the pcb
+pub fn build_pcbs_unit_positioning_map(pcbs: &[&Pcb]) -> Vec<Vec<DimensionUnitVector2>> {
+    pcbs.iter()
+        .map(|pcb| {
+            let pcb_unit_positions = pcb
+                .panel_sizing
+                .pcb_unit_positionings
+                .iter()
+                .map(|positioning| {
+                    // FIXME hard-coded use of UnitSystem::Millimeters
+                    //       the pcb needs to have a unit system defined for it.
+                    DimensionUnitVector2::new_dim_vector2_f64(positioning.offset, UnitSystem::Millimeters)
+                })
+                .collect::<Vec<_>>();
+
+            pcb_unit_positions
+        })
+        .collect::<Vec<_>>()
+}
+
 pub fn sort_placements(
     placement_states: &mut Vec<(&ObjectPath, &PlacementState)>,
     placement_orderings: &[PlacementSortingItem],
     load_out_items: &[LoadOutItem],
+    pcb_unit_positioning_map: &Vec<Vec<DimensionUnitVector2>>,
 ) {
     placement_states.sort_by(
         |(object_path_a, placement_state_a), (object_path_b, placement_state_b)| {
@@ -671,6 +704,13 @@ pub fn sort_placements(
                             );
                             pcb_unit_a.cmp(&pcb_unit_b)
                         }
+                        PlacementSortingMode::Pcb => {
+                            let pcb_a = object_path_a.pcb_instance().unwrap();
+                            let pcb_b = object_path_b.pcb_instance().unwrap();
+
+                            trace!("Comparing pcb instance, pcb_a: '{:?}', pcb_b: '{:?}'", pcb_a, pcb_b);
+                            pcb_a.cmp(&pcb_b)
+                        }
                         PlacementSortingMode::RefDes => {
                             trace!(
                                 "Comparing ref-des, ref_des_a: '{:?}', ref_des_b: '{:?}'",
@@ -682,6 +722,62 @@ pub fn sort_placements(
                                 .placement
                                 .ref_des
                                 .cmp(&placement_state_b.placement.ref_des)
+                        }
+                        PlacementSortingMode::PcbUnitXY => {
+                            let (pcb_index_a, pcb_unit_index_a) = object_path_a
+                                .pcb_instance_and_unit()
+                                .map(|(pcb_number, pcb_unit_number)| {
+                                    (pcb_number as usize - 1, pcb_unit_number as usize - 1)
+                                })
+                                .unwrap();
+                            let (pcb_index_b, pcb_unit_index_b) = object_path_b
+                                .pcb_instance_and_unit()
+                                .map(|(pcb_number, pcb_unit_number)| {
+                                    (pcb_number as usize - 1, pcb_unit_number as usize - 1)
+                                })
+                                .unwrap();
+
+                            let a_unit_position = pcb_unit_positioning_map[pcb_index_a][pcb_unit_index_a];
+                            let b_unit_position = pcb_unit_positioning_map[pcb_index_b][pcb_unit_index_b];
+
+                            a_unit_position
+                                .x
+                                .partial_cmp(&b_unit_position.x)
+                                .unwrap()
+                                .then(
+                                    a_unit_position
+                                        .y
+                                        .partial_cmp(&b_unit_position.y)
+                                        .unwrap(),
+                                )
+                        }
+                        PlacementSortingMode::PcbUnitYX => {
+                            let (pcb_index_a, pcb_unit_index_a) = object_path_a
+                                .pcb_instance_and_unit()
+                                .map(|(pcb_number, pcb_unit_number)| {
+                                    (pcb_number as usize - 1, pcb_unit_number as usize - 1)
+                                })
+                                .unwrap();
+                            let (pcb_index_b, pcb_unit_index_b) = object_path_b
+                                .pcb_instance_and_unit()
+                                .map(|(pcb_number, pcb_unit_number)| {
+                                    (pcb_number as usize - 1, pcb_unit_number as usize - 1)
+                                })
+                                .unwrap();
+
+                            let a_unit_position = pcb_unit_positioning_map[pcb_index_a][pcb_unit_index_a];
+                            let b_unit_position = pcb_unit_positioning_map[pcb_index_b][pcb_unit_index_b];
+
+                            a_unit_position
+                                .y
+                                .partial_cmp(&b_unit_position.y)
+                                .unwrap()
+                                .then(
+                                    a_unit_position
+                                        .x
+                                        .partial_cmp(&b_unit_position.x)
+                                        .unwrap(),
+                                )
                         }
                     };
 

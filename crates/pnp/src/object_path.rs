@@ -110,6 +110,13 @@ pub struct ObjectPath {
 }
 
 impl ObjectPath {
+    /// See `from_str` for a safe version
+    ///
+    /// Safety: will panic if invalid
+    pub fn from_raw_str(value: &str) -> Self {
+        Self::from_str(value).unwrap()
+    }
+
     // TODO rename to set_pcb_number?
     /// pcb_instance is a 1-based index.
     pub fn set_pcb_instance(&mut self, instance: u16) {

@@ -1787,7 +1787,12 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     PcbSide::Top,
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
+                    &[
+                        ("Pcb", "Asc"),
+                        ("PcbUnit", "Asc"),
+                        ("FeederReference", "Asc"),
+                        ("RefDes", "Desc"),
+                    ],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -1939,7 +1944,7 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "set-placement-ordering",
             "--phase top_1",
-            "--placement-orderings PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:DESC",
+            "--placement-orderings PCB:ASC,PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:DESC",
             // example for PnP machine placement
             //"--orderings PCB_UNIT:ASC,COST:ASC,AREA:ASC,HEIGHT;ASC,FEEDER_REFERENCE:ASC",
             // example for manual placement
@@ -1962,7 +1967,7 @@ mod operation_sequence_1 {
 
         // and
         assert_contains_inorder!(trace_content, [
-            "Phase placement orderings set. phase: 'top_1', orderings: [PCB_UNIT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
+            "Phase placement orderings set. phase: 'top_1', orderings: [PCB:ASC, PCB_UNIT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
         ]);
 
         // and
@@ -2343,7 +2348,12 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     PcbSide::Top,
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
+                    &[
+                        ("Pcb", "Asc"),
+                        ("PcbUnit", "Asc"),
+                        ("FeederReference", "Asc"),
+                        ("RefDes", "Desc"),
+                    ],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -2662,7 +2672,12 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     PcbSide::Top,
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
+                    &[
+                        ("Pcb", "Asc"),
+                        ("PcbUnit", "Asc"),
+                        ("FeederReference", "Asc"),
+                        ("RefDes", "Desc"),
+                    ],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])
@@ -2947,7 +2962,12 @@ mod operation_sequence_1 {
                         .to_str()
                         .unwrap(),
                     PcbSide::Top,
-                    &[("PcbUnit", "Asc"), ("FeederReference", "Asc"), ("RefDes", "Desc")],
+                    &[
+                        ("Pcb", "Asc"),
+                        ("PcbUnit", "Asc"),
+                        ("FeederReference", "Asc"),
+                        ("RefDes", "Desc"),
+                    ],
                 ),
             ])
             .with_phase_orderings(&["top_1", "bottom_1"])

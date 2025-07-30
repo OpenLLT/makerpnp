@@ -14,3 +14,13 @@ impl Part {
         }
     }
 }
+
+#[cfg(feature = "testing")]
+impl Default for Part {
+    fn default() -> Self {
+        Self {
+            manufacturer: "Default Manufacturer".to_string(),
+            mpn: "Default MPN".to_string(),
+        }
+    }
+}

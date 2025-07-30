@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::eda_units::unit_system::UnitSystem;
 
 /// Represents a dimension with nanometer precision
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Dimension {
     /// Value in nanometers (internal representation)

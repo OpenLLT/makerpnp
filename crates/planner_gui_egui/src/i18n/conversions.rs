@@ -36,7 +36,10 @@ pub fn placement_project_status_to_i18n_key(status: &ProjectPlacementStatus) -> 
 pub fn placement_sorting_mode_to_i18n_key(mode: &PlacementSortingMode) -> &'static str {
     match mode {
         PlacementSortingMode::FeederReference => "sort-mode-feeder-reference",
+        PlacementSortingMode::Pcb => "sort-mode-pcb",
         PlacementSortingMode::PcbUnit => "sort-mode-pcb-unit",
+        PlacementSortingMode::PcbUnitXY => "sort-mode-pcb-unit-xy",
+        PlacementSortingMode::PcbUnitYX => "sort-mode-pcb-unit-yx",
         PlacementSortingMode::RefDes => "sort-mode-ref-des",
     }
 }

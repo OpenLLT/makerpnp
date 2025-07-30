@@ -1961,8 +1961,9 @@ impl Planner {
                     ModelProject {
                         project, ..
                     },
+                    pcbs,
                     directory,
-                ) = Self::model_project_and_directory(model)?;
+                ) = Self::model_project_and_pcbs(model)?;
                 let phase = project
                     .phases
                     .get(&phase_reference)
@@ -1982,7 +1983,14 @@ impl Planner {
                     })
                     .collect();
 
-                project::sort_placements(&mut placements, &phase.placement_orderings, &loadout_items);
+                let pcb_unit_positioning_map = project::build_pcbs_unit_positioning_map(&pcbs);
+
+                project::sort_placements(
+                    &mut placements,
+                    &phase.placement_orderings,
+                    &loadout_items,
+                    &pcb_unit_positioning_map,
+                );
 
                 let placements = placements
                     .into_iter()

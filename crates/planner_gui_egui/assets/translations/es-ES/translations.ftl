@@ -254,7 +254,10 @@ placement-project-status-used = Utilizado
 placement-project-status-unused = No utilizado
 
 sort-mode-feeder-reference = Referencia del alimentador
+sort-mode-pcb = Instancia PCB
 sort-mode-pcb-unit = Unidad PCB
+sort-mode-pcb-unit-xy = Unidad PCB X, luego Y
+sort-mode-pcb-unit-yx = Unidad PCB Y, luego X
 sort-mode-ref-des = Des. de Ref.
 
 sort-order-ascending = Ascendente

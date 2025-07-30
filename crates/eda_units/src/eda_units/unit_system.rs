@@ -4,7 +4,8 @@ use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
 /// Represents different unit systems used in gerber files and UI
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ordered largest first
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum UnitSystem {
     /// Inches (1 inch = 25.4 mm = 25,400,000 nm)
@@ -117,6 +118,28 @@ mod tests {
     use rust_decimal_macros::dec;
 
     use super::*;
+
+    #[test]
+    fn ordering() {
+        // given
+        let mut unit_systems = vec![
+            UnitSystem::Si,
+            UnitSystem::Millimeters,
+            UnitSystem::Inches,
+            UnitSystem::Mils,
+        ];
+
+        // when
+        unit_systems.sort();
+
+        // then
+        assert_eq!(unit_systems, vec![
+            UnitSystem::Inches,
+            UnitSystem::Millimeters,
+            UnitSystem::Mils,
+            UnitSystem::Si
+        ]);
+    }
 
     #[test]
     fn test_unit_system_default_precision() {

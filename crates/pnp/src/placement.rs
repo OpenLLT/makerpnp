@@ -33,6 +33,21 @@ pub struct Placement {
     // pub position: PlacementPosition,
 }
 
+#[cfg(feature = "testing")]
+impl Default for Placement {
+    fn default() -> Self {
+        Self {
+            ref_des: RefDes("Default".into()),
+            part: Part::default(),
+            place: true,
+            pcb_side: PcbSide::Top,
+            x: Default::default(),
+            y: Default::default(),
+            rotation: Default::default(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct RefDes(String);
 

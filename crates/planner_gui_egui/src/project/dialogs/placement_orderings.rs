@@ -74,8 +74,20 @@ impl PlacementOrderingsModal {
                             move |tui: &mut Tui, fields, sender| {
                                 let all_items = IndexMap::from([
                                     (
+                                        PlacementSortingMode::Pcb,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::Pcb)),
+                                    ),
+                                    (
                                         PlacementSortingMode::PcbUnit,
                                         tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::PcbUnit)),
+                                    ),
+                                    (
+                                        PlacementSortingMode::PcbUnitXY,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::PcbUnitXY)),
+                                    ),
+                                    (
+                                        PlacementSortingMode::PcbUnitYX,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::PcbUnitYX)),
                                     ),
                                     (
                                         PlacementSortingMode::FeederReference,
