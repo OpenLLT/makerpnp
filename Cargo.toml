@@ -86,23 +86,32 @@ egui = { version = "0.32.0", features = ["serde"]}
 epaint = { version = "0.32.0"}
 egui_extras = { version = "0.32.0", default-features = false }
 eframe = { version = "0.32.0", default-features = false }
+
 #egui_taffy = "0.7.0"
 egui_taffy = { git = "https://github.com/makerpnp/egui_taffy", rev = "c14e390c1f3cd6487968c5845ea205a38c6afbe2" }
+
 #egui_mobius = "0.3.0-alpha.23"
 egui_mobius = { git = "https://github.com/makerpnp/egui_mobius", rev = "e62f97bfcf97a831bd67dd75ab5eab9585922765" }
 #egui_mobius = { path = "../../../libraries/rust/egui/egui_mobius/crates/egui_mobius" }
+
 egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", tag = "hello_egui-v0.9.0" }
+
 egui_ltreeview = { version = "0.5.3" }
 # also need egui 0.32, see https://github.com/LennysLounge/egui_ltreeview/pull/23
 #egui_ltreeview = { git = "https://github.com/makerpnp/egui_ltreeview", rev = "7650da057b5700ffdc9ff5db003500096927b172" }
-#egui-data-table = { version = "0.6.2" }
-# 0.6.2 doesn't support egui 0.32.0
-egui-data-table = { git = "https://github.com/makerpnp/egui-data-table", rev = "2feda5a9a5ec46ce8c7dee07736a1a007340ebfe" }
+
+#egui-data-table = { version = "0.8.0" }
+# requires a version with this PR: https://github.com/kang-sw/egui-data-table/pull/51
+egui-data-table = { git = "https://github.com/makerpnp/egui-data-table", rev = "980f74ed88bf563783a20a99fa69f29e1e6d564a" }
+
 #egui_double_slider = { version = "0.8.0"}
 egui_double_slider = { git = "https://github.com/hacknus/egui_double_slider", rev = "86df8ecd38d82198f042111ce58792e3fab546fe" }
+
 egui_vertical_stack = { version = "0.1.1" }
+
 #egui_tool_windows = { path = "../egui/egui_tool_windows" }
 egui_tool_windows = { version = "0.2.0"}
+
 egui_dock = { version = "0.17.0" }
 
 rfd = { version = "0.15.3" }

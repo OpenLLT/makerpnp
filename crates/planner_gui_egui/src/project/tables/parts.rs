@@ -49,6 +49,18 @@ impl PartStatesRowViewer {
     }
 }
 
+mod columns {
+    pub const MANUFACTURER_COL: usize = 0;
+    pub const MPN_COL: usize = 1;
+    pub const QUANTITY_COL: usize = 2;
+    pub const PROCESSES_COL: usize = 3;
+    pub const REF_DES_SET_COL: usize = 4;
+
+    /// count of columns
+    pub const COLUMN_COUNT: usize = 5;
+}
+use columns::*;
+
 impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {
         let _ = column;
@@ -65,7 +77,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn num_columns(&mut self) -> usize {
-        5
+        COLUMN_COUNT
     }
 
     fn is_sortable_column(&mut self, column: usize) -> bool {
@@ -73,7 +85,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PartStatesRow) -> bool {
-        column == 2
+        column == PROCESSES_COL
     }
 
     fn allow_row_insertions(&mut self) -> bool {
@@ -86,30 +98,30 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn compare_cell(&self, row_l: &PartStatesRow, row_r: &PartStatesRow, column: usize) -> std::cmp::Ordering {
         match column {
-            0 => row_l
+            MANUFACTURER_COL => row_l
                 .part
                 .manufacturer
                 .cmp(&row_r.part.manufacturer),
-            1 => row_l.part.mpn.cmp(&row_r.part.mpn),
-            2 => row_l
+            MPN_COL => row_l.part.mpn.cmp(&row_r.part.mpn),
+            PROCESSES_COL => row_l
                 .enabled_processes
                 .iter()
                 .cmp(&row_r.enabled_processes),
-            3 => row_l
+            REF_DES_SET_COL => row_l
                 .ref_des_set
                 .cmp(&row_r.ref_des_set),
-            4 => row_l.quantity.cmp(&row_r.quantity),
+            QUANTITY_COL => row_l.quantity.cmp(&row_r.quantity),
             _ => unreachable!(),
         }
     }
 
     fn column_name(&mut self, column: usize) -> Cow<'static, str> {
         match column {
-            0 => tr!("table-parts-column-manufacturer"),
-            1 => tr!("table-parts-column-mpn"),
-            2 => tr!("table-parts-column-processes"),
-            3 => tr!("table-parts-column-ref-des-set"),
-            4 => tr!("table-parts-column-quantity"),
+            MANUFACTURER_COL => tr!("table-parts-column-manufacturer"),
+            MPN_COL => tr!("table-parts-column-mpn"),
+            PROCESSES_COL => tr!("table-parts-column-processes"),
+            REF_DES_SET_COL => tr!("table-parts-column-ref-des-set"),
+            QUANTITY_COL => tr!("table-parts-column-quantity"),
             _ => unreachable!(),
         }
         .into()
@@ -117,9 +129,9 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn show_cell_view(&mut self, ui: &mut Ui, row: &PartStatesRow, column: usize) {
         let _ = match column {
-            0 => ui.label(&row.part.manufacturer),
-            1 => ui.label(&row.part.mpn),
-            2 => {
+            MANUFACTURER_COL => ui.label(&row.part.manufacturer),
+            MPN_COL => ui.label(&row.part.mpn),
+            PROCESSES_COL => {
                 // Note that the enabled_processes was built in the same order as self.processes.
                 let processes = row
                     .enabled_processes
@@ -133,7 +145,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 let processes_label: String = processes.join(", ");
                 ui.label(processes_label)
             }
-            3 => {
+            REF_DES_SET_COL => {
                 let label: String = row
                     .ref_des_set
                     .iter()
@@ -143,16 +155,16 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                     .join(", ");
                 ui.label(label)
             }
-            4 => ui.label(format!("{}", row.quantity)),
+            QUANTITY_COL => ui.label(format!("{}", row.quantity)),
             _ => unreachable!(),
         };
     }
 
     fn show_cell_editor(&mut self, ui: &mut Ui, row: &mut PartStatesRow, column: usize) -> Option<Response> {
         match column {
-            0 => None,
-            1 => None,
-            2 => {
+            MANUFACTURER_COL => None,
+            MPN_COL => None,
+            PROCESSES_COL => {
                 let response = ui.add(|ui: &mut Ui| {
                     ui.horizontal_wrapped(|ui| {
                         // Note that the enabled_processes was built in the same order as self.processes.
@@ -167,29 +179,29 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
                 });
                 Some(response)
             }
-            3 => None,
-            4 => None,
+            REF_DES_SET_COL => None,
+            QUANTITY_COL => None,
             _ => unreachable!(),
         }
     }
 
     fn set_cell_value(&mut self, src: &PartStatesRow, dst: &mut PartStatesRow, column: usize) {
         match column {
-            0 => dst
+            MANUFACTURER_COL => dst
                 .part
                 .manufacturer
                 .clone_from(&src.part.manufacturer),
-            1 => dst.part.mpn.clone_from(&src.part.mpn),
-            2 => {
+            MPN_COL => dst.part.mpn.clone_from(&src.part.mpn),
+            PROCESSES_COL => {
                 dst.enabled_processes
                     .clone_from(&src.enabled_processes);
                 dst.enabled_processes
                     .clone_from(&src.enabled_processes);
             }
-            3 => dst
+            REF_DES_SET_COL => dst
                 .ref_des_set
                 .clone_from(&src.ref_des_set),
-            4 => dst.quantity.clone_from(&src.quantity),
+            QUANTITY_COL => dst.quantity.clone_from(&src.quantity),
             _ => unreachable!(),
         }
     }
@@ -224,11 +236,11 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
             column, _current, _next, _context
         );
         match column {
-            0 => false,
-            1 => false,
-            2 => true,
-            3 => false,
-            4 => false,
+            MANUFACTURER_COL => false,
+            MPN_COL => false,
+            PROCESSES_COL => true,
+            REF_DES_SET_COL => false,
+            QUANTITY_COL => false,
             _ => unreachable!(),
         }
     }
@@ -283,6 +295,32 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
 
     fn row_filter_hash(&mut self) -> &impl std::hash::Hash {
         &self.filter
+    }
+
+    fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
+        debug!(
+            "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
+            highlighted, unhighlighted
+        );
+
+        // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
+        //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
+        //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
+
+        // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected parts instead
+        //       of the parts themselves?
+
+        let parts = highlighted
+            .iter()
+            .map(|row| row.part.clone())
+            .collect::<Vec<_>>();
+        self.sender
+            .send(PartsTabUiCommand::NewSelection(parts))
+            .expect("sent");
+    }
+
+    fn on_highlight_cell(&mut self, row: &PartStatesRow, column: usize) {
+        debug!("on_highlight_cell: {:?}, column: {:?}", row, column);
     }
 }
 

@@ -31,6 +31,7 @@ use crate::file_picker::Picker;
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
+use crate::project::tabs::parts_tab::PartsTabUiApplyAction;
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::task::Task;
@@ -1575,6 +1576,58 @@ impl UiComponent for Project {
                                 Err(service_error) => {
                                     tasks.push(Task::done(service_error));
                                     break;
+                                }
+                            }
+                        }
+
+                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                            ProjectViewRequest::Parts,
+                        )));
+                        tasks.push(final_task);
+
+                        let action = ProjectAction::Task(key, Task::batch(tasks));
+
+                        Some(action)
+                    }
+                    Some(PartsTabUiAction::Apply(parts, apply_action)) => {
+                        let mut tasks = vec![];
+
+                        debug!("apply_action: {:?}", apply_action);
+
+                        for part in parts {
+                            debug!("part: {:?}", part);
+
+                            match &apply_action {
+                                PartsTabUiApplyAction::AddProcess(process)
+                                | PartsTabUiApplyAction::RemoveProcess(process) => {
+                                    let operation = match &apply_action {
+                                        PartsTabUiApplyAction::AddProcess(_) => AddOrRemoveAction::Add,
+                                        PartsTabUiApplyAction::RemoveProcess(_) => AddOrRemoveAction::Remove,
+                                    };
+
+                                    match self
+                                        .planner_core_service
+                                        .update(Event::AssignProcessToParts {
+                                            process: process.clone(),
+                                            operation,
+                                            manufacturer: exact_match(part.manufacturer.as_str()),
+                                            mpn: exact_match(part.mpn.as_str()),
+                                        })
+                                        .into_actions()
+                                    {
+                                        Ok(actions) => {
+                                            debug!("actions: {:?}", actions);
+                                            let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                                .into_iter()
+                                                .map(Task::done)
+                                                .collect();
+                                            tasks.extend(effect_tasks);
+                                        }
+                                        Err(service_error) => {
+                                            tasks.push(Task::done(service_error));
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }

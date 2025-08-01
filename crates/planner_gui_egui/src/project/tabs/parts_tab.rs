@@ -24,6 +24,11 @@ pub struct PartsTabUi {
     #[derivative(Debug = "ignore")]
     part_states_table: Value<Option<(PartStatesRowViewer, DataTable<PartStatesRow>)>>,
 
+    selection: Option<Vec<Part>>,
+
+    selected_process: Option<ProcessReference>,
+    processes: Vec<ProcessReference>,
+
     pub component: ComponentState<PartsTabUiCommand>,
 }
 
@@ -31,6 +36,10 @@ impl PartsTabUi {
     pub fn new() -> Self {
         Self {
             part_states_table: Value::default(),
+
+            selection: None,
+            processes: Vec::new(),
+            selected_process: None,
 
             component: Default::default(),
         }
@@ -58,13 +67,15 @@ impl PartsTabUi {
             .collect();
 
         let (_viewer, table) = part_states_table.get_or_insert_with(|| {
-            let viewer = PartStatesRowViewer::new(self.component.sender.clone(), processes);
+            let viewer = PartStatesRowViewer::new(self.component.sender.clone(), processes.clone());
             let table = DataTable::new();
 
             (viewer, table)
         });
 
         table.replace(rows);
+
+        self.processes = processes;
     }
 }
 
@@ -79,6 +90,9 @@ pub enum PartsTabUiCommand {
         old_row: PartStatesRow,
     },
     FilterCommand(FilterUiCommand),
+    NewSelection(Vec<Part>),
+    ApplyClicked,
+    ProcessChanged(ProcessReference),
 }
 
 #[derive(Debug, Clone)]
@@ -89,6 +103,13 @@ pub enum PartsTabUiAction {
         processes: HashMap<ProcessReference, bool>,
     },
     RequestRepaint,
+    Apply(Vec<Part>, PartsTabUiApplyAction),
+}
+
+#[derive(Debug, Clone)]
+pub enum PartsTabUiApplyAction {
+    AddProcess(ProcessReference),
+    RemoveProcess(ProcessReference),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -111,9 +132,46 @@ impl UiComponent for PartsTabUi {
 
         let (viewer, table) = part_states_table.as_mut().unwrap();
 
-        viewer
-            .filter
-            .ui(ui, &mut FilterUiContext::default());
+        ui.horizontal(|ui| {
+            viewer
+                .filter
+                .ui(ui, &mut FilterUiContext::default());
+
+            ui.separator();
+
+            let have_selection = self.selection.is_some();
+
+            egui::ComboBox::from_id_salt(ui.id().with("process_selection"))
+                .selected_text(match &self.selected_process {
+                    Some(process) => format!("{}", process),
+                    None => "Process".to_string(),
+                })
+                .show_ui(ui, |ui| {
+                    for process in &self.processes {
+                        if ui
+                            .add(egui::Button::selectable(
+                                matches!(&self.selected_process, Some(selected_process) if selected_process == process),
+                                process.to_string(),
+                            ))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PartsTabUiCommand::ProcessChanged(process.clone()))
+                                .expect("sent");
+                        }
+                    }
+                });
+
+            ui.add_enabled_ui(have_selection, |ui| {
+                if ui.button("Apply").clicked() {
+                    self.component
+                        .sender
+                        .send(PartsTabUiCommand::ApplyClicked)
+                        .expect("sent");
+                }
+            });
+        });
 
         ui.separator();
 
@@ -134,6 +192,10 @@ impl UiComponent for PartsTabUi {
     ) -> Option<Self::UiAction> {
         match command {
             PartsTabUiCommand::None => Some(PartsTabUiAction::None),
+            PartsTabUiCommand::ProcessChanged(process) => {
+                self.selected_process = Some(process);
+                None
+            }
             PartsTabUiCommand::RowUpdated {
                 index,
                 new_row,
@@ -161,6 +223,21 @@ impl UiComponent for PartsTabUi {
                         Some(FilterUiAction::ApplyFilter) => Some(PartsTabUiAction::RequestRepaint),
                         None => None,
                     }
+                } else {
+                    None
+                }
+            }
+            PartsTabUiCommand::NewSelection(selection) => {
+                self.selection = Some(selection);
+                None
+            }
+            PartsTabUiCommand::ApplyClicked => {
+                if let (Some(selection), Some(process)) = (&self.selection, &self.selected_process) {
+                    // TODO handle add and remove
+                    Some(PartsTabUiAction::Apply(
+                        selection.clone(),
+                        PartsTabUiApplyAction::AddProcess(process.clone()),
+                    ))
                 } else {
                     None
                 }
