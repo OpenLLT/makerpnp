@@ -42,7 +42,7 @@ egui_dock = { workspace = true, features = ["serde"]}
 egui_mobius = { workspace = true, features = ["serde"] }
 egui_material_icons = { workspace = true }
 egui_extras = { workspace = true }
-egui_ltreeview = { workspace = true, features = ["persistence", "serde"] }
+egui_ltreeview = { workspace = true, features = ["persistence"] }
 egui-data-table = { workspace = true }
 egui_double_slider = { workspace = true }
 egui_vertical_stack = { workspace = true }

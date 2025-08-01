@@ -1777,12 +1777,11 @@ dependencies = [
 
 [[package]]
 name = "egui_ltreeview"
-version = "0.4.1"
-source = "git+https://github.com/makerpnp/egui_ltreeview?rev=7650da057b5700ffdc9ff5db003500096927b172#7650da057b5700ffdc9ff5db003500096927b172"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49b0d47a25b8c98bf01f4281f7d516c6e6631817c2b367319d5b239fd3db1ec7"
 dependencies = [
  "egui",
- "indexmap 2.10.0",
- "make_table_of_contents",
  "serde",
 ]
 
@@ -3359,15 +3358,6 @@ name = "lz4_flex"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
-
-[[package]]
-name = "make_table_of_contents"
-version = "0.1.0"
-source = "git+https://github.com/makerpnp/egui_ltreeview?rev=7650da057b5700ffdc9ff5db003500096927b172#7650da057b5700ffdc9ff5db003500096927b172"
-dependencies = [
- "quote",
- "syn 2.0.104",
-]
 
 [[package]]
 name = "malloc_buf"
