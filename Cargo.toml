@@ -157,6 +157,6 @@ nalgebra = { version = "0.33.2", default-features = false }
 [patch.crates-io]
 # fork of egui 0.32.0 with the following fixes:
 # https://github.com/emilk/egui/pull/7047 - Allow resize on one both or no axis
-#egui = { git = "https://github.com/MakerPnP/egui.git", rev = "45ceb4d667c7e82183bcf86d059707f8a40f7a3c"}
+egui = { git = "https://github.com/MakerPnP/egui.git", rev = "312bb8ec1018875fa4f7624e2e1781cdf42799aa"}
 # and since epaint and other crates come from the same repo, we have to patch them too if they are used as dependencies
-#epaint = { git = "https://github.com/MakerPnP/egui.git", rev = "45ceb4d667c7e82183bcf86d059707f8a40f7a3c"}
+epaint = { git = "https://github.com/MakerPnP/egui.git", rev = "312bb8ec1018875fa4f7624e2e1781cdf42799aa"}
