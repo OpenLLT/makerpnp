@@ -81,6 +81,20 @@ impl PlacementsTableUi {
             viewer.phases = phases;
         }
     }
+
+    pub fn filter_ui(&self, ui: &mut egui::Ui) {
+        let mut placements_table = self.placements_table.lock().unwrap();
+
+        if placements_table.is_none() {
+            ui.spinner();
+            return;
+        }
+        let (viewer, _) = placements_table.as_mut().unwrap();
+
+        viewer
+            .filter
+            .ui(ui, &mut FilterUiContext::default());
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -139,12 +153,6 @@ impl UiComponent for PlacementsTableUi {
         }
 
         let (viewer, table) = placements_table.as_mut().unwrap();
-
-        viewer
-            .filter
-            .ui(ui, &mut FilterUiContext::default());
-
-        ui.separator();
 
         let table_renderer = egui_data_table::Renderer::new(table, viewer)
             .with_style_modify(|style| {

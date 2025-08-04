@@ -191,6 +191,8 @@ pub enum FilterUiAction {
     ApplyFilter,
 }
 
+pub const MARGIN: Margin = Margin::symmetric(4, 2);
+
 impl UiComponent for Filter {
     type UiContext<'context> = FilterUiContext;
     type UiCommand = FilterUiCommand;
@@ -203,7 +205,8 @@ impl UiComponent for Filter {
 
             // combine the TextEdit and button in a single frame.
             egui::Frame::group(&Style::default())
-                .inner_margin(Margin::symmetric(4, 2))
+                .inner_margin(MARGIN)
+                .outer_margin(egui::Margin::ZERO)
                 .show(ui, |ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut expression)

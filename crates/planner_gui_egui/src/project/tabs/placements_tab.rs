@@ -84,6 +84,11 @@ impl UiComponent for PlacementsTabUi {
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-placements-header"));
+
+        self.placements_table_ui.filter_ui(ui);
+
+        ui.separator();
+
         self.placements_table_ui
             .ui(ui, &mut PlacementsTableUiContext::default())
     }
