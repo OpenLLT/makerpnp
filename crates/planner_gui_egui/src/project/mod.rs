@@ -32,6 +32,7 @@ use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::tabs::parts_tab::PartsTabUiApplyAction;
+use crate::project::tabs::placements_tab::PlacementsTabUiApplyAction;
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::task::Task;
@@ -1789,6 +1790,43 @@ impl UiComponent for Project {
                         unit_position,
                     }) => self.locate_component(object_path, pcb_side, design_position, unit_position),
                     None => None,
+                    Some(PlacementsTabUiAction::ApplyPlacementsAction(selection, action)) => {
+                        let mut tasks = Vec::with_capacity(selection.len());
+                        let mut actions = Vec::with_capacity(selection.len());
+
+                        for item in selection {
+                            let new_phase = match &action {
+                                PlacementsTabUiApplyAction::RemovePhase(_phase) => None,
+                                PlacementsTabUiApplyAction::ApplyPhase(phase) => Some(phase.clone()),
+                            };
+
+                            if item.state.phase.eq(&new_phase) {
+                                continue;
+                            }
+
+                            let mut new_placement = item.state.clone();
+                            new_placement.phase = new_phase;
+
+                            let old_placement = item.state.clone();
+
+                            let (item_tasks, item_actions) = Self::update_placement(
+                                &mut self.planner_core_service,
+                                key,
+                                item.path,
+                                new_placement,
+                                old_placement,
+                            );
+
+                            tasks.extend(item_tasks);
+                            actions.extend(item_actions);
+                        }
+
+                        actions.dedup_by(|a, b| a == b);
+
+                        Self::handle_update_placement_actions(&mut tasks, actions);
+
+                        Some(ProjectAction::Task(key, Task::batch(tasks)))
+                    }
                 }
             }
             ProjectUiCommand::PcbTabUiCommand {

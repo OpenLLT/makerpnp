@@ -197,6 +197,7 @@ form-common-choice-pcb-side-top = Top
 form-common-choice-pcb-side-bottom = Bottom
 
 form-common-choice-process = Process
+form-common-choice-phase = Phase
 
 form-common-input-load-out-source = Loadout source
 form-common-input-phase-reference = Phase reference

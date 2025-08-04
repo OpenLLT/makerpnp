@@ -115,6 +115,7 @@ pub enum PlacementsTableUiCommand {
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
     },
+    NewSelection(Vec<PlacementsItem>),
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +134,7 @@ pub enum PlacementsTableUiAction {
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
     },
+    NewSelection(Vec<PlacementsItem>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -206,6 +208,7 @@ impl UiComponent for PlacementsTableUi {
                 design_position,
                 unit_position,
             }),
+            PlacementsTableUiCommand::NewSelection(selection) => Some(PlacementsTableUiAction::NewSelection(selection)),
         }
     }
 }
@@ -745,5 +748,31 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn row_filter_hash(&mut self) -> &impl std::hash::Hash {
         &self.filter
+    }
+
+    fn on_highlight_change(&mut self, highlighted: &[&PlacementsRow], unhighlighted: &[&PlacementsRow]) {
+        trace!(
+            "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
+            highlighted, unhighlighted
+        );
+
+        // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
+        //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
+        //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
+
+        // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected placements instead
+        //       of the placements themselves?
+
+        let selection = highlighted
+            .iter()
+            .map(|row| PlacementsItem {
+                path: row.object_path.clone(),
+                state: row.placement_state.clone(),
+                ordering: row.ordering,
+            })
+            .collect::<Vec<_>>();
+        self.sender
+            .send(PlacementsTableUiCommand::NewSelection(selection))
+            .expect("sent");
     }
 }

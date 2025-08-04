@@ -2,7 +2,10 @@ use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
-use planner_app::{ObjectPath, PcbSide, PhaseOverview, PlacementPositionUnit, PlacementState, PlacementsList};
+use planner_app::{
+    ObjectPath, PcbSide, PhaseOverview, PhaseReference, PlacementPositionUnit, PlacementState, PlacementsItem,
+    PlacementsList,
+};
 use tracing::trace;
 
 use crate::project::tables::placements::{
@@ -17,6 +20,11 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub struct PlacementsTabUi {
     #[derivative(Debug = "ignore")]
     placements_table_ui: PlacementsTableUi,
+
+    selection: Option<Vec<PlacementsItem>>,
+    selected_phase: Option<PhaseReference>,
+
+    phases: Vec<PhaseOverview>,
 
     pub component: ComponentState<PlacementsTabUiCommand>,
 }
@@ -35,6 +43,9 @@ impl PlacementsTabUi {
 
         Self {
             placements_table_ui,
+            selection: None,
+            selected_phase: None,
+            phases: Vec::new(),
             component,
         }
     }
@@ -44,6 +55,7 @@ impl PlacementsTabUi {
             .update_placements(placements.placements, phases);
     }
     pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
+        self.phases = phases.clone();
         self.placements_table_ui
             .update_phases(phases);
     }
@@ -53,6 +65,15 @@ impl PlacementsTabUi {
 pub enum PlacementsTabUiCommand {
     None,
     PlacementsTableUiCommand(PlacementsTableUiCommand),
+
+    PlacementActionClicked(PlacementAction),
+    PhaseChanged(PhaseReference),
+}
+
+#[derive(Debug, Clone)]
+pub enum PlacementAction {
+    ApplyPhase,
+    RemovePhase,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +92,13 @@ pub enum PlacementsTabUiAction {
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
     },
+    ApplyPlacementsAction(Vec<PlacementsItem>, PlacementsTabUiApplyAction),
+}
+
+#[derive(Debug, Clone)]
+pub enum PlacementsTabUiApplyAction {
+    ApplyPhase(PhaseReference),
+    RemovePhase(PhaseReference),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -85,7 +113,71 @@ impl UiComponent for PlacementsTabUi {
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         ui.label(tr!("project-placements-header"));
 
-        self.placements_table_ui.filter_ui(ui);
+        ui.horizontal(|ui| {
+            // FIXME layout-pain - due to some vertical padding and sizing issues we render the filter first because it is tallest.
+            //       attempts were made to fix this, but ultimately all resulted in failure, so we gave up and went
+            //       with the simplest code, even though we WANT the buttons BEFORE the filter.
+            //       see the commit history/git-blame for details
+            //       the same issue exists on three tabs: placements tab, phase tab, parts tab.
+
+            self.placements_table_ui.filter_ui(ui);
+
+            ui.separator();
+
+            egui::ComboBox::from_id_salt(ui.id().with("phase_selection"))
+                .selected_text(match &self.selected_phase {
+                    Some(phase) => format!("{}", phase),
+                    None => tr!("form-common-choice-phase"),
+                })
+                .show_ui(ui, |ui| {
+                    for phase in &self.phases {
+                        if ui
+                            .add(egui::Button::selectable(
+                                matches!(&self.selected_phase, Some(selection) if selection.eq(&phase.phase_reference)),
+                                format!("{}", phase.phase_reference),
+                            ))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PlacementsTabUiCommand::PhaseChanged(phase.phase_reference.clone()))
+                                .expect("sent");
+                        }
+                    }
+                });
+
+            let have_selection = self.selection.is_some();
+            let have_phase = self.selected_phase.is_some();
+
+            ui.add_enabled_ui(have_selection && have_phase, |ui| {
+                egui::ComboBox::from_id_salt(ui.id().with("phase_action"))
+                    .selected_text(tr!("common-actions"))
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .add(egui::Button::selectable(false, tr!("form-button-apply")))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PlacementsTabUiCommand::PlacementActionClicked(
+                                    PlacementAction::ApplyPhase,
+                                ))
+                                .expect("sent");
+                        }
+                        if ui
+                            .add(egui::Button::selectable(false, tr!("form-button-remove")))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PlacementsTabUiCommand::PlacementActionClicked(
+                                    PlacementAction::RemovePhase,
+                                ))
+                                .expect("sent");
+                        }
+                    });
+            });
+        });
 
         ui.separator();
 
@@ -101,11 +193,16 @@ impl UiComponent for PlacementsTabUi {
     ) -> Option<Self::UiAction> {
         match command {
             PlacementsTabUiCommand::None => Some(PlacementsTabUiAction::None),
+            PlacementsTabUiCommand::PhaseChanged(phase) => {
+                self.selected_phase = Some(phase);
+                None
+            }
             PlacementsTabUiCommand::PlacementsTableUiCommand(command) => {
                 let action = self
                     .placements_table_ui
                     .update(command, &mut PlacementsTableUiContext::default());
                 match action {
+                    None => None,
                     Some(PlacementsTableUiAction::None) => None,
                     Some(PlacementsTableUiAction::RequestRepaint) => Some(PlacementsTabUiAction::RequestRepaint),
                     Some(PlacementsTableUiAction::UpdatePlacement {
@@ -128,7 +225,24 @@ impl UiComponent for PlacementsTabUi {
                         design_position,
                         unit_position,
                     }),
-                    None => None,
+                    Some(PlacementsTableUiAction::NewSelection(selection)) => {
+                        self.selection = Some(selection);
+                        None
+                    }
+                }
+            }
+            PlacementsTabUiCommand::PlacementActionClicked(action) => {
+                if let (Some(selection), Some(phase)) = (&self.selection, &self.selected_phase) {
+                    let apply_action = match action {
+                        PlacementAction::ApplyPhase => PlacementsTabUiApplyAction::ApplyPhase(phase.clone()),
+                        PlacementAction::RemovePhase => PlacementsTabUiApplyAction::RemovePhase(phase.clone()),
+                    };
+                    Some(PlacementsTabUiAction::ApplyPlacementsAction(
+                        selection.clone(),
+                        apply_action,
+                    ))
+                } else {
+                    None
                 }
             }
         }

@@ -236,6 +236,7 @@ impl UiComponent for PhaseTabUi {
             //       attempts were made to fix this, but ultimately all resulted in failure, so we gave up and went
             //       with the simplest code, even though we WANT the buttons BEFORE the filter.
             //       see the commit history/git-blame for details of the prior approach which involved a lot of additional code and hacks.
+            //       the same issue exists on three tabs: placements tab, phase tab, parts tab.
 
             self.placements_table_ui.filter_ui(ui);
 
@@ -320,6 +321,10 @@ impl UiComponent for PhaseTabUi {
                         unit_position,
                     }),
                     None => None,
+                    Some(PlacementsTableUiAction::NewSelection(_)) => {
+                        // Nothing to do.
+                        None
+                    }
                 }
             }
             PhaseTabUiCommand::AddPartsToLoadout {
