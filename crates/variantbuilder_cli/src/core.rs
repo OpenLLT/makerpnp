@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use crossbeam_channel::Sender;
-use tracing::debug;
+use tracing::trace;
 use variantbuilder_app::{Effect, Event, VariantBuilder};
 
 pub type Core = Arc<crux_core::Core<VariantBuilder>>;
@@ -12,7 +12,7 @@ pub fn new() -> Core {
 }
 
 pub fn update(core: &Core, event: Event, tx: &Arc<Sender<Effect>>) -> anyhow::Result<()> {
-    debug!("event: {:?}", event);
+    trace!("event: {:?}", event);
 
     for effect in core.process_event(event) {
         process_effect(core, effect, tx)?;
@@ -21,7 +21,7 @@ pub fn update(core: &Core, event: Event, tx: &Arc<Sender<Effect>>) -> anyhow::Re
 }
 
 pub fn process_effect(_core: &Core, effect: Effect, tx: &Arc<Sender<Effect>>) -> anyhow::Result<()> {
-    debug!("core::process_effect. effect: {:?}", effect);
+    trace!("effect: {:?}", effect);
 
     tx.send(effect)
         .map_err(|e| anyhow!("{:?}", e))?;

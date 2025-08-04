@@ -15,7 +15,7 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde_with::serde_as;
 use thiserror::Error;
-use tracing::{debug, info, trace};
+use tracing::{info, trace};
 
 use crate::design::{DesignIndex, DesignName};
 use crate::project::PcbOperationError;
@@ -481,7 +481,7 @@ impl PcbUnitTransform {
         );
         matrix = shift_to_positive * matrix;
 
-        debug!("PcbUnitTransform {:?}, matrix: {:?}", self, matrix);
+        trace!("PcbUnitTransform {:?}, matrix: {:?}", self, matrix);
 
         matrix
     }

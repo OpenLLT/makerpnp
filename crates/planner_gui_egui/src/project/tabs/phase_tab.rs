@@ -338,8 +338,11 @@ impl UiComponent for PhaseTabUi {
             }
             PhaseTabUiCommand::PlacementOrderingsModalUiCommand(command) => {
                 if let Some(modal) = self.placement_orderings_modal.as_mut() {
-                    let action = modal.update(command, &mut ());
-                    trace!("placement ordering model action: {:?}", action);
+                    let action = modal
+                        .update(command, &mut ())
+                        .inspect(|action| {
+                            trace!("placement ordering model action: {:?}", action);
+                        });
                     match action {
                         None => None,
                         Some(PlacementOrderingsModalAction::Submit(args)) => {

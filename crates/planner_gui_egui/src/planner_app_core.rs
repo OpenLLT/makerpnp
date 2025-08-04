@@ -3,7 +3,7 @@ use std::sync::Arc;
 use planner_app::effects::pcb_view_renderer::PcbViewRendererOperation;
 use planner_app::effects::project_view_renderer::ProjectViewRendererOperation;
 use planner_app::{Effect, Event, PcbView, Planner, ProjectView};
-use tracing::{debug, error};
+use tracing::{error, trace};
 
 type Core = Arc<planner_app::Core<Planner>>;
 
@@ -35,7 +35,7 @@ impl PlannerCoreService {
 
     #[must_use]
     pub fn update(&mut self, event: Event) -> Result<Vec<PlannerAction>, PlannerError> {
-        debug!("event: {:?}", event);
+        trace!("event: {:?}", event);
 
         let mut actions: Vec<PlannerAction> = Vec::new();
 
@@ -53,7 +53,7 @@ impl PlannerCoreService {
     }
 
     pub fn process_effect(core: &Core, effect: Effect) -> Result<PlannerAction, PlannerError> {
-        debug!("effect: {:?}", effect);
+        trace!("effect: {:?}", effect);
 
         match effect {
             Effect::Render(_) => {

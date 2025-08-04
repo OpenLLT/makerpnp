@@ -177,8 +177,8 @@ impl UiComponent for PlacementsTableUi {
                 if let Some((viewer, _table)) = &mut *table {
                     let action = viewer
                         .filter
-                        .update(command, &mut FilterUiContext::default());
-                    debug!("filter action: {:?}", action);
+                        .update(command, &mut FilterUiContext::default())
+                        .inspect(|action| debug!("filter action: {:?}", action));
                     match action {
                         Some(FilterUiAction::ApplyFilter) => Some(PlacementsTableUiAction::RequestRepaint),
                         None => None,

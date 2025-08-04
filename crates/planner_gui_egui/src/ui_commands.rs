@@ -151,9 +151,10 @@ pub fn handle_command(
 
             let action = {
                 let mut app_tabs = app_tabs.lock().unwrap();
-                app_tabs.update((tab_key, command), &mut tab_context)
+                app_tabs
+                    .update((tab_key, command), &mut tab_context)
+                    .inspect(|action| debug!("handling tab command action: {:?}", action))
             };
-            debug!("handling tab command action: {:?}", action);
             match action {
                 None => Task::none(),
                 Some(TabAction::None) => Task::none(),
@@ -188,7 +189,7 @@ pub fn handle_command(
                         action,
                     } => match action {
                         PcbTabAction::PcbTask(key, task) => task.map(move |action| {
-                            debug!("handling project action: {:?}", action);
+                            trace!("mapping project action: {:?}", action);
                             match action {
                                 // map it to the corresponding UiCommand::TabCommand
                                 PcbAction::UiCommand(command) => UiCommand::TabCommand {
@@ -222,7 +223,7 @@ pub fn handle_command(
                         action,
                     } => match action {
                         ProjectTabAction::ProjectTask(key, task) => task.map(move |action| {
-                            debug!("handling project action: {:?}", action);
+                            trace!("mapping project action: {:?}", action);
                             match action {
                                 // map it to the corresponding UiCommand::TabCommand
                                 ProjectAction::UiCommand(command) => UiCommand::TabCommand {

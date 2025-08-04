@@ -298,7 +298,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
-        debug!(
+        trace!(
             "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
             highlighted, unhighlighted
         );
@@ -320,7 +320,7 @@ impl RowViewer<PartStatesRow> for PartStatesRowViewer {
     }
 
     fn on_highlight_cell(&mut self, row: &PartStatesRow, column: usize) {
-        debug!("on_highlight_cell: {:?}, column: {:?}", row, column);
+        trace!("on_highlight_cell: {:?}, column: {:?}", row, column);
     }
 }
 

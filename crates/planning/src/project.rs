@@ -1167,7 +1167,7 @@ fn find_placement_changes(
         }
     }
 
-    debug!("placement changes:\n{:?}", changes);
+    trace!("placement changes:\n{:?}", changes);
 
     changes
 }
@@ -1223,7 +1223,7 @@ fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, 
         }
     }
 
-    debug!("part changes:\n{:?}", changes);
+    trace!("part changes:\n{:?}", changes);
 
     changes
 }
