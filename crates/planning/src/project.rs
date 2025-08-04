@@ -1055,7 +1055,7 @@ pub(crate) fn build_placement_unit_positions(
                 let top_transform = pcb.build_unit_transform(pcb_unit_index, &pcb.orientation.top);
                 let bottom_transform = pcb.build_unit_transform(pcb_unit_index, &pcb.orientation.bottom);
 
-                println!(
+                trace!(
                     "unit: {:?}, top_transform: {:?}, bottom_transform: {:?}",
                     (pcb_instance_number, pcb_unit_number),
                     top_transform,
