@@ -399,9 +399,9 @@ impl UiApp {
                     runtime.runtime().spawn({
                         let app_message_sender = app_message_sender.clone();
                         async move {
-                            debug!("running stream future");
+                            trace!("running stream future");
                             while let Some(command) = stream.next().await {
-                                debug!("command returned from future: {:?}", command);
+                                trace!("command returned from future: {:?}", command);
                                 app_message_sender
                                     .send(command)
                                     .expect("sent");
