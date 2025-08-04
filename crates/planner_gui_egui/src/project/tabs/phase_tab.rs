@@ -1,5 +1,5 @@
 use derivative::Derivative;
-use egui::{Ui, Vec2, WidgetText};
+use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use planner_app::{
@@ -232,70 +232,39 @@ impl UiComponent for PhaseTabUi {
         //
 
         ui.horizontal(|ui| {
-            let toolbar_height_id = ui.id().with("toolbar_height");
-            let toolbar_height = ui.ctx().memory_mut(|mem| {
-                mem.data
-                    .get_temp::<f32>(toolbar_height_id)
-            });
-
-            if let Some(toolbar_height) = toolbar_height {
-                ui.set_min_height(toolbar_height);
-            }
-
-            // FIXME due to some vertical padding issue, we wrap the buttons and a separator in a horizontal layout...
-            //       remove the ui.horizontal() and fix the issue properly, no idea where the spacing above the filter
-            //       is coming from. various attempts at adjusting the style all failed.
-            //       an alternative workaround is to display the filter first, then the buttons... but we WANT the buttons first.
-
-            ui.horizontal(|ui| {
-                let toolbar_element_min_size =
-                    Vec2::new(0.0, ui.spacing().interact_size.y + crate::filter::MARGIN.sum().y);
-
-                if ui
-                    .add(
-                        egui::Button::new(tr!("phase-toolbar-add-parts-to-loadout")).min_size(toolbar_element_min_size),
-                    )
-                    .clicked()
-                {
-                    // FUTURE a nice feature here, would be to use the current manufacturer and mpn filters (if any)
-                    //        currently there is a single filter, so adding support for per-column filters would make
-                    //        implementing this feature easier.
-                    // FUTURE disable the button if there are no visible parts.
-                    if let Some(overview) = &self.overview {
-                        self.component
-                            .send(PhaseTabUiCommand::AddPartsToLoadout {
-                                phase: overview.phase_reference.clone(),
-                                manufacturer_pattern: Regex::new("^.*$").unwrap(),
-                                mpn_pattern: Regex::new("^.*$").unwrap(),
-                            })
-                    }
-                }
-
-                if ui
-                    .add(egui::Button::new(tr!("phase-toolbar-placement-orderings")).min_size(toolbar_element_min_size))
-                    .clicked()
-                {
-                    self.component
-                        .send(PhaseTabUiCommand::PhasePlacementsOrderingsClicked)
-                }
-                ui.separator();
-            });
+            // FIXME layout-pain - due to some vertical padding and sizing issues we render the filter first because it is tallest.
+            //       attempts were made to fix this, but ultimately all resulted in failure, so we gave up and went
+            //       with the simplest code, even though we WANT the buttons BEFORE the filter.
+            //       see the commit history/git-blame for details of the prior approach which involved a lot of additional code and hacks.
 
             self.placements_table_ui.filter_ui(ui);
 
-            // the filter_ui is taller than previously added elements, need a sizing pass
-            // and then to set the height of the toolbar row on the next frame
+            ui.separator();
 
-            let current_height = ui.max_rect().height();
-            let height = toolbar_height.map_or(current_height, |height| current_height.max(height));
+            if ui
+                .button(tr!("phase-toolbar-add-parts-to-loadout"))
+                .clicked()
+            {
+                // FUTURE a nice feature here, would be to use the current manufacturer and mpn filters (if any)
+                //        currently there is a single filter, so adding support for per-column filters would make
+                //        implementing this feature easier.
+                // FUTURE disable the button if there are no visible parts.
+                if let Some(overview) = &self.overview {
+                    self.component
+                        .send(PhaseTabUiCommand::AddPartsToLoadout {
+                            phase: overview.phase_reference.clone(),
+                            manufacturer_pattern: Regex::new("^.*$").unwrap(),
+                            mpn_pattern: Regex::new("^.*$").unwrap(),
+                        })
+                }
+            }
 
-            if toolbar_height.is_none() {
-                println!("setting toolbar height");
-                let ctx = ui.ctx();
-                ctx.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(toolbar_height_id, height)
-                });
+            if ui
+                .button(tr!("phase-toolbar-placement-orderings"))
+                .clicked()
+            {
+                self.component
+                    .send(PhaseTabUiCommand::PhasePlacementsOrderingsClicked)
             }
         });
 
