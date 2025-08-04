@@ -1589,7 +1589,7 @@ impl UiComponent for Project {
 
                         Some(action)
                     }
-                    Some(PartsTabUiAction::Apply(parts, apply_action)) => {
+                    Some(PartsTabUiAction::ApplyPartsAction(parts, apply_action)) => {
                         let mut tasks = vec![];
 
                         debug!("apply_action: {:?}", apply_action);

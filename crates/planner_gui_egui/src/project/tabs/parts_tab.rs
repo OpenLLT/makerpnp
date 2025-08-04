@@ -91,8 +91,14 @@ pub enum PartsTabUiCommand {
     },
     FilterCommand(FilterUiCommand),
     NewSelection(Vec<Part>),
-    ApplyClicked,
+    PartsActionClicked(PartsAction),
     ProcessChanged(ProcessReference),
+}
+
+#[derive(Debug, Clone)]
+pub enum PartsAction {
+    AddProcess,
+    RemoveProcess,
 }
 
 #[derive(Debug, Clone)]
@@ -103,7 +109,7 @@ pub enum PartsTabUiAction {
         processes: HashMap<ProcessReference, bool>,
     },
     RequestRepaint,
-    Apply(Vec<Part>, PartsTabUiApplyAction),
+    ApplyPartsAction(Vec<Part>, PartsTabUiApplyAction),
 }
 
 #[derive(Debug, Clone)]
@@ -139,12 +145,10 @@ impl UiComponent for PartsTabUi {
 
             ui.separator();
 
-            let have_selection = self.selection.is_some();
-
             egui::ComboBox::from_id_salt(ui.id().with("process_selection"))
                 .selected_text(match &self.selected_process {
                     Some(process) => format!("{}", process),
-                    None => "Process".to_string(),
+                    None => tr!("form-common-choice-process"),
                 })
                 .show_ui(ui, |ui| {
                     for process in &self.processes {
@@ -163,13 +167,36 @@ impl UiComponent for PartsTabUi {
                     }
                 });
 
-            ui.add_enabled_ui(have_selection, |ui| {
-                if ui.button("Apply").clicked() {
-                    self.component
-                        .sender
-                        .send(PartsTabUiCommand::ApplyClicked)
-                        .expect("sent");
-                }
+            let have_selection = self.selection.is_some();
+            let have_process = self.selected_process.is_some();
+
+            ui.add_enabled_ui(have_selection && have_process, |ui| {
+                egui::ComboBox::from_id_salt(ui.id().with("process_action"))
+                    .selected_text(tr!("common-actions"))
+                    .show_ui(ui, |ui| {
+                        if ui
+                            .add(egui::Button::selectable(false, tr!("form-button-add")))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PartsTabUiCommand::PartsActionClicked(PartsAction::AddProcess))
+                                .expect("sent");
+                        }
+                        if ui
+                            .add(egui::Button::selectable(false, tr!("form-button-remove")))
+                            .clicked()
+                        {
+                            self.component
+                                .sender
+                                .send(PartsTabUiCommand::PartsActionClicked(PartsAction::RemoveProcess))
+                                .expect("sent");
+                        }
+                    });
+                //
+                // if ui.button("Apply").clicked() {
+                //     self.component.sender.send(PartsTabUiCommand::ApplyClicked).expect("sent");
+                // }
             });
         });
 
@@ -231,13 +258,13 @@ impl UiComponent for PartsTabUi {
                 self.selection = Some(selection);
                 None
             }
-            PartsTabUiCommand::ApplyClicked => {
+            PartsTabUiCommand::PartsActionClicked(action) => {
                 if let (Some(selection), Some(process)) = (&self.selection, &self.selected_process) {
-                    // TODO handle add and remove
-                    Some(PartsTabUiAction::Apply(
-                        selection.clone(),
-                        PartsTabUiApplyAction::AddProcess(process.clone()),
-                    ))
+                    let apply_action = match action {
+                        PartsAction::AddProcess => PartsTabUiApplyAction::AddProcess(process.clone()),
+                        PartsAction::RemoveProcess => PartsTabUiApplyAction::RemoveProcess(process.clone()),
+                    };
+                    Some(PartsTabUiAction::ApplyPartsAction(selection.clone(), apply_action))
                 } else {
                     None
                 }
