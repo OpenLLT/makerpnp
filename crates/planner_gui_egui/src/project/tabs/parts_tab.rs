@@ -193,10 +193,6 @@ impl UiComponent for PartsTabUi {
                                 .expect("sent");
                         }
                     });
-                //
-                // if ui.button("Apply").clicked() {
-                //     self.component.sender.send(PartsTabUiCommand::ApplyClicked).expect("sent");
-                // }
             });
         });
 
