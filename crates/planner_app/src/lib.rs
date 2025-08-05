@@ -1829,7 +1829,8 @@ impl Planner {
                     .tree
                     .add_edge(root_node, phases_node, ());
 
-                for (reference, phase) in &project.phases {
+                for reference in &project.phase_orderings {
+                    let phase = project.phases.get(reference).unwrap();
                     //
                     // add phase node
                     //
