@@ -740,7 +740,7 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_06_assign_process_to_parts() -> Result<(), anyhow::Error> {
+    fn sequence_06_refresh_from_design_variants() -> Result<(), anyhow::Error> {
         // given
         let mut ctx_guard = context::acquire(6);
         let ctx = ctx_guard.1.as_mut().unwrap();
@@ -764,6 +764,175 @@ mod operation_sequence_1 {
         let mut placments_file = File::create(placements_path)?;
         let _written = placments_file.write(design_a_variant_a_placements_csv_content.as_bytes())?;
         placments_file.flush()?;
+
+        // and
+        let expected_project_content = TestProject::new()
+            .with_name("job1")
+            .with_default_processes()
+            .with_pcbs(vec![project::TestProjectPcb {
+                pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
+                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+            }])
+            .with_part_states(vec![
+                (project::TestPart::new("CONN_MFR1", "CONN1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR1", "RES1"), TestPartState::default()),
+                (project::TestPart::new("RES_MFR2", "RES2"), TestPartState::default()),
+            ])
+            .with_placements(vec![
+                (
+                    "pcb=1::unit=1::ref_des=C1",
+                    TestPlacementState::new(
+                        "pcb=1::unit=1",
+                        TestPlacement::new(
+                            "C1",
+                            "CAP_MFR1",
+                            "CAP1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(40),
+                            dec!(45),
+                            dec!(180),
+                        ),
+                        TestUnitPosition::new(dec!(42), dec!(74), dec!(0)),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Unused,
+                        None,
+                    ),
+                ),
+                (
+                    "pcb=1::unit=1::ref_des=J1",
+                    TestPlacementState::new(
+                        "pcb=1::unit=1",
+                        TestPlacement::new(
+                            "J1",
+                            "CONN_MFR1",
+                            "CONN1",
+                            true,
+                            PcbSide::Bottom,
+                            dec!(10),
+                            dec!(10),
+                            dec!(0),
+                        ),
+                        TestUnitPosition::new(dec!(12), dec!(109), dec!(180)),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
+                ),
+                (
+                    "pcb=1::unit=1::ref_des=R1",
+                    TestPlacementState::new(
+                        "pcb=1::unit=1",
+                        TestPlacement::new(
+                            "R1",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(20),
+                            dec!(20),
+                            dec!(-45),
+                        ),
+                        TestUnitPosition::new(dec!(22), dec!(17), dec!(-45)),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
+                ),
+                (
+                    "pcb=1::unit=1::ref_des=R2",
+                    TestPlacementState::new(
+                        "pcb=1::unit=1",
+                        TestPlacement::new(
+                            "R2",
+                            "RES_MFR2",
+                            "RES2",
+                            true,
+                            PcbSide::Top,
+                            dec!(30),
+                            dec!(30),
+                            dec!(45),
+                        ),
+                        TestUnitPosition::new(dec!(32), dec!(27), dec!(45)),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
+                ),
+                (
+                    "pcb=1::unit=1::ref_des=R3",
+                    TestPlacementState::new(
+                        "pcb=1::unit=1",
+                        TestPlacement::new(
+                            "R3",
+                            "RES_MFR1",
+                            "RES1",
+                            true,
+                            PcbSide::Top,
+                            dec!(40),
+                            dec!(40),
+                            dec!(135),
+                        ),
+                        TestUnitPosition::new(dec!(42), dec!(37), dec!(135)),
+                        PlacementStatus::Pending,
+                        ProjectPlacementStatus::Used,
+                        None,
+                    ),
+                ),
+            ])
+            .content();
+
+        // and
+        let args = prepare_args(vec![
+            ctx.trace_log_arg.as_str(),
+            "project",
+            ctx.path_arg.as_str(),
+            ctx.project_arg.as_str(),
+            "refresh-from-design-variants",
+        ]);
+
+        // when
+        let cmd_assert = cmd
+            .args(args)
+            // then
+            .assert()
+            .stderr(print("stderr"))
+            .stdout(print("stdout"));
+
+        // and
+        let trace_content: String = read_and_show_file(&ctx.test_trace_log_path)?;
+
+        // and assert the command *after* the trace output has been displayed.
+        cmd_assert.success();
+
+        // and
+        assert_contains_inorder!(trace_content, [
+            "New part. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }\n",
+            "Removing unused part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
+            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 15, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 40, y: 40, rotation: 135 }",
+            "New placement. placement: Placement { ref_des: \"R2\", part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, place: true, pcb_side: Top, x: 30, y: 30, rotation: 45 }",
+            "Updating placement. old: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 30, y: 35, rotation: -90 }, new: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 10, y: 10, rotation: 0 }",
+            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 25, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 20, rotation: -45 }",
+            "Marking placement as unused. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 40, y: 45, rotation: 180 }",
+        ]);
+
+        // and
+        let project_content: String = read_and_show_file(&ctx.test_project_path)?;
+
+        assert_eq!(project_content, expected_project_content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn sequence_07_assign_process_to_parts() -> Result<(), anyhow::Error> {
+        // given
+        let mut ctx_guard = context::acquire(7);
+        let ctx = ctx_guard.1.as_mut().unwrap();
+        ctx.delete_trace_log();
+
+        // and
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
         // and
         let expected_project_content = TestProject::new()
@@ -914,13 +1083,6 @@ mod operation_sequence_1 {
 
         // and
         assert_contains_inorder!(trace_content, [
-            "New part. part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }\n",
-            "Removing unused part. part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }\n",
-            "Updating placement. old: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 10, y: 15, rotation: 90 }, new: Placement { ref_des: \"R3\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 40, y: 40, rotation: 135 }",
-            "New placement. placement: Placement { ref_des: \"R2\", part: Part { manufacturer: \"RES_MFR2\", mpn: \"RES2\" }, place: true, pcb_side: Top, x: 30, y: 30, rotation: 45 }",
-            "Updating placement. old: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 30, y: 35, rotation: -90 }, new: Placement { ref_des: \"J1\", part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, place: true, pcb_side: Bottom, x: 10, y: 10, rotation: 0 }",
-            "Updating placement. old: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 25, rotation: 0 }, new: Placement { ref_des: \"R1\", part: Part { manufacturer: \"RES_MFR1\", mpn: \"RES1\" }, place: true, pcb_side: Top, x: 20, y: 20, rotation: -45 }",
-            "Marking placement as unused. placement: Placement { ref_des: \"C1\", part: Part { manufacturer: \"CAP_MFR1\", mpn: \"CAP1\" }, place: true, pcb_side: Bottom, x: 40, y: 45, rotation: 180 }",
             "Added process. part: Part { manufacturer: \"CONN_MFR1\", mpn: \"CONN1\" }, applicable_processes: [\"manual\"]",
         ]);
 
@@ -933,9 +1095,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_07_create_phase_top() -> Result<(), anyhow::Error> {
+    fn sequence_08_create_phase_top() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(7);
+        let mut ctx_guard = context::acquire(8);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1145,9 +1307,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_08_create_phase_bottom() -> Result<(), anyhow::Error> {
+    fn sequence_09_create_phase_bottom() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(8);
+        let mut ctx_guard = context::acquire(9);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1389,9 +1551,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_09_assign_placements_to_phase() -> Result<(), anyhow::Error> {
+    fn sequence_10_assign_placements_to_phase() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(9);
+        let mut ctx_guard = context::acquire(10);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1678,9 +1840,9 @@ mod operation_sequence_1 {
 
     //noinspection MissingFeatures
     #[test]
-    fn sequence_10_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
+    fn sequence_11_assign_feeder_to_load_out_item() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(10);
+        let mut ctx_guard = context::acquire(11);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1745,9 +1907,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_11_set_placement_ordering() -> Result<(), anyhow::Error> {
+    fn sequence_12_set_placement_ordering() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(11);
+        let mut ctx_guard = context::acquire(12);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -1979,9 +2141,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_12_generate_artifacts() -> Result<(), anyhow::Error> {
+    fn sequence_13_generate_artifacts() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(12);
+        let mut ctx_guard = context::acquire(13);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2304,9 +2466,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_13_record_phase_operations() -> Result<(), anyhow::Error> {
+    fn sequence_14_record_phase_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(13);
+        let mut ctx_guard = context::acquire(14);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2630,9 +2792,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_14_record_placements_operation() -> Result<(), anyhow::Error> {
+    fn sequence_15_record_placements_operation() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(14);
+        let mut ctx_guard = context::acquire(15);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -2920,9 +3082,9 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_15_reset_operations() -> Result<(), anyhow::Error> {
+    fn sequence_16_reset_operations() -> Result<(), anyhow::Error> {
         // given
-        let mut ctx_guard = context::acquire(15);
+        let mut ctx_guard = context::acquire(16);
         let ctx = ctx_guard.1.as_mut().unwrap();
         ctx.delete_trace_log();
 
@@ -3149,8 +3311,8 @@ mod operation_sequence_1 {
     }
 
     #[test]
-    fn sequence_16_cleanup() {
-        let mut ctx_guard = context::acquire(16);
+    fn sequence_17_cleanup() {
+        let mut ctx_guard = context::acquire(17);
         let ctx = ctx_guard.1.take().unwrap();
         drop(ctx);
     }
@@ -3359,6 +3521,7 @@ mod help {
                   create                          Create a new job
                   add-pcb                         Add a PCB file to the project
                   assign-variant-to-unit          Assign a design variant to a PCB unit
+                  refresh-from-design-variants    Refresh from design variants
                   assign-process-to-parts         Assign a process to parts
                   create-phase                    Create a phase
                   assign-placements-to-phase      Assign placements to a phase
@@ -3461,6 +3624,32 @@ mod help {
 
             // when
             cmd.args(["project", "assign-variant-to-unit", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_refresh_from_design_variants() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Refresh from design variants
+
+                Usage: planner_cli project --project <PROJECT_NAME> refresh-from-design-variants [OPTIONS]
+                
+                Options:
+                  -v, --verbose...  Increase logging verbosity
+                  -q, --quiet...    Decrease logging verbosity
+                  -h, --help        Print help
+            "};
+
+            // when
+            cmd.args(["project", "refresh-from-design-variants", "--help"])
                 // then
                 .assert()
                 .success()

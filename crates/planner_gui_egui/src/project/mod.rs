@@ -777,21 +777,21 @@ impl Project {
 
         // FUTURE find a solution to keep the operation with the handler, instead of two separate arrays.
         //        a tuple was tried, but results in a compile error: "expected fn item, found a different fn item"
-        let actions = [Operation::AddOrRemovePhase, Operation::SetOrResetPlaced];
+        let operations = [Operation::AddOrRemovePhase, Operation::SetOrResetPlaced];
 
         let action_handlers = [handle_phase, handle_placed];
 
         let mut update_placement_actions = vec![];
 
-        for (action, handler) in actions
+        for (operation, handler) in operations
             .into_iter()
             .zip(action_handlers.into_iter())
         {
-            debug!("update placement, operation: {:?}", action);
-
+            trace!("update placement, trying handler for operation: {:?}", operation);
             if let Some((additional_update_placement_actions, core_result)) =
                 handler(planner_core_service, &key, &object_path, &new_placement, &old_placement)
             {
+                debug!("update placement, applicable handler found. operation: {:?}", operation);
                 match core_result {
                     Ok(actions) => {
                         debug!("actions: {:?}", actions);

@@ -922,26 +922,18 @@ pub fn assign_placements_to_phase(
     required_load_out_parts
 }
 
-pub struct ProjectRefreshResult {
-    pub modified: bool,
-    pub unique_parts: Vec<Part>,
-}
-
-pub fn refresh_from_design_variants(
-    project: &mut Project,
+pub fn refresh_from_design_variants<'a>(
+    project: &'a mut Project,
     pcbs: &[&Pcb],
     design_variant_placement_map: BTreeMap<DesignVariant, Vec<Placement>>,
-) -> Result<ProjectRefreshResult, ProjectError> {
-    let unique_parts = placement::build_unique_parts(&design_variant_placement_map);
+) -> Result<bool, ProjectError> {
+    let unique_parts = placement::build_unique_parts_from_design_variant_placement_map(&design_variant_placement_map);
 
     let mut modified = refresh_parts(project, unique_parts.as_slice());
 
     modified |= refresh_placements(project, pcbs, &design_variant_placement_map)?;
 
-    Ok(ProjectRefreshResult {
-        modified,
-        unique_parts,
-    })
+    Ok(modified)
 }
 
 /// It is possible that the EDA files and/or PCBs have changed since the last time the project was refreshed.
@@ -1180,46 +1172,57 @@ enum Change {
 }
 
 /// Returns 'true' if any changes were made.
-fn refresh_parts(project: &mut Project, all_parts: &[Part]) -> bool {
+fn refresh_parts(project: &mut Project, all_parts: &[&Part]) -> bool {
     let changes = find_part_changes(project, all_parts);
 
     let mut modified = false;
+
+    let mut new_parts = vec![];
+    let mut parts_to_remove = vec![];
 
     for change_item in changes.iter() {
         match change_item {
             (Change::New, part) => {
                 info!("New part. part: {:?}", part);
                 modified = true;
-                let _ = project
-                    .part_states
-                    .entry(part.clone())
-                    .or_default();
+                new_parts.push((*part).clone());
             }
             (Change::Existing, _part) => {}
             (Change::Unused, part) => {
                 info!("Removing unused part. part: {:?}", part);
                 modified = true;
-                let _ = project.part_states.remove(&part);
+                parts_to_remove.push((*part).clone());
             }
         }
+    }
+
+    for part in new_parts {
+        let _ = project
+            .part_states
+            .entry(part)
+            .or_default();
+    }
+
+    for part in parts_to_remove {
+        let _ = project.part_states.remove(&part);
     }
 
     modified
 }
 
-fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, Part)> {
-    let mut changes: Vec<(Change, Part)> = vec![];
+fn find_part_changes<'a: 'b, 'b>(project: &'b Project, all_parts: &[&'a Part]) -> Vec<(Change, &'b Part)> {
+    let mut changes: Vec<(Change, &Part)> = vec![];
 
-    for part in all_parts.iter() {
+    for &part in all_parts.iter() {
         match project.part_states.contains_key(part) {
-            true => changes.push((Change::Existing, part.clone())),
-            false => changes.push((Change::New, part.clone())),
+            true => changes.push((Change::Existing, part)),
+            false => changes.push((Change::New, part)),
         }
     }
 
     for (part, _process) in project.part_states.iter() {
-        if !all_parts.contains(part) {
-            changes.push((Change::Unused, part.clone()))
+        if !all_parts.contains(&part) {
+            changes.push((Change::Unused, part))
         }
     }
 
@@ -1229,41 +1232,56 @@ fn find_part_changes(project: &mut Project, all_parts: &[Part]) -> Vec<(Change, 
 }
 
 #[must_use]
-pub fn update_applicable_processes(
-    project: &mut Project,
-    all_parts: &[Part],
-    process: ProcessDefinition,
-    action: AddOrRemoveAction,
+pub fn find_parts_to_modify(
+    project: &Project,
+    unique_parts: &[&Part],
     manufacturer_pattern: Regex,
     mpn_pattern: Regex,
-) -> bool {
-    let mut modified = false;
-    let changes = find_part_changes(project, all_parts);
+) -> Vec<Part> {
+    let parts_to_modify: Vec<Part> = find_part_changes(project, unique_parts)
+        .into_iter()
+        .filter_map(|(change, part)| {
+            trace!("change: {:?}, part: {:?}", change, part);
 
-    for change in changes.iter() {
-        match change {
-            (Change::Existing, part) => {
-                if manufacturer_pattern.is_match(part.manufacturer.as_str()) && mpn_pattern.is_match(part.mpn.as_str())
-                {
-                    project
-                        .part_states
-                        .entry(part.clone())
-                        .and_modify(|part_state| {
-                            modified |= match action {
-                                AddOrRemoveAction::Add => {
-                                    add_process_to_part(part_state, part, process.reference.clone())
-                                }
-                                AddOrRemoveAction::Remove => {
-                                    remove_process_from_part(part_state, part, process.reference.clone())
-                                }
-                            }
-                        });
+            match change {
+                Change::New | Change::Existing => {
+                    if manufacturer_pattern.is_match(part.manufacturer.as_str())
+                        && mpn_pattern.is_match(part.mpn.as_str())
+                    {
+                        Some((*part).clone())
+                    } else {
+                        None
+                    }
+                }
+                _ => {
+                    panic!("unexpected change. change: {:?}", change);
                 }
             }
-            _ => {
-                panic!("unexpected change. change: {:?}", change);
-            }
-        }
+        })
+        .collect();
+
+    parts_to_modify
+}
+
+#[must_use]
+pub fn update_applicable_processes(
+    project: &mut Project,
+    parts_to_modify: Vec<Part>,
+    process: ProcessDefinition,
+    action: AddOrRemoveAction,
+) -> bool {
+    let mut modified = false;
+
+    for part in parts_to_modify {
+        project
+            .part_states
+            .entry(part.clone())
+            .and_modify(|part_state| {
+                modified |= match action {
+                    AddOrRemoveAction::Add => add_process_to_part(part_state, &part, process.reference.clone()),
+                    AddOrRemoveAction::Remove => remove_process_from_part(part_state, &part, process.reference.clone()),
+                }
+            });
     }
 
     modified

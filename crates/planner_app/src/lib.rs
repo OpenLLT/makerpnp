@@ -30,9 +30,7 @@ pub use planning::process::ProcessReference;
 pub use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
-use planning::project::{
-    PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectPcb, ProjectRefreshResult,
-};
+use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectPcb};
 pub use planning::variant::VariantName;
 use planning::{file, project};
 pub use pnp::load_out::LoadOutItem;
@@ -1077,7 +1075,7 @@ impl Planner {
                 *modified |= true;
 
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
-                *modified |= refresh_result.modified;
+                *modified |= refresh_result;
 
                 Ok(render::render())
             }),
@@ -1093,7 +1091,7 @@ impl Planner {
                     ..,
                 ) = { Self::model_project_and_pcbs(model) }?;
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
-                *modified |= refresh_result.modified;
+                *modified |= refresh_result;
 
                 Ok(render::render())
             }),
@@ -1106,30 +1104,25 @@ impl Planner {
                 let (
                     ModelProject {
                         project,
-                        path,
                         modified,
                         ..
                     },
-                    pcbs,
                     ..,
-                ) = { Self::model_project_and_pcbs(model) }?;
+                ) = { Self::model_project_and_directory(model) }?;
 
                 let process = project
                     .find_process(&process_name)
                     .map_err(|cause| AppError::ProcessError(cause.into()))?
                     .clone();
 
-                let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
-                *modified |= refresh_result.modified;
+                let unique_parts = Self::unique_parts(project)
+                    .into_iter()
+                    .collect::<Vec<_>>();
 
-                *modified |= project::update_applicable_processes(
-                    project,
-                    refresh_result.unique_parts.as_slice(),
-                    process,
-                    operation,
-                    manufacturer_pattern,
-                    mpn_pattern,
-                );
+                let parts_to_modify =
+                    project::find_parts_to_modify(project, unique_parts.as_slice(), manufacturer_pattern, mpn_pattern);
+
+                *modified |= project::update_applicable_processes(project, parts_to_modify, process, operation);
 
                 Ok(render::render())
             }),
@@ -1182,7 +1175,7 @@ impl Planner {
                 ) = { Self::model_project_and_pcbs(model) }?;
 
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
-                *modified |= refresh_result.modified;
+                *modified |= refresh_result;
 
                 let phase = project
                     .phases
@@ -1314,7 +1307,7 @@ impl Planner {
                 ) = { Self::model_project_and_pcbs(model) }?;
 
                 let refresh_result = Self::refresh_project(project, &pcbs, path).map_err(AppError::ProjectError)?;
-                *modified |= refresh_result.modified;
+                *modified |= refresh_result;
 
                 *modified |= project::update_placement_orderings(project, &reference, &placement_orderings)
                     .map_err(AppError::OperationError)?;
@@ -2255,11 +2248,7 @@ enum AppError {
 }
 
 impl Planner {
-    fn refresh_project(
-        project: &mut Project,
-        pcbs: &[&Pcb],
-        path: &PathBuf,
-    ) -> Result<ProjectRefreshResult, ProjectError> {
+    fn refresh_project(project: &mut Project, pcbs: &[&Pcb], path: &PathBuf) -> Result<bool, ProjectError> {
         let directory = path.parent().unwrap();
 
         let unique_design_variants = project.unique_design_variants(pcbs);
@@ -2268,11 +2257,20 @@ impl Planner {
             .map_err(ProjectError::UnableToLoadPlacements)?;
         let refresh_result = project::refresh_from_design_variants(project, pcbs, design_variant_placement_map);
 
-        if let Ok(refresh_result) = &refresh_result {
-            trace!("Refreshed from design variants. modified: {}", refresh_result.modified);
+        if let Ok(modified) = &refresh_result {
+            trace!("Refreshed from design variants. modified: {}", modified);
         }
 
         refresh_result
+    }
+
+    fn unique_parts<'a>(project: &'a Project) -> impl IntoIterator<Item = &'a Part> + 'a {
+        let unique_parts = project
+            .placements
+            .iter()
+            .map(|(_path, state)| &state.placement.part)
+            .collect::<IndexSet<_>>();
+        unique_parts
     }
 }
 

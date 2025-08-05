@@ -139,12 +139,14 @@ impl From<(PlacementSortingMode, SortOrder)> for PlacementSortingItem {
     }
 }
 
-pub fn build_unique_parts(design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>) -> Vec<Part> {
-    let mut unique_parts: Vec<Part> = vec![];
+pub fn build_unique_parts_from_design_variant_placement_map(
+    design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
+) -> Vec<&Part> {
+    let mut unique_parts: Vec<&Part> = vec![];
     for placements in design_variant_placement_map.values() {
         for record in placements {
-            if !unique_parts.contains(&record.part) {
-                unique_parts.push(record.part.clone());
+            if !unique_parts.contains(&&record.part) {
+                unique_parts.push(&record.part);
             }
         }
     }

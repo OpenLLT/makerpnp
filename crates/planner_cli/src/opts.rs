@@ -357,6 +357,8 @@ pub(crate) enum ProjectCommand {
         #[arg(long, value_parser = clap::value_parser!(VariantName), value_name = "VARIANT_NAME")]
         variant: VariantName,
     },
+    /// Refresh from design variants
+    RefreshFromDesignVariants,
     /// Assign a process to parts
     AssignProcessToParts {
         /// Process name
@@ -587,6 +589,7 @@ impl TryFrom<Opts> for Event {
                     unit,
                     variant,
                 }),
+                ProjectCommand::RefreshFromDesignVariants => Ok(Event::RefreshFromDesignVariants),
                 ProjectCommand::AssignProcessToParts {
                     process,
                     operation,
