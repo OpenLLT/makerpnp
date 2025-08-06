@@ -341,7 +341,7 @@ impl ConfigurationUi {
                                                                 {
                                                                     body.row(text_height, |mut row| {
                                                                         let is_selected = matches!(designs_selected_index, Some(selected_index) if selected_index == row_index);
-                                                                        let design_exists = pcb_overview.designs.len() > row_index;
+                                                                        let design_exists = matches!(pcb_overview.designs.get(row_index), Some(existing_design_name) if existing_design_name == design_name);
 
                                                                         row.set_selected(is_selected);
 
@@ -350,17 +350,29 @@ impl ConfigurationUi {
                                                                         });
 
                                                                         row.col(|ui| {
-                                                                            ui.add_enabled_ui(design_exists, |ui|{
+                                                                            ui.horizontal(|ui| {
+                                                                                ui.add_enabled_ui(design_exists, |ui|{
+                                                                                    if ui
+                                                                                        .button(tr!("form-configure-pcb-button-design-gerbers"))
+                                                                                        .clicked()
+                                                                                    {
+                                                                                        self.component
+                                                                                            .send(ConfigurationTabUiCommand::ManageDesignGerbersClicked {
+                                                                                                design_index: row_index,
+                                                                                            });
+                                                                                    }
+                                                                                });
                                                                                 if ui
-                                                                                    .button(tr!("form-configure-pcb-button-design-gerbers"))
+                                                                                    .button(tr!("form-common-button-delete"))
                                                                                     .clicked()
                                                                                 {
                                                                                     self.component
-                                                                                        .send(ConfigurationTabUiCommand::ManageDesignGerbersClicked {
+                                                                                        .send(ConfigurationTabUiCommand::DeleteDesign {
                                                                                             design_index: row_index,
-                                                                                        });
+                                                                                        })
                                                                                 }
                                                                             });
+
                                                                         });
 
                                                                         row.col(|ui| {
@@ -753,9 +765,7 @@ impl ConfigurationUi {
 
         self.manage_gerbers_modal = Some((mode, modal));
     }
-}
 
-impl ConfigurationUi {
     pub fn new() -> Self {
         Self {
             pcb_overview: None,
@@ -764,6 +774,11 @@ impl ConfigurationUi {
             fields: Value::default(),
             initial_args: Default::default(),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.fields = Value::default();
+        self.pcb_overview = None;
     }
 
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
@@ -956,6 +971,9 @@ pub enum ConfigurationTabUiCommand {
     Reset,
     Apply,
     ManagePcbGerbersClicked,
+    DeleteDesign {
+        design_index: usize,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -1107,6 +1125,28 @@ impl UiComponent for ConfigurationUi {
                     .lock()
                     .unwrap()
                     .pcb_unit_range = value;
+                None
+            }
+            ConfigurationTabUiCommand::DeleteDesign {
+                design_index,
+            } => {
+                let mut fields = self.fields.lock().unwrap();
+
+                debug!("fields (before): {:?}", *fields);
+                // unassign design if assigned to units, adjust other indexes in the map if necessary
+                for assigned_design_index in fields.unit_map.iter_mut() {
+                    if let Some(index) = assigned_design_index {
+                        if *index == design_index {
+                            *assigned_design_index = None
+                        } else if *index > design_index {
+                            *index -= 1;
+                        }
+                    }
+                }
+
+                // delete the design
+                fields.designs.remove(design_index);
+                debug!("fields (after): {:?}", *fields);
                 None
             }
 

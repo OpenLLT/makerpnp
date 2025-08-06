@@ -128,6 +128,13 @@ impl PanelTabUi {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.pcb_overview = None;
+        self.panel_sizing = None;
+        self.assembly_orientation = None;
+        self.panel_tab_ui_state = Default::default();
+    }
+
     pub fn update_pcb_overview(&mut self, pcb_overview: PcbOverview) {
         let assembly_orientation = pcb_overview.orientation.clone();
         self.assembly_orientation

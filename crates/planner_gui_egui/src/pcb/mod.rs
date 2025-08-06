@@ -799,20 +799,52 @@ impl UiComponent for Pcb {
                             path: self.path.clone(),
                         })
                         .when_ok(key, |_| None),
-                    Some(ConfigurationTabUiAction::Apply(args)) => self
-                        .planner_core_service
-                        .update(Event::ApplyPcbUnitConfiguration {
-                            path: self.path.clone(),
-                            units: args.units,
-                            gerber_offset: args.gerber_offset,
-                            designs: args.designs,
-                            unit_map: args.unit_map,
-                        })
-                        .when_ok(key, |_| {
-                            Some(PcbUiCommand::RequestPcbView(PcbViewRequest::Overview {
+                    Some(ConfigurationTabUiAction::Apply(args)) => {
+                        self.panel_sizing.take();
+                        self.pcb_overview.take();
+
+                        let mut pcb_ui_state = self.pcb_ui_state.lock().unwrap();
+                        pcb_ui_state.panel_tab_ui.reset();
+                        pcb_ui_state
+                            .configuration_tab_ui
+                            .reset();
+
+                        match self
+                            .planner_core_service
+                            .update(Event::ApplyPcbUnitConfiguration {
                                 path: self.path.clone(),
-                            }))
-                        }),
+                                units: args.units,
+                                gerber_offset: args.gerber_offset,
+                                designs: args.designs,
+                                unit_map: args.unit_map,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<_>>();
+
+                                let additional_tasks = vec![
+                                    Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                                        PcbViewRequest::Overview {
+                                            path: self.path.clone(),
+                                        },
+                                    ))),
+                                    Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
+                                        PcbViewRequest::Panel {
+                                            path: self.path.clone(),
+                                        },
+                                    ))),
+                                ];
+                                tasks.extend(additional_tasks);
+
+                                Some(PcbAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
 
                     //
                     // gerber file management

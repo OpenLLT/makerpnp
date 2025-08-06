@@ -767,13 +767,22 @@ impl Planner {
                 // FUTURE consider wrapping all event args in structures that can be validated using a validation framework to have consistent error handling instead of this type of thing...
                 // FUTURE and consider adding validation to everything that's deserialized too...
 
+                // Save existing design name mapping for later reference
+                let old_designs: Vec<DesignName> = pcb
+                    .design_names
+                    .iter()
+                    .cloned()
+                    .collect();
+
                 let designs_length = designs.len();
                 let design_index_max = designs_length - 1;
-                let design_name_set: IndexSet<DesignName> = IndexSet::from_iter(designs);
+                // Create new design set and verify uniqueness
+                let design_name_set: IndexSet<DesignName> = IndexSet::from_iter(designs.clone());
                 if design_name_set.len() != designs_length {
                     return Err(AppError::PcbOperationError(PcbOperationError::InvalidDesignSet));
                 }
 
+                // Validate unit map
                 for (&unit_index, &design_index) in unit_map.iter() {
                     if unit_index >= units {
                         return Err(AppError::PcbOperationError(PcbOperationError::PcbError(
@@ -795,13 +804,28 @@ impl Planner {
                     }
                 }
 
+                // Before replacing the design names, create a mapping for design sizings
+                let mut new_design_sizings = Vec::with_capacity(designs_length);
+                new_design_sizings.resize_with(designs_length, Default::default);
+
+                // Transfer existing design sizing information for designs that are kept
+                for (new_idx, design_name) in designs.iter().enumerate() {
+                    if let Some(old_idx) = old_designs
+                        .iter()
+                        .position(|d| d == design_name)
+                    {
+                        if old_idx < pcb.panel_sizing.design_sizings.len() {
+                            new_design_sizings[new_idx] = pcb.panel_sizing.design_sizings[old_idx].clone();
+                        }
+                    }
+                }
+
                 pcb.units = units;
                 pcb.gerber_offset = placement_offset;
                 pcb.unit_map = unit_map;
                 pcb.design_names = design_name_set;
 
-                pcb.panel_sizing
-                    .ensure_design_sizings(designs_length);
+                pcb.panel_sizing.design_sizings = new_design_sizings;
                 pcb.panel_sizing
                     .ensure_unit_positionings(units);
 
