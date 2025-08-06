@@ -103,6 +103,42 @@ pub struct Project {
     file_picker: Value<Picker>,
 }
 
+// FUTURE consider moving this into the planner app core itself, so it can be re-used by all apps using the same core.
+pub mod tree_item {
+    use std::sync::LazyLock;
+
+    use regex::Regex;
+
+    pub const PHASES: &str = r"^/project/phases$";
+    pub const PHASE: &str = r"^/project/phases/(?<phase>[^/]*){1}$";
+    pub const PHASE_LOADOUT: &str = r"^/project/phases/(?<phase>[^/]*){1}/loadout$";
+
+    pub const PCB: &str = r"^/project/pcbs/(?<pcb>[0-9]?){1}$";
+    pub const PCB_UNIT: &str = r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$";
+
+    pub struct RegularExpressions {
+        pub phases: Regex,
+        pub phase: Regex,
+        pub phase_loadout: Regex,
+        pub pcb: Regex,
+        pub pcb_unit: Regex,
+    }
+
+    impl Default for RegularExpressions {
+        fn default() -> Self {
+            Self {
+                phases: Regex::new(PHASES).unwrap(),
+                phase: Regex::new(PHASE).unwrap(),
+                phase_loadout: Regex::new(PHASE_LOADOUT).unwrap(),
+                pcb: Regex::new(PCB).unwrap(),
+                pcb_unit: Regex::new(PCB_UNIT).unwrap(),
+            }
+        }
+    }
+
+    pub static REGULAR_EXPRESSIONS: LazyLock<RegularExpressions> = LazyLock::new(|| RegularExpressions::default());
+}
+
 impl Project {
     pub fn from_path(
         path: PathBuf,
@@ -561,8 +597,10 @@ impl Project {
 
         #[must_use]
         fn handle_phase(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
-            let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}$").unwrap();
-            if let Some(captures) = phase_pattern.captures(&path) {
+            if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
+                .phase
+                .captures(&path)
+            {
                 let phase_reference: String = captures
                     .name("phase")
                     .unwrap()
@@ -580,8 +618,10 @@ impl Project {
 
         #[must_use]
         fn handle_phase_loadout(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
-            let phase_pattern = Regex::new(r"^/project/phases/(?<phase>[^/]*){1}/loadout$").unwrap();
-            if let Some(captures) = phase_pattern.captures(&path) {
+            if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
+                .phase_loadout
+                .captures(&path)
+            {
                 let phase_reference: String = captures
                     .name("phase")
                     .unwrap()
@@ -601,8 +641,10 @@ impl Project {
 
         #[must_use]
         fn handle_pcb(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
-            let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}$").unwrap();
-            if let Some(captures) = phase_pattern.captures(&path) {
+            if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
+                .pcb
+                .captures(&path)
+            {
                 let pcb_index = captures
                     .name("pcb")
                     .unwrap()
@@ -621,8 +663,10 @@ impl Project {
 
         #[must_use]
         fn handle_unit_assignments(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
-            let phase_pattern = Regex::new(r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$").unwrap();
-            if let Some(captures) = phase_pattern.captures(&path) {
+            if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
+                .pcb_unit
+                .captures(&path)
+            {
                 let pcb_index = captures
                     .name("pcb")
                     .unwrap()
@@ -1517,8 +1561,37 @@ impl UiComponent for Project {
                     .explorer_tab_ui
                     .update(command, context);
                 match explorer_ui_action {
-                    Some(ExplorerTabUiAction::Navigate(path)) => self.navigate(key, path),
                     None => None,
+                    Some(ExplorerTabUiAction::Navigate(path)) => self.navigate(key, path),
+                    Some(ExplorerTabUiAction::SetPhaseOrdering(phases)) => {
+                        match self
+                            .planner_core_service
+                            .update(Event::SetPhaseOrdering {
+                                phases,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let mut tasks = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect::<Vec<Task<ProjectAction>>>();
+
+                                let additional_tasks = vec![
+                                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                                        ProjectViewRequest::ProjectTree,
+                                    ))),
+                                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                                        ProjectViewRequest::Phases,
+                                    ))),
+                                ];
+                                tasks.extend(additional_tasks);
+
+                                Some(ProjectAction::Task(key, Task::batch(tasks)))
+                            }
+                            Err(error_action) => Some(error_action),
+                        }
+                    }
                 }
             }
             ProjectUiCommand::OverviewTabUiCommand(command) => {

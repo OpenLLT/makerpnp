@@ -493,6 +493,9 @@ pub enum Event {
         load_out: LoadOutSource,
         pcb_side: PcbSide,
     },
+    SetPhaseOrdering {
+        phases: Vec<PhaseReference>,
+    },
     AssignPlacementsToPhase {
         phase: PhaseReference,
         operation: SetOrClearAction,
@@ -1154,6 +1157,31 @@ impl Planner {
                 project
                     .update_phase(reference, process.reference.clone(), load_out.to_string(), pcb_side)
                     .map_err(AppError::OperationError)?;
+
+                Ok(render::render())
+            }),
+            Event::SetPhaseOrdering {
+                phases,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let new_phase_orderings = IndexSet::from_iter(phases);
+
+                fn are_sets_equal_in_order<T: PartialEq>(a: &IndexSet<T>, b: &IndexSet<T>) -> bool {
+                    a.iter().eq(b.iter())
+                }
+
+                if !are_sets_equal_in_order(&project.phase_orderings, &new_phase_orderings) {
+                    project.phase_orderings = new_phase_orderings;
+                    *modified = true;
+                }
 
                 Ok(render::render())
             }),

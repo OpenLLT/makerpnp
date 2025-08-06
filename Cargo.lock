@@ -4276,6 +4276,7 @@ dependencies = [
  "rust_decimal_macros",
  "serde",
  "slotmap",
+ "tap",
  "thiserror 2.0.12",
  "tokio",
  "tracing",

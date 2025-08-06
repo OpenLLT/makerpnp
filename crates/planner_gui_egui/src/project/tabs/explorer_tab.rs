@@ -1,16 +1,21 @@
 use std::borrow::Cow;
+use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::{tr, translate_fluent};
-use egui_ltreeview::{Action, Activate, NodeBuilder, TreeView, TreeViewBuilder, TreeViewState};
+use egui_ltreeview::{
+    Action, Activate, DirPosition, DragAndDrop, NodeBuilder, TreeView, TreeViewBuilder, TreeViewState,
+};
 use egui_mobius::types::Value;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
-use planner_app::{Arg, ProjectTreeItem, ProjectTreeView};
+use planner_app::{Arg, PhaseReference, ProjectTreeItem, ProjectTreeView};
+use tap::Tap;
+use tracing::{debug, trace};
 use util::path::clip_path;
 
 use crate::project::tabs::ProjectTabContext;
@@ -53,22 +58,35 @@ impl ExplorerTabUi {
         );
 
         for action in actions {
-            if let Action::Activate(Activate {
-                selected,
-                modifiers,
-            }) = action
-            {
-                let _ = modifiers;
-                for &node_id in &selected {
-                    let item = &graph[NodeIndex::new(node_id)];
-                    let path = project_path_from_view_path(&item.path);
+            match action {
+                Action::Activate(Activate {
+                    selected,
+                    modifiers,
+                }) => {
+                    let _ = modifiers;
+                    for &node_id in &selected {
+                        let item = &graph[NodeIndex::new(node_id)];
+                        let path = project_path_from_view_path(&item.path);
 
-                    self.component
-                        .send(ExplorerTabUiCommand::Navigate(path));
+                        self.component
+                            .send(ExplorerTabUiCommand::Navigate(path));
 
-                    // HACK: tree-view-dir-activate-expand-hack
-                    tree_view_state.expand_node(&node_id);
+                        // HACK: tree-view-dir-activate-expand-hack
+                        tree_view_state.expand_node(&node_id);
+                    }
                 }
+                Action::Move(mut dnd) => {
+                    // FIXME there's currently a bug in egui-ltreeview 0.5.3 that causes source nodes to be duplicated.
+                    dnd.source.dedup();
+
+                    debug!(
+                        "move, source: {:?}, target: {:?}, position: {:?}",
+                        dnd.source, dnd.target, dnd.position
+                    );
+                    self.component
+                        .send(ExplorerTabUiCommand::Move(dnd));
+                }
+                _ => {}
             }
         }
     }
@@ -222,14 +240,28 @@ impl ExplorerTabUi {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub enum ExplorerTabUiCommand {
     Navigate(NavigationPath),
+    Move(#[derivative(Debug(format_with = "DragAndDropFormatter::fmt"))] DragAndDrop<usize>),
+}
+
+struct DragAndDropFormatter {}
+
+impl DragAndDropFormatter {
+    fn fmt(value: &DragAndDrop<usize>, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        f.write_fmt(format_args!(
+            "DragAndDrop(source: {:?}, target: {:?}, position: {:?})",
+            value.source, value.target, value.position
+        ))
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ExplorerTabUiAction {
     Navigate(NavigationPath),
+    SetPhaseOrdering(Vec<PhaseReference>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -262,6 +294,163 @@ impl UiComponent for ExplorerTabUi {
                 self.select_path(&path);
 
                 Some(ExplorerTabUiAction::Navigate(path))
+            }
+            ExplorerTabUiCommand::Move(dnd) => {
+                let Some(project_tree) = &self.project_tree_view else {
+                    return None;
+                };
+
+                let source_nodes = dnd
+                    .source
+                    .iter()
+                    .map(|source_id| {
+                        project_tree
+                            .tree
+                            .node_weight(NodeIndex::new(*source_id))
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+
+                let destination_node = project_tree
+                    .tree
+                    .node_weight(NodeIndex::new(dnd.target))
+                    .unwrap();
+
+                debug!(
+                    "source_nodes: {:?}, destination_node: {:?}",
+                    source_nodes, destination_node
+                );
+
+                let destination_node_path = project_path_from_view_path(&destination_node.path).to_string();
+                debug!("destination_node_path: {:?}", destination_node_path);
+
+                // Handle re-arranging phases
+                if crate::project::tree_item::REGULAR_EXPRESSIONS
+                    .phases
+                    .is_match(&destination_node_path)
+                {
+                    let source_paths = source_nodes
+                        .iter()
+                        .map(|source_node| project_path_from_view_path(&source_node.path).to_string())
+                        .collect::<Vec<_>>();
+
+                    let moved_phases = source_paths
+                        .iter()
+                        .filter_map(|path| {
+                            trace!("source_path: {:?}", path);
+                            crate::project::tree_item::REGULAR_EXPRESSIONS
+                                .phase
+                                .captures(&path)
+                        })
+                        .map(|captures| {
+                            let phase_reference = captures.name("phase").unwrap().as_str();
+                            PhaseReference::from_raw_str(phase_reference)
+                        })
+                        .collect::<Vec<_>>();
+                    trace!("moved_phases: {:?}", moved_phases);
+
+                    let target_neighbour_paths = project_tree
+                        .tree
+                        .neighbors(NodeIndex::new(dnd.target))
+                        .map(|neighbour_index| {
+                            let neighbour = project_tree
+                                .tree
+                                .node_weight(neighbour_index)
+                                .unwrap();
+                            project_path_from_view_path(&neighbour.path).to_string()
+                        })
+                        .collect::<Vec<_>>()
+                        .tap_mut(|paths| {
+                            paths.reverse();
+                        });
+
+                    let all_phases = target_neighbour_paths
+                        .iter()
+                        .filter_map(|path| {
+                            trace!("target_neighbour_path: {:?}", path);
+                            crate::project::tree_item::REGULAR_EXPRESSIONS
+                                .phase
+                                .captures(&path)
+                        })
+                        .map(|captures| {
+                            let phase_reference = captures.name("phase").unwrap().as_str();
+                            PhaseReference::from_raw_str(phase_reference)
+                        })
+                        .collect::<Vec<_>>();
+
+                    debug!("current phase ordering: {:?}", all_phases);
+
+                    fn find_position(
+                        project_tree: &ProjectTreeView,
+                        index: usize,
+                        phases: &mut [PhaseReference],
+                    ) -> Option<usize> {
+                        phases.iter().position(|phase| {
+                            let node = project_tree
+                                .tree
+                                .node_weight(NodeIndex::new(index))
+                                .unwrap();
+                            let node_path = project_path_from_view_path(&node.path).to_string();
+                            let captures = crate::project::tree_item::REGULAR_EXPRESSIONS
+                                .phase
+                                .captures(&node_path);
+                            if let Some(captures) = captures {
+                                let node_phase = PhaseReference::from_raw_str(captures.name("phase").unwrap().as_str());
+                                return *phase == node_phase;
+                            }
+                            false
+                        })
+                    }
+
+                    let phases = match dnd.position {
+                        DirPosition::First => {
+                            let mut all_phases = all_phases;
+                            all_phases.retain(|phase| !moved_phases.contains(phase));
+                            let mut phases = moved_phases;
+                            phases.extend(all_phases);
+
+                            phases
+                        }
+                        DirPosition::Last => {
+                            let mut phases = all_phases;
+                            phases.retain(|phase| !moved_phases.contains(phase));
+                            phases.extend(moved_phases);
+                            phases
+                        }
+                        DirPosition::After(index) => {
+                            let mut phases = all_phases;
+                            phases.retain(|phase| !moved_phases.contains(phase));
+
+                            // Find the position after the specified index node
+                            let insert_position = find_position(project_tree, index, &mut phases)
+                                .map(|pos| pos + 1)
+                                .unwrap_or(phases.len());
+
+                            // Insert the moved phases at the determined position
+                            phases.splice(insert_position..insert_position, moved_phases);
+
+                            phases
+                        }
+                        DirPosition::Before(index) => {
+                            let mut phases = all_phases;
+                            phases.retain(|phase| !moved_phases.contains(phase));
+
+                            // Find the position before the specified index node
+                            let insert_position =
+                                find_position(project_tree, index, &mut phases).unwrap_or(phases.len());
+
+                            // Insert the moved phases at the determined position
+                            phases.splice(insert_position..insert_position, moved_phases);
+
+                            phases
+                        }
+                    };
+
+                    debug!("new phase ordering: {:?}", phases);
+                    return Some(ExplorerTabUiAction::SetPhaseOrdering(phases.into()));
+                }
+
+                None
             }
         }
     }
