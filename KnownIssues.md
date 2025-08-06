@@ -16,6 +16,16 @@ Complete one task before starting the next.
 
 Don't mark placements as placed/skipped before the task is started.
 
+### Tricky to re-arrange phases by dragging and dropping
+
+Due to usability issues with egui_ltreeview, it's not clear where you can drop
+items from the tree views.
+
+#### Workaround
+
+* Close child nodes before attempting to re-arranging siblings.
+* Try the operation in reverse, e.g. instead of dragging a middle item below the last item, drag the last item up.
+
 ### Phase ordering is not checked when starting tasks.
 
 #### Workaround
