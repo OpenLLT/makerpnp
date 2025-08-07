@@ -15,10 +15,8 @@ use egui_mobius::types::ValueGuard;
 use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
-use planner_app::{
-    DesignIndex, DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, ProjectPcbOverview, VariantName,
-};
-use tracing::debug;
+use planner_app::{DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, ProjectPcbOverview, VariantName};
+use tracing::{debug, error};
 use util::range_utils::RangeIntoUsize;
 use validator::{Validate, ValidationError};
 
@@ -128,9 +126,14 @@ impl UnitAssignmentsTabUi {
                 pcb_unit_assignments
                     .unit_assignments
                     .get(pcb_unit_index)
-                    .map(|variant_name| DesignVariant {
-                        design_name: pcb_overview.designs[*pcb_design_index].clone(),
-                        variant_name: variant_name.clone(),
+                    .cloned()
+                    .filter(|it|{
+                        let mismatched = pcb_overview.designs[*pcb_design_index].ne(&it.design_name);
+                        if mismatched {
+                            // a unit assignment was found for this pcb_unit_index, but the design_name is not in the designs list, probably the design was deleted or renamed in the PCB.
+                            error!("Assigned unit has a design name not found in designs list, assignment design variant: {:?}, designs: {:?}", it, pcb_overview.designs);
+                        }
+                        !mismatched
                     })
             })
             .collect::<Vec<_>>();
@@ -161,16 +164,10 @@ impl UnitAssignmentsTabUi {
 
         fields.variant_map = (0..pcb_overview.units)
             .map(|pcb_unit_index| {
-                (
-                    pcb_overview
-                        .unit_map
-                        .get(&pcb_unit_index)
-                        .cloned(),
-                    pcb_unit_assignments
-                        .unit_assignments
-                        .get(&pcb_unit_index)
-                        .cloned(),
-                )
+                pcb_unit_assignments
+                    .unit_assignments
+                    .get(&pcb_unit_index)
+                    .cloned()
             })
             .collect::<Vec<_>>();
     }
@@ -598,7 +595,7 @@ impl UnitAssignmentsTabUi {
                                             ));
                                     }
 
-                                    let have_assigned_items_in_range = fields.variant_map[assignment_range].iter().any(|(_, assignment)| assignment.is_some());
+                                    let have_assigned_items_in_range = fields.variant_map[assignment_range].iter().any(|assignment| assignment.is_some());
 
                                     if tui
                                         .style(Style {
@@ -675,7 +672,7 @@ impl UnitAssignmentsTabUi {
                                                         })
                                                         .body(|mut body| {
                                                             let mut variant_map_selected_indexes = fields.variant_map_selected_indexes.clone();
-                                                            for (pcb_unit_index, (design_index, assigned_variant_name)) in
+                                                            for (pcb_unit_index, assigned_design_variant) in
                                                                 fields.variant_map.iter().enumerate()
                                                             {
                                                                 body.row(text_height, |mut row| {
@@ -687,16 +684,17 @@ impl UnitAssignmentsTabUi {
                                                                     });
 
                                                                     row.col(|ui| {
-                                                                        let label = design_index
-                                                                            .map(|design_index| pcb_overview.designs[design_index].to_string())
+                                                                        let label = assigned_design_variant
+                                                                            .clone()
+                                                                            .map(|it| it.design_name.to_string())
                                                                             .unwrap_or(tr!("assignment-unassigned"));
                                                                         ui.label(label);
                                                                     });
 
                                                                     row.col(|ui| {
-                                                                        let label = assigned_variant_name
+                                                                        let label = assigned_design_variant
                                                                             .clone()
-                                                                            .map(|variant_name| variant_name.to_string())
+                                                                            .map(|it| it.variant_name.to_string())
                                                                             .unwrap_or(tr!("assignment-unassigned"));
                                                                         ui.label(label);
                                                                     });
@@ -762,8 +760,8 @@ impl UnitAssignmentsTabUi {
                                     }
 
                                     let have_assigned_selection = fields.variant_map_selected_indexes.iter().any(|index|{
-                                        let (_, assigned_variant_name) = &fields.variant_map[*index];
-                                        assigned_variant_name.is_some()
+                                        let assigned_design_variant = &fields.variant_map[*index];
+                                        assigned_design_variant.is_some()
                                     });
                                     if tui
                                         .style(Style {
@@ -780,7 +778,7 @@ impl UnitAssignmentsTabUi {
                                             ));
                                     }
 
-                                    let have_assigned_items = fields.variant_map.iter().any(|(_, assigned_variant_name)| assigned_variant_name.is_some());
+                                    let have_assigned_items = fields.variant_map.iter().any(|assigned_design_variant| assigned_design_variant.is_some());
                                     if tui
                                         .style(Style {
                                             flex_grow: 1.0,
@@ -810,8 +808,13 @@ impl UnitAssignmentsTabUi {
         let variant_map = fields
             .variant_map
             .iter()
-            .filter(|(_, variant_name)| variant_name.is_some())
-            .map(|(_design_index, variant_name)| variant_name.clone().unwrap())
+            .filter(|assigned_design_variant| assigned_design_variant.is_some())
+            .map(|assigned_design_variant| {
+                assigned_design_variant
+                    .clone()
+                    .unwrap()
+                    .variant_name
+            })
             .collect::<Vec<_>>();
 
         let args = UpdateUnitAssignmentsArgs {
@@ -821,6 +824,39 @@ impl UnitAssignmentsTabUi {
 
         debug!("update unit assignments. args: {:?}", args);
         Some(UnitAssignmentsTabUiAction::UpdateUnitAssignments(args))
+    }
+
+    fn can_assign_variant(
+        existing_designs: &[DesignName],
+        design_variant: &DesignVariant,
+        candidate_design_variant: &&mut Option<DesignVariant>,
+    ) -> bool {
+        match candidate_design_variant {
+            Some(cdv)
+                if cdv
+                    .design_name
+                    .eq(&design_variant.design_name) =>
+            {
+                debug!("Assigning variant to unit with the same design: {}", design_variant);
+                true
+            }
+            Some(cdv) => {
+                let can_assign = existing_designs
+                    .iter()
+                    .all(|d| d.ne(&cdv.design_name));
+                if can_assign {
+                    debug!("Assigning design and variant, to a unit with a design that no-longer exists");
+                } else {
+                    debug!("Skipping assignment (design to be applied doesn't match");
+                }
+
+                can_assign
+            }
+            None => {
+                debug!("Assigning to an unassigned unit");
+                true
+            }
+        }
     }
 }
 
@@ -842,7 +878,7 @@ pub struct UnitAssignmentsFields {
     design_variants: Vec<DesignVariant>,
 
     /// index of the vec is the pcb unit index (0-based)
-    variant_map: Vec<(Option<DesignIndex>, Option<VariantName>)>,
+    variant_map: Vec<Option<DesignVariant>>,
 
     design_variant_selected_index: Option<usize>,
     variant_map_selected_indexes: Vec<usize>,
@@ -968,10 +1004,16 @@ impl UiComponent for UnitAssignmentsTabUi {
         command: Self::UiCommand,
         _context: &mut Self::UiContext<'context>,
     ) -> Option<Self::UiAction> {
+        let mut fields = self.fields.lock().unwrap();
+        let existing_designs = fields
+            .design_variants
+            .iter()
+            .map(|it| it.design_name.clone())
+            .collect::<Vec<_>>();
+
         match command {
             UnitAssignmentsTabUiCommand::None => Some(UnitAssignmentsTabUiAction::None),
             UnitAssignmentsTabUiCommand::AddDesignVariantClicked => {
-                let mut fields = self.fields.lock().unwrap();
                 let variant_name = VariantName::from_str(&fields.variant_name).unwrap();
 
                 if let Some(design_name) = fields.design_name.clone() {
@@ -989,28 +1031,20 @@ impl UiComponent for UnitAssignmentsTabUi {
                 None
             }
             UnitAssignmentsTabUiCommand::VariantNameChanged(value) => {
-                let mut fields = self.fields.lock().unwrap();
                 fields.variant_name = value;
                 fields.update_placements_filename();
                 None
             }
             UnitAssignmentsTabUiCommand::PcbUnitRangeChanged(value) => {
-                self.fields
-                    .lock()
-                    .unwrap()
-                    .pcb_unit_range = value;
+                fields.pcb_unit_range = value;
                 None
             }
-
             UnitAssignmentsTabUiCommand::DesignNameChanged(design_name) => {
-                let mut fields = self.fields.lock().unwrap();
                 fields.design_name = Some(design_name);
                 fields.update_placements_filename();
                 None
             }
-
             UnitAssignmentsTabUiCommand::DesignVariantSelectionChanged(design_variant_selected_index) => {
-                let mut fields = self.fields.lock().unwrap();
                 fields.design_variant_selected_index = design_variant_selected_index;
 
                 if let Some(design_variant_selected_index) = design_variant_selected_index {
@@ -1020,149 +1054,102 @@ impl UiComponent for UnitAssignmentsTabUi {
                     fields.variant_name = design_variant.variant_name.to_string();
                     fields.update_placements_filename();
                 }
-
                 None
             }
 
             UnitAssignmentsTabUiCommand::ApplyRangeClicked(design_variant_index) => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
-                    let pcb_unit_range = fields.pcb_unit_range.clone();
-                    let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview
-                        .designs
-                        .iter()
-                        .position(|design_name| design_name.eq(&design_variant.design_name))
-                        .map(|index| index as DesignIndex);
+                let pcb_unit_range = fields.pcb_unit_range.clone();
+                let design_variant = fields.design_variants[design_variant_index].clone();
 
-                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
-                        .variant_map
-                        .iter_mut()
-                        .enumerate()
-                        .filter(|(pcb_unit_index, _)| {
-                            pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
-                        })
-                        .filter(|(_pcb_unit_index, (candidate_design_index, _))| {
-                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
-                        })
-                    {
-                        *assigned_variant_name = Some(design_variant.variant_name.clone());
-                    }
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                for (_pcb_unit_index, assigned_design_variant) in fields
+                    .variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                    .filter(|(_pcb_unit_index, candidate_design_variant)| {
+                        Self::can_assign_variant(&existing_designs, &design_variant, candidate_design_variant)
+                    })
+                {
+                    *assigned_design_variant = Some(design_variant.clone());
                 }
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::UnassignFromRange(design_variant_index) => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
-                    let pcb_unit_range = fields.pcb_unit_range.clone();
-                    let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview
-                        .designs
-                        .iter()
-                        .position(|design_name| design_name.eq(&design_variant.design_name));
+                let pcb_unit_range = fields.pcb_unit_range.clone();
+                let design_variant = fields.design_variants[design_variant_index].clone();
 
-                    for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
-                        .variant_map
-                        .iter_mut()
-                        .enumerate()
-                        .filter(|(pcb_unit_index, _)| {
-                            pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1))
-                        })
-                        .filter(|(_pcb_unit_index, (candidate_design_index, _))| {
-                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
-                        }) {
-                        *assigned_variant_name = None;
-                    }
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                for (_pcb_unit_index, assigned_design_variant) in fields
+                    .variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
+                    .filter(|(_pcb_unit_index, candidate_design_variant)| {
+                        Self::can_assign_variant(&existing_designs, &design_variant, candidate_design_variant)
+                    })
+                {
+                    *assigned_design_variant = None;
                 }
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::UnassignRange => {
-                let mut fields = self.fields.lock().unwrap();
                 let pcb_unit_range = fields.pcb_unit_range.clone();
 
-                for (_pcb_unit_index, (_design_index, assigned_variant_name)) in fields
+                for (_pcb_unit_index, assigned_design_variant) in fields
                     .variant_map
                     .iter_mut()
                     .enumerate()
                     .filter(|(pcb_unit_index, _)| pcb_unit_range.contains(&(*pcb_unit_index as u16 + 1)))
                 {
-                    *assigned_variant_name = None;
+                    *assigned_design_variant = None;
                 }
                 Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::ApplyAllClicked(design_variant_index) => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
-                    let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview
-                        .designs
-                        .iter()
-                        .position(|design_name| design_name.eq(&design_variant.design_name));
+                let design_variant = fields.design_variants[design_variant_index].clone();
 
-                    for (_design_index, assigned_variant_name) in
-                        fields
-                            .variant_map
-                            .iter_mut()
-                            .filter(|(candidate_design_index, _variant_name)| {
-                                matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
-                            },
-                            )
-                    {
-                        *assigned_variant_name = Some(design_variant.variant_name.clone());
-                    }
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                for assigned_design_variant in fields
+                    .variant_map
+                    .iter_mut()
+                    .filter(|candidate_design_variant| {
+                        Self::can_assign_variant(&existing_designs, &design_variant, candidate_design_variant)
+                    })
+                {
+                    *assigned_design_variant = Some(design_variant.clone());
                 }
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::UnassignAllClicked => {
-                let mut fields = self.fields.lock().unwrap();
-                for (_design_index, assigned_variant_name) in fields.variant_map.iter_mut() {
-                    *assigned_variant_name = None;
+                for assigned_design_variant in fields.variant_map.iter_mut() {
+                    *assigned_design_variant = None;
                 }
 
                 Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::AssignSelection(design_variant_index, variant_map_selected_indexes) => {
-                if let Some(pcb_overview) = &self.pcb_overview {
-                    let mut fields = self.fields.lock().unwrap();
+                let design_variant = fields.design_variants[design_variant_index].clone();
 
-                    let design_variant = fields.design_variants[design_variant_index].clone();
-                    let design_index = pcb_overview
-                        .designs
-                        .iter()
-                        .position(|design_name| design_name.eq(&design_variant.design_name));
-
-                    for (_index, (_design_index, assigned_variant_name)) in fields
-                        .variant_map
-                        .iter_mut()
-                        .enumerate()
-                        .filter(|(index, _)| variant_map_selected_indexes.contains(index))
-                        .filter(|(_index, (candidate_design_index, _variant_name))| {
-                            matches!((candidate_design_index, design_index), (Some(cdi), Some(di)) if *cdi == di)
-                        })
-                    {
-                        *assigned_variant_name = Some(design_variant.variant_name.clone());
-                    }
-
-                    Self::apply_variant_map(fields, self.pcb_index)
-                } else {
-                    None
+                for (_index, assigned_design_variant) in fields
+                    .variant_map
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(index, _)| variant_map_selected_indexes.contains(index))
+                    .filter(|(_pcb_unit_index, candidate_design_variant)| {
+                        Self::can_assign_variant(&existing_designs, &design_variant, candidate_design_variant)
+                    })
+                {
+                    *assigned_design_variant = Some(design_variant.clone());
                 }
+
+                Self::apply_variant_map(fields, self.pcb_index)
             }
             UnitAssignmentsTabUiCommand::UnassignSelection(variant_map_selected_indexes) => {
-                let mut fields = self.fields.lock().unwrap();
-                for (_index, (_design_index, assigned_variant_name)) in fields
+                for (_index, assigned_design_variant) in fields
                     .variant_map
                     .iter_mut()
                     .enumerate()
                     .filter(|(index, _)| variant_map_selected_indexes.contains(index))
                 {
-                    *assigned_variant_name = None;
+                    *assigned_design_variant = None;
                 }
 
                 Self::apply_variant_map(fields, self.pcb_index)

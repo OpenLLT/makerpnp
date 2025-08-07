@@ -22,6 +22,7 @@ mod operation_sequence_1 {
     use assert_cmd::Command;
     use indoc::indoc;
     use nalgebra::Vector2;
+    use planning::design::DesignVariant;
     use planning::file::FileReference;
     use planning::pcb::PcbAssemblyOrientation;
     use planning::placement::{PlacementOperation, PlacementStatus, ProjectPlacementStatus};
@@ -603,7 +604,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (project::TestPart::new("CAP_MFR1", "CAP1"), TestPartState::default()),
@@ -771,7 +775,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (project::TestPart::new("CONN_MFR1", "CONN1"), TestPartState::default()),
@@ -940,7 +947,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -1110,7 +1120,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -1322,7 +1335,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -1566,7 +1582,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -1922,7 +1941,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -2483,7 +2505,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -2807,7 +2832,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (
@@ -3097,7 +3125,10 @@ mod operation_sequence_1 {
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
-                unit_assignments: BTreeMap::from_iter([(0, (0, "variant_a".into()))]),
+                unit_assignments: BTreeMap::from_iter([(0, DesignVariant {
+                    design_name: "design_a".into(),
+                    variant_name: "variant_a".into(),
+                })]),
             }])
             .with_part_states(vec![
                 (

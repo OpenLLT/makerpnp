@@ -292,8 +292,7 @@ pub struct ProjectPcb {
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
-    // TODO remove `DesignIndex` from this tuple, calling code should use the corresponding `pcb.design_to_unit_mapping` to avoid data mismatch
-    pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
+    pub unit_assignments: BTreeMap<PcbUnitIndex, DesignVariant>,
 }
 
 impl ProjectPcb {
@@ -327,16 +326,14 @@ impl ProjectPcb {
     pub fn unit_assignments(&self, pcb: &Pcb) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {
         let mut unit_assignments = vec![None; pcb.units as usize];
 
-        for (unit_index, (design_index, variant_name)) in self.unit_assignments.iter() {
-            unit_assignments[*unit_index as usize] = Some(DesignVariant {
-                design_name: pcb
-                    .design_names
-                    .iter()
-                    .nth(*design_index as usize)
-                    .unwrap()
-                    .clone(),
-                variant_name: variant_name.clone(),
-            });
+        for (unit_index, design_variant) in self.unit_assignments.iter() {
+            // it's possible that the design variant is no-longer in the PCB
+            if pcb
+                .design_names
+                .contains(&design_variant.design_name)
+            {
+                unit_assignments[*unit_index as usize] = Some(design_variant.clone())
+            }
         }
 
         Ok(unit_assignments)
@@ -356,7 +353,7 @@ impl ProjectPcb {
         pcb: &Pcb,
         unit: u16,
         variant_name: VariantName,
-    ) -> Result<Option<VariantName>, ProjectPcbError> {
+    ) -> Result<Option<DesignVariant>, ProjectPcbError> {
         if unit >= pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
                 unit,
@@ -372,22 +369,28 @@ impl ProjectPcb {
                 unit,
             })?;
 
+        let design_name = pcb.design_names[design_index as usize].clone();
+        let design_variant = DesignVariant {
+            design_name,
+            variant_name,
+        };
+
         match self.unit_assignments.entry(unit) {
             Entry::Vacant(entry) => {
-                entry.insert((design_index, variant_name));
+                entry.insert(design_variant);
                 Ok(None)
             }
             Entry::Occupied(mut entry) => {
-                let (other_design_index, other_variant_name) = entry.get();
-                if other_design_index.eq(&design_index) && other_variant_name.eq(&variant_name) {
+                let other_design_variant = entry.get();
+                if other_design_variant.eq(&design_variant) {
                     return Err(ProjectPcbError::UnitAlreadyAssigned {
                         unit,
                     });
                 }
 
-                let old_assigment = entry.insert((design_index, variant_name));
+                let old_assigment = entry.insert(design_variant);
 
-                Ok(Some(old_assigment.1))
+                Ok(Some(old_assigment))
             }
         }
     }

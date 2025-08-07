@@ -4,12 +4,11 @@ use std::str::FromStr;
 
 use indexmap::{IndexMap, IndexSet};
 use nalgebra::Vector2;
-use planning::design::{DesignIndex, DesignName};
+use planning::design::{DesignIndex, DesignName, DesignVariant};
 use planning::file::FileReference;
 use planning::pcb::PcbAssemblyOrientation;
 use planning::placement::{PlacementSortingMode, PlacementStatus, ProjectPlacementStatus};
 use planning::process::{OperationReference, ProcessReference, ProcessRuleReference, TaskReference, TaskStatus};
-use planning::variant::VariantName;
 use pnp::object_path::ObjectPath;
 use pnp::panel::{Dimensions, Unit};
 use pnp::pcb::{PcbSide, PcbUnitIndex};
@@ -238,7 +237,7 @@ pub struct TestProjectPcb {
     #[serde_as(as = "Vec<(_, _)>")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     #[serde(default)]
-    pub unit_assignments: BTreeMap<PcbUnitIndex, (DesignIndex, VariantName)>,
+    pub unit_assignments: BTreeMap<PcbUnitIndex, DesignVariant>,
 }
 
 #[derive(Debug, serde::Serialize, Ord, PartialOrd, Eq, PartialEq)]

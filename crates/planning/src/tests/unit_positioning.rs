@@ -27,7 +27,7 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use tap::Tap;
 
-use crate::design::{DesignIndex, DesignName};
+use crate::design::{DesignIndex, DesignName, DesignVariant};
 use crate::file::FileReference;
 use crate::pcb::{Pcb, PcbAssemblyFlip, PcbAssemblyOrientation, PcbSideAssemblyOrientation, UnitPlacementPosition};
 use crate::phase::PhaseReference;
@@ -411,16 +411,28 @@ fn test_build_placement_unit_positions(
     let mut project_pcb = ProjectPcb::new(FileReference::Relative(PathBuf::from("pcb1.pcb.json")));
     project_pcb
         .unit_assignments
-        .insert(0, (0, "Variant1".into()));
+        .insert(0, DesignVariant {
+            design_name: "Design1".into(),
+            variant_name: "Variant1".into(),
+        });
     project_pcb
         .unit_assignments
-        .insert(1, (0, "Variant1".into()));
+        .insert(1, DesignVariant {
+            design_name: "Design1".into(),
+            variant_name: "Variant1".into(),
+        });
     project_pcb
         .unit_assignments
-        .insert(2, (0, "Variant1".into()));
+        .insert(2, DesignVariant {
+            design_name: "Design1".into(),
+            variant_name: "Variant1".into(),
+        });
     project_pcb
         .unit_assignments
-        .insert(3, (0, "Variant1".into()));
+        .insert(3, DesignVariant {
+            design_name: "Design1".into(),
+            variant_name: "Variant1".into(),
+        });
     project.pcbs.push(project_pcb);
 
     // and build args

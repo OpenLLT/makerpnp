@@ -261,7 +261,7 @@ pub struct PcbOverview {
 pub struct PcbUnitAssignments {
     /// the design name for the pcb unit index can be obtained via the PCB overview
     /// not all pcb units may be assigned
-    pub unit_assignments: HashMap<PcbUnitIndex, VariantName>,
+    pub unit_assignments: HashMap<PcbUnitIndex, DesignVariant>,
     pub index: u16,
 }
 
@@ -1681,7 +1681,7 @@ impl Planner {
                 let unit_assignments = project_pcb
                     .unit_assignments
                     .iter()
-                    .map(|(pcb_unit_index, (_design_index, variant_name))| (*pcb_unit_index, variant_name.clone()))
+                    .map(|(pcb_unit_index, design_variant)| (*pcb_unit_index, design_variant.clone()))
                     .collect::<HashMap<_, _>>();
 
                 let pcb_unit_assignments = PcbUnitAssignments {
@@ -1813,21 +1813,30 @@ impl Planner {
                             .unwrap();
                         args.insert("design_name".to_string(), Arg::String(design_name.to_string()));
 
-                        if let Some((assignment_design_index, variant_name)) = project_pcb
+                        if let Some(assignment_design_variant) = project_pcb
                             .unit_assignments
                             .get(pcb_unit_index)
                         {
-                            let design_changed = assignment_design_index != design_index;
+                            let design_changed = assignment_design_variant
+                                .design_name
+                                .ne(design_name);
                             if design_changed {
                                 // It's invalid for these to be mismatched; if this occurs, then the pcb variant map is
                                 // out of sync with the pcb unit assignments and needs to be re-synced; since that
                                 // should happen before this code, ignore this `unit_map` entry.
-                                error!("PCB unit map is out of sync with pcb unit assignments. map_index: {}, unit: {}, assignment_design_index: {}, design_index: {}",
-                                    map_index, pcb_unit_index, assignment_design_index, design_index
+                                error!("PCB unit map is out of sync with pcb unit assignments. map_index: {}, unit: {}, assignment_design_variant: {}, design_index: {}",
+                                    map_index, pcb_unit_index, assignment_design_variant, design_index
                                 );
                                 continue;
                             } else {
-                                args.insert("variant_name".to_string(), Arg::String(variant_name.to_string()));
+                                args.insert(
+                                    "variant_name".to_string(),
+                                    Arg::String(
+                                        assignment_design_variant
+                                            .variant_name
+                                            .to_string(),
+                                    ),
+                                );
                             }
                         }
 
