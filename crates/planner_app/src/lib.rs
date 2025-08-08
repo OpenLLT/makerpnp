@@ -1021,6 +1021,8 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::RefreshPcbs => Box::new(move |model: &mut Model| {
+                info!("Refreshing PCBs");
+
                 let paths = model
                     .model_pcbs
                     .keys()

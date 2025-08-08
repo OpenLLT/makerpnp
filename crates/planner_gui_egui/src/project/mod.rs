@@ -1110,6 +1110,7 @@ impl UiComponent for Project {
             // project views
             //
             ProjectUiCommand::RequestProjectView(view_request) => {
+                debug!("request project view: {:?}", view_request);
                 let event = match view_request {
                     ProjectViewRequest::Overview => Event::RequestOverviewView {},
                     ProjectViewRequest::Parts => Event::RequestPartStatesView {},
@@ -2043,7 +2044,24 @@ impl UiComponent for Project {
             }
             ProjectUiCommand::PcbsRefreshed => {
                 info!("PCBs refreshed.");
-                None
+
+                let mut tasks = vec![];
+                for (index, _path) in self.pcbs.iter().enumerate() {
+                    let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::PcbOverview {
+                            pcb: index as u16,
+                        },
+                    )));
+                    tasks.push(task);
+                }
+
+                // an updated PCB can effect designs and variants.
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::ProjectTree,
+                )));
+                tasks.push(task);
+
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
         }
     }
