@@ -49,7 +49,7 @@ use crate::process::{
 use crate::report::project_report_json_to_markdown;
 use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::variant::VariantName;
-use crate::{file, operation_history, placement, report};
+use crate::{file, operation_history, pcb, placement, report};
 
 #[serde_as]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -308,7 +308,7 @@ impl ProjectPcb {
             .pcb_file
             .build_path(project_directory);
 
-        let pcb = file::load(&path)?;
+        let pcb = pcb::load_pcb(&path)?;
 
         Ok((self.pcb_file.clone(), pcb, path))
     }

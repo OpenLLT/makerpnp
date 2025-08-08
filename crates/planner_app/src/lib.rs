@@ -32,7 +32,7 @@ pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
 use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectPcb};
 pub use planning::variant::VariantName;
-use planning::{file, project};
+use planning::{file, pcb, project};
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 pub use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Unit};
@@ -183,7 +183,7 @@ impl Model {
 
     /// Load a PCB, no project required.
     fn load_pcb(&mut self, path: &PathBuf) -> Result<(), AppError> {
-        let pcb = load_pcb(path).map_err(AppError::IoError)?;
+        let pcb = pcb::load_pcb(path).map_err(AppError::IoError)?;
 
         self.model_pcbs
             .insert(path.clone(), ModelPcb {
@@ -1066,7 +1066,7 @@ impl Planner {
                 let project_directory = path.parent().unwrap();
                 let pcb_path = pcb_file.build_path(&project_directory.to_path_buf());
 
-                let pcb = load_pcb(&pcb_path).map_err(AppError::IoError)?;
+                let pcb = pcb::load_pcb(&pcb_path).map_err(AppError::IoError)?;
 
                 project::add_pcb(project, &pcb_file).map_err(AppError::PcbOperationError)?;
 
@@ -2387,18 +2387,5 @@ fn try_build_phase_overview(
         pcb_side: phase.pcb_side.clone(),
         phase_placement_orderings: phase.placement_orderings.clone(),
         state: state.clone(),
-    })
-}
-
-fn load_pcb(path: &PathBuf) -> Result<Pcb, std::io::Error> {
-    file::load::<Pcb>(path).map(|mut pcb| {
-        // TODO can we somehow integrate this block into the deserialization so we don't have to do it explicitly?
-
-        pcb.panel_sizing
-            .ensure_design_sizings(pcb.design_names.len());
-        pcb.panel_sizing
-            .ensure_unit_positionings(pcb.units);
-
-        pcb
     })
 }
