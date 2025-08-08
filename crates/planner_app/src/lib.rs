@@ -403,29 +403,30 @@ impl PartialEq for ProjectTreeView {
 pub enum ProjectView {
     Overview(ProjectOverview),
     Parts(PartStates),
+    PcbOverview(ProjectPcbOverview),
+    PcbUnitAssignments(PcbUnitAssignments),
     Phases(Phases),
     PhaseLoadOut(LoadOut),
     PhaseOverview(PhaseOverview),
     PhasePlacements(PhasePlacements),
     Placements(PlacementsList),
+    ProcessDefinition(ProcessDefinition),
     ProjectTree(ProjectTreeView),
-    Process(ProcessDefinition),
-    PcbOverview(ProjectPcbOverview),
-    PcbUnitAssignments(PcbUnitAssignments),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub enum ProjectViewRequest {
     Overview,
     Parts,
+    PcbOverview { pcb: u16 },
+    PcbUnitAssignments { pcb: u16 },
     Phases,
     PhaseLoadOut { phase: PhaseReference },
     PhaseOverview { phase: PhaseReference },
     PhasePlacements { phase: PhaseReference },
     Placements,
+    ProcessDefinition { process: ProcessReference },
     ProjectTree,
-    PcbOverview { pcb: u16 },
-    PcbUnitAssignments { pcb: u16 },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -555,9 +556,6 @@ pub enum Event {
     RequestPhasePlacementsView {
         phase_reference: PhaseReference,
     },
-    RequestProcessView {
-        process_reference: String,
-    },
     RequestPartStatesView,
     RequestPhaseLoadOutView {
         phase_reference: PhaseReference,
@@ -569,6 +567,9 @@ pub enum Event {
     RequestPcbUnitAssignmentsView {
         /// index, 0-based
         pcb: u16,
+    },
+    RequestProcessDefinitionView {
+        process_reference: ProcessReference,
     },
 
     //
@@ -1867,13 +1868,13 @@ impl Planner {
                     .tree
                     .add_edge(root_node, processes_node, ());
 
-                for (index, process) in project.processes.iter().enumerate() {
+                for process in project.processes.iter() {
                     let process_node = project_tree
                         .tree
                         .add_node(ProjectTreeItem {
                             key: "process".to_string(),
                             args: HashMap::from([("name".to_string(), Arg::String(process.reference.to_string()))]),
-                            path: format!("/processes/{}", index).to_string(),
+                            path: format!("/processes/{}", process.reference).to_string(),
                         });
 
                     project_tree
@@ -2011,6 +2012,26 @@ impl Planner {
 
                 Ok(project_view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
+            Event::RequestProcessDefinitionView {
+                process_reference,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project, ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let process = project
+                    .processes
+                    .iter()
+                    .find(|it| it.reference.eq(&process_reference))
+                    .ok_or(AppError::UnknownProcessReference(process_reference.clone()))?;
+
+                Ok(project_view_renderer::view(ProjectView::ProcessDefinition(
+                    process.clone(),
+                )))
+            }),
             Event::RequestPhasePlacementsView {
                 phase_reference,
             } => Box::new(move |model: &mut Model| {
@@ -2066,25 +2087,6 @@ impl Planner {
                 Ok(project_view_renderer::view(ProjectView::PhasePlacements(
                     phase_placements,
                 )))
-            }),
-            Event::RequestProcessView {
-                process_reference,
-            } => Box::new(move |model: &mut Model| {
-                let ModelProject {
-                    project, ..
-                } = model
-                    .model_project
-                    .as_mut()
-                    .ok_or(AppError::OperationRequiresProject)?;
-
-                let process_reference =
-                    ProcessReference::try_from(process_reference).map_err(|err| AppError::ProcessError(err.into()))?;
-
-                let process = project
-                    .find_process(&process_reference)
-                    .map_err(|err| AppError::ProcessError(err.into()))?;
-
-                Ok(project_view_renderer::view(ProjectView::Process(process.clone())))
             }),
             Event::RequestPartStatesView {} => Box::new(move |model: &mut Model| {
                 let ModelProject {
@@ -2309,6 +2311,8 @@ enum AppError {
 
     #[error("Unknown phase reference. reference: {0}")]
     UnknownPhaseReference(Reference),
+    #[error("Unknown process reference. reference: {0}")]
+    UnknownProcessReference(ProcessReference),
 }
 
 impl Planner {

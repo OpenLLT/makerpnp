@@ -398,7 +398,7 @@ impl UiComponent for PhaseTabUi {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, PartialEq)]
 pub struct PhaseTab {
-    pub phase: Reference,
+    pub phase: PhaseReference,
 }
 
 impl PhaseTab {

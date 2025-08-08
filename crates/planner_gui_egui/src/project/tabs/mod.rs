@@ -19,6 +19,7 @@ pub mod parts_tab;
 pub mod pcb_tab;
 pub mod phase_tab;
 pub mod placements_tab;
+pub mod process_tab;
 pub mod unit_assignments_tab;
 
 #[derive(Derivative, serde::Deserialize, serde::Serialize)]
@@ -102,8 +103,9 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Explorer(tab) => tab.label(),
             ProjectTabKind::Overview(tab) => tab.label(),
             ProjectTabKind::Parts(tab) => tab.label(),
-            ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
+            ProjectTabKind::Placements(tab) => tab.label(),
+            ProjectTabKind::Process(tab) => tab.label(),
             ProjectTabKind::LoadOut(tab) => tab.label(),
             ProjectTabKind::Pcb(tab) => tab.label(),
             ProjectTabKind::UnitAssignments(tab) => tab.label(),
@@ -115,8 +117,9 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Process(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::UnitAssignments(tab) => tab.ui(ui, tab_key, context),
@@ -128,8 +131,9 @@ impl Tab for ProjectTabKind {
             ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Process(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::UnitAssignments(tab) => tab.on_close(tab_key, context),

@@ -41,7 +41,7 @@ pub struct ProcessDefinition {
     ///
     pub operations: Vec<OperationDefinition>,
 
-    /// examples: `["core::"]`
+    /// examples: `["core::..."]`
     pub rules: Vec<ProcessRuleReference>,
 }
 
@@ -63,7 +63,7 @@ pub struct OperationDefinition {
 /// a namespaced operation task reference.  e.g. "core::place_components"
 pub type TaskReference = Reference;
 
-/// a namespaced rule reference. e.g. "core::unique_feeder_ids"
+/// a namespaced rule reference. e.g. "core::unique_feeder_references"
 pub type ProcessRuleReference = Reference;
 
 impl ProcessDefinition {

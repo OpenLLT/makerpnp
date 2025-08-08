@@ -33,6 +33,9 @@ use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
 use crate::project::tabs::parts_tab::PartsTabUiApplyAction;
 use crate::project::tabs::placements_tab::PlacementsTabUiApplyAction;
+use crate::project::tabs::process_tab::{
+    ProcessTab, ProcessTabUi, ProcessTabUiAction, ProcessTabUiCommand, ProcessTabUiContext,
+};
 use crate::project::tabs::{ProjectTabAction, ProjectTabContext, ProjectTabUiCommand, ProjectTabs};
 use crate::project::toolbar::{ProjectToolbar, ProjectToolbarAction, ProjectToolbarUiCommand};
 use crate::task::Task;
@@ -115,6 +118,7 @@ pub mod tree_item {
 
     pub const PCB: &str = r"^/project/pcbs/(?<pcb>[0-9]?){1}$";
     pub const PCB_UNIT: &str = r"^/project/pcbs/(?<pcb>[0-9]?){1}/units(?:.*)?$";
+    pub const PROCESS: &str = r"^/project/processes/(?<process>[^/]*){1}$";
 
     pub struct RegularExpressions {
         pub phases: Regex,
@@ -122,6 +126,7 @@ pub mod tree_item {
         pub phase_loadout: Regex,
         pub pcb: Regex,
         pub pcb_unit: Regex,
+        pub process: Regex,
     }
 
     impl Default for RegularExpressions {
@@ -132,6 +137,7 @@ pub mod tree_item {
                 phase_loadout: Regex::new(PHASE_LOADOUT).unwrap(),
                 pcb: Regex::new(PCB).unwrap(),
                 pcb_unit: Regex::new(PCB_UNIT).unwrap(),
+                process: Regex::new(PROCESS).unwrap(),
             }
         }
     }
@@ -235,9 +241,10 @@ impl Project {
             let command = match tab {
                 ProjectTabKind::Explorer(_tab) => ProjectUiCommand::ShowExplorer,
                 ProjectTabKind::Overview(_tab) => ProjectUiCommand::ShowOverview,
+                ProjectTabKind::Parts(_tab) => ProjectUiCommand::ShowParts,
                 ProjectTabKind::Phase(tab) => ProjectUiCommand::ShowPhase(tab.phase.clone()),
                 ProjectTabKind::Placements(_tab) => ProjectUiCommand::ShowPlacements,
-                ProjectTabKind::Parts(_tab) => ProjectUiCommand::ShowParts,
+                ProjectTabKind::Process(tab) => ProjectUiCommand::ShowProcess(tab.process.clone()),
                 ProjectTabKind::LoadOut(tab) => ProjectUiCommand::ShowPhaseLoadout {
                     phase: tab.phase.clone(),
                 },
@@ -304,7 +311,7 @@ impl Project {
         tasks
     }
 
-    pub fn show_phase(&mut self, key: ProjectKey, phase: Reference) -> Option<Vec<Task<ProjectAction>>> {
+    pub fn show_phase(&mut self, key: ProjectKey, phase: PhaseReference) -> Option<Vec<Task<ProjectAction>>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let tab = PhaseTab::new(phase.clone());
 
@@ -335,6 +342,33 @@ impl Project {
                     },
                 ))),
             ]),
+        }
+    }
+
+    pub fn show_process(&mut self, key: ProjectKey, process: ProcessReference) -> Option<Vec<Task<ProjectAction>>> {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let tab = ProcessTab::new(process.clone());
+
+        project_tabs
+            .show_tab(
+                |candidate_tab_kind| matches!(candidate_tab_kind, ProjectTabKind::Process(candidate_tab) if candidate_tab.eq(&tab)),
+            )
+            .inspect(|tab_key| {
+                debug!("showing existing process tab. process: {:?}, tab_key: {:?}", process, tab_key);
+            })
+            .inspect_err(|_| {
+                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Process(tab));
+                debug!("adding process tab. process: {:?}, tab_key: {:?}", process, tab_key);
+            })
+            .ok();
+
+        match self.ensure_process(key, &process) {
+            false => None,
+            true => Some(vec![Task::done(ProjectAction::UiCommand(
+                ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProcessDefinition {
+                    process: process.clone(),
+                }),
+            ))]),
         }
     }
 
@@ -462,6 +496,34 @@ impl Project {
         created
     }
 
+    fn ensure_process(&self, key: ProjectKey, process: &Reference) -> bool {
+        let process = process.clone();
+        let mut state = self.project_ui_state.lock().unwrap();
+        let mut created = false;
+        let _process_state = state
+            .process_tab_uis
+            .entry(process.clone())
+            .or_insert_with(|| {
+                created = true;
+                debug!("ensuring process ui. process: {:?}", process);
+                let mut process_ui = ProcessTabUi::new();
+                process_ui
+                    .component
+                    .configure_mapper(self.component.sender.clone(), {
+                        move |command| {
+                            trace!("process ui mapper. command: {:?}", command);
+                            (key, ProjectUiCommand::ProcessTabUiCommand {
+                                process: process.clone(),
+                                command,
+                            })
+                        }
+                    });
+
+                process_ui
+            });
+
+        created
+    }
     fn ensure_load_out(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) -> bool {
         let load_out_source = load_out_source.clone();
         let mut state = self.project_ui_state.lock().unwrap();
@@ -617,6 +679,27 @@ impl Project {
         }
 
         #[must_use]
+        fn handle_process(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+            if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
+                .process
+                .captures(&path)
+            {
+                let process_reference: String = captures
+                    .name("process")
+                    .unwrap()
+                    .as_str()
+                    .to_string();
+                debug!("process_reference: {}", process_reference);
+
+                let reference = Reference::from_raw(process_reference);
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowProcess(reference)));
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
         fn handle_phase_loadout(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if let Some(captures) = tree_item::REGULAR_EXPRESSIONS
                 .phase_loadout
@@ -688,11 +771,12 @@ impl Project {
         let handlers = [
             handle_root,
             handle_parts,
-            handle_phases,
-            handle_phase_loadout,
-            handle_placements,
-            handle_phase,
             handle_pcb,
+            handle_phase,
+            handle_phase_loadout,
+            handle_phases,
+            handle_placements,
+            handle_process,
             handle_unit_assignments,
         ];
 
@@ -1142,6 +1226,11 @@ impl UiComponent for Project {
                     } => Event::RequestPcbUnitAssignmentsView {
                         pcb,
                     },
+                    ProjectViewRequest::ProcessDefinition {
+                        process,
+                    } => Event::RequestProcessDefinitionView {
+                        process_reference: process,
+                    },
                 };
 
                 self.planner_core_service
@@ -1248,8 +1337,19 @@ impl UiComponent for Project {
 
                         phase_ui.update_placements(phase_placements, self.phases.clone());
                     }
-                    ProjectView::Process(_process) => {
-                        // TODO
+                    ProjectView::ProcessDefinition(process_definition) => {
+                        trace!("process definition: {:?}", process_definition);
+                        let process = process_definition.reference.clone();
+
+                        self.ensure_process(key, &process);
+
+                        let mut state = self.project_ui_state.lock().unwrap();
+                        let process_ui = state
+                            .process_tab_uis
+                            .get_mut(&process)
+                            .unwrap();
+
+                        process_ui.update_definition(process_definition);
                     }
                     ProjectView::Parts(part_states) => {
                         trace!("parts: {:?}", part_states);
@@ -1547,6 +1647,11 @@ impl UiComponent for Project {
 
                 tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
             }
+            ProjectUiCommand::ShowProcess(process) => {
+                let tasks = self.show_process(key.clone(), process.clone());
+
+                tasks.map(|tasks| ProjectAction::Task(key, Task::batch(tasks)))
+            }
             ProjectUiCommand::ShowPcb(pcb_index) => {
                 let tasks = self.show_pcb(key.clone(), pcb_index);
 
@@ -1791,6 +1896,24 @@ impl UiComponent for Project {
                         design_position,
                         unit_position,
                     }) => self.locate_component(object_path, pcb_side, design_position, unit_position),
+                }
+            }
+            ProjectUiCommand::ProcessTabUiCommand {
+                process,
+                command,
+            } => {
+                let mut state = self.project_ui_state.lock().unwrap();
+                let process_ui = state
+                    .process_tab_uis
+                    .get_mut(&process)
+                    .unwrap();
+
+                let context = &mut ProcessTabUiContext::default();
+                let process_ui_action = process_ui.update(command, context);
+
+                match process_ui_action {
+                    None => None,
+                    Some(ProcessTabUiAction::None) => None,
                 }
             }
             ProjectUiCommand::LoadOutTabUiCommand {
@@ -2077,8 +2200,9 @@ pub struct ProjectUiState {
     load_out_tab_uis: HashMap<LoadOutSource, LoadOutTabUi>,
     parts_tab_ui: PartsTabUi,
     pcb_tab_uis: HashMap<usize, PcbTabUi>,
-    phases_tab_uis: HashMap<Reference, PhaseTabUi>,
+    phases_tab_uis: HashMap<PhaseReference, PhaseTabUi>,
     placements_ui: PlacementsTabUi,
+    process_tab_uis: HashMap<ProcessReference, ProcessTabUi>,
     overview_ui: OverviewTabUi,
     unit_assignment_tab_uis: HashMap<usize, UnitAssignmentsTabUi>,
 }
@@ -2098,6 +2222,7 @@ impl ProjectUiState {
             pcb_tab_uis: HashMap::default(),
             phases_tab_uis: HashMap::default(),
             placements_ui: PlacementsTabUi::new(),
+            process_tab_uis: HashMap::default(),
             overview_ui: OverviewTabUi::new(),
             unit_assignment_tab_uis: HashMap::default(),
         };
@@ -2149,6 +2274,7 @@ pub enum ProjectTabKind {
     LoadOut(LoadOutTab),
     Pcb(PcbTab),
     UnitAssignments(UnitAssignmentsTab),
+    Process(ProcessTab),
 }
 
 #[derive(Debug, Clone)]
@@ -2246,6 +2372,13 @@ pub enum ProjectUiCommand {
         pcb_index: u16,
         command: UnitAssignmentsTabUiCommand,
     },
+
+    ShowProcess(ProcessReference),
+    ProcessTabUiCommand {
+        process: Reference,
+        command: ProcessTabUiCommand,
+    },
+
     RefreshFromDesignVariants,
     RefreshPcbs,
     PcbsRefreshed,

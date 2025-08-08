@@ -66,6 +66,9 @@ project-parts-header = Project Parts
 
 project-pcb-tab-label = PCB ({ $pcb })
 
+project-process-header = Process
+project-process-tab-label = Process ({ $process })
+
 project-unit-assignments-tab-label = Unit assignments ({ $pcb })
 project-unit-assignments-header = Unit assignments
 
