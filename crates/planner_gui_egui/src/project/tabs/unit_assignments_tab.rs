@@ -16,7 +16,7 @@ use egui_taffy::taffy::prelude::{auto, length, percent, span};
 use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Size, Style};
 use egui_taffy::{Tui, TuiBuilderLogic, tui};
 use planner_app::{DesignName, DesignVariant, PcbOverview, PcbUnitAssignments, ProjectPcbOverview, VariantName};
-use tracing::{debug, error};
+use tracing::{debug, error, trace};
 use util::range_utils::RangeIntoUsize;
 use validator::{Validate, ValidationError};
 
@@ -919,7 +919,7 @@ impl UnitAssignmentsFields {
 
         placements_directory.push(placements_filename);
         if !placements_directory.exists() {
-            debug!("placements file does not exist. filename: {:?}", placements_directory);
+            trace!("placements file does not exist. filename: {:?}", placements_directory);
             Err(ValidationError::new("form-file-not-found"))
         } else {
             Ok(())
