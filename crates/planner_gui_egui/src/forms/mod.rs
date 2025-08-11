@@ -9,6 +9,8 @@ use egui_taffy::{Tui, TuiBuilderLogic};
 use i18n::fluent_argument_helpers::json::build_fluent_args;
 use validator::{ValidateArgs, ValidationError, ValidationErrors};
 
+pub mod validation;
+
 use crate::forms::transforms::resize_x_transform;
 
 /// transient helper

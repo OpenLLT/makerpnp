@@ -362,6 +362,17 @@ macro_rules! tabs_impl {
         }
 
         #[allow(dead_code)]
+        pub fn filter_map_mut<B, F>(&self, f: F) -> Vec<B>
+        where
+            F: FnMut((&TabKey, &mut $tab_kind)) -> Option<B>,
+        {
+            let mut tabs = self.tabs.lock().unwrap();
+            tabs.iter_mut()
+                .filter_map(f)
+                .collect::<Vec<_>>()
+        }
+
+        #[allow(dead_code)]
         pub fn with_tab_mut<F, O>(&self, tab_key: &TabKey, f: F) -> O
         where
             F: Fn(&mut $tab_kind) -> O,

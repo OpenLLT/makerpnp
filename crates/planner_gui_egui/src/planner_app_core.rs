@@ -24,6 +24,7 @@ pub enum PlannerAction {
 #[derive(Debug, Clone)]
 pub enum PlannerError {
     CoreError((chrono::DateTime<chrono::Utc>, String)),
+    Other((chrono::DateTime<chrono::Utc>, String)),
 }
 
 impl PlannerCoreService {

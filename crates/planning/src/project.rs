@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
 use anyhow::Error;
 use csv::QuoteStyle;
@@ -16,7 +15,7 @@ use pnp::object_path::ObjectPath;
 use pnp::part::Part;
 use pnp::pcb::{PcbInstanceNumber, PcbSide, PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
-use pnp::reference::{Reference, ReferenceError};
+use pnp::reference::Reference;
 use regex::Regex;
 use rust_decimal::Decimal;
 use serde_with::serde_as;
@@ -413,27 +412,24 @@ pub enum ProjectPcbError {
 }
 
 #[derive(Error, Debug)]
-pub enum ProcessFactoryError {
-    #[error("Unknown error, reason: {reason:?}")]
-    ErrorCreatingProcessReference { reason: ReferenceError },
-    #[error("unknown process.  process: {}", process)]
-    UnknownProcessName { process: String },
+pub enum ProcessPresetFactoryError {
+    #[error("Unknown process preset.  preset: {}", preset)]
+    UnknownPreset { preset: String },
 }
 
-pub struct ProcessFactory {}
+pub struct ProcessPresetFactory {}
 
-impl ProcessFactory {
-    pub fn by_name(name: &str) -> Result<ProcessDefinition, ProcessFactoryError> {
-        let process_name =
-            ProcessReference::from_str(name).map_err(|e| ProcessFactoryError::ErrorCreatingProcessReference {
-                reason: e,
-            })?;
+impl ProcessPresetFactory {
+    pub fn available_presets() -> Vec<String> {
+        vec!["pnp".to_string(), "manual".to_string()]
+    }
 
+    pub fn by_preset_name(name: &str) -> Result<ProcessDefinition, ProcessPresetFactoryError> {
         // FUTURE add support for more named processes
 
         match name {
             "pnp" => Ok(ProcessDefinition {
-                reference: process_name,
+                reference: ProcessReference::from_raw_str("pnp"),
                 operations: vec![
                     OperationDefinition {
                         reference: Reference::from_raw_str("load_pcbs"),
@@ -451,7 +447,7 @@ impl ProcessFactory {
                 rules: vec![ProcessRuleReference::from_raw_str("core::unique_feeder_references")],
             }),
             "manual" => Ok(ProcessDefinition {
-                reference: process_name,
+                reference: ProcessReference::from_raw_str("manual"),
                 operations: vec![
                     OperationDefinition {
                         reference: Reference::from_raw_str("load_pcbs"),
@@ -467,8 +463,8 @@ impl ProcessFactory {
                 ],
                 rules: vec![],
             }),
-            _ => Err(ProcessFactoryError::UnknownProcessName {
-                process: process_name.to_string(),
+            preset @ _ => Err(ProcessPresetFactoryError::UnknownPreset {
+                preset: preset.to_string(),
             }),
         }
     }
@@ -479,8 +475,8 @@ impl Default for Project {
         Self {
             name: "Unnamed".to_string(),
             processes: vec![
-                ProcessFactory::by_name("pnp").unwrap(),
-                ProcessFactory::by_name("manual").unwrap(),
+                ProcessPresetFactory::by_preset_name("pnp").unwrap(),
+                ProcessPresetFactory::by_preset_name("manual").unwrap(),
             ],
             pcbs: vec![],
             part_states: Default::default(),

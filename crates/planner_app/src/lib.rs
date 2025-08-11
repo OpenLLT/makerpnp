@@ -26,11 +26,15 @@ pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::PlacementStatus;
 pub use planning::placement::ProjectPlacementStatus;
 pub use planning::placement::{PlacementOperation, PlacementState};
+use planning::process::ProcessError;
 pub use planning::process::ProcessReference;
 pub use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
 pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
-use planning::project::{PartStateError, PcbOperationError, ProcessFactory, Project, ProjectError, ProjectPcb};
+use planning::project::{
+    PartStateError, PcbOperationError, ProcessPresetFactory, ProcessPresetFactoryError, Project, ProjectError,
+    ProjectPcb,
+};
 pub use planning::variant::VariantName;
 use planning::{file, pcb, project};
 pub use pnp::load_out::LoadOutItem;
@@ -475,6 +479,13 @@ pub enum Event {
     },
     RefreshPcbs,
     SaveAllPcbs,
+    CreateProcessFromPreset {
+        preset: ProcessReference,
+    },
+    ApplyProcessDefinition {
+        process_reference: ProcessReference,
+        process_definition: ProcessDefinition,
+    },
     AssignVariantToUnit {
         unit: ObjectPath,
         variant: VariantName,
@@ -1084,6 +1095,128 @@ impl Planner {
 
                 Ok(render::render())
             }),
+            Event::CreateProcessFromPreset {
+                preset,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+                let preset_name_str = preset.to_string();
+                let process =
+                    ProcessPresetFactory::by_preset_name(preset_name_str.as_str()).map_err(|cause| match cause {
+                        ProcessPresetFactoryError::UnknownPreset {
+                            preset,
+                        } => AppError::ProcessError(ProcessError::UnknownPreset {
+                            preset,
+                            presets: ProcessPresetFactory::available_presets(),
+                        }),
+                    })?;
+
+                project
+                    .ensure_process(&process)
+                    .map_err(AppError::OperationError)?;
+                *modified |= true;
+
+                Ok(render::render())
+            }),
+            Event::ApplyProcessDefinition {
+                process_reference,
+                process_definition,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let started = project
+                    .phase_states
+                    .iter()
+                    .any(|(_, phase)| {
+                        phase.operation_states.iter().any(|os| {
+                            os.task_states
+                                .iter()
+                                .any(|(_, ts)| !ts.is_pending())
+                        })
+                    });
+
+                if started {
+                    // reject any attempt to modify a process if any phase has been started
+                    return Err(AppError::ProcessError(ProcessError::ProcessInProgress {
+                        process_reference,
+                    }));
+                }
+
+                if let Some(_other_process) = project.processes.iter_mut().find(|it| {
+                    it.reference
+                        .eq(&process_definition.reference)
+                }) {
+                    // reject a rename if the process reference is already in use
+                    return Err(AppError::ProcessError(ProcessError::DuplicateProcessReference {
+                        process_reference,
+                    }));
+                }
+
+                let process = project
+                    .processes
+                    .iter_mut()
+                    .find(|it| it.reference.eq(&process_reference));
+
+                enum ApplyMode {
+                    OnlyModified,
+                    RenamedAndModified,
+                    New,
+                }
+
+                let mode = match &process {
+                    Some(process)
+                        if process
+                            .reference
+                            .eq(&process_definition.reference) =>
+                    {
+                        ApplyMode::OnlyModified
+                    }
+                    Some(_process) => ApplyMode::RenamedAndModified,
+                    None => ApplyMode::New,
+                };
+
+                match mode {
+                    ApplyMode::OnlyModified => {
+                        if let Some(process) = process {
+                            *process = process_definition;
+                        }
+                    }
+                    ApplyMode::RenamedAndModified => {
+                        if let Some(process) = process {
+                            // update phases to use the new process
+                            for (_phase_reference, phase) in project.phases.iter_mut() {
+                                if phase.process.eq(&process_reference) {
+                                    phase.process = process_definition.reference.clone();
+                                }
+                            }
+
+                            *process = process_definition;
+                        }
+                    }
+                    ApplyMode::New => {
+                        project
+                            .processes
+                            .push(process_definition);
+                    }
+                }
+
+                *modified = true;
+
+                Ok(render::render())
+            }),
             Event::AssignVariantToUnit {
                 variant: variant_name,
                 unit,
@@ -1142,7 +1275,7 @@ impl Planner {
 
                 let process = project
                     .find_process(&process_name)
-                    .map_err(|cause| AppError::ProcessError(cause.into()))?
+                    .map_err(AppError::ProcessError)?
                     .clone();
 
                 let unique_parts = Self::unique_parts(project)
@@ -1157,7 +1290,7 @@ impl Planner {
                 Ok(render::render())
             }),
             Event::CreatePhase {
-                process: process_name,
+                process: process_reference,
                 reference,
                 load_out,
                 pcb_side,
@@ -1170,13 +1303,12 @@ impl Planner {
                     .model_project
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
-                let process_name_str = process_name.to_string();
-                let process = ProcessFactory::by_name(process_name_str.as_str())
-                    .map_err(|cause| AppError::ProcessError(cause.into()))?;
 
-                project
-                    .ensure_process(&process)
-                    .map_err(AppError::OperationError)?;
+                let process = project
+                    .find_process(&process_reference)
+                    .map_err(AppError::ProcessError)?
+                    .clone();
+
                 *modified |= true;
 
                 stores::load_out::ensure_load_out(&load_out).map_err(AppError::OperationError)?;
@@ -1330,7 +1462,7 @@ impl Planner {
 
                 let process = project
                     .find_process(&phase.process)
-                    .map_err(|cause| AppError::ProcessError(cause.into()))?
+                    .map_err(AppError::ProcessError)?
                     .clone();
 
                 let load_out_source =
@@ -2297,7 +2429,7 @@ enum AppError {
     #[error("Project error, cause: {0}")]
     ProjectError(ProjectError),
     #[error("Process error. cause: {0}")]
-    ProcessError(anyhow::Error),
+    ProcessError(ProcessError),
     #[error("Part error. cause: {0}")]
     PartError(PartStateError),
     #[error("Loadout source error. cause: {0}")]

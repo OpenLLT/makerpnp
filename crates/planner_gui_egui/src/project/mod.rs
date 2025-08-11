@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use derivative::Derivative;
 use egui::Ui;
 use egui_i18n::tr;
-use egui_mobius::types::{Enqueue, Value};
+use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use planner_app::{
     AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
     PhaseOverview, PhaseReference, PlacementOperation, PlacementPositionUnit, PlacementState, PlacementStatus,
@@ -499,6 +500,16 @@ impl Project {
     fn ensure_process(&self, key: ProjectKey, process: &Reference) -> bool {
         let process = process.clone();
         let mut state = self.project_ui_state.lock().unwrap();
+
+        self.ensure_process_inner(key, process.clone(), &mut state)
+    }
+
+    fn ensure_process_inner(
+        &self,
+        key: ProjectKey,
+        process: Reference,
+        state: &mut ValueGuard<ProjectUiState>,
+    ) -> bool {
         let mut created = false;
         let _process_state = state
             .process_tab_uis
@@ -524,6 +535,7 @@ impl Project {
 
         created
     }
+
     fn ensure_load_out(&self, key: ProjectKey, phase: Reference, load_out_source: &LoadOutSource) -> bool {
         let load_out_source = load_out_source.clone();
         let mut state = self.project_ui_state.lock().unwrap();
@@ -1180,6 +1192,9 @@ impl UiComponent for Project {
             ProjectUiCommand::Error(error) => {
                 match error {
                     PlannerError::CoreError(message) => {
+                        self.errors.push(message);
+                    }
+                    PlannerError::Other(message) => {
                         self.errors.push(message);
                     }
                 }
@@ -1902,6 +1917,8 @@ impl UiComponent for Project {
                 process,
                 command,
             } => {
+                trace!("process: {:?}, command: {:?}", process, command);
+
                 let mut state = self.project_ui_state.lock().unwrap();
                 let process_ui = state
                     .process_tab_uis
@@ -1914,6 +1931,98 @@ impl UiComponent for Project {
                 match process_ui_action {
                     None => None,
                     Some(ProcessTabUiAction::None) => None,
+
+                    //
+                    // form
+                    //
+                    Some(ProcessTabUiAction::Reset {
+                        process_reference,
+                    }) => self
+                        .planner_core_service
+                        .update(Event::RequestProcessDefinitionView {
+                            process_reference,
+                        })
+                        .when_ok(key, |_| None),
+                    Some(ProcessTabUiAction::Apply(args)) => {
+                        // the process reference may have changed, use the updated reference
+                        let updated_process_reference = args
+                            .process_definition
+                            .reference
+                            .clone();
+
+                        let process_reference_changed = !updated_process_reference.eq(&args.process_reference);
+
+                        if process_reference_changed {
+                            if state
+                                .process_tab_uis
+                                .contains_key(&updated_process_reference)
+                            {
+                                let now = chrono::DateTime::from(SystemTime::now());
+                                return Some(ProjectAction::UiCommand(ProjectUiCommand::Error(PlannerError::Other(
+                                    (now, tr!("process-error-name-already-in-use")),
+                                ))));
+                            }
+
+                            debug!(
+                                "process reference changed. old: {}, new: {}",
+                                args.process_reference, updated_process_reference
+                            );
+                            // update the reference in the map
+                            let (old_reference, _process_ui) = state
+                                .process_tab_uis
+                                .remove_entry(&args.process_reference)
+                                .unwrap();
+                            // if we just re-insert the ui with an updated reference, the ui's mapper will still have the old reference, so we need to update the mapper too, easier just to re-create the ui instance
+                            //state.process_tab_uis.insert(updated_process_reference.clone(), process_ui);
+                            self.ensure_process_inner(key, updated_process_reference.clone(), &mut state);
+
+                            // update the tab's reference
+                            let tabs = self.project_tabs.lock().unwrap();
+                            let updated = tabs.filter_map_mut(|(_key, tab)| match tab {
+                                ProjectTabKind::Process(tab) if tab.process.eq(&old_reference) => {
+                                    tab.process = updated_process_reference.clone();
+                                    Some(true)
+                                }
+                                _ => None,
+                            });
+                            assert!(matches!(updated.first(), Some(true)));
+                        }
+
+                        let mut tasks = vec![];
+
+                        match self
+                            .planner_core_service
+                            .update(Event::ApplyProcessDefinition {
+                                process_reference: args.process_reference,
+                                process_definition: args.process_definition,
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect();
+                                tasks.extend(effect_tasks);
+
+                                tasks.push(Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree),
+                                )));
+                                tasks.push(Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::Overview),
+                                )));
+                                tasks.push(Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProcessDefinition {
+                                        process: updated_process_reference,
+                                    }),
+                                )));
+                            }
+                            Err(service_error) => {
+                                tasks.push(Task::done(service_error));
+                            }
+                        }
+                        Some(ProjectAction::Task(key, Task::batch(tasks)))
+                    }
                 }
             }
             ProjectUiCommand::LoadOutTabUiCommand {

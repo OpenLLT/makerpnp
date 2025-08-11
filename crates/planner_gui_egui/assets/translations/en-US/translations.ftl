@@ -204,6 +204,7 @@ form-common-choice-phase = Phase
 
 form-common-input-load-out-source = Loadout source
 form-common-input-phase-reference = Phase reference
+form-common-input-process-reference = Process reference
 form-common-input-x = X
 form-common-input-y = Y
 form-common-input-top = Top
@@ -361,6 +362,12 @@ ratio-error = Ratio: N/A
 filter-expression = Search...
 
 expanding-header-details = Details
+
+#
+# errors
+#
+
+process-error-name-already-in-use = Attempted to rename a process to a name already in use
 
 #
 # egui-data-tables

@@ -79,6 +79,12 @@ pub enum ProcessError {
         processes: Vec<ProcessDefinition>,
         process: String,
     },
+    #[error("Process in progress. process: '{}'", process_reference)]
+    ProcessInProgress { process_reference: ProcessReference },
+    #[error("Duplicate process reference. process: '{}'", process_reference)]
+    DuplicateProcessReference { process_reference: ProcessReference },
+    #[error("Unknown pre-set process. available-presets: {:?}, pre-set: {}", presets, preset)]
+    UnknownPreset { presets: Vec<String>, preset: String },
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Clone)]
@@ -204,6 +210,10 @@ pub trait TaskState {
     }
 
     fn can_complete(&self) -> bool;
+
+    fn is_pending(&self) -> bool {
+        matches!(self.status(), TaskStatus::Pending)
+    }
 
     fn set_started(&mut self);
 

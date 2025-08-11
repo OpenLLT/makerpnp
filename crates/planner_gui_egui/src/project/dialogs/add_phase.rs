@@ -11,7 +11,7 @@ use egui_taffy::taffy::{AlignContent, AlignItems, Display, FlexDirection, Style}
 use egui_taffy::{Tui, TuiBuilderLogic, taffy, tui};
 use planner_app::{LoadOutSource, PcbSide, ProcessReference, Reference};
 use taffy::Size;
-use validator::{Validate, ValidationError};
+use validator::Validate;
 
 use crate::file_picker::Picker;
 use crate::forms::Form;
@@ -220,41 +220,19 @@ impl AddPhaseModal {
 pub struct AddPhaseFields {
     // FUTURE could also validate that the reference is not already used
     #[validate(length(min = 1, code = "form-input-error-length"))]
-    #[validate(custom(function = "CommonValidation::validate_reference"))]
+    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_reference"))]
     reference: String,
 
     #[validate(required(code = "form-option-error-required"))]
     pcb_side: Option<PcbSideChoice>,
 
     #[validate(required(code = "form-option-error-required"))]
-    #[validate(custom(function = "CommonValidation::validate_optional_process_reference"))]
+    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_optional_process_reference"))]
     process: Option<ProcessReference>,
 
     #[validate(required(code = "form-option-error-required"))]
-    #[validate(custom(function = "CommonValidation::validate_optional_loadout_source"))]
+    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_optional_loadout_source"))]
     load_out: Option<String>,
-}
-
-struct CommonValidation {}
-impl CommonValidation {
-    pub fn validate_reference(reference: &String) -> Result<(), ValidationError> {
-        Reference::from_str(&reference)
-            .map_err(|_e| ValidationError::new("form-input-error-reference-invalid"))
-            .map(|_| ())
-    }
-
-    pub fn validate_optional_process_reference(process_reference: &ProcessReference) -> Result<(), ValidationError> {
-        match process_reference.is_valid() {
-            true => Ok(()),
-            false => Err(ValidationError::new("form-input-error-process-reference-invalid")),
-        }
-    }
-
-    pub fn validate_optional_loadout_source(load_out_source: &String) -> Result<(), ValidationError> {
-        LoadOutSource::from_str(&load_out_source)
-            .map_err(|_e| ValidationError::new("form-input-error-loadout-source-invalid"))
-            .map(|_loadout_source| ())
-    }
 }
 
 #[derive(Debug, Clone)]
