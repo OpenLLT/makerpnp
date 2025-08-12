@@ -3553,6 +3553,8 @@ mod help {
                   add-pcb                         Add a PCB file to the project
                   assign-variant-to-unit          Assign a design variant to a PCB unit
                   refresh-from-design-variants    Refresh from design variants
+                  create-process-from-preset      Create a process from presets
+                  delete-process                  Delete a process from the project
                   assign-process-to-parts         Assign a process to parts
                   create-phase                    Create a phase
                   assign-placements-to-phase      Assign placements to a phase
@@ -3681,6 +3683,60 @@ mod help {
 
             // when
             cmd.args(["project", "refresh-from-design-variants", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_create_process_from_preset() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Create a process from presets
+
+                Usage: planner_cli project --project <PROJECT_NAME> create-process-from-preset [OPTIONS] --preset <PRESET>
+
+                Options:
+                      --preset <PRESET>  Process preset name
+                  -v, --verbose...       Increase logging verbosity
+                  -q, --quiet...         Decrease logging verbosity
+                  -h, --help             Print help
+            "};
+
+            // when
+            cmd.args(["project", "create-process-from-preset", "--help"])
+                // then
+                .assert()
+                .success()
+                .stderr(print("stderr"))
+                .stdout(print("stdout").and(predicate::str::diff(expected_output)));
+        }
+
+        #[test]
+        fn help_for_delete_process() {
+            // given
+            let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
+
+            // and
+            let expected_output = indoc! {"
+                Delete a process from the project
+                
+                Usage: planner_cli project --project <PROJECT_NAME> delete-process [OPTIONS] --process <PROCESS>
+                
+                Options:
+                      --process <PROCESS>  Process preset name
+                  -v, --verbose...         Increase logging verbosity
+                  -q, --quiet...           Decrease logging verbosity
+                  -h, --help               Print help
+            "};
+
+            // when
+            cmd.args(["project", "delete-process", "--help"])
                 // then
                 .assert()
                 .success()

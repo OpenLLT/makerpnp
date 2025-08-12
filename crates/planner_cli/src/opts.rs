@@ -359,6 +359,18 @@ pub(crate) enum ProjectCommand {
     },
     /// Refresh from design variants
     RefreshFromDesignVariants,
+    /// Create a process from presets
+    CreateProcessFromPreset {
+        /// Process preset name
+        #[arg(long)]
+        preset: ProcessReference,
+    },
+    /// Delete a process from the project
+    DeleteProcess {
+        /// Process preset name
+        #[arg(long)]
+        process: ProcessReference,
+    },
     /// Assign a process to parts
     AssignProcessToParts {
         /// Process name
@@ -590,6 +602,16 @@ impl TryFrom<Opts> for Event {
                     variant,
                 }),
                 ProjectCommand::RefreshFromDesignVariants => Ok(Event::RefreshFromDesignVariants),
+                ProjectCommand::CreateProcessFromPreset {
+                    preset,
+                } => Ok(Event::CreateProcessFromPreset {
+                    preset,
+                }),
+                ProjectCommand::DeleteProcess {
+                    process,
+                } => Ok(Event::DeleteProcess {
+                    process_reference: process,
+                }),
                 ProjectCommand::AssignProcessToParts {
                     process,
                     operation,
