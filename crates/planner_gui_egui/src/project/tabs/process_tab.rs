@@ -99,7 +99,7 @@ impl ProcessTabUi {
                         move |ui: &mut Ui, fields, sender| {
                             let mut reference_clone = fields.reference.clone();
                             let output = TextEdit::singleline(&mut reference_clone)
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width().min(200.0))
                                 .show(ui);
 
                             if !fields.reference.eq(&reference_clone) {
