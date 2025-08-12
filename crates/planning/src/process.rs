@@ -79,6 +79,8 @@ pub enum ProcessError {
         processes: Vec<ProcessDefinition>,
         process: String,
     },
+    #[error("Process in use. process: '{}'", process_reference)]
+    ProcessInUse { process_reference: ProcessReference },
     #[error("Process in progress. process: '{}'", process_reference)]
     ProcessInProgress { process_reference: ProcessReference },
     #[error("Duplicate process reference. process: '{}'", process_reference)]

@@ -1932,6 +1932,41 @@ impl UiComponent for Project {
                     None => None,
                     Some(ProcessTabUiAction::None) => None,
 
+                    Some(ProcessTabUiAction::Delete(process_reference)) => {
+                        let mut tasks = vec![];
+                        match self
+                            .planner_core_service
+                            .update(Event::DeleteProcess {
+                                process_reference: process_reference.clone(),
+                            })
+                            .into_actions()
+                        {
+                            Ok(actions) => {
+                                let effect_tasks: Vec<Task<ProjectAction>> = actions
+                                    .into_iter()
+                                    .map(Task::done)
+                                    .collect();
+                                tasks.extend(effect_tasks);
+
+                                tasks.push(Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree),
+                                )));
+                                tasks.push(Task::done(ProjectAction::UiCommand(
+                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::Overview),
+                                )));
+
+                                let mut tabs = self.project_tabs.lock().unwrap();
+                                tabs.retain(|_key, kind|{
+                                    !matches!(kind, ProjectTabKind::Process(tab) if tab.process.eq(&process_reference))
+                                });
+                                state.process_tab_uis.remove(&process);
+                            }
+                            Err(service_error) => {
+                                tasks.push(Task::done(service_error));
+                            }
+                        }
+                        Some(ProjectAction::Task(key, Task::batch(tasks)))
+                    }
                     //
                     // form
                     //

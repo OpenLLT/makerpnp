@@ -149,8 +149,9 @@ pub struct ProcessDefinitionArgs {
 pub enum ProcessTabUiCommand {
     None,
     ReferenceChanged(String),
-    Apply,
-    Reset,
+    ApplyClicked,
+    ResetClicked,
+    DeleteClicked,
 }
 
 #[derive(Debug, Clone)]
@@ -158,6 +159,7 @@ pub enum ProcessTabUiAction {
     None,
     Reset { process_reference: ProcessReference },
     Apply(ProcessDefinitionArgs),
+    Delete(ProcessReference),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -182,6 +184,14 @@ impl UiComponent for ProcessTabUi {
             return;
         };
 
+        if ui
+            .label(format!("🗑 {}", tr!("form-common-button-delete")))
+            .clicked()
+        {
+            self.component
+                .send(ProcessTabUiCommand::DeleteClicked);
+        }
+
         let form = Form::new(&state.fields, &self.component.sender, ());
 
         self.show_form(ui, &form);
@@ -201,7 +211,7 @@ impl UiComponent for ProcessTabUi {
                     .clicked()
                 {
                     self.component
-                        .send(ProcessTabUiCommand::Reset);
+                        .send(ProcessTabUiCommand::ResetClicked);
                 }
 
                 if ui
@@ -212,7 +222,7 @@ impl UiComponent for ProcessTabUi {
                     .clicked()
                 {
                     self.component
-                        .send(ProcessTabUiCommand::Apply);
+                        .send(ProcessTabUiCommand::ApplyClicked);
                 }
             },
             |_ui| {},
@@ -243,16 +253,19 @@ impl UiComponent for ProcessTabUi {
                 fields.reference = reference;
                 None
             }
+            ProcessTabUiCommand::DeleteClicked => {
+                Some(ProcessTabUiAction::Delete(state.initial_process_reference.clone()))
+            }
 
             //
             // form submission
             //
-            ProcessTabUiCommand::Apply => {
+            ProcessTabUiCommand::ApplyClicked => {
                 let args = fields.build_args(state.initial_process_reference.clone());
 
                 Some(ProcessTabUiAction::Apply(args))
             }
-            ProcessTabUiCommand::Reset => Some(ProcessTabUiAction::Reset {
+            ProcessTabUiCommand::ResetClicked => Some(ProcessTabUiAction::Reset {
                 process_reference: state
                     .initial_args
                     .process_reference

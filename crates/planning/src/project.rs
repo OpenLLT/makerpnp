@@ -222,6 +222,7 @@ impl Project {
                 let existing_phase = entry.get_mut();
                 let old_phase = existing_phase.clone();
 
+                // FIXME the phase state needs to be updated if the process changes.
                 existing_phase.process = process_name;
                 existing_phase.load_out_source = load_out_source;
 
@@ -242,6 +243,65 @@ impl Project {
             })
     }
 
+    /// Delete a process
+    ///
+    /// Safety: Assumes the process exists.
+    pub fn delete_process(&mut self, process_reference: &ProcessReference) -> Result<(), ProcessError> {
+        self.ensure_process_not_in_use(process_reference)?;
+        self.processes
+            .retain(|process| !process.reference.eq(process_reference));
+
+        Ok(())
+    }
+
+    /// Check to see if the process is in-use by a phase
+    /// Returns Err if it is, otherwise Ok
+    ///
+    /// Note: The given process may not exist
+    pub fn ensure_process_not_in_use(&self, process_reference: &ProcessReference) -> Result<(), ProcessError> {
+        let in_use = self
+            .phases
+            .iter()
+            .any(|(_, phase)| phase.process.eq(process_reference));
+
+        if in_use {
+            Err(ProcessError::ProcessInUse {
+                process_reference: process_reference.clone(),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Check to see if the process is in-use by a phase that is in-progress
+    /// Returns Err if it is, otherwise Ok
+    ///
+    /// Note: The given process may not exist
+    pub fn ensure_process_not_in_progress(&self, process_reference: &ProcessReference) -> Result<(), ProcessError> {
+        let in_progress = self
+            .phase_states
+            .iter()
+            .zip(self.phases.iter())
+            .any(|((_, phase_state), (_, phase))| {
+                phase.process.eq(process_reference)
+                    && phase_state
+                        .operation_states
+                        .iter()
+                        .any(|os| {
+                            os.task_states
+                                .iter()
+                                .any(|(_, ts)| !ts.is_pending())
+                        })
+            });
+
+        if in_progress {
+            Err(ProcessError::ProcessInProgress {
+                process_reference: process_reference.clone(),
+            })
+        } else {
+            Ok(())
+        }
+    }
     /// Warning: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
     ///
     /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.

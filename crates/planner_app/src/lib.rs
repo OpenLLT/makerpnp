@@ -486,6 +486,9 @@ pub enum Event {
         process_reference: ProcessReference,
         process_definition: ProcessDefinition,
     },
+    DeleteProcess {
+        process_reference: ProcessReference,
+    },
     AssignVariantToUnit {
         unit: ObjectPath,
         variant: VariantName,
@@ -1137,24 +1140,6 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                let started = project
-                    .phase_states
-                    .iter()
-                    .any(|(_, phase)| {
-                        phase.operation_states.iter().any(|os| {
-                            os.task_states
-                                .iter()
-                                .any(|(_, ts)| !ts.is_pending())
-                        })
-                    });
-
-                if started {
-                    // reject any attempt to modify a process if any phase has been started
-                    return Err(AppError::ProcessError(ProcessError::ProcessInProgress {
-                        process_reference,
-                    }));
-                }
-
                 if let Some(_other_process) = project.processes.iter_mut().find(|it| {
                     it.reference
                         .eq(&process_definition.reference)
@@ -1164,6 +1149,10 @@ impl Planner {
                         process_reference,
                     }));
                 }
+
+                project
+                    .ensure_process_not_in_progress(&process_reference)
+                    .map_err(AppError::ProcessError)?;
 
                 let process = project
                     .processes
@@ -1212,6 +1201,32 @@ impl Planner {
                             .push(process_definition);
                     }
                 }
+
+                *modified = true;
+
+                Ok(render::render())
+            }),
+            Event::DeleteProcess {
+                process_reference,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                // Sanity check the process exists
+                let _process_definition = project
+                    .find_process(&process_reference)
+                    .map_err(AppError::ProcessError)?
+                    .clone();
+
+                project
+                    .delete_process(&process_reference)
+                    .map_err(AppError::ProcessError)?;
 
                 *modified = true;
 
