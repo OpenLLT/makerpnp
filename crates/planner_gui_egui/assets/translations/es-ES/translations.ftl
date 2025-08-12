@@ -179,6 +179,8 @@ form-create-unit-assignment-input-placements-directory = Directorio de ubicacion
 
 form-phase-placement-orderings-input-orderings = Ordenaciones
 
+form-process-operations = Operaciones
+
 form-common-combo-select = Seleccionar...
 form-common-combo-none = Ninguno
 
@@ -349,6 +351,9 @@ table-fiducials-column-y = Y
 table-fiducials-column-mask-diameter = Máscara ⌀
 table-fiducials-column-copper-diameter = Cobre ⌀
 table-fiducials-column-actions = Acciones
+
+table-operations-column-operation = Operación
+table-operations-column-task = { $task }
 
 common-value-not-available = N/A
 common-actions = Acciones

@@ -30,7 +30,9 @@ use planning::process::ProcessError;
 pub use planning::process::ProcessReference;
 pub use planning::process::TaskReference;
 pub use planning::process::TaskStatus;
-pub use planning::process::{OperationReference, OperationStatus, ProcessDefinition, TaskAction};
+pub use planning::process::{
+    OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessRuleReference, TaskAction,
+};
 use planning::project::{
     PartStateError, PcbOperationError, ProcessPresetFactory, ProcessPresetFactoryError, Project, ProjectError,
     ProjectPcb,
@@ -1140,30 +1142,16 @@ impl Planner {
                     .as_mut()
                     .ok_or(AppError::OperationRequiresProject)?;
 
-                if let Some(_other_process) = project.processes.iter_mut().find(|it| {
-                    it.reference
-                        .eq(&process_definition.reference)
-                }) {
-                    // reject a rename if the process reference is already in use
-                    return Err(AppError::ProcessError(ProcessError::DuplicateProcessReference {
-                        process_reference,
-                    }));
-                }
-
-                project
-                    .ensure_process_not_in_progress(&process_reference)
-                    .map_err(AppError::ProcessError)?;
-
-                let process = project
-                    .processes
-                    .iter_mut()
-                    .find(|it| it.reference.eq(&process_reference));
-
                 enum ApplyMode {
                     OnlyModified,
                     RenamedAndModified,
                     New,
                 }
+
+                let process = project
+                    .processes
+                    .iter()
+                    .find(|it| it.reference.eq(&process_reference));
 
                 let mode = match &process {
                     Some(process)
@@ -1177,23 +1165,40 @@ impl Planner {
                     None => ApplyMode::New,
                 };
 
-                match mode {
-                    ApplyMode::OnlyModified => {
-                        if let Some(process) = process {
-                            *process = process_definition;
+                if matches!(mode, ApplyMode::RenamedAndModified) {
+                    if let Some(_other_process) = project.processes.iter_mut().find(|it| {
+                        it.reference
+                            .eq(&process_definition.reference)
+                    }) {
+                        // reject a rename if the process reference is already in use
+                        return Err(AppError::ProcessError(ProcessError::DuplicateProcessReference {
+                            process_reference,
+                        }));
+                    }
+                }
+
+                project
+                    .ensure_process_not_in_progress(&process_reference)
+                    .map_err(AppError::ProcessError)?;
+
+                let process = project
+                    .processes
+                    .iter_mut()
+                    .find(|it| it.reference.eq(&process_reference))
+                    .unwrap();
+
+                if matches!(mode, ApplyMode::RenamedAndModified) {
+                    // update phases to use the new process
+                    for (_phase_reference, phase) in project.phases.iter_mut() {
+                        if phase.process.eq(&process_reference) {
+                            phase.process = process_definition.reference.clone();
                         }
                     }
-                    ApplyMode::RenamedAndModified => {
-                        if let Some(process) = process {
-                            // update phases to use the new process
-                            for (_phase_reference, phase) in project.phases.iter_mut() {
-                                if phase.process.eq(&process_reference) {
-                                    phase.process = process_definition.reference.clone();
-                                }
-                            }
+                }
 
-                            *process = process_definition;
-                        }
+                match mode {
+                    ApplyMode::RenamedAndModified | ApplyMode::OnlyModified => {
+                        *process = process_definition;
                     }
                     ApplyMode::New => {
                         project
