@@ -1187,18 +1187,37 @@ impl Planner {
                     .find(|it| it.reference.eq(&process_reference))
                     .unwrap();
 
-                if matches!(mode, ApplyMode::RenamedAndModified) {
-                    // update phases to use the new process
-                    for (_phase_reference, phase) in project.phases.iter_mut() {
-                        if phase.process.eq(&process_reference) {
-                            phase.process = process_definition.reference.clone();
-                        }
-                    }
-                }
+                let new_process_reference = process_definition.reference.clone();
 
                 match mode {
                     ApplyMode::RenamedAndModified | ApplyMode::OnlyModified => {
                         *process = process_definition;
+
+                        // find the phases to update
+                        let phases_to_update = project
+                            .phases
+                            .iter()
+                            .filter_map(|(phase_reference, phase)| {
+                                if phase.process.eq(&process_reference) {
+                                    Some((phase_reference.clone(), phase.load_out_source.clone(), phase.pcb_side))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        debug!("phases_to_update: {:?}", phases_to_update);
+
+                        // update the phase states
+                        for (phase_reference, load_out_source, pcb_side) in phases_to_update {
+                            project
+                                .update_phase(
+                                    phase_reference,
+                                    new_process_reference.clone(),
+                                    load_out_source,
+                                    pcb_side,
+                                )
+                                .map_err(AppError::OperationError)?;
+                        }
                     }
                     ApplyMode::New => {
                         project

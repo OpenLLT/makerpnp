@@ -188,43 +188,53 @@ impl Project {
         Ok(modified)
     }
 
+    /// Update a phase
+    ///
+    /// Call when changing the process, load-out source or pcb_side.
+    ///
+    /// Safety: The phase must not be in-progress.
     pub fn update_phase(
         &mut self,
         reference: PhaseReference,
-        process_name: ProcessReference,
+        process_reference: ProcessReference,
         load_out_source: String,
         pcb_side: PcbSide,
     ) -> anyhow::Result<()> {
+        let process = self.find_process(&process_reference)?;
+        let phase_state = PhaseState::from_process(process);
+
         match self.phases.entry(reference.clone()) {
             Entry::Vacant(entry) => {
                 let phase = Phase {
                     reference: reference.clone(),
-                    process: process_name.clone(),
+                    process: process_reference.clone(),
                     load_out_source: load_out_source.clone(),
-                    pcb_side: pcb_side.clone(),
+                    pcb_side,
                     placement_orderings: vec![],
                 };
                 entry.insert(phase);
                 info!(
                     "Created phase. reference: '{}', process: {}, load_out: {:?}",
-                    reference, process_name, load_out_source
+                    reference, process_reference, load_out_source
                 );
                 self.phase_orderings
                     .insert(reference.clone());
                 info!("Phase ordering: {}", PhaseOrderings(&self.phase_orderings));
 
-                let process = self.find_process(&process_name)?;
-
                 self.phase_states
-                    .insert(reference, PhaseState::from_process(process));
+                    .insert(reference, phase_state);
             }
             Entry::Occupied(mut entry) => {
                 let existing_phase = entry.get_mut();
                 let old_phase = existing_phase.clone();
 
-                // FIXME the phase state needs to be updated if the process changes.
-                existing_phase.process = process_name;
+                existing_phase.process = process_reference;
+                // FIXME if the load out source changed ensure the loadout contains all the parts assigned to the phase
                 existing_phase.load_out_source = load_out_source;
+
+                let _old_state = self
+                    .phase_states
+                    .insert(reference, phase_state);
 
                 info!("Updated phase. old: {:?}, new: {:?}", old_phase, existing_phase);
             }
