@@ -1286,7 +1286,7 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::LoadoutSourceError)?;
 
                 let parts = project::find_phase_parts(project, &phase_reference, manufacturer_pattern, mpn_pattern);
 
