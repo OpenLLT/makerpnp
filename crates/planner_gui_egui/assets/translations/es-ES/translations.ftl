@@ -152,15 +152,6 @@ pcb-gerber-viewer-tab-label-design = Diseño ({ $index })
 pcb-gerber-viewer-layers-window-title = Capas
 pcb-gerber-viewer-input-go-to = Ir a
 
-form-button-ok = Aceptar
-form-button-cancel = Cancelar
-form-button-close = Cerrar
-form-button-add = Añadir
-form-button-remove = Quitar
-form-button-apply = Aplicar
-form-button-reset = Restablecer
-form-button-refresh = Actualizar
-
 form-configure-pcb-input-units = Units
 form-configure-pcb-input-gerber-offset = Despl. de colocación
 form-configure-pcb-group-unit-map = Mapa de unidades
@@ -223,8 +214,14 @@ form-common-button-unassign-range = Desasignar rango
 form-common-button-apply-range = Aplicar rango
 form-common-button-apply-all = Aplicar todo
 
+form-common-button-ok = Aceptar
+form-common-button-cancel = Cancelar
+form-common-button-close = Cerrar
 form-common-button-add = Añadir
 form-common-button-remove = Quitar
+form-common-button-apply = Aplicar
+form-common-button-reset = Restablecer
+form-common-button-refresh = Actualizar
 form-common-button-delete = Borrar
 
 form-option-error-required = * Obligatorio

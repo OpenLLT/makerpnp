@@ -175,7 +175,7 @@ impl UiComponent for PartsTabUi {
                     .selected_text(tr!("common-actions"))
                     .show_ui(ui, |ui| {
                         if ui
-                            .add(egui::Button::selectable(false, tr!("form-button-add")))
+                            .add(egui::Button::selectable(false, tr!("form-common-button-add")))
                             .clicked()
                         {
                             self.component
@@ -184,7 +184,7 @@ impl UiComponent for PartsTabUi {
                                 .expect("sent");
                         }
                         if ui
-                            .add(egui::Button::selectable(false, tr!("form-button-remove")))
+                            .add(egui::Button::selectable(false, tr!("form-common-button-remove")))
                             .clicked()
                         {
                             self.component

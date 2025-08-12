@@ -75,7 +75,7 @@ pub fn show_errors_modal(
             |_ui| {},
             |ui| {
                 if ui
-                    .button(tr!("form-button-ok"))
+                    .button(tr!("form-common-button-ok"))
                     .clicked()
                 {
                     component.send((key, ProjectUiCommand::ClearErrors))

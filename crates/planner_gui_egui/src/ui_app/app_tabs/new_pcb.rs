@@ -237,7 +237,7 @@ impl NewPcbTab {
                         ..default_style()
                     })
                     .enabled_ui(form.is_valid())
-                    .ui_add(Button::new(tr!("form-button-ok")))
+                    .ui_add(Button::new(tr!("form-common-button-ok")))
                     .clicked()
                 {
                     self.component

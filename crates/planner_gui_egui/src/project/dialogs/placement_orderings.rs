@@ -240,7 +240,7 @@ impl UiComponent for PlacementOrderingsModal {
                 |_ui| {},
                 |ui| {
                     if ui
-                        .button(tr!("form-button-cancel"))
+                        .button(tr!("form-common-button-cancel"))
                         .clicked()
                     {
                         self.component
@@ -248,7 +248,7 @@ impl UiComponent for PlacementOrderingsModal {
                     }
 
                     if ui
-                        .add_enabled(form.is_valid(), egui::Button::new(tr!("form-button-ok")))
+                        .add_enabled(form.is_valid(), egui::Button::new(tr!("form-common-button-ok")))
                         .clicked()
                     {
                         self.component

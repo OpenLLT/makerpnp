@@ -197,7 +197,7 @@ impl UiComponent for ProcessTabUi {
             ui,
             |ui| {
                 if ui
-                    .add_enabled(is_changed, egui::Button::new(tr!("form-button-reset")))
+                    .add_enabled(is_changed, egui::Button::new(tr!("form-common-button-reset")))
                     .clicked()
                 {
                     self.component
@@ -207,7 +207,7 @@ impl UiComponent for ProcessTabUi {
                 if ui
                     .add_enabled(
                         is_changed && form.is_valid(),
-                        egui::Button::new(tr!("form-button-apply")),
+                        egui::Button::new(tr!("form-common-button-apply")),
                     )
                     .clicked()
                 {

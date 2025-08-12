@@ -158,7 +158,7 @@ impl UiComponent for ManageGerbersModal {
                             });
                             row.col(|ui| {
                                 if ui
-                                    .button(tr!("form-button-remove"))
+                                    .button(tr!("form-common-button-remove"))
                                     .clicked()
                                 {
                                     self.component
@@ -175,14 +175,14 @@ impl UiComponent for ManageGerbersModal {
                 ui,
                 |ui| {
                     if ui
-                        .button(tr!("form-button-add"))
+                        .button(tr!("form-common-button-add"))
                         .clicked()
                     {
                         self.component
                             .send(ManagerGerbersModalUiCommand::Add);
                     }
                     if ui
-                        .button(tr!("form-button-refresh"))
+                        .button(tr!("form-common-button-refresh"))
                         .clicked()
                     {
                         self.component
@@ -191,7 +191,7 @@ impl UiComponent for ManageGerbersModal {
                 },
                 |ui| {
                     if ui
-                        .button(tr!("form-button-close"))
+                        .button(tr!("form-common-button-close"))
                         .clicked()
                     {
                         self.component

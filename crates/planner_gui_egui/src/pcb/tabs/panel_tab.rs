@@ -183,7 +183,7 @@ impl PanelTabUi {
                 ui,
                 |ui| {
                     if ui
-                        .add_enabled(is_changed, egui::Button::new(tr!("form-button-reset")))
+                        .add_enabled(is_changed, egui::Button::new(tr!("form-common-button-reset")))
                         .clicked()
                     {
                         sender
@@ -192,7 +192,7 @@ impl PanelTabUi {
                     }
 
                     if ui
-                        .add_enabled(is_changed, egui::Button::new(tr!("form-button-apply")))
+                        .add_enabled(is_changed, egui::Button::new(tr!("form-common-button-apply")))
                         .clicked()
                     {
                         sender

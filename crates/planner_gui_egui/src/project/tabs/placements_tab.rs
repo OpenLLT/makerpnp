@@ -154,7 +154,7 @@ impl UiComponent for PlacementsTabUi {
                     .selected_text(tr!("common-actions"))
                     .show_ui(ui, |ui| {
                         if ui
-                            .add(egui::Button::selectable(false, tr!("form-button-apply")))
+                            .add(egui::Button::selectable(false, tr!("form-common-button-apply")))
                             .clicked()
                         {
                             self.component
@@ -165,7 +165,7 @@ impl UiComponent for PlacementsTabUi {
                                 .expect("sent");
                         }
                         if ui
-                            .add(egui::Button::selectable(false, tr!("form-button-remove")))
+                            .add(egui::Button::selectable(false, tr!("form-common-button-remove")))
                             .clicked()
                         {
                             self.component
