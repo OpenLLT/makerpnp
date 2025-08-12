@@ -1,5 +1,5 @@
 use derivative::Derivative;
-use egui::{TextEdit, Ui, WidgetText};
+use egui::{Frame, TextEdit, Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::Column;
 use egui_i18n::tr;
@@ -121,55 +121,58 @@ impl ProcessTabUi {
                                 .size
                                 .max(ui.spacing().interact_size.y);
 
-                            let mut table_builder = egui_extras::TableBuilder::new(ui)
-                                .striped(true)
-                                .column(Column::remainder());
+                            Frame::group(&egui::Style::default()).show(ui, |ui| {
+                                let mut table_builder = egui_extras::TableBuilder::new(ui)
+                                    .striped(true)
+                                    .column(Column::remainder());
 
-                            for _ in 0..state.available_tasks.len() {
-                                table_builder = table_builder.column(Column::auto());
-                            }
+                                for _ in 0..state.available_tasks.len() {
+                                    table_builder = table_builder.column(Column::auto());
+                                }
 
-                            table_builder
-                                .header(text_height, |mut header| {
-                                    header.col(|ui| {
-                                        ui.strong(tr!("table-operations-column-operation"));
-                                    });
-                                    for task in &state.available_tasks {
+                                table_builder
+                                    .header(text_height, |mut header| {
                                         header.col(|ui| {
-                                            // TODO generate an i18n key from the task instead
-                                            ui.strong(tr!("table-operations-column-task", { task: task.to_string() }));
+                                            ui.strong(tr!("table-operations-column-operation"));
                                         });
-                                    }
-                                })
-                                .body(|mut body| {
-                                    for (operation, tasks) in fields.operations.iter() {
-                                        body.row(text_height, |mut row| {
-                                            row.col(|ui| {
-                                                // TODO make editable
-                                                ui.strong(operation.to_string());
+                                        for task in &state.available_tasks {
+                                            header.col(|ui| {
+                                                // TODO generate an i18n key from the task instead
+                                                ui.strong(
+                                                    tr!("table-operations-column-task", { task: task.to_string() }),
+                                                );
                                             });
-
-                                            for task in &state.available_tasks {
+                                        }
+                                    })
+                                    .body(|mut body| {
+                                        for (operation, tasks) in fields.operations.iter() {
+                                            body.row(text_height, |mut row| {
                                                 row.col(|ui| {
-                                                    let mut checked = tasks.contains(task);
-                                                    if ui
-                                                        .add(egui::Checkbox::without_text(&mut checked))
-                                                        .changed()
-                                                    {
-                                                        sender
-                                                            .send(ProcessTabUiCommand::TaskChanged {
-                                                                operation: operation.clone(),
-                                                                task: task.clone(),
-                                                                checked,
-                                                            })
-                                                            .expect("sent");
-                                                    }
+                                                    // TODO make editable
+                                                    ui.strong(operation.to_string());
                                                 });
-                                            }
-                                        })
-                                    }
-                                });
 
+                                                for task in &state.available_tasks {
+                                                    row.col(|ui| {
+                                                        let mut checked = tasks.contains(task);
+                                                        if ui
+                                                            .add(egui::Checkbox::without_text(&mut checked))
+                                                            .changed()
+                                                        {
+                                                            sender
+                                                                .send(ProcessTabUiCommand::TaskChanged {
+                                                                    operation: operation.clone(),
+                                                                    task: task.clone(),
+                                                                    checked,
+                                                                })
+                                                                .expect("sent");
+                                                        }
+                                                    });
+                                                }
+                                            })
+                                        }
+                                    });
+                            });
                             ui.response()
                         }
                         // end of form.add_field_ui
@@ -282,14 +285,22 @@ impl UiComponent for ProcessTabUi {
             return;
         };
 
-        if ui
-            .label(format!("🗑 {}", tr!("form-common-button-delete")))
-            .clicked()
-        {
-            self.component
-                .send(ProcessTabUiCommand::DeleteClicked);
-        }
+        //
+        // toolbar
+        //
+        ui.horizontal(|ui| {
+            if ui
+                .button(format!("🗑 {}", tr!("form-common-button-delete")))
+                .clicked()
+            {
+                self.component
+                    .send(ProcessTabUiCommand::DeleteClicked);
+            }
+        });
 
+        //
+        // form
+        //
         let form = Form::new(&state.fields, &self.component.sender, ());
 
         self.show_form(ui, &form, state);
