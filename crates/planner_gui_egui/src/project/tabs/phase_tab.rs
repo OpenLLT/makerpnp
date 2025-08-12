@@ -4,7 +4,7 @@ use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use planner_app::{
     ObjectPath, OperationReference, OperationStatus, PcbSide, PhaseOverview, PhasePlacements, PhaseReference,
-    PlacementPositionUnit, PlacementState, Reference, TaskAction, TaskReference, TaskStatus,
+    PlacementPositionUnit, PlacementState, ProcessReference, Reference, TaskAction, TaskReference, TaskStatus,
 };
 use regex::Regex;
 use tracing::{debug, trace};
@@ -62,6 +62,17 @@ impl PhaseTabUi {
         self.placements_table_ui
             .update_placements(phase_placements.placements, phases);
     }
+
+    pub fn on_process_changed(&self, process: &ProcessReference) {
+        if matches!(&self.overview, Some(overview) if overview.process.eq(process)) {
+            self.request_refresh();
+        }
+    }
+
+    pub fn request_refresh(&self) {
+        self.component
+            .send(PhaseTabUiCommand::Refresh);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +91,7 @@ pub enum PhaseTabUiCommand {
         task: TaskReference,
         action: TaskAction,
     },
+    Refresh,
 }
 
 #[derive(Debug, Clone)]
@@ -110,6 +122,9 @@ pub enum PhaseTabUiAction {
         pcb_side: PcbSide,
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
+    },
+    Refresh {
+        phase: PhaseReference,
     },
 }
 
@@ -381,17 +396,33 @@ impl UiComponent for PhaseTabUi {
                 operation,
                 task,
                 action,
-            } => Some(PhaseTabUiAction::TaskAction {
-                phase: self
+            } => {
+                let phase = self
                     .overview
                     .as_ref()
                     .unwrap()
                     .phase_reference
-                    .clone(),
-                operation,
-                task,
-                action,
-            }),
+                    .clone();
+
+                Some(PhaseTabUiAction::TaskAction {
+                    phase,
+                    operation,
+                    task,
+                    action,
+                })
+            }
+            PhaseTabUiCommand::Refresh => {
+                let phase = self
+                    .overview
+                    .as_ref()
+                    .unwrap()
+                    .phase_reference
+                    .clone();
+
+                Some(PhaseTabUiAction::Refresh {
+                    phase,
+                })
+            }
         }
     }
 }

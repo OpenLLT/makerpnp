@@ -1911,6 +1911,12 @@ impl UiComponent for Project {
                         design_position,
                         unit_position,
                     }) => self.locate_component(object_path, pcb_side, design_position, unit_position),
+                    Some(PhaseTabUiAction::Refresh {
+                        phase,
+                    }) => {
+                        let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RefreshPhase(phase)));
+                        Some(ProjectAction::Task(key, task))
+                    }
                 }
             }
             ProjectUiCommand::ProcessTabUiCommand {
@@ -2040,17 +2046,9 @@ impl UiComponent for Project {
                                     .collect();
                                 tasks.extend(effect_tasks);
 
-                                tasks.push(Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectTree),
-                                )));
-                                tasks.push(Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::Overview),
-                                )));
-                                tasks.push(Task::done(ProjectAction::UiCommand(
-                                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProcessDefinition {
-                                        process: updated_process_reference,
-                                    }),
-                                )));
+                                tasks.push(Task::done(ProjectAction::UiCommand(ProjectUiCommand::ProcessChanged {
+                                    process: updated_process_reference.clone(),
+                                })));
                             }
                             Err(service_error) => {
                                 tasks.push(Task::done(service_error));
@@ -2330,6 +2328,32 @@ impl UiComponent for Project {
 
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
+            ProjectUiCommand::ProcessChanged {
+                process,
+            } => {
+                info!("Process changed. process: {}", process);
+
+                let tasks = vec![
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::ProjectTree,
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::Overview,
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::ProcessDefinition {
+                            process: process.clone(),
+                        },
+                    ))),
+                ];
+
+                let state = self.project_ui_state.lock().unwrap();
+                // if a phase tab that uses the process is open, it needs to be refreshed now too
+                for (_phase, tab_ui) in &state.phases_tab_uis {
+                    tab_ui.on_process_changed(&process);
+                }
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
         }
     }
 }
@@ -2526,6 +2550,9 @@ pub enum ProjectUiCommand {
     RefreshFromDesignVariants,
     RefreshPcbs,
     PcbsRefreshed,
+    ProcessChanged {
+        process: ProcessReference,
+    },
 }
 
 fn project_path_from_view_path(view_path: &String) -> NavigationPath {
