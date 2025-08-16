@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use derivative::Derivative;
 use egui::{Frame, TextEdit, Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
@@ -32,6 +34,7 @@ pub struct ProcessTabUi {
 pub struct ProcessTabUiState {
     available_tasks: Vec<TaskReference>,
     fields: Value<ProcessFields>,
+    new_operation_fields: Value<NewOperationFields>,
     initial_args: ProcessDefinitionArgs,
     initial_process_reference: ProcessReference,
 }
@@ -65,6 +68,7 @@ impl ProcessTabUi {
 
         self.state = Some(ProcessTabUiState {
             fields: Value::new(fields),
+            new_operation_fields: Value::new(NewOperationFields::default()),
             available_tasks,
             initial_args,
             initial_process_reference,
@@ -97,12 +101,15 @@ impl ProcessTabUi {
                         // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
                         //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
                         move |ui: &mut Ui, fields, sender| {
-                            let mut reference_clone = fields.reference.clone();
+                            let mut reference_clone = fields.process_reference.clone();
                             let output = TextEdit::singleline(&mut reference_clone)
                                 .desired_width(ui.available_width().min(200.0))
                                 .show(ui);
 
-                            if !fields.reference.eq(&reference_clone) {
+                            if !fields
+                                .process_reference
+                                .eq(&reference_clone)
+                            {
                                 sender
                                     .send(ProcessTabUiCommand::ReferenceChanged(reference_clone))
                                     .expect("sent")
@@ -129,6 +136,7 @@ impl ProcessTabUi {
                                 for _ in 0..state.available_tasks.len() {
                                     table_builder = table_builder.column(Column::auto());
                                 }
+                                table_builder = table_builder.column(Column::auto());
 
                                 table_builder
                                     .header(text_height, |mut header| {
@@ -143,13 +151,38 @@ impl ProcessTabUi {
                                                 );
                                             });
                                         }
+                                        header.col(|ui| {
+                                            ui.strong(tr!("table-operations-column-actions"));
+                                        });
                                     })
                                     .body(|mut body| {
                                         for (operation, tasks) in fields.operations.iter() {
                                             body.row(text_height, |mut row| {
                                                 row.col(|ui| {
-                                                    // TODO make editable
-                                                    ui.strong(operation.to_string());
+                                                    let mut operation_reference = operation.to_string();
+                                                    let output =
+                                                        TextEdit::singleline(&mut operation_reference).show(ui);
+                                                    if output.response.changed() {
+                                                        self.component.send(
+                                                            ProcessTabUiCommand::OperationReferenceChanged {
+                                                                operation: operation.clone(),
+                                                                new_operation_reference: operation_reference,
+                                                            },
+                                                        );
+                                                    }
+                                                });
+
+                                                row.col(|ui| {
+                                                    if ui
+                                                        .button(format!("🗑 {}", tr!("form-common-button-delete")))
+                                                        .clicked()
+                                                    {
+                                                        self.component.send(
+                                                            ProcessTabUiCommand::DeleteOperationClicked {
+                                                                operation: operation.clone(),
+                                                            },
+                                                        );
+                                                    }
                                                 });
 
                                                 for task in &state.available_tasks {
@@ -177,6 +210,81 @@ impl ProcessTabUi {
                         }
                         // end of form.add_field_ui
                     });
+                    // end of form.show_fields_vertical
+                });
+
+                // end of tui.show
+            });
+    }
+
+    /// we need an entirely different form for adding a new operation.
+    /// if we were to combine the 'operation_reference' with the other fields, it would prevent applying changes
+    /// when the field is empty or invalid, which is not the intention
+    /// FUTURE consider moving this form to a 'new operation' modal
+    pub fn show_new_operaton_form(
+        &self,
+        ui: &mut Ui,
+        form: &Form<NewOperationFields, ProcessTabUiCommand>,
+        _state: &ProcessTabUiState,
+    ) {
+        let default_style = || Style {
+            padding: length(2.),
+            gap: length(2.),
+            ..Default::default()
+        };
+
+        tui(ui, ui.id().with("new_operation_form"))
+            .reserve_available_width()
+            .style(Style {
+                align_items: Some(AlignItems::Center),
+                flex_direction: FlexDirection::Column,
+                size: Size {
+                    width: percent(1.),
+                    height: auto(),
+                },
+                padding: length(8.),
+                gap: length(8.),
+                ..default_style()
+            })
+            .show(|tui| {
+                form.show_fields_vertical(tui, |form, tui| {
+                    form.add_field_ui(
+                        "operation_reference",
+                        tr!("form-common-input-operation-reference"),
+                        tui,
+                        {
+                            move |ui: &mut Ui, fields, sender| {
+                                ui.horizontal(|ui| {
+                                    let mut operation_reference = fields.operation_reference.to_string();
+                                    let output = TextEdit::singleline(&mut operation_reference).show(ui);
+                                    if output.response.changed() {
+                                        sender
+                                            .send(ProcessTabUiCommand::NewOperationReferenceChanged(
+                                                operation_reference.clone(),
+                                            ))
+                                            .expect("sent");
+                                    }
+
+                                    let is_new_operation_valid = form
+                                        .field_validation_errors("operation_reference")
+                                        .is_none();
+
+                                    ui.add_enabled_ui(is_new_operation_valid, |ui| {
+                                        if ui
+                                            .button(tr!("form-common-button-add"))
+                                            .clicked()
+                                        {
+                                            sender
+                                                .send(ProcessTabUiCommand::AddOperationClicked)
+                                                .expect("sent");
+                                        }
+                                    });
+                                });
+
+                                ui.response()
+                            }
+                        },
+                    );
 
                     // end of form.show_fields_vertical
                 });
@@ -191,17 +299,33 @@ pub struct ProcessFields {
     // FUTURE could also validate that the reference is not already used
     #[validate(length(min = 1, code = "form-input-error-length"))]
     #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_reference"))]
-    reference: String,
+    process_reference: String,
 
     operations: IndexMap<OperationReference, Vec<TaskReference>>,
 
     rules: Vec<ProcessRuleReference>,
 }
 
+#[derive(Clone, Debug, Validate, serde::Deserialize, serde::Serialize)]
+pub struct NewOperationFields {
+    // FUTURE could also validate that the reference is not already used
+    #[validate(length(min = 1, code = "form-input-error-length"))]
+    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_reference"))]
+    pub operation_reference: String,
+}
+
+impl Default for NewOperationFields {
+    fn default() -> Self {
+        Self {
+            operation_reference: "".to_string(),
+        }
+    }
+}
+
 impl ProcessFields {
     pub fn from_process_definition(process: ProcessDefinition) -> Self {
         Self {
-            reference: process.reference.to_string(),
+            process_reference: process.reference.to_string(),
             operations: process
                 .operations
                 .into_iter()
@@ -227,7 +351,7 @@ impl ProcessFields {
             process_reference: initial_process_reference,
             process_definition: ProcessDefinition {
                 // safety, validation ensures that the reference is valid
-                reference: ProcessReference::from_raw(self.reference.clone()),
+                reference: ProcessReference::from_raw(self.process_reference.clone()),
                 operations,
                 rules,
             },
@@ -253,6 +377,15 @@ pub enum ProcessTabUiCommand {
         task: TaskReference,
         checked: bool,
     },
+    DeleteOperationClicked {
+        operation: OperationReference,
+    },
+    AddOperationClicked,
+    OperationReferenceChanged {
+        operation: OperationReference,
+        new_operation_reference: String,
+    },
+    NewOperationReferenceChanged(String),
 }
 
 #[derive(Debug, Clone)]
@@ -304,6 +437,10 @@ impl UiComponent for ProcessTabUi {
         let form = Form::new(&state.fields, &self.component.sender, ());
 
         self.show_form(ui, &form, state);
+
+        let new_operation_form = Form::new(&state.new_operation_fields, &self.component.sender, ());
+
+        self.show_new_operaton_form(ui, &new_operation_form, state);
 
         let is_changed = state
             .fields
@@ -359,7 +496,16 @@ impl UiComponent for ProcessTabUi {
         match command {
             ProcessTabUiCommand::None => Some(ProcessTabUiAction::None),
             ProcessTabUiCommand::ReferenceChanged(reference) => {
-                fields.reference = reference;
+                fields.process_reference = reference;
+                None
+            }
+            ProcessTabUiCommand::NewOperationReferenceChanged(operation_reference) => {
+                let mut new_operation_fields = state
+                    .new_operation_fields
+                    .lock()
+                    .unwrap();
+
+                new_operation_fields.operation_reference = operation_reference;
                 None
             }
             ProcessTabUiCommand::DeleteClicked => {
@@ -395,6 +541,50 @@ impl UiComponent for ProcessTabUi {
                 }
                 None
             }
+            ProcessTabUiCommand::AddOperationClicked => {
+                let new_operation_fields = state
+                    .new_operation_fields
+                    .lock()
+                    .unwrap();
+
+                if let Ok(new_operation) = OperationReference::from_str(&new_operation_fields.operation_reference) {
+                    fields
+                        .operations
+                        .insert(new_operation, vec![]);
+                }
+                None
+            }
+            ProcessTabUiCommand::OperationReferenceChanged {
+                operation,
+                new_operation_reference,
+            } => {
+                if let Ok(new_operation_reference) = OperationReference::from_str(&new_operation_reference) {
+                    if let Some(position) = fields
+                        .operations
+                        .iter()
+                        .position(|(candidate_operation, _tasks)| operation.eq(candidate_operation))
+                    {
+                        let tasks = fields
+                            .operations
+                            .shift_remove(&operation)
+                            .unwrap();
+                        fields
+                            .operations
+                            .insert_before(position, new_operation_reference, tasks);
+                    }
+                }
+                None
+            }
+            ProcessTabUiCommand::DeleteOperationClicked {
+                operation,
+            } => fields
+                .operations
+                .shift_remove(&operation)
+                .map(|_operation| {
+                    let args = fields.build_args(state.initial_process_reference.clone());
+
+                    ProcessTabUiAction::Apply(args)
+                }),
 
             //
             // form submission

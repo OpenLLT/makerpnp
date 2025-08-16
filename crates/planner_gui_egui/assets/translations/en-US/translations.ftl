@@ -198,6 +198,7 @@ form-common-choice-phase = Phase
 form-common-input-load-out-source = Loadout source
 form-common-input-phase-reference = Phase reference
 form-common-input-process-reference = Process reference
+form-common-input-operation-reference = Operation reference
 form-common-input-x = X
 form-common-input-y = Y
 form-common-input-top = Top
@@ -353,6 +354,7 @@ table-fiducials-column-copper-diameter = Copper ⌀
 table-fiducials-column-actions = Actions
 
 table-operations-column-operation = Operation
+table-operations-column-actions = Actions
 table-operations-column-task = { $task }
 
 common-value-not-available = N/A
