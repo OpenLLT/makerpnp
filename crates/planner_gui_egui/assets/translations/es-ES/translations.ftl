@@ -360,7 +360,7 @@ table-operations-column-task = { $task }
 common-value-not-available = N/A
 common-actions = Acciones
 
-common-value-operation-reference-default = NombreDeOperación
+common-value-operation-reference-default = nombre_de_operación
 
 ratio = Relación: { $numerator }: { $denominator }
 ratio-error = Ratio: N/A
