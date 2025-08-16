@@ -306,22 +306,6 @@ pub struct ProcessFields {
     rules: Vec<ProcessRuleReference>,
 }
 
-#[derive(Clone, Debug, Validate, serde::Deserialize, serde::Serialize)]
-pub struct NewOperationFields {
-    // FUTURE could also validate that the reference is not already used
-    #[validate(length(min = 1, code = "form-input-error-length"))]
-    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_reference"))]
-    pub operation_reference: String,
-}
-
-impl Default for NewOperationFields {
-    fn default() -> Self {
-        Self {
-            operation_reference: "".to_string(),
-        }
-    }
-}
-
 impl ProcessFields {
     pub fn from_process_definition(process: ProcessDefinition) -> Self {
         Self {
@@ -335,6 +319,7 @@ impl ProcessFields {
         }
     }
 
+    /// Safety: requires that the fields are valid.
     pub fn build_args(&self, initial_process_reference: ProcessReference) -> ProcessDefinitionArgs {
         let operations = self
             .operations
@@ -350,7 +335,6 @@ impl ProcessFields {
         ProcessDefinitionArgs {
             process_reference: initial_process_reference,
             process_definition: ProcessDefinition {
-                // safety, validation ensures that the reference is valid
                 reference: ProcessReference::from_raw(self.process_reference.clone()),
                 operations,
                 rules,
@@ -363,6 +347,22 @@ impl ProcessFields {
 pub struct ProcessDefinitionArgs {
     pub process_reference: ProcessReference,
     pub process_definition: ProcessDefinition,
+}
+
+#[derive(Clone, Debug, Validate, serde::Deserialize, serde::Serialize)]
+pub struct NewOperationFields {
+    // FUTURE could also validate that the reference is not already used
+    #[validate(length(min = 1, code = "form-input-error-length"))]
+    #[validate(custom(function = "crate::forms::validation::CommonValidation::validate_reference"))]
+    pub operation_reference: String,
+}
+
+impl Default for NewOperationFields {
+    fn default() -> Self {
+        Self {
+            operation_reference: tr!("common-value-operation-reference-default"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -442,12 +442,14 @@ impl UiComponent for ProcessTabUi {
 
         self.show_new_operaton_form(ui, &new_operation_form, state);
 
-        let is_changed = state
-            .fields
-            .lock()
-            .unwrap()
-            .build_args(state.initial_process_reference.clone())
-            != state.initial_args;
+        // IMPORTANT here the form must be valid before attempting to build the args otherwise a panic can occur
+        let is_changed = form.is_valid()
+            && state
+                .fields
+                .lock()
+                .unwrap()
+                .build_args(state.initial_process_reference.clone())
+                != state.initial_args;
 
         egui::Sides::new().show(
             ui,
