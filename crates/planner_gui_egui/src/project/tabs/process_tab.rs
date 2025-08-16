@@ -172,19 +172,6 @@ impl ProcessTabUi {
                                                     }
                                                 });
 
-                                                row.col(|ui| {
-                                                    if ui
-                                                        .button(format!("🗑 {}", tr!("form-common-button-delete")))
-                                                        .clicked()
-                                                    {
-                                                        self.component.send(
-                                                            ProcessTabUiCommand::DeleteOperationClicked {
-                                                                operation: operation.clone(),
-                                                            },
-                                                        );
-                                                    }
-                                                });
-
                                                 for task in &state.available_tasks {
                                                     row.col(|ui| {
                                                         let mut checked = tasks.contains(task);
@@ -202,6 +189,19 @@ impl ProcessTabUi {
                                                         }
                                                     });
                                                 }
+
+                                                row.col(|ui| {
+                                                    if ui
+                                                        .button(format!("🗑 {}", tr!("form-common-button-delete")))
+                                                        .clicked()
+                                                    {
+                                                        self.component.send(
+                                                            ProcessTabUiCommand::DeleteOperationClicked {
+                                                                operation: operation.clone(),
+                                                            },
+                                                        );
+                                                    }
+                                                });
                                             })
                                         }
                                     });
