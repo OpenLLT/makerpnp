@@ -10,7 +10,7 @@ use crux_core::render::RenderOperation;
 pub use crux_core::Core;
 use crux_core::{render, App, Command};
 use gerber::GerberFile;
-pub use gerber::GerberFileFunction;
+pub use gerber::{GerberFileFunction, GerberFileFunctionDiscriminants, PcbSideRequirement};
 use indexmap::IndexSet;
 use nalgebra::Vector2;
 use petgraph::Graph;
@@ -642,6 +642,10 @@ pub enum Event {
     RefreshGerberFiles {
         path: PathBuf,
         design: Option<DesignName>,
+    },
+    ApplyGerberFileFunctions {
+        path: PathBuf,
+        file_functions: Vec<(PathBuf, Option<GerberFileFunction>)>,
     },
 
     //
@@ -1705,6 +1709,25 @@ impl Planner {
                 let was_modified = pcb
                     .update_gerbers(design, vec![])
                     .map_err(|e| AppError::PcbOperationError(PcbOperationError::PcbError(e)))?;
+
+                *modified |= was_modified;
+
+                Ok(render::render())
+            }),
+            Event::ApplyGerberFileFunctions {
+                path: pcb_path,
+                file_functions,
+            } => Box::new(move |model: &mut Model| {
+                let ModelPcb {
+                    modified,
+                    pcb,
+                    ..
+                } = model
+                    .model_pcbs
+                    .get_mut(&pcb_path)
+                    .ok_or(AppError::PcbOperationError(PcbOperationError::PcbNotLoaded))?;
+
+                let was_modified = pcb.apply_file_functions(file_functions);
 
                 *modified |= was_modified;
 

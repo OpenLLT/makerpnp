@@ -11,6 +11,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 serde = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+
 
 [dev-dependencies]
 rstest = { workspace = true }

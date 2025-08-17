@@ -995,6 +995,10 @@ pub enum ConfigurationTabUiAction {
     },
     Reset,
     Apply(PcbUnitConfigurationArgs),
+    ApplyGerberFileFunctions {
+        path: PathBuf,
+        file_functions: Vec<(PathBuf, Option<GerberFileFunction>)>,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -1326,6 +1330,15 @@ impl UiComponent for ConfigurationUi {
                             Some(ConfigurationTabUiAction::RefreshGerberFiles {
                                 path: pcb_overview.path.clone(),
                                 design,
+                            })
+                        }
+                        Some(ManagerGerberModalAction::ApplyGerberFileFunctions {
+                            file_functions,
+                        }) => {
+                            debug!("applying gerber file functions. file_functions: {:?}", file_functions);
+                            Some(ConfigurationTabUiAction::ApplyGerberFileFunctions {
+                                path: pcb_overview.path.clone(),
+                                file_functions,
                             })
                         }
                     }

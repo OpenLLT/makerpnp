@@ -282,6 +282,36 @@ impl Pcb {
         };
         Ok(gerbers)
     }
+
+    pub fn apply_file_functions(&mut self, file_functions: Vec<(PathBuf, Option<GerberFileFunction>)>) -> bool {
+        fn apply_file_function(function: Option<GerberFileFunction>, gerber: &mut GerberFile) -> bool {
+            let old_function = gerber.function;
+            gerber.function = function;
+
+            old_function != gerber.function
+        }
+
+        let mut modified = false;
+        for (path, function) in file_functions {
+            if let Some(gerber) = self
+                .pcb_gerbers
+                .iter_mut()
+                .find(|candidate| candidate.file.eq(&path))
+            {
+                modified |= apply_file_function(function, gerber);
+            }
+
+            for design_gerbers in self.design_gerbers.values_mut() {
+                if let Some(gerber) = design_gerbers
+                    .iter_mut()
+                    .find(|candidate| candidate.file.eq(&path))
+                {
+                    modified |= apply_file_function(function, gerber);
+                }
+            }
+        }
+        modified
+    }
 }
 
 pub fn create_pcb(

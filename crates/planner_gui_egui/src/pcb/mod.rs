@@ -943,6 +943,16 @@ impl UiComponent for Pcb {
                             Err(error_action) => Some(error_action),
                         }
                     }
+                    Some(ConfigurationTabUiAction::ApplyGerberFileFunctions {
+                        path,
+                        file_functions,
+                    }) => self
+                        .planner_core_service
+                        .update(Event::ApplyGerberFileFunctions {
+                            path,
+                            file_functions,
+                        })
+                        .when_ok(key, |_| Some(PcbUiCommand::RefreshPcb)),
                 }
             }
             PcbUiCommand::PanelTabUiCommand(command) => {

@@ -5,10 +5,12 @@ use egui::Modal;
 use egui_extras::Column;
 use egui_i18n::tr;
 use egui_mobius::Value;
-use planner_app::{PcbGerberItem, PcbSide};
+use planner_app::{GerberFileFunction, GerberFileFunctionDiscriminants, PcbGerberItem, PcbSide, PcbSideRequirement};
+use strum::VariantArray;
+use tracing::debug;
 
 use crate::file_picker::Picker;
-use crate::i18n::conversions::{gerber_file_function_to_i18n_key, pcb_side_to_i18n_key};
+use crate::i18n::conversions::{gerber_file_function_discriminant_to_i18n_key, pcb_side_to_i18n_key};
 use crate::ui_component::{ComponentState, UiComponent};
 
 #[derive(Derivative)]
@@ -16,6 +18,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub struct ManageGerbersModal {
     title: String,
     gerbers: Vec<PcbGerberItem>,
+    gerber_file_functions: Vec<(Option<GerberFileFunctionDiscriminants>, Option<PcbSide>)>,
 
     file_picker: Value<Picker>,
 
@@ -24,9 +27,24 @@ pub struct ManageGerbersModal {
 
 impl ManageGerbersModal {
     pub fn new(title: String, gerbers: Vec<PcbGerberItem>) -> Self {
+        let gerber_file_functions = gerbers
+            .iter()
+            .map(|meh| {
+                let discriminant = meh
+                    .function
+                    .map(|function| function.into());
+                let pcb_side = meh
+                    .function
+                    .map(|function| function.pcb_side())
+                    .flatten();
+
+                (discriminant, pcb_side)
+            })
+            .collect::<Vec<_>>();
         Self {
             title,
             gerbers,
+            gerber_file_functions,
             component: Default::default(),
             file_picker: Default::default(),
         }
@@ -40,18 +58,38 @@ impl ManageGerbersModal {
 #[derive(Debug, Clone)]
 pub enum ManagerGerbersModalUiCommand {
     Close,
-    Remove { index: usize },
+    Remove {
+        index: usize,
+    },
     Add,
-    GerberFilesPicked { picked_files: Vec<PathBuf> },
+    GerberFilesPicked {
+        picked_files: Vec<PathBuf>,
+    },
     Refresh,
+    FunctionChanged {
+        index: usize,
+        function_discriminant: Option<GerberFileFunctionDiscriminants>,
+    },
+    PcbSideChanged {
+        index: usize,
+        pcb_side: Option<PcbSide>,
+    },
+    Apply,
 }
 
 #[derive(Debug, Clone)]
 pub enum ManagerGerberModalAction {
     CloseDialog,
-    RemoveGerberFiles { files: Vec<PathBuf> },
-    AddGerberFiles { files: Vec<PathBuf> },
+    RemoveGerberFiles {
+        files: Vec<PathBuf>,
+    },
+    AddGerberFiles {
+        files: Vec<PathBuf>,
+    },
     RefreshGerberFiles,
+    ApplyGerberFileFunctions {
+        file_functions: Vec<(PathBuf, Option<GerberFileFunction>)>,
+    },
 }
 
 impl UiComponent for ManageGerbersModal {
@@ -117,12 +155,19 @@ impl UiComponent for ManageGerbersModal {
                 })
                 .body(|mut body| {
                     for (
-                        index,
-                        PcbGerberItem {
-                            path,
-                            function,
-                        },
-                    ) in self.gerbers.iter().enumerate()
+                        (
+                            index,
+                            PcbGerberItem {
+                                path,
+                                function: _function,
+                            },
+                        ),
+                        choice,
+                    ) in self
+                        .gerbers
+                        .iter()
+                        .enumerate()
+                        .zip(self.gerber_file_functions.iter())
                     {
                         body.row(text_height, |mut row| {
                             row.col(|ui| {
@@ -137,24 +182,113 @@ impl UiComponent for ManageGerbersModal {
                                 );
                             });
                             row.col(|ui| {
-                                // TODO replace label with a dropdown to allow the user to change the purpose
-                                let label = match function {
-                                    Some(function) => tr!(gerber_file_function_to_i18n_key(function)),
-                                    None => tr!("common-value-not-available"),
-                                };
-                                ui.label(label);
+                                egui::ComboBox::from_id_salt(ui.id().with("file_function"))
+                                    .selected_text(match choice.0 {
+                                        Some(function_choice) => {
+                                            tr!(gerber_file_function_discriminant_to_i18n_key(&function_choice))
+                                        }
+                                        None => tr!("form-common-combo-select"),
+                                    })
+                                    .show_ui(ui, |ui| {
+                                        if ui
+                                            .add(egui::Button::selectable(
+                                                choice.0.is_none(),
+                                                tr!("form-common-combo-none"),
+                                            ))
+                                            .clicked()
+                                        {
+                                            self.component
+                                                .send(ManagerGerbersModalUiCommand::FunctionChanged {
+                                                    index,
+                                                    function_discriminant: None,
+                                                });
+                                        }
+                                        for discriminant in GerberFileFunctionDiscriminants::VARIANTS {
+                                            let selected = choice
+                                                .0
+                                                .map(|function_choice| discriminant.eq(&function_choice))
+                                                .unwrap_or(false);
+
+                                            if ui
+                                                .add(egui::Button::selectable(
+                                                    selected,
+                                                    tr!(gerber_file_function_discriminant_to_i18n_key(discriminant)),
+                                                ))
+                                                .clicked()
+                                            {
+                                                self.component
+                                                    .send(ManagerGerbersModalUiCommand::FunctionChanged {
+                                                        index,
+                                                        function_discriminant: Some(*discriminant),
+                                                    });
+                                            }
+                                        }
+                                    });
                             });
                             row.col(|ui| {
-                                // TODO ask the function if PCB side is relevant and if so, replace the label with a
-                                //      dropdown to allow the user to change the side
+                                let pcb_side_requirement = choice
+                                    .0
+                                    .map(|choice| choice.pcb_side_requirement());
 
-                                let label_key = function
-                                    .map(|function| function.pcb_side())
-                                    .flatten()
-                                    .map(|pcb_side| pcb_side_to_i18n_key(&pcb_side))
-                                    .unwrap_or("common-value-not-available");
+                                match pcb_side_requirement {
+                                    Some(requirement)
+                                        if requirement == PcbSideRequirement::Required
+                                            || requirement == PcbSideRequirement::Optional =>
+                                    {
+                                        let pcb_side = choice.1;
 
-                                ui.label(tr!(label_key));
+                                        egui::ComboBox::from_id_salt(ui.id().with("pcb_side"))
+                                            .selected_text({
+                                                let label_key = pcb_side
+                                                    .map(|pcb_side| pcb_side_to_i18n_key(&pcb_side))
+                                                    .unwrap_or("common-value-not-available");
+
+                                                tr!(label_key)
+                                            })
+                                            .show_ui(ui, |ui| {
+                                                let is_top = pcb_side
+                                                    .map(|pcb_side| pcb_side == PcbSide::Top)
+                                                    .unwrap_or(false);
+
+                                                let is_bottom = pcb_side
+                                                    .map(|pcb_side| pcb_side == PcbSide::Bottom)
+                                                    .unwrap_or(false);
+
+                                                if ui
+                                                    .add(egui::Button::selectable(
+                                                        is_top,
+                                                        tr!("form-common-choice-pcb-side-top"),
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    self.component
+                                                        .send(ManagerGerbersModalUiCommand::PcbSideChanged {
+                                                            index,
+                                                            pcb_side: Some(PcbSide::Top),
+                                                        });
+                                                }
+                                                if ui
+                                                    .add(egui::Button::selectable(
+                                                        is_bottom,
+                                                        tr!("form-common-choice-pcb-side-bottom"),
+                                                    ))
+                                                    .clicked()
+                                                {
+                                                    self.component
+                                                        .send(ManagerGerbersModalUiCommand::PcbSideChanged {
+                                                            index,
+                                                            pcb_side: Some(PcbSide::Bottom),
+                                                        });
+                                                }
+                                            });
+                                    }
+                                    Some(_requirement) => {
+                                        ui.label(tr!("form-common-value-not-available"));
+                                    }
+                                    _ => {
+                                        ui.label(tr!("form-common-value-not-available"));
+                                    }
+                                }
                             });
                             row.col(|ui| {
                                 if ui
@@ -187,6 +321,13 @@ impl UiComponent for ManageGerbersModal {
                     {
                         self.component
                             .send(ManagerGerbersModalUiCommand::Refresh);
+                    }
+                    if ui
+                        .button(tr!("form-common-button-apply"))
+                        .clicked()
+                    {
+                        self.component
+                            .send(ManagerGerbersModalUiCommand::Apply);
                     }
                 },
                 |ui| {
@@ -231,6 +372,86 @@ impl UiComponent for ManageGerbersModal {
             } => Some(ManagerGerberModalAction::AddGerberFiles {
                 files: picked_files,
             }),
+            ManagerGerbersModalUiCommand::FunctionChanged {
+                index,
+                function_discriminant,
+            } => {
+                debug!(
+                    "function changed, index: {}, function: {:?}",
+                    index, function_discriminant
+                );
+                let choice = self
+                    .gerber_file_functions
+                    .get_mut(index)
+                    .unwrap();
+                choice.0 = function_discriminant;
+                None
+            }
+            ManagerGerbersModalUiCommand::PcbSideChanged {
+                index,
+                pcb_side,
+            } => {
+                debug!("pcb side changed, index: {}, pcb_side: {:?}", index, pcb_side);
+                let choice = self
+                    .gerber_file_functions
+                    .get_mut(index)
+                    .unwrap();
+                choice.1 = pcb_side;
+                None
+            }
+            ManagerGerbersModalUiCommand::Apply => {
+                debug!("gerber_file_functions: {:?}", self.gerber_file_functions);
+                let file_functions: Vec<(PathBuf, Option<GerberFileFunction>)> = self
+                    .gerber_file_functions
+                    .iter()
+                    .map(|choice| {
+                        let pcb_side = choice.1;
+                        choice
+                            .0
+                            .map(|discriminant| match (discriminant, pcb_side) {
+                                //
+                                // Required pcb side
+                                //
+                                (GerberFileFunctionDiscriminants::Assembly, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Assembly(pcb_side))
+                                }
+                                (GerberFileFunctionDiscriminants::Component, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Component(pcb_side))
+                                }
+                                (GerberFileFunctionDiscriminants::Copper, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Copper(pcb_side))
+                                }
+                                (GerberFileFunctionDiscriminants::Legend, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Legend(pcb_side))
+                                }
+                                (GerberFileFunctionDiscriminants::Paste, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Paste(pcb_side))
+                                }
+                                (GerberFileFunctionDiscriminants::Solder, Some(pcb_side)) => {
+                                    Some(GerberFileFunction::Solder(pcb_side))
+                                }
+                                //
+                                // No pcb side
+                                //
+                                (GerberFileFunctionDiscriminants::Profile, None) => Some(GerberFileFunction::Profile),
+                                //
+                                // Option pcb side
+                                //
+                                (GerberFileFunctionDiscriminants::Other, pcb_side) => {
+                                    Some(GerberFileFunction::Other(pcb_side))
+                                }
+                                // Invalid/unfinished selections
+                                _ => None,
+                            })
+                    })
+                    .zip(self.gerbers.iter())
+                    .filter_map(|(choice, item)| choice.map(|choice| (item.path.clone(), choice)))
+                    .collect::<Vec<_>>();
+
+                Some(ManagerGerberModalAction::ApplyGerberFileFunctions {
+                    file_functions,
+                })
+            }
         }
     }
 }

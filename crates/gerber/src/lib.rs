@@ -6,6 +6,7 @@ use gerber_types::{
     Position, StandardComment,
 };
 use pnp::pcb::PcbSide;
+use strum_macros::{EnumDiscriminants, VariantArray};
 use thiserror::Error;
 use tracing::{error, info, trace};
 
@@ -24,6 +25,9 @@ pub struct GerberFile {
 /// For Pick-and-Place planning, we only care about a subset of the gerber files.
 /// See `gerber-types::FileFunction` for the full list.
 #[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(EnumDiscriminants)]
+#[strum_discriminants(vis(pub))]
+#[strum_discriminants(derive(VariantArray))]
 pub enum GerberFileFunction {
     Assembly(PcbSide),
     Component(PcbSide),
@@ -35,6 +39,19 @@ pub enum GerberFileFunction {
     Solder(PcbSide),
 
     Other(Option<PcbSide>),
+}
+
+#[cfg(test)]
+mod gerber_file_function_discriminant_tests {
+    use strum::VariantArray;
+
+    use super::*;
+
+    #[test]
+    fn test_gerber_file_function_as_gerber_file_function() {
+        let all = GerberFileFunctionDiscriminants::VARIANTS;
+        assert_eq!(all.len(), 8);
+    }
 }
 
 impl GerberFileFunction {
@@ -50,6 +67,23 @@ impl GerberFileFunction {
             GerberFileFunction::Other(_) => None,
         }
     }
+}
+
+impl GerberFileFunctionDiscriminants {
+    pub fn pcb_side_requirement(&self) -> PcbSideRequirement {
+        match self {
+            GerberFileFunctionDiscriminants::Profile => PcbSideRequirement::NotApplicable,
+            GerberFileFunctionDiscriminants::Other => PcbSideRequirement::Optional,
+            _ => PcbSideRequirement::Required,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PcbSideRequirement {
+    Required,
+    Optional,
+    NotApplicable,
 }
 
 #[allow(dead_code)]

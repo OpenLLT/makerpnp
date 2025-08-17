@@ -1,6 +1,6 @@
 use planner_app::{
-    GerberFileFunction, OperationStatus, PcbAssemblyFlip, PcbSide, PlacementSortingMode, PlacementStatus,
-    ProjectPlacementStatus, TaskStatus,
+    GerberFileFunction, GerberFileFunctionDiscriminants, OperationStatus, PcbAssemblyFlip, PcbSide,
+    PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus,
 };
 use util::sorting::SortOrder;
 
@@ -81,6 +81,21 @@ pub fn gerber_file_function_to_i18n_key(function: &GerberFileFunction) -> &'stat
         GerberFileFunction::Profile => "gerber-file-function-profile",
         GerberFileFunction::Solder(_) => "gerber-file-function-solder",
         GerberFileFunction::Other(_) => "gerber-file-function-other",
+    }
+}
+
+pub fn gerber_file_function_discriminant_to_i18n_key(
+    function_discriminant: &GerberFileFunctionDiscriminants,
+) -> &'static str {
+    match function_discriminant {
+        GerberFileFunctionDiscriminants::Assembly => "gerber-file-function-assembly",
+        GerberFileFunctionDiscriminants::Component => "gerber-file-function-component",
+        GerberFileFunctionDiscriminants::Copper => "gerber-file-function-copper",
+        GerberFileFunctionDiscriminants::Legend => "gerber-file-function-legend",
+        GerberFileFunctionDiscriminants::Paste => "gerber-file-function-paste",
+        GerberFileFunctionDiscriminants::Profile => "gerber-file-function-profile",
+        GerberFileFunctionDiscriminants::Solder => "gerber-file-function-solder",
+        GerberFileFunctionDiscriminants::Other => "gerber-file-function-other",
     }
 }
 
