@@ -243,6 +243,40 @@ impl Project {
         Ok(())
     }
 
+    pub fn can_start_phase(&self, phase_reference: &PhaseReference) -> bool {
+        let mut log = vec![];
+        let mut can_start_phase = true;
+
+        for phase in &self.phase_orderings {
+            let phase_state = self.phase_states.get(phase).unwrap();
+
+            if phase.eq(phase_reference) {
+                let is_pending = phase_state.is_pending();
+                log.push((phase.clone(), if is_pending { "pending" } else { "not pending" }));
+
+                can_start_phase &= is_pending;
+                // no need to check subsequent phases
+                break;
+            }
+
+            let is_complete = phase_state.is_complete();
+            log.push((phase.clone(), if is_complete { "complete" } else { "not complete" }));
+            can_start_phase &= is_complete;
+
+            if !can_start_phase {
+                // no need to check subsequent phases if a preceding phase is not complete.
+                break;
+            }
+        }
+
+        debug!(
+            "can start phase: {}. phase: {}, log: {:?}",
+            can_start_phase, phase_reference, log
+        );
+
+        can_start_phase
+    }
+
     pub fn find_process(&self, process_reference: &ProcessReference) -> Result<&ProcessDefinition, ProcessError> {
         self.processes
             .iter()

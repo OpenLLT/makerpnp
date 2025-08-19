@@ -8,8 +8,10 @@ pub fn build_task_actions(
     previous_task_status: &Option<TaskStatus>,
     task_status: &TaskStatus,
     can_complete: bool,
+    can_start_phase: bool,
 ) -> Option<Vec<TaskAction>> {
     trace!("building task actions");
+
     if !matches!(previous_operation_status, None | Some(OperationStatus::Complete)) {
         trace!(
             "previous operation status not complete. previous_operation_status: {:?}",
@@ -36,7 +38,14 @@ pub fn build_task_actions(
 
     let mut task_actions = Vec::new();
     match task_status {
-        TaskStatus::Pending => task_actions.push(TaskAction::Start),
+        TaskStatus::Pending => {
+            if previous_operation_status.is_none() && previous_task_status.is_none() && !can_start_phase {
+                trace!("first operation, first task and phase cannot be started");
+                return None;
+            }
+
+            task_actions.push(TaskAction::Start)
+        }
         TaskStatus::Started => {
             if can_complete {
                 task_actions.push(TaskAction::Complete);

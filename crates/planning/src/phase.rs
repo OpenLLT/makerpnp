@@ -10,7 +10,7 @@ use crate::placement::PlacementSortingItem;
 use crate::process::TestTaskState;
 use crate::process::{
     AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState,
-    PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
+    OperationStatus, PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
 };
 
 pub type PhaseReference = Reference;
@@ -39,8 +39,8 @@ pub enum PhaseError {
     InvalidOperationForPhase(Reference, OperationReference, Vec<OperationReference>),
     #[error("Invalid task for operation. phase: '{}', operation: '{}', task: '{}', possible_tasks: {:?}", .0, .1, .2, .3.iter().map(|reference|reference.to_string()).collect::<Vec<_>>())]
     InvalidTaskForOperation(Reference, OperationReference, TaskReference, Vec<TaskReference>),
-    #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
-    PrecedingOperationIncomplete(Reference, OperationReference),
+    // #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
+    // PrecedingOperationIncomplete(Reference, OperationReference),
 }
 
 pub struct PhaseOrderings<'a>(pub &'a IndexSet<Reference>);
@@ -100,6 +100,18 @@ impl PhaseState {
                 task_state.reset()
             }
         }
+    }
+
+    pub fn is_pending(&self) -> bool {
+        self.operation_states
+            .iter()
+            .all(|os| os.status() == OperationStatus::Pending)
+    }
+
+    pub fn is_complete(&self) -> bool {
+        self.operation_states
+            .iter()
+            .all(|os| os.status() == OperationStatus::Complete)
     }
 }
 

@@ -290,6 +290,7 @@ pub struct PhaseOverview {
     pub load_out_source: LoadOutSource,
     pub pcb_side: PcbSide,
     pub phase_placement_orderings: Vec<PlacementSortingItem>,
+    pub can_start: bool,
     pub state: PhaseState,
 }
 
@@ -2169,9 +2170,12 @@ impl Planner {
                             .phase_states
                             .get(phase_reference)
                             .unwrap();
+                        let can_start = project.can_start_phase(&phase_reference);
+
                         // FUTURE try and avoid the [`unwrap`] here, ideally by ensuring load-out sources are always correct
                         //        for every situation instead of using [`try_build_phase_load_out_source`]
-                        try_build_phase_overview(&directory, phase_reference.clone(), phase, phase_state).unwrap()
+                        try_build_phase_overview(&directory, phase_reference.clone(), phase, can_start, phase_state)
+                            .unwrap()
                     })
                     .collect::<Vec<PhaseOverview>>();
 
@@ -2200,9 +2204,11 @@ impl Planner {
                     .phase_states
                     .get(&phase_reference)
                     .unwrap();
+                let can_start = project.can_start_phase(&phase_reference);
 
-                let phase_overview = try_build_phase_overview(&directory, phase_reference, phase, phase_state)
-                    .map_err(AppError::LoadoutSourceError)?;
+                let phase_overview =
+                    try_build_phase_overview(&directory, phase_reference, phase, can_start, phase_state)
+                        .map_err(AppError::LoadoutSourceError)?;
 
                 Ok(project_view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
@@ -2576,6 +2582,7 @@ fn try_build_phase_overview(
     directory: &PathBuf,
     phase_reference: PhaseReference,
     phase: &Phase,
+    can_start: bool,
     state: &PhaseState,
 ) -> Result<PhaseOverview, LoadOutSourceError> {
     let load_out_source = try_build_phase_load_out_source(directory, phase)?;
@@ -2586,6 +2593,7 @@ fn try_build_phase_overview(
         load_out_source,
         pcb_side: phase.pcb_side.clone(),
         phase_placement_orderings: phase.placement_orderings.clone(),
+        can_start,
         state: state.clone(),
     })
 }

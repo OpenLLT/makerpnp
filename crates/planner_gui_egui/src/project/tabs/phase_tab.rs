@@ -148,6 +148,8 @@ impl UiComponent for PhaseTabUi {
 
             if let Some(overview) = &self.overview {
                 let mut previous_operation_status = None;
+                let can_start_phase = overview.can_start;
+
                 for (index, operation_state) in overview
                     .state
                     .operation_states
@@ -195,6 +197,7 @@ impl UiComponent for PhaseTabUi {
                                 &previous_task_status,
                                 &task_status,
                                 task_state.can_complete(),
+                                can_start_phase,
                             ) {
                                 egui::ComboBox::from_id_salt(ui.id().with("kind"))
                                     .selected_text(status)
