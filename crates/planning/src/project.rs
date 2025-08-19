@@ -1940,6 +1940,8 @@ mod apply_phase_operation_task_action_tests {
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum TaskActionError {
+    #[error("Phase cannot be started.")]
+    PhaseCannotBeStarted,
     #[error("Preceding operation not complete.")]
     PrecedingOperationNotComplete,
     #[error("Preceding task not complete.")]
@@ -1962,10 +1964,14 @@ fn can_apply_action<'p>(
     task_reference: &TaskReference,
     task_action: &TaskAction,
 ) -> Result<&'p mut Box<dyn SerializableTaskState>, TaskActionError> {
+    let can_start_phase = project.can_start_phase(phase_reference);
+
     let phase_state = project
         .phase_states
         .get_mut(phase_reference)
         .unwrap();
+
+    let mut is_first_operation = true;
 
     let operation_state = phase_state
         .operation_states
@@ -1984,6 +1990,8 @@ fn can_apply_action<'p>(
                 return Ok(acc);
             }
 
+            is_first_operation = false;
+
             //
             // check overall-state of preceding operation
             //
@@ -1995,6 +2003,8 @@ fn can_apply_action<'p>(
             Ok(acc)
         })?
         .unwrap();
+
+    let mut is_first_task = true;
 
     let task_state = operation_state
         .task_states
@@ -2009,6 +2019,11 @@ fn can_apply_action<'p>(
                 // check the state of this task
                 //
                 match (task_action, task_state.status()) {
+                    (TaskAction::Start, TaskStatus::Pending) => {
+                        if is_first_operation && is_first_task && !can_start_phase {
+                            return Err(TaskActionError::PhaseCannotBeStarted);
+                        }
+                    }
                     (TaskAction::Start, TaskStatus::Started) => return Err(TaskActionError::TaskAlreadyStarted),
                     (TaskAction::Complete, TaskStatus::Complete) => return Err(TaskActionError::TaskAlreadyComplete),
                     (TaskAction::Abandon, TaskStatus::Abandoned) => return Err(TaskActionError::TaskAlreadyAbandoned),
@@ -2027,6 +2042,8 @@ fn can_apply_action<'p>(
                 }
                 acc = Some(task_state);
             } else {
+                is_first_task = false;
+
                 //
                 // check the state of the preceding task
                 //
@@ -2102,6 +2119,7 @@ pub fn apply_phase_operation_task_action(
     // 1) trying to change a task where preceding tasks or operations are not in the correct state
     // 2) trying to complete AutomatedPnp/ManuallySolderComponents when not all components have been placed (or skipped)
     // 3) some other task-defined reason.
+    // 4) applying tasks to phases when the preceding phase is not complete.
 
     let task_state = can_apply_action(project, phase_reference, &operation_reference, &task_reference, &action)?;
 
