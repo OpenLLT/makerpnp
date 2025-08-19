@@ -1058,8 +1058,20 @@ fn refresh_placements(
             }
             Change::Existing => {
                 placement_state_entry.and_modify(|ps| {
+                    if !ps
+                        .project_status
+                        .eq(&ProjectPlacementStatus::Used)
+                    {
+                        // this can happen:
+                        // 1) if a placement is removed, then later re-added. (e.g. changes to a placements.csv file)
+                        // 2) if unit mappings are changed, first causing the placement to become unused, then later
+                        //     changed again such that the placement becomes required again.
+                        info!("Marking previously unused placement as used. path: {}", path);
+                        ps.project_status = ProjectPlacementStatus::Used;
+                        modified |= true;
+                    }
                     if !ps.placement.eq(&placement) {
-                        info!("Updating placement. old: {:?}, new: {:?}", ps.placement, placement,);
+                        info!("Updating placement. old: {:?}, new: {:?}", ps.placement, placement);
                         ps.placement = placement;
                         modified |= true;
                     }
