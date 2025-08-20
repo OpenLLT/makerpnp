@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
@@ -13,11 +14,12 @@ use egui_mobius::types::Value;
 use i18n::fluent_argument_helpers::planner_app::build_fluent_args;
 use petgraph::Graph;
 use petgraph::graph::NodeIndex;
-use planner_app::{Arg, PhaseReference, ProjectTreeItem, ProjectTreeView};
+use planner_app::{Arg, PcbSide, PhaseReference, ProjectTreeItem, ProjectTreeView};
 use tap::Tap;
 use tracing::{debug, trace};
 use util::path::clip_path;
 
+use crate::i18n::conversions::pcb_side_to_i18n_key;
 use crate::project::tabs::ProjectTabContext;
 use crate::project::{project_path_from_view_path, view_path_from_project_path};
 use crate::tabs::{Tab, TabKey};
@@ -155,6 +157,35 @@ impl ExplorerTabUi {
             Ok((key, Cow::Borrowed(item)))
         }
 
+        fn handle_phase<'p>(
+            default_key: String,
+            item: &'p ProjectTreeItem,
+            _project_directory: &'_ PathBuf,
+        ) -> Result<(String, Cow<'p, ProjectTreeItem>), ()> {
+            if !item.key.eq("phase") {
+                return Err(());
+            }
+
+            let pcb_side = item
+                .args
+                .get("pcb_side")
+                .ok_or(())
+                .and_then(|arg| match arg {
+                    Arg::String(pcb_side) => PcbSide::from_str(pcb_side),
+                    _ => Err(()),
+                })?;
+
+            let mut item = item.clone();
+            item.args.insert(
+                "pcb_side".to_string(),
+                Arg::String(tr!(pcb_side_to_i18n_key(&pcb_side))),
+            );
+
+            let item: Cow<'p, ProjectTreeItem> = Cow::Owned(item);
+
+            Ok((default_key, item))
+        }
+
         fn default_handler<'p>(
             default_key: String,
             item: &'p ProjectTreeItem,
@@ -164,7 +195,12 @@ impl ExplorerTabUi {
         }
 
         // some items need additional processing
-        let handlers = [handle_phase_loadout, handle_unit_assignment, default_handler];
+        let handlers = [
+            handle_phase,
+            handle_phase_loadout,
+            handle_unit_assignment,
+            default_handler,
+        ];
 
         let default_key = format!("project-explorer-node-{}", item.key);
 

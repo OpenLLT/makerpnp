@@ -2101,6 +2101,7 @@ impl Planner {
                             args: HashMap::from([
                                 ("reference".to_string(), Arg::String(reference.to_string())),
                                 ("process".to_string(), Arg::String(phase.process.to_string())),
+                                ("pcb_side".to_string(), Arg::String(phase.pcb_side.to_string())),
                             ]),
                             path: phase_path.clone(),
                         });

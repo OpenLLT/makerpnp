@@ -4,7 +4,7 @@
 //! To complicate things, humans prefer 1-based numbers ("the first", "the second",..), and computers prefer 0-based numbers (arrays, vectors, etc.)
 //! We define types and use them, so that it's clear where indexes (0-based) vs numbers (1-based) are used.
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 
 /// 0-based
@@ -43,6 +43,15 @@ impl FromStr for PcbSide {
             "top" => Ok(PcbSide::Top),
             "bottom" => Ok(PcbSide::Bottom),
             _ => Err(()),
+        }
+    }
+}
+
+impl Display for PcbSide {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PcbSide::Top => f.write_str("top"),
+            PcbSide::Bottom => f.write_str("bottom"),
         }
     }
 }

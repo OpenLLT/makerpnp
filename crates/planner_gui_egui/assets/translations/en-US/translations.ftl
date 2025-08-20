@@ -101,7 +101,7 @@ project-explorer-node-root = Root
 project-explorer-node-parts = Parts
 project-explorer-node-placements = Placements
 project-explorer-node-phases = Phases
-project-explorer-node-phase = { $reference } ({ $process})
+project-explorer-node-phase = { $reference } ({ $process } - { $pcb_side })
 project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Unit assignments
 project-explorer-node-unit-assignment-assigned = { $name } {$design_name} = {$variant_name}
