@@ -169,11 +169,12 @@ impl ExplorerTabUi {
             let pcb_side = item
                 .args
                 .get("pcb_side")
-                .ok_or(())
                 .and_then(|arg| match arg {
-                    Arg::String(pcb_side) => PcbSide::from_str(pcb_side),
-                    _ => Err(()),
-                })?;
+                    Arg::String(s) => Some(s.as_str()),
+                    _ => None,
+                })
+                .map(PcbSide::from_str)
+                .unwrap_or(Err(()))?;
 
             let mut item = item.clone();
             item.args.insert(
