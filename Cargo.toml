@@ -44,6 +44,7 @@ termtree = { version = "0.5.1"}
 derivative = { version = "2.2.0" }
 lexical-sort = { version = "0.3.1"}
 tap = { version = "1.0.1" }
+uuid = { version = "1.18.0" }
 
 # enums
 strum = { version = "0.27.1" }
