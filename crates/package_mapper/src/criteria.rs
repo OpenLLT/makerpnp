@@ -23,7 +23,7 @@ impl PackageMappingCriteria for GenericCriteria {
                 let value = match field {
                     "manufacturer" => part.manufacturer.as_str(),
                     "mpn" => part.mpn.as_str(),
-                    _ => panic!("Unknown field"),
+                    _ => panic!("Unknown criteria field: '{}', possible fields: {:?}", field, fields),
                 };
                 criterion.matches(field, value)
             })
