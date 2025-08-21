@@ -17,30 +17,12 @@ impl PartialEq for dyn PlacementMappingCriteria {
 
 impl PlacementMappingCriteria for GenericCriteria {
     fn matches(&self, eda_placement: &EdaPlacement) -> bool {
-        let result: Option<bool> = self
-            .criteria
-            .iter()
-            .fold(None, |mut matched, criterion| {
-                let matched_field = eda_placement
-                    .fields
-                    .iter()
-                    .find(|field| criterion.matches(field.name.as_str(), field.value.as_str()));
-
-                match (&mut matched, matched_field) {
-                    // matched, previous fields checked
-                    (Some(accumulated_result), Some(_field)) => *accumulated_result &= true,
-                    // matched, first field
-                    (None, Some(_field)) => matched = Some(true),
-                    // not matched, previous fields checked
-                    (Some(accumulated_result), None) => *accumulated_result = false,
-                    // not matched, first field
-                    (None, None) => matched = Some(false),
-                }
-
-                matched
-            });
-
-        result.unwrap_or(false)
+        self.criteria.iter().all(|criterion| {
+            eda_placement
+                .fields
+                .iter()
+                .any(|field| criterion.matches(field.name.as_str(), field.value.as_str()))
+        })
     }
 }
 
