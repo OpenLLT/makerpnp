@@ -17,35 +17,17 @@ impl PartialEq for dyn PackageMappingCriteria {
 
 impl PackageMappingCriteria for GenericCriteria {
     fn matches(&self, part: &Part) -> bool {
-        let result: Option<bool> = self
-            .criteria
-            .iter()
-            .fold(None, |mut matched, criterion| {
-                let fields = ["manufacturer", "mpn"];
-                let matched_field = fields.into_iter().find(|&field| {
-                    let value = match field {
-                        "manufacturer" => part.manufacturer.as_str(),
-                        "mpn" => part.mpn.as_str(),
-                        _ => panic!("Unknown field"),
-                    };
-                    criterion.matches(field, value)
-                });
-
-                match (&mut matched, matched_field) {
-                    // matched, previous fields checked
-                    (Some(accumulated_result), Some(_field)) => *accumulated_result &= true,
-                    // matched, first field
-                    (None, Some(_field)) => matched = Some(true),
-                    // not matched, previous fields checked
-                    (Some(accumulated_result), None) => *accumulated_result = false,
-                    // not matched, first field
-                    (None, None) => matched = Some(false),
-                }
-
-                matched
-            });
-
-        result.unwrap_or(false)
+        self.criteria.iter().all(|criterion| {
+            let fields = ["manufacturer", "mpn"];
+            fields.iter().any(|&field| {
+                let value = match field {
+                    "manufacturer" => part.manufacturer.as_str(),
+                    "mpn" => part.mpn.as_str(),
+                    _ => panic!("Unknown field"),
+                };
+                criterion.matches(field, value)
+            })
+        })
     }
 }
 
