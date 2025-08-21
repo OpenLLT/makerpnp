@@ -4053,6 +4053,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "package_mapper"
+version = "0.1.0"
+dependencies = [
+ "criteria",
+ "pnp",
+ "regex",
+ "util",
+]
+
+[[package]]
 name = "parking"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

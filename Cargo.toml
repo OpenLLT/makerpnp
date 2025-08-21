@@ -18,6 +18,7 @@ members = [
     "crates/math",
     "crates/planning",
     "crates/part_mapper",
+    "crates/package_mapper",
     "crates/pnp",
     "crates/planner_app",
     "crates/planner_cli",
