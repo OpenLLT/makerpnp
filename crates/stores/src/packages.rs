@@ -1,9 +1,11 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::path::Path;
+use std::path::PathBuf;
 
 use anyhow::{Context, Error};
 use pnp::package::Package;
-use tracing::{trace, Level};
+use tracing::Level;
 
 use crate::csv::packages::{build_package_from_field_map, get_base_package_headers};
 
@@ -189,7 +191,7 @@ mod tests {
         let temp_dir = tempdir()?;
 
         // and packages
-        let (test_packages_path, test_packages_file_name) = build_temp_csv_file(&temp_dir, "packages");
+        let (test_packages_path, _test_packages_file_name) = build_temp_csv_file(&temp_dir, "packages");
 
         save_packages(&[Package::new("NAME1".into())], &test_packages_path)?;
 

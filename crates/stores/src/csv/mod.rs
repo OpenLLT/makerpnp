@@ -5,9 +5,12 @@ use criteria::{ExactMatchCriterion, FieldCriterion, GenericCriteria, RegexMatchC
 use eda::substitution::{EdaSubstitutionRule, EdaSubstitutionRuleTransformItem};
 use eda::EdaTool;
 use heck::ToUpperCamelCase;
+use package_mapper::criteria::PartMappingCriteria;
+use package_mapper::package_mapping::PackageMapping;
 use part_mapper::criteria::PlacementMappingCriteria;
 use part_mapper::part_mapping::PartMapping;
 use pnp::load_out::LoadOutItem;
+use pnp::package::Package;
 use pnp::part::Part;
 use pnp::reference::Reference;
 use regex::{Error, Regex};
@@ -23,6 +26,83 @@ pub mod packages;
 enum CSVEdaToolValue {
     DipTrace,
     KiCad,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all(deserialize = "PascalCase"))]
+pub struct PackageMappingRecord(HashMap<String, String>);
+
+impl PackageMappingRecord {
+    pub fn build_package_mapping<'package>(
+        &self,
+        packages: &'package [Package],
+    ) -> Result<PackageMapping<'package>, PackageMappingRecordError> {
+        let fields = &self.0;
+
+        let name = fields
+            .get("Name")
+            .ok_or(PackageMappingRecordError::MissingField {
+                field: "Name".to_string(),
+            })?;
+
+        let matched_package_ref = packages
+            .iter()
+            .find(|&package| package.name.eq(name));
+
+        let package_ref = match matched_package_ref {
+            Some(package) => Ok(package),
+            _ => Err(PackageMappingRecordError::NoMatchingPackage {
+                criteria: name.clone(),
+            }),
+        }?;
+
+        let fields_names = ["manufacturer", "mpn"];
+
+        let matched_fields = build_matched_fields(fields, &fields_names);
+
+        let mut mapping_criteria: Vec<Box<dyn PartMappingCriteria>> = vec![];
+
+        let criteria_fields: Vec<Box<dyn FieldCriterion>> =
+            matched_fields
+                .iter()
+                .try_fold(vec![], |mut acc, (&ref key, &ref value)| {
+                    let value_kind =
+                        build_value_kind(&value).map_err(|error| PackageMappingRecordError::InvalidRegex {
+                            error,
+                        })?;
+
+                    let boxed_criterion: Box<dyn FieldCriterion> = match value_kind {
+                        ValueKind::Regex(regex) => Box::new(RegexMatchCriterion::new(key.to_lowercase(), regex)),
+                        ValueKind::ExactMatch(value) => Box::new(ExactMatchCriterion::new(key.to_lowercase(), value)),
+                    };
+                    acc.push(boxed_criterion);
+                    Ok(acc)
+                })?;
+        let criteria = GenericCriteria {
+            criteria: criteria_fields,
+        };
+
+        mapping_criteria.push(Box::new(criteria));
+
+        let package_mapping = PackageMapping::new(package_ref, mapping_criteria);
+
+        Ok(package_mapping)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum PackageMappingRecordError {
+    #[error("Unable to build criteria")]
+    UnableToBuildCriteria,
+
+    #[error("No matching package, criteria: {criteria:?}")]
+    NoMatchingPackage { criteria: String },
+
+    #[error("Missing field. field: {field:?}")]
+    MissingField { field: String },
+
+    #[error("Invalid regular expression. reason: {error:?}")]
+    InvalidRegex { error: regex::Error },
 }
 
 // FUTURE Investigate if it's possible to specify required fields like 'Eda', 'Manufacturer', 'Mpn' and then a hashmap
@@ -101,19 +181,9 @@ impl PartMappingRecord {
 
         let fields_names = eda_fields_names(&eda);
 
+        let matched_fields = build_matched_fields(fields, fields_names);
+
         let mut mapping_criteria: Vec<Box<dyn PlacementMappingCriteria>> = vec![];
-
-        let mut matched_fields: Vec<(&String, &String)> = fields
-            .iter()
-            .filter_map(
-                |(key, value)| match fields_names.contains(&key.to_lowercase().as_str()) {
-                    true => Some((key, value)),
-                    false => None,
-                },
-            )
-            .collect();
-
-        matched_fields.sort();
 
         let criteria_fields: Vec<Box<dyn FieldCriterion>> =
             matched_fields
@@ -322,4 +392,22 @@ impl AssemblyRuleRecord {
             mpn: self.mpn.clone(),
         })
     }
+}
+
+fn build_matched_fields<'a>(
+    fields: &'a HashMap<String, String>,
+    fields_names: &[&str],
+) -> Vec<(&'a String, &'a String)> {
+    let mut matched_fields: Vec<(&String, &String)> = fields
+        .iter()
+        .filter_map(
+            |(key, value)| match fields_names.contains(&key.to_lowercase().as_str()) {
+                true => Some((key, value)),
+                false => None,
+            },
+        )
+        .collect();
+
+    matched_fields.sort();
+    matched_fields
 }

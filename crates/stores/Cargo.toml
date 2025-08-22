@@ -35,5 +35,6 @@ tempfile = { workspace = true }
 
 [features]
 testing = [
-    "part_mapper/testing"
+    "part_mapper/testing",
+    "package_mapper/testing",
 ]
