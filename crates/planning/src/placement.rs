@@ -82,7 +82,12 @@ impl Display for ProjectPlacementStatus {
     Hash
 )]
 pub enum PlacementSortingMode {
+    Area,
+    //Cost,
+    //Description,
     FeederReference,
+    Height,
+    Part,
     /// The pcb instance
     Pcb,
     /// Just the pcb unit number without the pcb instance
@@ -92,14 +97,17 @@ pub enum PlacementSortingMode {
     /// Right then up (ignores pcb instance and pcb unit)
     PcbUnitYX,
     RefDes,
-    // FUTURE add other modes, such as COST, PART, AREA, HEIGHT, REFDES, ANGLE, PANEL_XY, PANEL_YX, DESCRIPTION
-    //        Note: PANEL_XY and PANEL_YX are for when you have a job with multiple PCBs.
 }
 
 impl Display for PlacementSortingMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Area => write!(f, "Area"),
+            //Self::Cost => write!(f, "Cost"),
+            //Self::Description => write!(f, "Description"),
             Self::FeederReference => write!(f, "FeederReference"),
+            Self::Height => write!(f, "Height"),
+            Self::Part => write!(f, "Part"),
             Self::Pcb => write!(f, "Pcb"),
             Self::PcbUnit => write!(f, "PcbUnit"),
             Self::PcbUnitXY => write!(f, "PcbUnitXY"),

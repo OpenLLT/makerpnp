@@ -10,6 +10,7 @@ pnp = { path = "../pnp"}
 eda = { path = "../eda"}
 planning = { path = "../planning"}
 part_mapper = { path = "../part_mapper"}
+package_mapper = { path = "../package_mapper"}
 
 anyhow = { workspace = true }
 regex = { workspace = true }
@@ -20,13 +21,17 @@ rust_decimal = { workspace = true }
 csv = { workspace = true }
 
 serde = { workspace = true , features = ["derive"] }
+serde_with = { workspace = true }
 
 tracing = { workspace = true }
 heck = { workspace = true }
 
 [dev-dependencies]
+util = { path = "../util", features = ["testing"]}
+
 assert_fs = { workspace = true }
 stores = { path = ".", features = ["testing"] }
+tempfile = { workspace = true }
 
 [features]
 testing = [

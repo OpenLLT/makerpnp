@@ -191,7 +191,7 @@ mod tests {
     };
 
     #[test]
-    fn map_parts() {
+    fn map_placements() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn map_parts_with_multiple_matching_mappings() {
+    fn map_placements_with_multiple_matching_mappings() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),
@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn map_parts_with_no_part_mappings() {
+    fn map_placements_with_no_part_mappings() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),
@@ -379,7 +379,7 @@ mod tests {
     }
 
     #[test]
-    fn map_parts_with_multiple_matching_mappings_with_one_in_the_load_out() {
+    fn map_placements_with_multiple_matching_mappings_with_one_in_the_load_out() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[test]
-    fn map_parts_with_multiple_matching_mappings_with_an_assembly_rule() {
+    fn map_placements_with_multiple_matching_mappings_with_an_assembly_rule() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),
@@ -532,7 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn map_parts_with_multiple_matching_mappings_with_an_assembly_rule_and_loadout_item() {
+    fn map_placements_with_multiple_matching_mappings_with_an_assembly_rule_and_loadout_item() {
         // given
         let eda_placement1 = EdaPlacement {
             ref_des: "R1".to_string(),

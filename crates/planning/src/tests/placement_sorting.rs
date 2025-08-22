@@ -1,6 +1,10 @@
+use std::collections::BTreeMap;
+
 use eda_units::eda_units::dimension_unit::{DimensionUnitVector2, DimensionUnitVector2Ext};
 use eda_units::eda_units::unit_system::UnitSystem;
 use pnp::object_path::ObjectPath;
+use pnp::package::Package;
+use pnp::part::Part;
 use pnp::placement::Placement;
 use util::sorting::SortOrder;
 
@@ -24,6 +28,7 @@ fn test_placement_sorting_pcb_unit_xy() {
         .iter()
         .map(|(_, position, _)| *position)
         .collect::<Vec<_>>();
+    let part_packages: BTreeMap<&Part, &Package> = BTreeMap::new();
     let pcb_unit_positioning_map = vec![pcb_1_unit_positions];
 
     // when
@@ -31,6 +36,7 @@ fn test_placement_sorting_pcb_unit_xy() {
         &mut sortable_placement_states,
         &placement_orderings,
         &load_out_items,
+        &part_packages,
         &pcb_unit_positioning_map,
     );
 
@@ -66,6 +72,7 @@ fn test_placement_sorting_pcb_unit_yx() {
         .iter()
         .map(|(_, position, _)| *position)
         .collect::<Vec<_>>();
+    let part_packages: BTreeMap<&Part, &Package> = BTreeMap::new();
     let pcb_unit_positioning_map = vec![pcb_1_unit_positions];
 
     // when
@@ -73,6 +80,7 @@ fn test_placement_sorting_pcb_unit_yx() {
         &mut sortable_placement_states,
         &placement_orderings,
         &load_out_items,
+        &part_packages,
         &pcb_unit_positioning_map,
     );
 

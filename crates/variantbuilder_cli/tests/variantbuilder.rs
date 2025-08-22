@@ -16,9 +16,7 @@ mod tests {
     use stores::part_mappings::test::TestPartMappingRecord;
     use stores::test::load_out_builder::TestLoadOutRecord;
     use tempfile::tempdir;
-    use util::test::{build_temp_csv_file, build_temp_file, prepare_args, print};
-
-    use crate::test_helpers::{dump_args, dump_file};
+    use util::test::{build_temp_csv_file, build_temp_file, dump_args, dump_file, prepare_args, print};
 
     /// This functional test tests the following:
     ///
@@ -1175,28 +1173,5 @@ mod help {
             .success()
             .stderr(print("stderr"))
             .stdout(print("stdout").and(predicate::str::diff(expected_output)));
-    }
-}
-#[cfg(test)]
-mod test_helpers {
-    use std::fs::read_to_string;
-    use std::path::PathBuf;
-
-    use thiserror::__private::AsDisplay;
-
-    pub fn dump_file(title: &str, path: PathBuf) -> Result<(), std::io::Error> {
-        let content: String = read_to_string(path.clone())?;
-        println!(
-            "file: {}\npath: {}\ncontent:\n{}",
-            title,
-            path.clone().as_display(),
-            content
-        );
-
-        Ok(())
-    }
-
-    pub fn dump_args(args: &Vec<&str>) {
-        println!("args: {:?}", args);
     }
 }

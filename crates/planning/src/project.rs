@@ -12,12 +12,14 @@ use indexmap::IndexSet;
 use pnp;
 use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
+use pnp::package::Package;
 use pnp::part::Part;
 use pnp::pcb::{PcbInstanceNumber, PcbSide, PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
 use pnp::reference::Reference;
 use regex::Regex;
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use thiserror::Error;
@@ -644,6 +646,7 @@ pub fn generate_artifacts(
     pcbs: &[&Pcb],
     directory: &Path,
     phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>,
+    part_packages: &BTreeMap<&Part, &Package>,
 ) -> Result<(), ArtifactGenerationError> {
     let mut issues: BTreeSet<ProjectReportIssue> = BTreeSet::new();
 
@@ -654,7 +657,15 @@ pub fn generate_artifacts(
             .get(reference)
             .unwrap();
 
-        generate_phase_artifacts(project, pcbs, phase, load_out_items.as_slice(), directory, &mut issues)?;
+        generate_phase_artifacts(
+            project,
+            pcbs,
+            phase,
+            load_out_items.as_slice(),
+            part_packages,
+            directory,
+            &mut issues,
+        )?;
     }
 
     let report = report::project_generate_report(project, pcbs, &phase_load_out_items_map, &mut issues);
@@ -682,6 +693,7 @@ fn generate_phase_artifacts(
     pcbs: &[&Pcb],
     phase: &Phase,
     load_out_items: &[LoadOutItem],
+    part_packages: &BTreeMap<&Part, &Package>,
     directory: &Path,
     issues: &mut BTreeSet<ProjectReportIssue>,
 ) -> Result<(), ArtifactGenerationError> {
@@ -700,6 +712,7 @@ fn generate_phase_artifacts(
         &mut placement_states,
         &phase.placement_orderings,
         load_out_items,
+        part_packages,
         &pcb_unit_positioning_map,
     );
 
@@ -762,6 +775,7 @@ pub fn sort_placements(
     placement_states: &mut Vec<(&ObjectPath, &PlacementState)>,
     placement_orderings: &[PlacementSortingItem],
     load_out_items: &[LoadOutItem],
+    part_packages: &BTreeMap<&Part, &Package>,
     pcb_unit_positioning_map: &Vec<Vec<DimensionUnitVector2>>,
 ) {
     placement_states.sort_by(
@@ -882,6 +896,49 @@ pub fn sort_placements(
                                         .unwrap(),
                                 )
                         }
+                        PlacementSortingMode::Area => {
+                            let package_area = |part| {
+                                part_packages
+                                    .get(part)
+                                    .map(|package| {
+                                        package
+                                            .dimensions_mm
+                                            .as_ref()
+                                            .map(|dimensions| dimensions.area())
+                                    })
+                                    .flatten()
+                                    .unwrap_or(dec!(0))
+                            };
+
+                            let area_a = package_area(&placement_state_a.placement.part);
+                            let area_b = package_area(&placement_state_b.placement.part);
+
+                            area_a.cmp(&area_b)
+                        }
+                        PlacementSortingMode::Height => {
+                            let package_height = |part| {
+                                part_packages
+                                    .get(part)
+                                    .map(|package| {
+                                        package
+                                            .dimensions_mm
+                                            .as_ref()
+                                            .map(|dimensions| dimensions.size_z())
+                                    })
+                                    .flatten()
+                                    .unwrap_or(dec!(0))
+                            };
+
+                            let height_a = package_height(&placement_state_a.placement.part);
+                            let height_b = package_height(&placement_state_b.placement.part);
+
+                            height_a.cmp(&height_b)
+                        }
+                        PlacementSortingMode::Part => placement_state_a
+                            .placement
+                            .part
+                            .cmp(&placement_state_b.placement.part), //PlacementSortingMode::Cost => todo!(),
+                                                                     //PlacementSortingMode::Description => todo!(),
                     };
 
                     match sort_ordering.sort_order {

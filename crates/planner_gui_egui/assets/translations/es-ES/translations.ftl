@@ -258,7 +258,10 @@ placement-no-place = No-lugar
 placement-project-status-used = Utilizado
 placement-project-status-unused = No utilizado
 
+sort-mode-area = Área
 sort-mode-feeder-reference = Referencia del alimentador
+sort-mode-height = Altura
+sort-mode-part = Parte
 sort-mode-pcb = Instancia PCB
 sort-mode-pcb-unit = Unidad PCB
 sort-mode-pcb-unit-xy = Unidad PCB X, luego Y

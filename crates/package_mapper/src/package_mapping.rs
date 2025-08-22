@@ -1,18 +1,18 @@
 use pnp::package::Package;
 
-use crate::criteria::PackageMappingCriteria;
+use crate::criteria::PartMappingCriteria;
 
 #[cfg_attr(any(test, feature = "testing"), derive(PartialEq))]
 #[derive(Debug)]
 pub struct PackageMapping<'package> {
-    pub part: &'package Package,
-    pub criteria: Vec<Box<dyn PackageMappingCriteria>>,
+    pub package: &'package Package,
+    pub criteria: Vec<Box<dyn PartMappingCriteria>>,
 }
 
 impl<'package> PackageMapping<'package> {
-    pub fn new(part: &'package Package, criteria: Vec<Box<dyn PackageMappingCriteria>>) -> Self {
+    pub fn new(part: &'package Package, criteria: Vec<Box<dyn PartMappingCriteria>>) -> Self {
         Self {
-            part,
+            package: part,
             criteria,
         }
     }

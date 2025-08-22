@@ -258,7 +258,10 @@ placement-no-place = No-place
 placement-project-status-used = Used
 placement-project-status-unused = Unused
 
+sort-mode-area = Area
 sort-mode-feeder-reference = Feeder reference
+sort-mode-height = Height
+sort-mode-part = Part
 sort-mode-pcb = PCB instance
 sort-mode-pcb-unit = PCB unit
 sort-mode-pcb-unit-xy = PCB unit X, then Y

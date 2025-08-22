@@ -1,9 +1,11 @@
 use std::ffi::OsString;
+use std::fs::read_to_string;
 use std::path::PathBuf;
 
 use predicates::function::FnPredicate;
 use predicates::prelude::predicate;
 use tempfile::TempDir;
+
 #[cfg(test)]
 pub mod lock;
 
@@ -41,4 +43,15 @@ pub fn prepare_args<'a>(args: Vec<&'a str>) -> Vec<&'a str> {
             }
             args
         })
+}
+
+pub fn dump_file(title: &str, path: PathBuf) -> Result<(), std::io::Error> {
+    let content: String = read_to_string(path.clone())?;
+    println!("file: {}\npath: {}\ncontent:\n{}", title, path.display(), content);
+
+    Ok(())
+}
+
+pub fn dump_args(args: &Vec<&str>) {
+    println!("args: {:?}", args);
 }

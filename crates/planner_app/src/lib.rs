@@ -13,6 +13,7 @@ use gerber::GerberFile;
 pub use gerber::{GerberFileFunction, GerberFileFunctionDiscriminants, PcbSideRequirement};
 use indexmap::IndexSet;
 use nalgebra::Vector2;
+use package_mapper::package_mapping::PackageMapping;
 use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
@@ -41,6 +42,7 @@ pub use planning::variant::VariantName;
 use planning::{file, pcb, project};
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
+use pnp::package::Package;
 pub use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Unit};
 pub use pnp::part::Part;
 pub use pnp::pcb::PcbSide;
@@ -1574,8 +1576,34 @@ impl Planner {
                     )
                     .map_err(AppError::OperationError)?;
 
-                project::generate_artifacts(project, &pcbs, &project_directory, phase_load_out_item_map)
-                    .map_err(|cause| AppError::OperationError(cause.into()))?;
+                // TODO add sources to the project?
+                let packages_source: String = project_directory
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .join("packages.csv")
+                    .to_string_lossy()
+                    .into();
+                let package_mappings_source: String = project_directory
+                    .parent()
+                    .unwrap()
+                    .join("package-mappings.csv")
+                    .to_string_lossy()
+                    .into();
+
+                let packages = Self::load_packages(&packages_source)?;
+                let package_mappings = Self::load_package_mappings(&package_mappings_source, &packages)?;
+                let unique_parts = Self::project_unique_parts(project);
+                let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
+
+                project::generate_artifacts(
+                    project,
+                    &pcbs,
+                    &project_directory,
+                    phase_load_out_item_map,
+                    &part_packages_map,
+                )
+                .map_err(|cause| AppError::OperationError(cause.into()))?;
                 Ok(render::render())
             }),
             Event::RecordPhaseOperation {
@@ -2241,15 +2269,15 @@ impl Planner {
                         project, ..
                     },
                     pcbs,
-                    directory,
+                    project_directory,
                 ) = Self::model_project_and_pcbs(model)?;
                 let phase = project
                     .phases
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                let load_out_source =
-                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
+                let load_out_source = try_build_phase_load_out_source(&project_directory, &phase)
+                    .map_err(AppError::LoadoutSourceError)?;
 
                 let loadout_items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
@@ -2264,10 +2292,31 @@ impl Planner {
 
                 let pcb_unit_positioning_map = project::build_pcbs_unit_positioning_map(&pcbs);
 
+                // TODO add sources to the project?
+                let packages_source: String = project_directory
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .join("packages.csv")
+                    .to_string_lossy()
+                    .into();
+                let package_mappings_source: String = project_directory
+                    .parent()
+                    .unwrap()
+                    .join("package-mappings.csv")
+                    .to_string_lossy()
+                    .into();
+
+                let packages = Self::load_packages(&packages_source)?;
+                let package_mappings = Self::load_package_mappings(&package_mappings_source, &packages)?;
+                let unique_parts = Self::project_unique_parts(project);
+                let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
+
                 project::sort_placements(
                     &mut placements,
                     &phase.placement_orderings,
                     &loadout_items,
+                    &part_packages_map,
                     &pcb_unit_positioning_map,
                 );
 
@@ -2372,6 +2421,50 @@ impl Planner {
                 Ok(project_view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
         }
+    }
+
+    fn load_packages<'parts, 'b>(parts_source: &String) -> Result<Vec<Package>, AppError> {
+        let packages: Vec<Package> = stores::packages::load_packages(&parts_source)
+            .map_err(|error| AppError::OperationError(anyhow!("package source error. cause: {:?}", error)))?;
+
+        Ok(packages)
+    }
+
+    fn load_package_mappings<'a>(
+        package_mappings_source: &String,
+        packages: &'a Vec<Package>,
+    ) -> Result<Vec<PackageMapping<'a>>, AppError> {
+        let package_mappings = stores::package_mappings::load_package_mappings(packages, &package_mappings_source)
+            .map_err(|error| AppError::OperationError(anyhow!("package source error. cause: {:?}", error)))?;
+
+        Ok(package_mappings)
+    }
+
+    fn project_unique_parts(project: &Project) -> BTreeSet<&Part> {
+        let unique_parts = BTreeSet::from_iter(
+            project
+                .placements
+                .iter()
+                .map(|(_path, placement_state)| &placement_state.placement.part),
+        );
+
+        unique_parts
+    }
+
+    fn build_project_part_package_map<'a, 'b, 'c, 'd>(
+        unique_parts: &'a BTreeSet<&'b Part>,
+        package_mappings: &'c Vec<PackageMapping<'d>>,
+    ) -> Result<BTreeMap<&'b Part, &'c Package>, AppError> {
+        let part_packages_map = package_mapper::PackageMapper::process(unique_parts, package_mappings)
+            .map_err(|mapper_error| AppError::OperationError(anyhow!("part mapper error. cause: {:?}", mapper_error)))?
+            .into_iter()
+            .filter_map(|result| {
+                result
+                    .package
+                    .map(|package| (result.part, package))
+            })
+            .collect::<BTreeMap<_, _>>();
+        Ok(part_packages_map)
     }
 
     fn create_and_add_pcb(

@@ -41,6 +41,9 @@ pub fn placement_sorting_mode_to_i18n_key(mode: &PlacementSortingMode) -> &'stat
         PlacementSortingMode::PcbUnitXY => "sort-mode-pcb-unit-xy",
         PlacementSortingMode::PcbUnitYX => "sort-mode-pcb-unit-yx",
         PlacementSortingMode::RefDes => "sort-mode-ref-des",
+        PlacementSortingMode::Area => "sort-mode-area",
+        PlacementSortingMode::Height => "sort-mode-height",
+        PlacementSortingMode::Part => "sort-mode-part",
     }
 }
 

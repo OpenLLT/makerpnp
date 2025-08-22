@@ -5,17 +5,17 @@ use pnp::part::Part;
 use util::dynamic::as_any::AsAny;
 use util::dynamic::dynamic_eq::DynamicEq;
 
-pub trait PackageMappingCriteria: Debug + AsAny + DynamicEq {
+pub trait PartMappingCriteria: Debug + AsAny + DynamicEq {
     fn matches(&self, part: &Part) -> bool;
 }
 
-impl PartialEq for dyn PackageMappingCriteria {
+impl PartialEq for dyn PartMappingCriteria {
     fn eq(&self, other: &Self) -> bool {
         self.dynamic_eq(other.as_any())
     }
 }
 
-impl PackageMappingCriteria for GenericCriteria {
+impl PartMappingCriteria for GenericCriteria {
     fn matches(&self, part: &Part) -> bool {
         self.criteria.iter().all(|criterion| {
             let fields = ["manufacturer", "mpn"];
@@ -37,7 +37,7 @@ mod generic_criteria_tests {
     use pnp::part::Part;
     use regex::Regex;
 
-    use crate::criteria::PackageMappingCriteria;
+    use crate::criteria::PartMappingCriteria;
 
     #[test]
     fn matches() {
