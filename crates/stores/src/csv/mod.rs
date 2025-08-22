@@ -5,7 +5,9 @@ use criteria::{ExactMatchCriterion, FieldCriterion, GenericCriteria, RegexMatchC
 use eda::substitution::{EdaSubstitutionRule, EdaSubstitutionRuleTransformItem};
 use eda::EdaTool;
 use heck::ToUpperCamelCase;
-use manufacturer_package_code_sequence::ManufacturerCodeFields;
+//use sequential_fields_adaptor::SequentialFieldsAdapter;
+//use manufacturer_package_code_sequence::ManufacturerCodeFields;
+use manufacturer_package_code_helper::*;
 use part_mapper::criteria::PlacementMappingCriteria;
 use part_mapper::part_mapping::PartMapping;
 use pnp::load_out::LoadOutItem;
@@ -14,13 +16,16 @@ use pnp::part::Part;
 use pnp::reference::Reference;
 use regex::{Error, Regex};
 use rust_decimal::Decimal;
-use sequential_fields_adaptor::SequentialFieldsAdapter;
+use sequential_fields_helper::*;
 use serde_with::serde_as;
 use thiserror::Error;
 
 //mod numeric_sequence;
-mod manufacturer_package_code_sequence;
-mod sequential_fields_adaptor;
+//mod sequential_fields_adaptor;
+
+mod manufacturer_package_code_helper;
+mod sequential_fields_helper;
+//mod manufacturer_package_code_sequence;
 
 // FUTURE Investigate whether the `build` methods should be taking `self` instead of `&self` to avoid additional allocations
 //        Most of the time records are parsed, then domain objects are built based on the records then the records
@@ -234,9 +239,17 @@ pub struct PackageRecord {
     #[serde(default)]
     pub jedec_package_code: Option<String>,
 
-    //#[serde_as(as = "NumericSequence<ManufacturerPackageCode>")]
+    // #[serde_as(as = "NumericSequence<ManufacturerPackageCode>")]
     // #[serde_as(as = "SequentialFieldsAdapter<ManufacturerCodeFields>")]
-    // #[serde(default)]
+    // manufacturer_codes: Vec<ManufacturerPackageCode>,
+
+    // Flattened fields for manufacturer codes
+    #[serde(flatten)]
+    #[serde(default)]
+    pub manufacturer_code_fields: FlatRecord,
+
+    #[serde(skip)]
+    #[serde(default)]
     pub manufacturer_codes: Vec<ManufacturerPackageCode>,
 }
 
@@ -254,7 +267,7 @@ impl PackageRecord {
             ipc7351_code: self.ipc7351_code.clone(),
             jedec_mo_code: self.jedec_mo_code.clone(),
             jedec_package_code: self.jedec_package_code.clone(),
-            manufacturer_codes: self.manufacturer_codes.clone(),
+            manufacturer_codes: vec![], // self.manufacturer_codes.clone(),
         })
     }
 }
