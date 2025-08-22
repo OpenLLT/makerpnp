@@ -5,27 +5,15 @@ use criteria::{ExactMatchCriterion, FieldCriterion, GenericCriteria, RegexMatchC
 use eda::substitution::{EdaSubstitutionRule, EdaSubstitutionRuleTransformItem};
 use eda::EdaTool;
 use heck::ToUpperCamelCase;
-//use sequential_fields_adaptor::SequentialFieldsAdapter;
-//use manufacturer_package_code_sequence::ManufacturerCodeFields;
-use manufacturer_package_code_helper::*;
 use part_mapper::criteria::PlacementMappingCriteria;
 use part_mapper::part_mapping::PartMapping;
 use pnp::load_out::LoadOutItem;
-use pnp::package::{ManufacturerPackageCode, Package, PackageDimensions};
 use pnp::part::Part;
 use pnp::reference::Reference;
 use regex::{Error, Regex};
-use rust_decimal::Decimal;
-use sequential_fields_helper::*;
-use serde_with::serde_as;
 use thiserror::Error;
 
-//mod numeric_sequence;
-//mod sequential_fields_adaptor;
-
-mod manufacturer_package_code_helper;
-mod sequential_fields_helper;
-//mod manufacturer_package_code_sequence;
+pub mod packages;
 
 // FUTURE Investigate whether the `build` methods should be taking `self` instead of `&self` to avoid additional allocations
 //        Most of the time records are parsed, then domain objects are built based on the records then the records
@@ -39,6 +27,9 @@ enum CSVEdaToolValue {
 
 // FUTURE Investigate if it's possible to specify required fields like 'Eda', 'Manufacturer', 'Mpn' and then a hashmap
 //       for the remaining, eda-specific, fields.  Maybe using `#[serde(flatten)] eda_fields: HashMap<String, String>`.
+//       likely it's probably not, due to this bugs that would need resolving first:
+//       1) https://github.com/BurntSushi/rust-csv/issues/239
+//       2) https://github.com/BurntSushi/rust-csv/issues/344#issuecomment-2286126491
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all(deserialize = "PascalCase"))]
 pub struct PartMappingRecord(HashMap<String, String>);
@@ -183,91 +174,6 @@ impl PartRecord {
         Ok(Part {
             manufacturer: self.manufacturer.clone(),
             mpn: self.mpn.clone(),
-        })
-    }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all(deserialize = "PascalCase"))]
-pub struct SizeDimensionsRecord {
-    #[serde(rename = "SizeX")]
-    pub x: Decimal,
-    #[serde(rename = "SizeY")]
-    pub y: Decimal,
-    #[serde(rename = "SizeZ")]
-    pub z: Decimal,
-}
-
-impl From<&SizeDimensionsRecord> for PackageDimensions {
-    fn from(rec: &SizeDimensionsRecord) -> Self {
-        PackageDimensions::new(rec.x, rec.y, rec.z)
-    }
-}
-
-#[serde_as]
-#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all(deserialize = "PascalCase"))]
-pub struct PackageRecord {
-    pub name: String,
-
-    #[serde(default)]
-    pub lead_count: Option<u32>,
-
-    #[serde(default)]
-    pub lead_pitch_mm: Option<Decimal>,
-
-    // #[serde(flatten)]
-    // pub dimensions_mm: Option<SizeDimensionsRecord>,
-    #[serde(default)]
-    pub generic_shorthand: Option<String>,
-
-    #[serde(default)]
-    pub eia_imperial_code: Option<String>,
-
-    #[serde(default)]
-    pub eia_metric_code: Option<String>,
-
-    #[serde(default)]
-    pub jeita_code: Option<String>,
-
-    #[serde(default)]
-    pub ipc7351_code: Option<String>,
-
-    #[serde(default)]
-    pub jedec_mo_code: Option<String>,
-
-    #[serde(default)]
-    pub jedec_package_code: Option<String>,
-
-    // #[serde_as(as = "NumericSequence<ManufacturerPackageCode>")]
-    // #[serde_as(as = "SequentialFieldsAdapter<ManufacturerCodeFields>")]
-    // manufacturer_codes: Vec<ManufacturerPackageCode>,
-
-    // Flattened fields for manufacturer codes
-    #[serde(flatten)]
-    #[serde(default)]
-    pub manufacturer_code_fields: FlatRecord,
-
-    #[serde(skip)]
-    #[serde(default)]
-    pub manufacturer_codes: Vec<ManufacturerPackageCode>,
-}
-
-impl PackageRecord {
-    pub fn build_package(&self) -> Result<Package, anyhow::Error> {
-        Ok(Package {
-            name: self.name.clone(),
-            lead_count: self.lead_count,
-            lead_pitch_mm: self.lead_pitch_mm,
-            dimensions_mm: None, // self.dimensions_mm.as_ref().map(|it|it.into()),
-            generic_shorthand: self.generic_shorthand.clone(),
-            eia_imperial_code: self.eia_imperial_code.clone(),
-            eia_metric_code: self.eia_metric_code.clone(),
-            jeita_code: self.jeita_code.clone(),
-            ipc7351_code: self.ipc7351_code.clone(),
-            jedec_mo_code: self.jedec_mo_code.clone(),
-            jedec_package_code: self.jedec_package_code.clone(),
-            manufacturer_codes: vec![], // self.manufacturer_codes.clone(),
         })
     }
 }
