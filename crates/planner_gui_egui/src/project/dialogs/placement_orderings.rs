@@ -74,6 +74,24 @@ impl PlacementOrderingsModal {
                             move |tui: &mut Tui, fields, sender| {
                                 let all_items = IndexMap::from([
                                     (
+                                        PlacementSortingMode::Area,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::Area)),
+                                    ),
+                                    (
+                                        PlacementSortingMode::FeederReference,
+                                        tr!(placement_sorting_mode_to_i18n_key(
+                                            &PlacementSortingMode::FeederReference
+                                        )),
+                                    ),
+                                    (
+                                        PlacementSortingMode::Height,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::Height)),
+                                    ),
+                                    (
+                                        PlacementSortingMode::Part,
+                                        tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::Part)),
+                                    ),
+                                    (
                                         PlacementSortingMode::Pcb,
                                         tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::Pcb)),
                                     ),
@@ -88,12 +106,6 @@ impl PlacementOrderingsModal {
                                     (
                                         PlacementSortingMode::PcbUnitYX,
                                         tr!(placement_sorting_mode_to_i18n_key(&PlacementSortingMode::PcbUnitYX)),
-                                    ),
-                                    (
-                                        PlacementSortingMode::FeederReference,
-                                        tr!(placement_sorting_mode_to_i18n_key(
-                                            &PlacementSortingMode::FeederReference
-                                        )),
                                     ),
                                     (
                                         PlacementSortingMode::RefDes,
