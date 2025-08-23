@@ -39,6 +39,8 @@ mod operation_sequence_1 {
         TestLoadPcbsOperationTaskHistoryKind, TestOperationHistoryItem, TestOperationHistoryKind,
         TestPlaceComponentsOperationTaskHistoryKind, TestPlacementOperationHistoryKind,
     };
+    use crate::common::package_mappings_builder::{PackageMappingsCSVBuilder, TestPackageMappingRecord};
+    use crate::common::packages_builder::{PackagesCSVBuilder, TestPackageRecord};
     use crate::common::phase_placement_builder::{PhasePlacementsCSVBuilder, TestPhasePlacementRecord};
     use crate::common::project_builder as project;
     use crate::common::project_builder::{
@@ -2012,6 +2014,8 @@ mod operation_sequence_1 {
                     &[
                         ("Pcb", "Asc"),
                         ("PcbUnit", "Asc"),
+                        ("Area", "Asc"),
+                        ("Height", "Asc"),
                         ("FeederReference", "Asc"),
                         ("RefDes", "Desc"),
                     ],
@@ -2166,7 +2170,7 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "set-placement-ordering",
             "--phase top_1",
-            "--placement-orderings PCB:ASC,PCB_UNIT:ASC,FEEDER_REFERENCE:ASC,REF_DES:DESC",
+            "--placement-orderings PCB:ASC,PCB_UNIT:ASC,AREA:ASC,HEIGHT:ASC,FEEDER_REFERENCE:ASC,REF_DES:DESC",
             // example for PnP machine placement
             //"--orderings PCB_UNIT:ASC,COST:ASC,AREA:ASC,HEIGHT;ASC,FEEDER_REFERENCE:ASC",
             // example for manual placement
@@ -2189,7 +2193,7 @@ mod operation_sequence_1 {
 
         // and
         assert_contains_inorder!(trace_content, [
-            "Phase placement orderings set. phase: 'top_1', orderings: [PCB:ASC, PCB_UNIT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
+            "Phase placement orderings set. phase: 'top_1', orderings: [PCB:ASC, PCB_UNIT:ASC, AREA:ASC, HEIGHT:ASC, FEEDER_REFERENCE:ASC, REF_DES:DESC]",
         ]);
 
         // and
@@ -2210,18 +2214,50 @@ mod operation_sequence_1 {
         // and
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_planner_cli"));
 
+        let packages_content = PackagesCSVBuilder::new()
+            .with_items(&[
+                TestPackageRecord {
+                    name: "RES_0603_PKG1".to_string(),
+                    size_x: dec!(1.6),
+                    size_y: dec!(0.85),
+                    size_z: dec!(0.45),
+                },
+                TestPackageRecord {
+                    name: "RES_0805_PKG1".to_string(),
+                    size_x: dec!(2.0),
+                    size_y: dec!(1.25),
+                    size_z: dec!(0.5),
+                },
+            ])
+            .as_string();
+
+        let mut packages_file = File::create(ctx.packages_path.clone())?;
+        let _written = packages_file.write(packages_content.as_bytes())?;
+        packages_file.flush()?;
+
+        let package_mappings_content = PackageMappingsCSVBuilder::new()
+            .with_items(&[
+                TestPackageMappingRecord {
+                    manufacturer: "RES_MFR1".to_string(),
+                    mpn: "RES1".to_string(),
+                    name: "RES_0603_PKG1".to_string(),
+                },
+                TestPackageMappingRecord {
+                    manufacturer: "RES_MFR2".to_string(),
+                    mpn: "RES2".to_string(),
+                    name: "RES_0805_PKG1".to_string(),
+                },
+            ])
+            .as_string();
+
+        let mut package_mappings_file = File::create(ctx.package_mappings_path.clone())?;
+        let _written = package_mappings_file.write(package_mappings_content.as_bytes())?;
+        package_mappings_file.flush()?;
+
         // and
         let expected_phase_1_placements_content = PhasePlacementsCSVBuilder::new()
             .with_items(&[
-                TestPhasePlacementRecord {
-                    object_path: "pcb=1::unit=1::ref_des=R2".to_string(),
-                    feeder_reference: "".to_string(),
-                    manufacturer: "RES_MFR2".to_string(),
-                    mpn: "RES2".to_string(),
-                    x: dec!(32),
-                    y: dec!(27),
-                    rotation: dec!(45),
-                },
+                // these 2 should map to the smallest and shortest, package
                 TestPhasePlacementRecord {
                     object_path: "pcb=1::unit=1::ref_des=R3".to_string(),
                     feeder_reference: "FEEDER_1".to_string(),
@@ -2239,6 +2275,16 @@ mod operation_sequence_1 {
                     x: dec!(22),
                     y: dec!(17),
                     rotation: dec!(-45),
+                },
+                // should map to a package with a larger area, that is also taller
+                TestPhasePlacementRecord {
+                    object_path: "pcb=1::unit=1::ref_des=R2".to_string(),
+                    feeder_reference: "".to_string(),
+                    manufacturer: "RES_MFR2".to_string(),
+                    mpn: "RES2".to_string(),
+                    x: dec!(32),
+                    y: dec!(27),
+                    rotation: dec!(45),
                 },
             ])
             .as_string();
@@ -2577,6 +2623,8 @@ mod operation_sequence_1 {
                     &[
                         ("Pcb", "Asc"),
                         ("PcbUnit", "Asc"),
+                        ("Area", "Asc"),
+                        ("Height", "Asc"),
                         ("FeederReference", "Asc"),
                         ("RefDes", "Desc"),
                     ],
@@ -2905,6 +2953,8 @@ mod operation_sequence_1 {
                     &[
                         ("Pcb", "Asc"),
                         ("PcbUnit", "Asc"),
+                        ("Area", "Asc"),
+                        ("Height", "Asc"),
                         ("FeederReference", "Asc"),
                         ("RefDes", "Desc"),
                     ],
@@ -3199,6 +3249,8 @@ mod operation_sequence_1 {
                     &[
                         ("Pcb", "Asc"),
                         ("PcbUnit", "Asc"),
+                        ("Area", "Asc"),
+                        ("Height", "Asc"),
                         ("FeederReference", "Asc"),
                         ("RefDes", "Desc"),
                     ],

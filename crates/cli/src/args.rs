@@ -29,7 +29,10 @@ impl SortOrderArg {
 #[derive(ValueEnum)]
 #[value(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PlacementSortingModeArg {
+    Area,
     FeederReference,
+    Height,
+    Part,
     Pcb,
     PcbUnit,
     PcbUnitXY,
@@ -42,7 +45,10 @@ pub enum PlacementSortingModeArg {
 impl PlacementSortingModeArg {
     pub fn to_placement_sorting_mode(&self) -> PlacementSortingMode {
         match self {
+            PlacementSortingModeArg::Area => PlacementSortingMode::Area,
             PlacementSortingModeArg::FeederReference => PlacementSortingMode::FeederReference,
+            PlacementSortingModeArg::Height => PlacementSortingMode::Height,
+            PlacementSortingModeArg::Part => PlacementSortingMode::Part,
             PlacementSortingModeArg::Pcb => PlacementSortingMode::Pcb,
             PlacementSortingModeArg::PcbUnit => PlacementSortingMode::PcbUnit,
             PlacementSortingModeArg::PcbUnitXY => PlacementSortingMode::PcbUnitXY,
