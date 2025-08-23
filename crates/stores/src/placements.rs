@@ -1,13 +1,14 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use planning::design::DesignVariant;
 use pnp::part::Part;
 use pnp::pcb::PcbSide;
 use pnp::placement::Placement;
 use rust_decimal::Decimal;
-use tracing::trace;
+use tracing::{info, trace};
+use util::source::Source;
 
 /// See `EdaPlacement` for details of co-ordinate system
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -65,10 +66,18 @@ impl PlacementRecord {
     }
 }
 
-pub fn load_placements(placements_path: PathBuf) -> Result<Vec<Placement>, anyhow::Error> {
+pub type PlacementsSource = Source;
+
+pub fn load_placements(source: &PlacementsSource) -> Result<Vec<Placement>, anyhow::Error> {
+    info!("Loading placements. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(placements_path.clone())
-        .with_context(|| format!("Error placements. file: {}", placements_path.to_str().unwrap()))?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error placements. file: {}", path.display()))?;
 
     let records = csv_reader
         .deserialize()
@@ -101,8 +110,9 @@ pub fn load_all_placements(
 
         let mut placements_path = PathBuf::from(directory);
         placements_path.push(format!("{}_{}_placements.csv", design, variant));
+        let source = PlacementsSource::File(placements_path);
 
-        let placements = load_placements(placements_path)?;
+        let placements = load_placements(&source)?;
         let _ = all_placements.insert(design_variant, placements);
     }
     Ok(all_placements)

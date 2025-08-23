@@ -26,10 +26,12 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use tracing::{debug, error, info, trace, warn};
 use util::sorting::SortOrder;
+use util::source::Source;
 
 use crate::actions::{AddOrRemoveAction, SetOrClearAction};
 use crate::design::{DesignIndex, DesignName, DesignVariant};
 use crate::file::FileReference;
+use crate::library::LibraryConfig;
 use crate::operation_history::{
     AutomatedSolderingOperationTaskHistoryKind, LoadPcbsOperationTaskHistoryKind,
     ManualSolderingOperationTaskHistoryKind, OperationHistoryItem, OperationHistoryKind,
@@ -57,6 +59,9 @@ use crate::{file, operation_history, pcb, placement, report};
 #[serde(rename_all = "snake_case")]
 pub struct Project {
     pub name: String,
+
+    #[serde(default)]
+    pub library_config: LibraryConfig,
 
     /// The *definition* of the processes used by this project.
     pub processes: Vec<ProcessDefinition>,
@@ -92,9 +97,13 @@ pub struct Project {
 }
 
 impl Project {
-    pub fn new(name: String) -> Self {
+    pub fn new(name: String, package_source: Option<Source>, package_mappings_source: Option<Source>) -> Self {
         Self {
             name,
+            library_config: LibraryConfig {
+                package_source,
+                package_mappings_source,
+            },
             ..Self::default()
         }
     }
@@ -590,6 +599,7 @@ impl Default for Project {
             placements: Default::default(),
             phase_orderings: Default::default(),
             phase_states: Default::default(),
+            library_config: Default::default(),
         }
     }
 }

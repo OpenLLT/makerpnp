@@ -7,6 +7,7 @@ edition = "2021"
 serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true, optional = true }
 predicates = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [features]
 testing = [

@@ -65,7 +65,10 @@ mod operation_sequence_1 {
         use std::thread::sleep;
         use std::time::Duration;
 
+        use util::source::Source;
+
         use super::*;
+        use crate::common::project_builder::TestLibraryConfig;
 
         #[derive(Debug)]
         pub struct Context {
@@ -81,6 +84,9 @@ mod operation_sequence_1 {
             pub phase_1_load_out_path: PathBuf,
             pub phase_2_load_out_path: PathBuf,
             pub phase_1_log_path: PathBuf,
+            pub packages_path: PathBuf,
+            pub package_mappings_path: PathBuf,
+            pub library_config: TestLibraryConfig,
         }
 
         impl Context {
@@ -99,6 +105,15 @@ mod operation_sequence_1 {
 
                 let (test_project_path, _test_project_file_name) =
                     build_temp_file(&temp_dir, "project-job1", "mpnp.json");
+
+                let (packages_path, _packages_file_name) = build_temp_file(&temp_dir, "packages", "csv");
+                let (package_mappings_path, _package_mappings_file_name) =
+                    build_temp_file(&temp_dir, "package_mappings", "csv");
+
+                let library_config = TestLibraryConfig {
+                    package_source: Source::from_absolute_path(packages_path.clone()).ok(),
+                    package_mappings_source: Source::from_absolute_path(package_mappings_path.clone()).ok(),
+                };
 
                 let (test_pcb_1_path, _test_pcb_1_file_name) = build_temp_file(&temp_dir, "panel_a", "pcb.json");
                 let test_pcb_1_arg = format!("--pcb-file {}", test_pcb_1_path.to_str().unwrap());
@@ -126,6 +141,9 @@ mod operation_sequence_1 {
                     phase_1_load_out_path,
                     phase_1_log_path,
                     phase_2_load_out_path,
+                    packages_path,
+                    package_mappings_path,
+                    library_config,
                 }
             }
 
@@ -199,8 +217,18 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .content();
+
+        // and
+        let packages_arg = format!("--packages {}", ctx.packages_path.to_str().unwrap());
+        let package_mappings_arg = format!(
+            "--package-mappings {}",
+            ctx.package_mappings_path
+                .to_str()
+                .unwrap()
+        );
 
         // and
         let args = prepare_args(vec![
@@ -210,6 +238,8 @@ mod operation_sequence_1 {
             ctx.project_arg.as_str(),
             "-vvv",
             "create",
+            packages_arg.as_str(),
+            package_mappings_arg.as_str(),
         ]);
         println!("args: {:?}", args);
 
@@ -522,6 +552,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -601,6 +632,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -772,6 +804,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -944,6 +977,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -1117,6 +1151,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -1332,6 +1367,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -1579,6 +1615,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -1938,6 +1975,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -2502,6 +2540,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -2829,6 +2868,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -3122,6 +3162,7 @@ mod operation_sequence_1 {
         // and
         let expected_project_content = TestProject::new()
             .with_name("job1")
+            .with_library_config(&ctx.library_config)
             .with_default_processes()
             .with_pcbs(vec![project::TestProjectPcb {
                 pcb_file: FileReference::Relative("panel_a.pcb.json".into()),
@@ -3595,9 +3636,11 @@ mod help {
                 Usage: planner_cli project --project <PROJECT_NAME> create [OPTIONS]
 
                 Options:
-                  -v, --verbose...  Increase logging verbosity
-                  -q, --quiet...    Decrease logging verbosity
-                  -h, --help        Print help
+                      --packages <PACKAGES>                  The source for packages
+                      --package-mappings <PACKAGE_MAPPINGS>  The source for part to package mappings
+                  -v, --verbose...                           Increase logging verbosity
+                  -q, --quiet...                             Decrease logging verbosity
+                  -h, --help                                 Print help
             "};
 
             // when

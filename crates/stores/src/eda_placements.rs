@@ -1,18 +1,23 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use eda::diptrace::csv::DiptracePlacementRecord;
 use eda::easyeda::csv::EasyEdaPlacementRecord;
 use eda::kicad::csv::KiCadPlacementRecord;
 use eda::placement::EdaPlacement;
 use eda::EdaTool;
-use tracing::trace;
 use tracing::Level;
+use tracing::{info, trace};
+use util::source::Source;
+
+pub type EdaPlacementsSource = Source;
 
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load_eda_placements(eda_tool: EdaTool, placements_source: &String) -> Result<Vec<EdaPlacement>, Error> {
-    let placements_path_buf = PathBuf::from(placements_source);
-    let placements_path = placements_path_buf.as_path();
+pub fn load_eda_placements(eda_tool: EdaTool, source: &EdaPlacementsSource) -> Result<Vec<EdaPlacement>, Error> {
+    info!("Loading eda placements. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader_builder = csv::ReaderBuilder::new();
 
     // TODO consider moving the creation of the CSV reader builder into the EdaTool specific modules.
@@ -26,8 +31,8 @@ pub fn load_eda_placements(eda_tool: EdaTool, placements_source: &String) -> Res
     };
 
     let mut csv_reader = csv_reader_builder
-        .from_path(placements_path)
-        .with_context(|| format!("Error reading placements. file: {}", placements_path.to_str().unwrap()))?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading placements. file: {}", path.display()))?;
 
     let mut placements: Vec<EdaPlacement> = vec![];
 

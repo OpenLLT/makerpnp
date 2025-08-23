@@ -1,5 +1,7 @@
 pub mod actions;
 pub mod design;
+
+pub mod library;
 pub mod operation;
 pub mod operation_history;
 pub mod part;

@@ -11,6 +11,7 @@ eda = { path = "../eda"}
 planning = { path = "../planning"}
 part_mapper = { path = "../part_mapper"}
 package_mapper = { path = "../package_mapper"}
+util = { path = "../util"}
 
 anyhow = { workspace = true }
 regex = { workspace = true }

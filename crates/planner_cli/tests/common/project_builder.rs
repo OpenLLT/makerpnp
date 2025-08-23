@@ -20,6 +20,7 @@ use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use util::dynamic::as_any::AsAny;
 use util::sorting::SortOrder;
+use util::source::Source;
 
 use crate::common::serde::ToFormattedJson;
 
@@ -28,6 +29,8 @@ use crate::common::serde::ToFormattedJson;
 #[serde(rename_all = "snake_case")]
 pub struct TestProject {
     pub name: String,
+
+    pub library_config: TestLibraryConfig,
 
     /// The *definition* of the processes used by this project.
     pub processes: Vec<TestProcessDefinition>,
@@ -68,6 +71,10 @@ impl TestProject {
         self
     }
 
+    pub fn with_library_config(mut self, library_config: &TestLibraryConfig) -> Self {
+        self.library_config = library_config.clone();
+        self
+    }
     pub fn with_default_processes(mut self) -> Self {
         self.processes.clear();
 
@@ -556,4 +563,11 @@ impl Display for TestProcessOperationStatus {
             TestProcessOperationStatus::Abandoned => write!(f, "Abandoned"),
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct TestLibraryConfig {
+    pub package_source: Option<Source>,
+    pub package_mappings_source: Option<Source>,
 }

@@ -52,10 +52,13 @@ pub use pnp::placement::{Placement, PlacementPosition, PlacementPositionUnit};
 pub use pnp::reference::Reference;
 use regex::Regex;
 use serde_with::serde_as;
+use stores::load_out::LoadOutOperationError;
 pub use stores::load_out::LoadOutSource;
-use stores::load_out::{LoadOutOperationError, LoadOutSourceError};
+use stores::package_mappings::PackageMappingsSource;
+use stores::packages::PackagesSource;
 use thiserror::Error;
 use tracing::{debug, error, info, trace, warn};
+use util::source::SourceError;
 
 use crate::effects::pcb_view_renderer::PcbViewRendererOperation;
 use crate::effects::project_view_renderer::ProjectViewRendererOperation;
@@ -465,6 +468,8 @@ pub enum Event {
         name: String,
         /// The name of the project file
         path: PathBuf,
+        packages: Option<PackagesSource>,
+        package_mappings: Option<PackageMappingsSource>,
     },
     // TODO consider if the 'shell' should be loading and saving the project, not the core?
     //      currently the core does all loading/saving and uses stores too, this might not be how
@@ -676,12 +681,14 @@ impl Planner {
             Event::CreateProject {
                 name,
                 path,
+                packages,
+                package_mappings,
             } => Box::new(|model: &mut Model| {
                 info!("Creating project. path: {:?}", &path);
 
                 let project_directory = path.parent().unwrap().to_path_buf();
 
-                let project = Project::new(name);
+                let project = Project::new(name, packages, package_mappings);
                 model
                     .model_project
                     .replace(ModelProject {
@@ -1422,7 +1429,7 @@ impl Planner {
                 *modified |= project::refresh_phase_operation_states(project);
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::SourceError)?;
 
                 match operation {
                     SetOrClearAction::Set => {
@@ -1464,7 +1471,7 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::SourceError)?;
 
                 let parts = project::find_phase_parts(project, &phase_reference, manufacturer_pattern, mpn_pattern);
 
@@ -1512,7 +1519,7 @@ impl Planner {
                     .clone();
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, phase).map_err(AppError::SourceError)?;
 
                 stores::load_out::assign_feeder_to_load_out_item(
                     &load_out_source,
@@ -1576,23 +1583,21 @@ impl Planner {
                     )
                     .map_err(AppError::OperationError)?;
 
-                // TODO add sources to the project?
-                let packages_source: String = project_directory
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .join("packages.csv")
-                    .to_string_lossy()
-                    .into();
-                let package_mappings_source: String = project_directory
-                    .parent()
-                    .unwrap()
-                    .join("package-mappings.csv")
-                    .to_string_lossy()
-                    .into();
+                let packages_source = project
+                    .library_config
+                    .package_source
+                    .as_ref()
+                    .ok_or(AppError::OperationError(anyhow!("No package source configured")))?;
+                let packages_mappings_source = project
+                    .library_config
+                    .package_mappings_source
+                    .as_ref()
+                    .ok_or(AppError::OperationError(anyhow!(
+                        "No package mappings source configured"
+                    )))?;
 
-                let packages = Self::load_packages(&packages_source)?;
-                let package_mappings = Self::load_package_mappings(&package_mappings_source, &packages)?;
+                let packages = Self::load_packages(packages_source)?;
+                let package_mappings = Self::load_package_mappings(&packages_mappings_source, &packages)?;
                 let unique_parts = Self::project_unique_parts(project);
                 let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
 
@@ -2237,7 +2242,7 @@ impl Planner {
 
                 let phase_overview =
                     try_build_phase_overview(&directory, phase_reference, phase, can_start, phase_state)
-                        .map_err(AppError::LoadoutSourceError)?;
+                        .map_err(AppError::SourceError)?;
 
                 Ok(project_view_renderer::view(ProjectView::PhaseOverview(phase_overview)))
             }),
@@ -2276,8 +2281,8 @@ impl Planner {
                     .get(&phase_reference)
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
-                let load_out_source = try_build_phase_load_out_source(&project_directory, &phase)
-                    .map_err(AppError::LoadoutSourceError)?;
+                let load_out_source =
+                    try_build_phase_load_out_source(&project_directory, &phase).map_err(AppError::SourceError)?;
 
                 let loadout_items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
@@ -2292,23 +2297,21 @@ impl Planner {
 
                 let pcb_unit_positioning_map = project::build_pcbs_unit_positioning_map(&pcbs);
 
-                // TODO add sources to the project?
-                let packages_source: String = project_directory
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .join("packages.csv")
-                    .to_string_lossy()
-                    .into();
-                let package_mappings_source: String = project_directory
-                    .parent()
-                    .unwrap()
-                    .join("package-mappings.csv")
-                    .to_string_lossy()
-                    .into();
+                let packages_source = project
+                    .library_config
+                    .package_source
+                    .as_ref()
+                    .ok_or(AppError::OperationError(anyhow!("No package source configured")))?;
+                let packages_mappings_source = project
+                    .library_config
+                    .package_mappings_source
+                    .as_ref()
+                    .ok_or(AppError::OperationError(anyhow!(
+                        "No package mappings source configured"
+                    )))?;
 
                 let packages = Self::load_packages(&packages_source)?;
-                let package_mappings = Self::load_package_mappings(&package_mappings_source, &packages)?;
+                let package_mappings = Self::load_package_mappings(&packages_mappings_source, &packages)?;
                 let unique_parts = Self::project_unique_parts(project);
                 let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
 
@@ -2408,7 +2411,7 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?;
 
                 let load_out_source =
-                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::LoadoutSourceError)?;
+                    try_build_phase_load_out_source(&directory, &phase).map_err(AppError::SourceError)?;
 
                 let items = stores::load_out::load_items(&load_out_source).map_err(AppError::OperationError)?;
 
@@ -2423,18 +2426,18 @@ impl Planner {
         }
     }
 
-    fn load_packages<'parts, 'b>(parts_source: &String) -> Result<Vec<Package>, AppError> {
-        let packages: Vec<Package> = stores::packages::load_packages(&parts_source)
+    fn load_packages<'parts, 'b>(packages_source: &PackagesSource) -> Result<Vec<Package>, AppError> {
+        let packages: Vec<Package> = stores::packages::load_packages(packages_source)
             .map_err(|error| AppError::OperationError(anyhow!("package source error. cause: {:?}", error)))?;
 
         Ok(packages)
     }
 
     fn load_package_mappings<'a>(
-        package_mappings_source: &String,
+        package_mappings_source: &PackageMappingsSource,
         packages: &'a Vec<Package>,
     ) -> Result<Vec<PackageMapping<'a>>, AppError> {
-        let package_mappings = stores::package_mappings::load_package_mappings(packages, &package_mappings_source)
+        let package_mappings = stores::package_mappings::load_package_mappings(packages, package_mappings_source)
             .map_err(|error| AppError::OperationError(anyhow!("package source error. cause: {:?}", error)))?;
 
         Ok(package_mappings)
@@ -2594,8 +2597,8 @@ enum AppError {
     ProcessError(ProcessError),
     #[error("Part error. cause: {0}")]
     PartError(PartStateError),
-    #[error("Loadout source error. cause: {0}")]
-    LoadoutSourceError(LoadOutSourceError),
+    #[error("Source error. cause: {0}")]
+    SourceError(SourceError),
     #[error("Loadout error. cause: {0}")]
     LoadoutError(LoadOutOperationError),
     #[error("PCB error. cause: {0}")]
@@ -2661,7 +2664,7 @@ mod app_tests {
 }
 
 /// Build a load-out source, where the load-out source *may* be a relative or absolute path.
-fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Result<LoadOutSource, LoadOutSourceError> {
+fn try_build_phase_load_out_source(project_path: &PathBuf, phase: &Phase) -> Result<LoadOutSource, SourceError> {
     assert!(project_path.is_dir());
 
     let directory = project_path
@@ -2678,7 +2681,7 @@ fn try_build_phase_overview(
     phase: &Phase,
     can_start: bool,
     state: &PhaseState,
-) -> Result<PhaseOverview, LoadOutSourceError> {
+) -> Result<PhaseOverview, SourceError> {
     let load_out_source = try_build_phase_load_out_source(directory, phase)?;
 
     Ok(PhaseOverview {

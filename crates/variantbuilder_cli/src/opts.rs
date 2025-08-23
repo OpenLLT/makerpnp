@@ -4,7 +4,9 @@ use clap::{Args, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use cli::args::EdaToolArg;
 use thiserror::Error;
-use variantbuilder_app::{AssemblyVariant, Event, LoadOutSource};
+use variantbuilder_app::{
+    AssemblyRuleSource, AssemblyVariant, EdaSubstitutionsSource, Event, LoadOutSource, PartsSource, PlacementsSource,
+};
 
 #[derive(Parser)]
 #[command(name = "variantbuilder_cli")]
@@ -61,19 +63,19 @@ pub enum Command {
 
         /// Placements source
         #[arg(long, value_name = "SOURCE")]
-        placements: String,
+        placements: PlacementsSource,
 
         /// Parts source
         #[arg(long, value_name = "SOURCE")]
-        parts: String,
+        parts: PartsSource,
 
         /// Part-mappings source
         #[arg(long, value_name = "SOURCE")]
-        part_mappings: String,
+        part_mappings: PartsSource,
 
         /// Substitution sources
         #[arg(long, value_delimiter = ',', num_args = 0.., value_name = "SOURCE")]
-        substitutions: Vec<String>,
+        substitutions: Vec<EdaSubstitutionsSource>,
 
         /// List of reference designators to disable (use for do-not-fit, no-place, test-points, fiducials, etc)
         #[arg(long, num_args = 0.., value_delimiter = ',')]
@@ -81,7 +83,7 @@ pub enum Command {
 
         /// Assembly rules source
         #[arg(long, value_name = "SOURCE")]
-        assembly_rules: Option<String>,
+        assembly_rules: Option<AssemblyRuleSource>,
 
         /// Output CSV file
         #[arg(long, value_name = "FILE")]

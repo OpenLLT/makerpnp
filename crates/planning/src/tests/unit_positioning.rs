@@ -177,7 +177,7 @@ fn test_build_placement_unit_positions(
     #[case] expectations: [[Decimal; 3]; 8],
 ) {
     // given
-    let mut project = Project::new("test".to_string());
+    let mut project = Project::new("test".to_string(), None, None);
 
     let eda_gerber_export_offset = Vector2::new(dec!(5), dec!(5));
     let eda_placement_export_offset = Vector2::new(dec!(10), dec!(10));

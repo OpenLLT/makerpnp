@@ -1,27 +1,27 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use package_mapper::package_mapping::PackageMapping;
 use pnp::package::Package;
-use tracing::{trace, Level};
+use tracing::{info, trace, Level};
+use util::source::Source;
 
 use crate::csv::PackageMappingRecord;
+
+pub type PackageMappingsSource = Source;
 
 #[tracing::instrument(level = Level::DEBUG)]
 pub fn load_package_mappings<'packages>(
     packages: &'packages Vec<Package>,
-    package_mappings_source: &String,
+    source: &PackageMappingsSource,
 ) -> Result<Vec<PackageMapping<'packages>>, Error> {
-    let package_mappings_path_buf = PathBuf::from(package_mappings_source);
-    let package_mappings_path = package_mappings_path_buf.as_path();
+    info!("Loading package mappings. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(package_mappings_path)
-        .with_context(|| {
-            format!(
-                "Error reading package mappings. file: {}",
-                package_mappings_path.to_str().unwrap()
-            )
-        })?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading package mappings. file: {}", path.display()))?;
 
     let mut package_mappings: Vec<PackageMapping> = vec![];
 
@@ -49,6 +49,7 @@ pub mod csv_loading_tests {
     use test::TestPackageMappingRecord;
 
     use super::*;
+    use crate::packages::PackagesSource;
 
     #[test]
     pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()> {
@@ -59,14 +60,11 @@ pub mod csv_loading_tests {
         let temp_dir = TempDir::new()?;
         let mut test_package_mappings_path = temp_dir.path().to_path_buf();
         test_package_mappings_path.push("package-mappings.csv");
-        let test_package_mappings_source = test_package_mappings_path
-            .to_str()
-            .unwrap()
-            .to_string();
+        let test_package_mappings_source = PackagesSource::from_absolute_path(test_package_mappings_path.clone())?;
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_package_mappings_path)?;
+            .from_path(test_package_mappings_path.clone())?;
 
         writer.serialize(TestPackageMappingRecord {
             manufacturer: "424242".to_string(),
@@ -120,7 +118,7 @@ pub mod csv_loading_tests {
             },
         ];
 
-        let csv_content = std::fs::read_to_string(test_package_mappings_source.clone())?;
+        let csv_content = std::fs::read_to_string(test_package_mappings_path)?;
         println!("{csv_content:}");
 
         // when

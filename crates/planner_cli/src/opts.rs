@@ -22,6 +22,8 @@ use regex::Regex;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use stores::load_out::LoadOutSource;
+use stores::package_mappings::PackageMappingsSource;
+use stores::packages::PackagesSource;
 use thiserror::Error;
 
 #[derive(Parser, Debug)]
@@ -339,7 +341,15 @@ fn parse_design_kv(s: &str) -> Result<(u16, DesignName), String> {
 //#[command(arg_required_else_help(true))]
 pub(crate) enum ProjectCommand {
     /// Create a new job
-    Create {},
+    Create {
+        /// The source for packages
+        #[arg(long)]
+        packages: Option<PackagesSource>,
+
+        /// The source for part to package mappings
+        #[arg(long)]
+        package_mappings: Option<PackageMappingsSource>,
+    },
     /// Add a PCB file to the project
     AddPcb {
         /// The path of the PCB, e.g. 'relative:<some_relative_path>' or '<some_absolute_path>'
@@ -578,7 +588,10 @@ impl TryFrom<Opts> for Event {
                 }
             },
             ModeCommand::Project(project_args) => match project_args.command {
-                ProjectCommand::Create {} => {
+                ProjectCommand::Create {
+                    packages,
+                    package_mappings,
+                } => {
                     let name = project_args.project;
                     let directory = project_args.path.clone();
 
@@ -587,6 +600,8 @@ impl TryFrom<Opts> for Event {
                     Ok(Event::CreateProject {
                         name,
                         path,
+                        packages,
+                        package_mappings,
                     })
                 }
                 ProjectCommand::AddPcb {

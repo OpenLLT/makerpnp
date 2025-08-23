@@ -1,28 +1,28 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use part_mapper::part_mapping::PartMapping;
 use pnp::part::Part;
-use tracing::trace;
 use tracing::Level;
+use tracing::{info, trace};
+use util::source::Source;
 
 use crate::csv::PartMappingRecord;
+
+pub type PartMappingsSource = Source;
 
 #[tracing::instrument(level = Level::DEBUG)]
 pub fn load_part_mappings<'part>(
     parts: &'part Vec<Part>,
-    part_mappings_source: &String,
+    source: &PartMappingsSource,
 ) -> Result<Vec<PartMapping<'part>>, Error> {
-    let part_mappings_path_buf = PathBuf::from(part_mappings_source);
-    let part_mappings_path = part_mappings_path_buf.as_path();
+    info!("Loading part mappings. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(part_mappings_path)
-        .with_context(|| {
-            format!(
-                "Error reading part mappings. file: {}",
-                part_mappings_path.to_str().unwrap()
-            )
-        })?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading part mappings. file: {}", path.display()))?;
 
     let mut part_mappings: Vec<PartMapping> = vec![];
 
@@ -49,6 +49,7 @@ pub mod csv_loading_tests {
     use pnp::part::Part;
     use regex::Regex;
 
+    use crate::packages::PackagesSource;
     use crate::part_mappings::load_part_mappings;
     use crate::part_mappings::test::TestPartMappingRecord;
 
@@ -66,14 +67,11 @@ pub mod csv_loading_tests {
         let temp_dir = TempDir::new()?;
         let mut test_part_mappings_path = temp_dir.path().to_path_buf();
         test_part_mappings_path.push("part-mappings.csv");
-        let test_part_mappings_source = test_part_mappings_path
-            .to_str()
-            .unwrap()
-            .to_string();
+        let test_part_mappings_source = PackagesSource::from_absolute_path(test_part_mappings_path.clone())?;
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_part_mappings_path)?;
+            .from_path(test_part_mappings_path.clone())?;
 
         writer.serialize(TestPartMappingRecord {
             name: Some("12345".to_string()),
@@ -86,7 +84,7 @@ pub mod csv_loading_tests {
 
         writer.flush()?;
 
-        let csv_content = std::fs::read_to_string(test_part_mappings_source.clone())?;
+        let csv_content = std::fs::read_to_string(&test_part_mappings_path)?;
         println!("{csv_content:}");
 
         // when
@@ -110,14 +108,11 @@ pub mod csv_loading_tests {
         let temp_dir = TempDir::new()?;
         let mut test_part_mappings_path = temp_dir.path().to_path_buf();
         test_part_mappings_path.push("part-mappings.csv");
-        let test_part_mappings_source = test_part_mappings_path
-            .to_str()
-            .unwrap()
-            .to_string();
+        let test_part_mappings_source = PackagesSource::from_absolute_path(test_part_mappings_path.clone())?;
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_part_mappings_path)?;
+            .from_path(test_part_mappings_path.clone())?;
 
         writer.serialize(TestPartMappingRecord {
             name: Some("12345".to_string()),
@@ -173,7 +168,7 @@ pub mod csv_loading_tests {
             },
         ];
 
-        let csv_content = std::fs::read_to_string(test_part_mappings_source.clone())?;
+        let csv_content = std::fs::read_to_string(test_part_mappings_path)?;
         println!("{csv_content:}");
 
         // when

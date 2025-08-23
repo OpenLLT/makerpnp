@@ -1,24 +1,24 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use assembly::rules::AssemblyRule;
-use tracing::trace;
 use tracing::Level;
+use tracing::{info, trace};
+use util::source::Source;
 
 use crate::csv::AssemblyRuleRecord;
 
+pub type AssemblyRuleSource = Source;
+
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load(assembly_rule_source: &String) -> Result<Vec<AssemblyRule>, Error> {
-    let assembly_rule_path_buf = PathBuf::from(assembly_rule_source);
-    let assembly_rule_path = assembly_rule_path_buf.as_path();
+pub fn load(source: &AssemblyRuleSource) -> Result<Vec<AssemblyRule>, Error> {
+    info!("Loading assembly rules. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(assembly_rule_path)
-        .with_context(|| {
-            format!(
-                "Error reading assembly rules. file: {}",
-                assembly_rule_path.to_str().unwrap()
-            )
-        })?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading assembly rules. file: {}", path.display()))?;
 
     let mut assembly_rules: Vec<AssemblyRule> = vec![];
 

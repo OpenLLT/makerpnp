@@ -1,19 +1,24 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use pnp::part::Part;
-use tracing::trace;
 use tracing::Level;
+use tracing::{info, trace};
+use util::source::Source;
 
 use crate::csv::PartRecord;
 
+pub type PartsSource = Source;
+
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load_parts(parts_source: &String) -> Result<Vec<Part>, Error> {
-    let parts_path_buf = PathBuf::from(parts_source);
-    let parts_path = parts_path_buf.as_path();
+pub fn load_parts(source: &PartsSource) -> Result<Vec<Part>, Error> {
+    info!("Loading parts. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(parts_path)
-        .with_context(|| format!("Error reading parts. file: {}", parts_path.to_str().unwrap()))?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading parts. file: {}", path.display()))?;
 
     let mut parts: Vec<Part> = vec![];
 

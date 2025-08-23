@@ -1,24 +1,24 @@
-use std::path::PathBuf;
-
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use eda::substitution::EdaSubstitutionRule;
-use tracing::trace;
 use tracing::Level;
+use tracing::{info, trace};
+use util::source::Source;
 
 use crate::csv::SubstitutionRecord;
 
+pub type EdaSubstitutionsSource = Source;
+
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load_eda_substitutions(substitutions_source: &String) -> Result<Vec<EdaSubstitutionRule>, Error> {
-    let substitutions_path_buf = PathBuf::from(substitutions_source);
-    let substitutions_path = substitutions_path_buf.as_path();
+pub fn load_eda_substitutions(source: &EdaSubstitutionsSource) -> Result<Vec<EdaSubstitutionRule>, Error> {
+    info!("Loading eda substitutions. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(substitutions_path)
-        .with_context(|| {
-            format!(
-                "Error reading substitutions. file: {}",
-                substitutions_path.to_str().unwrap()
-            )
-        })?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading substitutions. file: {}", path.display()))?;
 
     let mut eda_substitutions: Vec<EdaSubstitutionRule> = vec![];
 
@@ -46,6 +46,7 @@ pub mod csv_loading_tests {
 
     use crate::substitutions::load_eda_substitutions;
     use crate::substitutions::test::TestEdaSubstitutionRecord;
+    use crate::substitutions::EdaSubstitutionsSource;
 
     #[test]
     pub fn use_exact_match_and_regex_match_criterion() -> anyhow::Result<()> {
@@ -53,14 +54,12 @@ pub mod csv_loading_tests {
         let temp_dir = TempDir::new()?;
         let mut test_eda_substitutions_path = temp_dir.path().to_path_buf();
         test_eda_substitutions_path.push("substitutions.csv");
-        let test_eda_substitutions_source = test_eda_substitutions_path
-            .to_str()
-            .unwrap()
-            .to_string();
+        let test_eda_substitutions_source =
+            EdaSubstitutionsSource::from_absolute_path(test_eda_substitutions_path.clone())?;
 
         let mut writer = csv::WriterBuilder::new()
             .quote_style(QuoteStyle::Always)
-            .from_path(test_eda_substitutions_path)?;
+            .from_path(test_eda_substitutions_path.clone())?;
 
         writer.serialize(TestEdaSubstitutionRecord {
             name_pattern: Some("NAME1".to_string()),
@@ -128,7 +127,7 @@ pub mod csv_loading_tests {
             },
         ];
 
-        let csv_content = std::fs::read_to_string(test_eda_substitutions_source.clone())?;
+        let csv_content = std::fs::read_to_string(test_eda_substitutions_path)?;
         println!("{csv_content:}");
 
         // when

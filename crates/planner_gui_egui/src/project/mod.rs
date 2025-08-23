@@ -1106,6 +1106,8 @@ impl UiComponent for Project {
                     .update(Event::CreateProject {
                         name: state.name.clone().unwrap(),
                         path: self.path.clone(),
+                        packages: None,
+                        package_mappings: None,
                     })
                     .when_ok(key, |_| Some(ProjectUiCommand::Created))
             }

@@ -13,8 +13,14 @@ use eda::substitution::{EdaSubstitutionResult, EdaSubstitutionRule, EdaSubstitut
 pub use eda::EdaTool;
 use part_mapper::{PartMapper, PartMapperError, PartMappingError, PartMappingResult, PlacementPartMappingResult};
 use serde_with::serde_as;
+pub use stores::assembly_rules::AssemblyRuleSource;
+pub use stores::eda_placements::EdaPlacementsSource;
 pub use stores::load_out::LoadOutSource;
+pub use stores::part_mappings::PartMappingsSource;
+pub use stores::parts::PartsSource;
 use stores::placements::PlacementRecord;
+pub use stores::placements::PlacementsSource;
+pub use stores::substitutions::EdaSubstitutionsSource;
 use stores::{assembly_rules, eda_placements, load_out, part_mappings, parts, substitutions};
 use termtree::Tree;
 use thiserror::Error;
@@ -48,13 +54,13 @@ pub enum Event {
     None,
     Build {
         eda_tool: EdaTool,
-        placements: String,
+        placements: EdaPlacementsSource,
         assembly_variant: AssemblyVariant,
-        parts: String,
-        part_mappings: String,
-        substitutions: Vec<String>,
+        parts: PartsSource,
+        part_mappings: PartMappingsSource,
+        substitutions: Vec<EdaSubstitutionsSource>,
         load_out: Option<LoadOutSource>,
-        assembly_rules: Option<String>,
+        assembly_rules: Option<AssemblyRuleSource>,
         output: String,
         ref_des_disable_list: Vec<String>,
     },
@@ -135,13 +141,13 @@ enum AppError {
 #[tracing::instrument(level = Level::DEBUG)]
 fn build_assembly_variant(
     eda_tool: EdaTool,
-    placements_source: &String,
+    placements_source: &EdaPlacementsSource,
     assembly_variant: AssemblyVariant,
-    parts_source: &String,
-    part_mappings_source: &String,
-    eda_substitutions_sources: &[String],
+    parts_source: &PartsSource,
+    part_mappings_source: &PartMappingsSource,
+    eda_substitutions_sources: &[EdaSubstitutionsSource],
     load_out_source: &Option<LoadOutSource>,
-    assembly_rules_source: &Option<String>,
+    assembly_rules_source: &Option<AssemblyRuleSource>,
     output: &String,
     ref_des_disable_list: &Vec<String>,
 ) -> Result<(), Error> {

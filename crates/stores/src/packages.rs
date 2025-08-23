@@ -1,23 +1,28 @@
 use std::collections::HashMap;
 #[cfg(test)]
 use std::path::Path;
-use std::path::PathBuf;
 
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use pnp::package::Package;
-use tracing::Level;
+use tracing::{info, Level};
+use util::source::Source;
 
-use crate::csv::packages::{build_package_from_field_map, get_base_package_headers};
+use crate::csv::packages::build_package_from_field_map;
+
+pub type PackagesSource = Source;
 
 #[tracing::instrument(level = Level::DEBUG)]
-pub fn load_packages(packages_source: &String) -> Result<Vec<Package>, Error> {
-    let packages_path_buf = PathBuf::from(packages_source);
-    let packages_path = packages_path_buf.as_path();
+pub fn load_packages(source: &PackagesSource) -> Result<Vec<Package>, Error> {
+    info!("Loading packages. source: {}", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
 
     // Use the CSV reader directly without serialization
     let mut reader = csv::ReaderBuilder::new()
-        .from_path(packages_path)
-        .with_context(|| format!("Error reading packages. file: {}", packages_path.to_str().unwrap()))?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading packages. file: {}", path.display()))?;
 
     let mut packages = Vec::new();
 
@@ -56,7 +61,7 @@ pub fn load_packages(packages_source: &String) -> Result<Vec<Package>, Error> {
 #[cfg(test)]
 pub fn save_packages(packages: &[Package], output_path: &Path) -> Result<(), Error> {
     // Create headers with all possible fields
-    let mut headers = get_base_package_headers();
+    let mut headers = stores::csv::packages::get_base_package_headers();
 
     // Find the maximum number of manufacturer codes across all packages
     let max_mfr_codes = packages
@@ -192,20 +197,17 @@ mod tests {
 
         // and packages
         let (test_packages_path, _test_packages_file_name) = build_temp_csv_file(&temp_dir, "packages");
+        let packages_source = PackagesSource::from_absolute_path(test_packages_path.clone())?;
 
         save_packages(&[Package::new("NAME1".into())], &test_packages_path)?;
 
-        dump_file("packages", test_packages_path.clone())?;
+        dump_file("packages", test_packages_path)?;
 
         // and
         let expected_packages = vec![Package::new("NAME1".into())];
 
         // when
-        let packages = load_packages(
-            &test_packages_path
-                .to_string_lossy()
-                .to_string(),
-        )?;
+        let packages = load_packages(&packages_source)?;
 
         assert_eq!(packages, expected_packages);
 

@@ -1,10 +1,8 @@
 use std::collections::BTreeSet;
-use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::path::PathBuf;
-use std::str::FromStr;
 
-use anyhow::{Context, Error};
+use anyhow::{anyhow, Context, Error};
 use csv::QuoteStyle;
 use planning::process::{ProcessDefinition, ProcessReference, ProcessRuleReference};
 use pnp::load_out::LoadOutItem;
@@ -14,18 +12,23 @@ use regex::Regex;
 use thiserror::Error;
 use tracing::trace;
 use tracing::{info, Level};
+use util::source::Source;
 
 use crate::csv::LoadOutItemRecord;
 
-#[tracing::instrument(level = Level::DEBUG)]
-pub fn load_items(load_out_source: &LoadOutSource) -> Result<Vec<LoadOutItem>, Error> {
-    info!("Loading load-out. source: '{}'", load_out_source);
+pub type LoadOutSource = Source;
 
-    let load_out_path_buf = PathBuf::from(load_out_source.to_string());
-    let load_out_path = load_out_path_buf.as_path();
+#[tracing::instrument(level = Level::DEBUG)]
+pub fn load_items(source: &LoadOutSource) -> Result<Vec<LoadOutItem>, Error> {
+    info!("Loading load-out. source: '{}'", source);
+
+    let path = source
+        .path()
+        .map_err(|error| anyhow!("Unsupported source type. cause: {:?}", error))?;
+
     let mut csv_reader = csv::ReaderBuilder::new()
-        .from_path(load_out_path)
-        .with_context(|| format!("Error reading load-out. file: {}", load_out_path.to_str().unwrap()))?;
+        .from_path(path.clone())
+        .with_context(|| format!("Error reading load-out. file: {}", path.display()))?;
 
     let mut items: Vec<LoadOutItem> = vec![];
 
@@ -74,83 +77,6 @@ pub fn ensure_load_out(load_out_source: &LoadOutSource) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-// FUTURE maybe this should be a url?
-#[derive(
-    Debug,
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash
-)]
-pub struct LoadOutSource(String);
-
-impl FromStr for LoadOutSource {
-    type Err = LoadOutSourceError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(LoadOutSource(s.to_string()))
-    }
-}
-
-impl LoadOutSource {
-    pub fn try_from_relative_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        if !path.is_relative() {
-            panic!()
-        }
-        Self::try_from_path_inner(path)
-    }
-
-    pub fn try_from_path_inner(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        if !path.exists() {
-            return Err(LoadOutSourceError::PathDoesNotExist(path));
-        }
-        if !path.is_file() {
-            return Err(LoadOutSourceError::PathIsNotAFile(path));
-        }
-        Ok(LoadOutSource(path.to_str().unwrap().to_string()))
-    }
-
-    pub fn try_from_absolute_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        if !path.is_absolute() {
-            panic!()
-        }
-        Self::try_from_path_inner(path)
-    }
-
-    pub fn try_from_path(project_path: &PathBuf, path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        match path.is_absolute() {
-            true => Self::from_absolute_path(path.clone()),
-            false => {
-                let full_path = project_path.clone().join(path);
-                Self::try_from_path_inner(full_path)
-            }
-        }
-    }
-
-    pub fn from_absolute_path(path: PathBuf) -> Result<LoadOutSource, LoadOutSourceError> {
-        assert!(path.is_absolute());
-        Ok(LoadOutSource(path.to_str().unwrap().to_string()))
-    }
-}
-
-impl Display for LoadOutSource {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.0.as_str())
-    }
-}
-
-#[derive(Debug, Error)]
-pub enum LoadOutSourceError {
-    #[error("Path does not exist. path: {0}")]
-    PathDoesNotExist(PathBuf),
-    #[error("Path is not a file. path: {0}")]
-    PathIsNotAFile(PathBuf),
 }
 
 #[derive(Error, Debug)]
