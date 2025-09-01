@@ -9,7 +9,7 @@ use tracing::{debug, error, trace};
 use util::path::clip_path;
 
 use crate::project::tables::load_out::{
-    LoadOutRow, LoadOutTableUi, LoadOutTableUiAction, LoadOutTableUiCommand, LoadOutTableUiContext,
+    LoadOutTableUi, LoadOutTableUiAction, LoadOutTableUiCommand, LoadOutTableUiContext,
 };
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
@@ -56,11 +56,6 @@ pub enum LoadOutTabUiCommand {
     None,
 
     // internal
-    RowUpdated {
-        index: usize,
-        new_row: LoadOutRow,
-        old_row: LoadOutRow,
-    },
     LoadoutTableUiCommand(LoadOutTableUiCommand),
 }
 
@@ -101,25 +96,25 @@ impl UiComponent for LoadOutTabUi {
     ) -> Option<Self::UiAction> {
         match command {
             LoadOutTabUiCommand::None => Some(LoadOutTabUiAction::None),
-            LoadOutTabUiCommand::RowUpdated {
-                index,
-                new_row,
-                old_row,
-            } => {
-                let (_, _) = (index, old_row);
-
-                Some(LoadOutTabUiAction::UpdateFeederForPart {
-                    phase: self.phase.clone(),
-                    part: new_row.part,
-                    feeder: Reference::try_from(new_row.feeder).ok(),
-                })
-            }
             LoadOutTabUiCommand::LoadoutTableUiCommand(command) => self
                 .load_out_table_ui
                 .update(command, &mut LoadOutTableUiContext::default())
                 .map(|action| match action {
                     LoadOutTableUiAction::None => LoadOutTabUiAction::None,
                     LoadOutTableUiAction::RequestRepaint => LoadOutTabUiAction::RequestRepaint,
+                    LoadOutTableUiAction::RowUpdated {
+                        index,
+                        new_row,
+                        old_row,
+                    } => {
+                        let (_, _) = (index, old_row);
+
+                        LoadOutTabUiAction::UpdateFeederForPart {
+                            phase: self.phase.clone(),
+                            part: new_row.part,
+                            feeder: Reference::try_from(new_row.feeder).ok(),
+                        }
+                    }
                 }),
         }
     }
