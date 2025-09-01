@@ -1726,6 +1726,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_deferred_table"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afa44163b85992715271336eca4e92c808716b14568285b56f50d068f87a5b81"
+dependencies = [
+ "egui",
+ "indexmap 2.11.1",
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "egui_dock"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4293,6 +4305,7 @@ dependencies = [
  "egui",
  "egui-data-table",
  "egui-i18n",
+ "egui_deferred_table",
  "egui_dock",
  "egui_double_slider",
  "egui_extras",
