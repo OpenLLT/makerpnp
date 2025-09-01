@@ -1,19 +1,16 @@
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use derivative::Derivative;
-use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
-use egui_data_table::DataTable;
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
-use tracing::debug;
+use tracing::{debug, error, trace};
 use util::path::clip_path;
 
-use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::i18n::datatable_support::FluentTranslator;
-use crate::project::tables::load_out::{LoadOutRow, LoadOutRowViewer};
+use crate::project::tables::load_out::{
+    LoadOutRow, LoadOutTableUi, LoadOutTableUiAction, LoadOutTableUiCommand, LoadOutTableUiContext,
+};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -23,43 +20,34 @@ use crate::ui_component::{ComponentState, UiComponent};
 pub struct LoadOutTabUi {
     phase: Reference,
     #[derivative(Debug = "ignore")]
-    load_out_table: Value<Option<(LoadOutRowViewer, DataTable<LoadOutRow>)>>,
+    load_out_table_ui: LoadOutTableUi,
 
     pub component: ComponentState<LoadOutTabUiCommand>,
 }
 
 impl LoadOutTabUi {
     pub fn new(phase: Reference) -> Self {
+        let component: ComponentState<LoadOutTabUiCommand> = Default::default();
+
+        let mut load_out_table_ui = LoadOutTableUi::new();
+        load_out_table_ui
+            .component
+            .configure_mapper(component.sender.clone(), |load_out_table_command| {
+                trace!("phase load_out table mapper. command: {:?}", load_out_table_command);
+                LoadOutTabUiCommand::LoadoutTableUiCommand(load_out_table_command)
+            });
+
         Self {
             phase,
-            load_out_table: Value::default(),
+            load_out_table_ui: LoadOutTableUi::new(),
 
             component: Default::default(),
         }
     }
 
-    pub fn update_load_out(&mut self, mut load_out: LoadOut) {
-        let mut load_out_table = self.load_out_table.lock().unwrap();
-
-        let rows = load_out
-            .items
-            .drain(0..)
-            .map(|item| LoadOutRow {
-                part: Part::new(item.manufacturer, item.mpn),
-                feeder: item
-                    .reference
-                    .map_or_else(|| "".to_string(), |reference| reference.to_string()),
-            })
-            .collect();
-
-        let (_viewer, table) = load_out_table.get_or_insert_with(|| {
-            let viewer = LoadOutRowViewer::new(self.component.sender.clone());
-            let table = DataTable::new();
-
-            (viewer, table)
-        });
-
-        table.replace(rows);
+    pub fn update_load_out(&mut self, load_out: LoadOut) {
+        self.load_out_table_ui
+            .update_loadout(load_out);
     }
 }
 
@@ -73,7 +61,7 @@ pub enum LoadOutTabUiCommand {
         new_row: LoadOutRow,
         old_row: LoadOutRow,
     },
-    FilterCommand(FilterUiCommand),
+    LoadoutTableUiCommand(LoadOutTableUiCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -97,28 +85,12 @@ impl UiComponent for LoadOutTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let mut load_out_table = self.load_out_table.lock().unwrap();
-
-        if load_out_table.is_none() {
-            ui.spinner();
-            return;
-        }
-
-        let (viewer, table) = load_out_table.as_mut().unwrap();
-
-        viewer
-            .filter
-            .ui(ui, &mut FilterUiContext::default());
+        self.load_out_table_ui.filter_ui(ui);
 
         ui.separator();
 
-        let table_renderer = egui_data_table::Renderer::new(table, viewer)
-            .with_style_modify(|style| {
-                style.auto_shrink = [false, false].into();
-                style.scroll_bar_visibility = ScrollBarVisibility::AlwaysVisible;
-            })
-            .with_translator(Arc::new(FluentTranslator::default()));
-        ui.add(table_renderer);
+        self.load_out_table_ui
+            .ui(ui, &mut LoadOutTableUiContext::default());
     }
 
     #[profiling::function]
@@ -142,22 +114,13 @@ impl UiComponent for LoadOutTabUi {
                     feeder: Reference::try_from(new_row.feeder).ok(),
                 })
             }
-            LoadOutTabUiCommand::FilterCommand(command) => {
-                let mut table = self.load_out_table.lock().unwrap();
-                if let Some((viewer, _table)) = &mut *table {
-                    let action = viewer
-                        .filter
-                        .update(command, &mut FilterUiContext::default())
-                        .inspect(|action| debug!("filter action: {:?}", action));
-
-                    match action {
-                        Some(FilterUiAction::ApplyFilter) => Some(LoadOutTabUiAction::RequestRepaint),
-                        None => None,
-                    }
-                } else {
-                    None
-                }
-            }
+            LoadOutTabUiCommand::LoadoutTableUiCommand(command) => self
+                .load_out_table_ui
+                .update(command, &mut LoadOutTableUiContext::default())
+                .map(|action| match action {
+                    LoadOutTableUiAction::None => LoadOutTabUiAction::None,
+                    LoadOutTableUiAction::RequestRepaint => LoadOutTabUiAction::RequestRepaint,
+                }),
         }
     }
 }

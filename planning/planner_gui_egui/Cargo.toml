@@ -45,6 +45,7 @@ egui_material_icons = { workspace = true }
 egui_extras = { workspace = true }
 egui_ltreeview = { workspace = true, features = ["persistence"] }
 egui-data-table = { workspace = true }
+egui_deferred_table = { workspace = true, features = ["persistence"] }
 egui_double_slider = { workspace = true }
 egui_vertical_stack = { workspace = true }
 egui_tool_windows = { workspace = true, features = ["persistence"] }
