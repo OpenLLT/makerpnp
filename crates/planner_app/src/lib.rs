@@ -2442,7 +2442,7 @@ impl Planner {
         Ok(part_packages_map)
     }
 
-    // due to the lifetimes of the mappings, the storage for the packages and package mappings needs to be provided
+    // Due to the lifetimes of the mappings, the storage for the packages and package mappings needs to be provided
     // up-front.
     fn load_part_packages_map<'a, 'b>(
         project: &'a Project,
@@ -2451,36 +2451,24 @@ impl Planner {
         package_mappings_storage: &'b mut Vec<PackageMapping<'b>>,
     ) -> Result<BTreeMap<&'a Part, &'b Package>, AppError> {
         // Check if both sources are available
-        if project
-            .library_config
-            .package_source
-            .is_none()
-            || project
+        let (Some(packages_source), Some(package_mappings_source)) = (
+            project
+                .library_config
+                .package_source
+                .as_ref(),
+            project
                 .library_config
                 .package_mappings_source
-                .is_none()
-        {
+                .as_ref(),
+        ) else {
             return Ok(BTreeMap::new());
-        }
-
-        // At this point, we know both sources exist
-        let packages_source = project
-            .library_config
-            .package_source
-            .as_ref()
-            .unwrap();
-
-        let packages_mappings_source = project
-            .library_config
-            .package_mappings_source
-            .as_ref()
-            .unwrap();
+        };
 
         // Load the packages and store them in the provided output vector
         *packages_storage = Self::load_packages(packages_source)?;
 
         // Load the mappings and store them in the provided output vector
-        *package_mappings_storage = Self::load_package_mappings(packages_mappings_source, packages_storage)?;
+        *package_mappings_storage = Self::load_package_mappings(package_mappings_source, packages_storage)?;
 
         // Build the mapping
         let unique_parts = Self::project_unique_parts(project);
