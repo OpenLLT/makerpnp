@@ -1597,9 +1597,8 @@ impl UiComponent for Project {
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::Phases,
                     ))),
-                    // FIXME there is no current way to know when to continue
-                    //       since there is no mechanism to know if `ProjectViewRequest::Phases` completed and all the
-                    //       effects have ALSO completed.
+                    // FIXME there is no current way to know whether to continue,  or not, as there is no mechanism
+                    //       to know if `ProjectViewRequest::Phases` completed and all the effects have ALSO completed.
                     //       currently the ProjectUiCommand::ContinueShowPhaseLoadout is called before the handler for
                     //       ProjectUiCommand::ProjectView is called.
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::ContinueShowPhaseLoadout {
@@ -1630,7 +1629,21 @@ impl UiComponent for Project {
 
                     task.map(|task| ProjectAction::Task(key, task))
                 } else {
-                    None
+                    // FIXME see ProjectUiCommand::ShowPhaseLoadout handler
+
+                    debug!(
+                        "FIXME - there continuing to show a phase when the phase overview has not available. phase: {:?}",
+                        phase
+                    );
+
+                    // FIXME retrying indefinitely by sending the command again, in the hopes it has worked by the time this
+                    //       command handler is executed again.
+                    Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::ContinueShowPhaseLoadout {
+                            phase,
+                        })),
+                    ))
                 }
             }
             ProjectUiCommand::ShowPcbUnitAssignments(pcb_index) => {
