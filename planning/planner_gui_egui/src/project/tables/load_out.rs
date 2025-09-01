@@ -1,15 +1,18 @@
-use egui::Ui;
+use egui::{Color32, Ui};
 use egui_deferred_table::{
     Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
     TableDimensions,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
+use egui_mobius::types::Enqueue;
 use planner_app::{LoadOut, Part};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
 use crate::ui_component::{ComponentState, UiComponent};
+
+const SHOW_DEBUG_SHAPES: bool = false;
 
 #[derive(Debug, Clone)]
 pub struct LoadOutRow {
@@ -27,12 +30,31 @@ mod columns {
 }
 use columns::*;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LoadOutDataSource {
     rows: Vec<LoadOutRow>,
+
+    // temporary implementation due to in-progress nature of egui_deferred_table
+    cell: Option<CellEditState>,
+    sender: Enqueue<LoadOutTableUiCommand>,
+}
+
+#[derive(Debug, Clone)]
+enum CellEditState {
+    // the pivot point for selections, etc.
+    Pivot(CellIndex),
+    Editing(CellIndex),
 }
 
 impl LoadOutDataSource {
+    pub fn new(sender: Enqueue<LoadOutTableUiCommand>) -> Self {
+        Self {
+            rows: Default::default(),
+            cell: Default::default(),
+            sender,
+        }
+    }
+
     pub fn update_loadout(&mut self, mut load_out: LoadOut) {
         self.rows = load_out
             .items
@@ -58,13 +80,53 @@ impl DeferredTableDataSource for LoadOutDataSource {
 
 impl DeferredTableRenderer for LoadOutDataSource {
     fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex) {
-        let row = &self.rows[cell_index.row];
-        match cell_index.column {
-            FEEDER_REFERENCE_COL => ui.label(&row.feeder.to_string()),
-            MANUFACTURER_COL => ui.label(&row.part.manufacturer),
-            MPN_COL => ui.label(&row.part.mpn),
-            _ => unreachable!(),
+        let (selected, editing) = match self.cell {
+            Some(CellEditState::Pivot(selected_cell_index)) if selected_cell_index == cell_index => (true, false),
+            Some(CellEditState::Editing(selected_cell_index)) if selected_cell_index == cell_index => (false, true),
+            _ => (false, false),
         };
+
+        let row = &self.rows[cell_index.row];
+
+        let handled = editing && {
+            match cell_index.column {
+                FEEDER_REFERENCE_COL => {
+                    let mut value = row.feeder.clone();
+                    if ui
+                        .text_edit_singleline(&mut value)
+                        .changed()
+                    {
+                        self.sender
+                            .send(LoadOutTableUiCommand::FeederReferenceChanged {
+                                value,
+                                cell_index,
+                            })
+                            .expect("sent");
+                    }
+                    true
+                }
+                _ => false,
+            }
+        };
+
+        if !handled {
+            match cell_index.column {
+                FEEDER_REFERENCE_COL => ui.label(&row.feeder.to_string()),
+                MANUFACTURER_COL => ui.label(&row.part.manufacturer),
+                MPN_COL => ui.label(&row.part.mpn),
+                _ => unreachable!(),
+            };
+        }
+
+        if SHOW_DEBUG_SHAPES {
+            if editing {
+                ui.painter()
+                    .debug_rect(ui.clip_rect(), Color32::RED, "Edit");
+            } else if selected {
+                ui.painter()
+                    .debug_rect(ui.clip_rect(), Color32::ORANGE, "Pivot");
+            }
+        }
     }
 }
 
@@ -88,7 +150,7 @@ impl LoadOutTableUi {
             });
 
         Self {
-            source: Value::new(LoadOutDataSource::default()),
+            source: Value::new(LoadOutDataSource::new(component.sender.clone())),
             filter,
             component,
         }
@@ -111,12 +173,19 @@ impl LoadOutTableUi {
 pub enum LoadOutTableUiCommand {
     None,
     FilterCommand(FilterUiCommand),
+    FeederReferenceChanged { value: String, cell_index: CellIndex },
+    CellEditComplete(CellIndex),
 }
 
 #[derive(Debug, Clone)]
 pub enum LoadOutTableUiAction {
     None,
     RequestRepaint,
+    RowUpdated {
+        index: CellIndex,
+        new_row: LoadOutRow,
+        old_row: LoadOutRow,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -151,7 +220,53 @@ impl UiComponent for LoadOutTableUi {
         for action in actions {
             match action {
                 Action::CellClicked(cell_index) => {
-                    info!("Cell clicked. cell: {:?}", cell_index)
+                    info!("Cell clicked. cell: {:?}", cell_index);
+
+                    // click once to select, click again to edit
+
+                    match data_source.cell.as_mut() {
+                        None => {
+                            // change selection
+                            data_source
+                                .cell
+                                .replace(CellEditState::Pivot(cell_index));
+                        }
+                        Some(CellEditState::Pivot(pivot_cell_index)) if *pivot_cell_index == cell_index => {
+                            debug!("clicked in selected cell");
+
+                            // change mode to edit
+                            data_source
+                                .cell
+                                .replace(CellEditState::Editing(cell_index));
+                        }
+                        Some(CellEditState::Pivot(_)) => {
+                            debug!("clicked in different cell");
+
+                            // change selection
+                            data_source
+                                .cell
+                                .replace(CellEditState::Pivot(cell_index));
+                        }
+                        Some(CellEditState::Editing(editing_cell_index)) if *editing_cell_index == cell_index => {
+                            debug!("clicked in cell while editing");
+
+                            // nothing to do
+                        }
+                        Some(CellEditState::Editing(editing_cell_index)) => {
+                            debug!("clicked in a different cell while editing");
+
+                            // apply edited value
+                            self.component
+                                .sender
+                                .send(LoadOutTableUiCommand::CellEditComplete(*editing_cell_index))
+                                .expect("sent");
+
+                            // change selection
+                            data_source
+                                .cell
+                                .replace(CellEditState::Pivot(cell_index));
+                        }
+                    }
                 }
             }
         }
@@ -175,6 +290,26 @@ impl UiComponent for LoadOutTableUi {
                     None => None,
                 }
             }
+            LoadOutTableUiCommand::FeederReferenceChanged {
+                value,
+                cell_index,
+            } => {
+                let source = &mut *self.source.lock().unwrap();
+                let row = &mut source.rows[cell_index.row];
+                row.feeder = value;
+                debug!("feeder reference changed. row: {:?}", row);
+                None
+            }
+            LoadOutTableUiCommand::CellEditComplete(cell_index) => {
+                let source = &mut *self.source.lock().unwrap();
+                let row = &mut source.rows[cell_index.row];
+
+                Some(LoadOutTableUiAction::RowUpdated {
+                    index: cell_index,
+                    new_row: row.clone(),
+                    old_row: row.clone(),
+                })
+            }
         }
     }
 }
@@ -182,33 +317,6 @@ impl UiComponent for LoadOutTableUi {
 //
 // Snippets of code remaining to be ported.
 //
-
-// 0 => {
-//     // FIXME this is directly modifying state
-//     let mut reference = row.feeder.clone().to_string();
-//     if ui
-//         .text_edit_singleline(&mut reference)
-//         .changed()
-//     {
-//         row.feeder = reference;
-//     }
-//
-//     Some(ui.response())
-// }
-// 1 => None,
-// 2 => None,
-
-// trace!(
-//     "on_row_updated. row_index {}, old_row: {:?}, old_row: {:?}",
-//     row_index, new_row, old_row
-// );
-// self.sender
-//     .send(LoadOutTabUiCommand::RowUpdated {
-//         index: row_index,
-//         new_row: new_row.clone(),
-//         old_row: old_row.clone(),
-//     })
-//     .expect("sent");
 
 // let haystack = format!(
 //     "feeder: {}, manufacturer: '{}', mpn: '{}'",
