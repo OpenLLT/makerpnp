@@ -1583,23 +1583,9 @@ impl Planner {
                     )
                     .map_err(AppError::OperationError)?;
 
-                let packages_source = project
-                    .library_config
-                    .package_source
-                    .as_ref()
-                    .ok_or(AppError::OperationError(anyhow!("No package source configured")))?;
-                let packages_mappings_source = project
-                    .library_config
-                    .package_mappings_source
-                    .as_ref()
-                    .ok_or(AppError::OperationError(anyhow!(
-                        "No package mappings source configured"
-                    )))?;
-
-                let packages = Self::load_packages(packages_source)?;
-                let package_mappings = Self::load_package_mappings(&packages_mappings_source, &packages)?;
-                let unique_parts = Self::project_unique_parts(project);
-                let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
+                let mut packages = Vec::new();
+                let mut package_mappings = Vec::new();
+                let part_packages_map = Self::load_part_packages_map(project, &mut packages, &mut package_mappings)?;
 
                 project::generate_artifacts(
                     project,
@@ -2297,23 +2283,9 @@ impl Planner {
 
                 let pcb_unit_positioning_map = project::build_pcbs_unit_positioning_map(&pcbs);
 
-                let packages_source = project
-                    .library_config
-                    .package_source
-                    .as_ref()
-                    .ok_or(AppError::OperationError(anyhow!("No package source configured")))?;
-                let packages_mappings_source = project
-                    .library_config
-                    .package_mappings_source
-                    .as_ref()
-                    .ok_or(AppError::OperationError(anyhow!(
-                        "No package mappings source configured"
-                    )))?;
-
-                let packages = Self::load_packages(&packages_source)?;
-                let package_mappings = Self::load_package_mappings(&packages_mappings_source, &packages)?;
-                let unique_parts = Self::project_unique_parts(project);
-                let part_packages_map = Self::build_project_part_package_map(&unique_parts, &package_mappings)?;
+                let mut packages = Vec::new();
+                let mut package_mappings = Vec::new();
+                let part_packages_map = Self::load_part_packages_map(project, &mut packages, &mut package_mappings)?;
 
                 project::sort_placements(
                     &mut placements,
@@ -2426,7 +2398,7 @@ impl Planner {
         }
     }
 
-    fn load_packages<'parts, 'b>(packages_source: &PackagesSource) -> Result<Vec<Package>, AppError> {
+    fn load_packages(packages_source: &PackagesSource) -> Result<Vec<Package>, AppError> {
         let packages: Vec<Package> = stores::packages::load_packages(packages_source)
             .map_err(|error| AppError::OperationError(anyhow!("package source error. cause: {:?}", error)))?;
 
@@ -2467,6 +2439,53 @@ impl Planner {
                     .map(|package| (result.part, package))
             })
             .collect::<BTreeMap<_, _>>();
+        Ok(part_packages_map)
+    }
+
+    // due to the lifetimes of the mappings, the storage for the packages and package mappings needs to be provided
+    // up-front.
+    fn load_part_packages_map<'a, 'b>(
+        project: &'a Project,
+        // Provide mutable references to variables that will be populated
+        packages_storage: &'b mut Vec<Package>,
+        package_mappings_storage: &'b mut Vec<PackageMapping<'b>>,
+    ) -> Result<BTreeMap<&'a Part, &'b Package>, AppError> {
+        // Check if both sources are available
+        if project
+            .library_config
+            .package_source
+            .is_none()
+            || project
+                .library_config
+                .package_mappings_source
+                .is_none()
+        {
+            return Ok(BTreeMap::new());
+        }
+
+        // At this point, we know both sources exist
+        let packages_source = project
+            .library_config
+            .package_source
+            .as_ref()
+            .unwrap();
+
+        let packages_mappings_source = project
+            .library_config
+            .package_mappings_source
+            .as_ref()
+            .unwrap();
+
+        // Load the packages and store them in the provided output vector
+        *packages_storage = Self::load_packages(packages_source)?;
+
+        // Load the mappings and store them in the provided output vector
+        *package_mappings_storage = Self::load_package_mappings(packages_mappings_source, packages_storage)?;
+
+        // Build the mapping
+        let unique_parts = Self::project_unique_parts(project);
+        let part_packages_map = Self::build_project_part_package_map(&unique_parts, package_mappings_storage)?;
+
         Ok(part_packages_map)
     }
 
