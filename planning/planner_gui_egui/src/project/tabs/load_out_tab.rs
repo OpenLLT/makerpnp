@@ -39,9 +39,9 @@ impl LoadOutTabUi {
 
         Self {
             phase,
-            load_out_table_ui: LoadOutTableUi::new(),
+            load_out_table_ui,
 
-            component: Default::default(),
+            component,
         }
     }
 
