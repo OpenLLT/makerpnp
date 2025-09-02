@@ -108,14 +108,14 @@ impl UiComponent for LoadOutTabUi {
                         item,
                         original_item,
                     } => {
-                        let (_, _) = (index, original_item);
+                        let _ = index;
 
                         // the only thing that can change in the item, is the feeder, otherwise we would need to look
                         // at the item and original item to determine what changed and handle accordingly.
 
                         LoadOutTabUiAction::UpdateFeederForPart {
                             phase: self.phase.clone(),
-                            part: Part::new(item.manufacturer, item.mpn),
+                            part: Part::new(original_item.manufacturer, original_item.mpn),
                             feeder: item.reference,
                         }
                     }

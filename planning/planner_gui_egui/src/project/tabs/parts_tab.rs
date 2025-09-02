@@ -1,19 +1,13 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use derivative::Derivative;
-use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
-use egui_data_table::DataTable;
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
-use egui_mobius::types::Value;
 use planner_app::{Part, PartStates, ProcessReference};
-use tracing::debug;
+use tracing::trace;
 
-use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::i18n::datatable_support::FluentTranslator;
-use crate::project::tables::parts::{PartStatesRow, PartStatesRowViewer};
+use crate::project::tables::parts::{PartTableUi, PartTableUiAction, PartTableUiCommand, PartTableUiContext};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -22,7 +16,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 #[derivative(Debug)]
 pub struct PartsTabUi {
     #[derivative(Debug = "ignore")]
-    part_states_table: Value<Option<(PartStatesRowViewer, DataTable<PartStatesRow>)>>,
+    part_table_ui: PartTableUi,
 
     selection: Option<Vec<Part>>,
 
@@ -34,46 +28,32 @@ pub struct PartsTabUi {
 
 impl PartsTabUi {
     pub fn new() -> Self {
+        let component: ComponentState<PartsTabUiCommand> = Default::default();
+
+        let mut part_table_ui = PartTableUi::new(Vec::default());
+        part_table_ui
+            .component
+            .configure_mapper(component.sender.clone(), |part_table_command| {
+                trace!("part table mapper. command: {:?}", part_table_command);
+                PartsTabUiCommand::PartTableUiCommand(part_table_command)
+            });
+
         Self {
-            part_states_table: Value::default(),
+            part_table_ui,
 
             selection: None,
             processes: Vec::new(),
             selected_process: None,
 
-            component: Default::default(),
+            component,
         }
     }
 
-    pub fn update_part_states(&mut self, mut part_states: PartStates, processes: Vec<ProcessReference>) {
-        let mut part_states_table = self.part_states_table.lock().unwrap();
-
-        let rows = part_states
-            .parts
-            .drain(0..)
-            .map(|part_state| {
-                let enabled_processes = processes
-                    .iter()
-                    .map(|process| (process.clone(), part_state.processes.contains(process)))
-                    .collect::<Vec<(ProcessReference, bool)>>();
-
-                PartStatesRow {
-                    part: part_state.part,
-                    enabled_processes,
-                    ref_des_set: part_state.ref_des_set,
-                    quantity: part_state.quantity,
-                }
-            })
-            .collect();
-
-        let (_viewer, table) = part_states_table.get_or_insert_with(|| {
-            let viewer = PartStatesRowViewer::new(self.component.sender.clone(), processes.clone());
-            let table = DataTable::new();
-
-            (viewer, table)
-        });
-
-        table.replace(rows);
+    pub fn update_part_states(&mut self, part_states: PartStates, processes: Vec<ProcessReference>) {
+        self.part_table_ui
+            .update_processes(processes.clone());
+        self.part_table_ui
+            .update_parts(part_states);
 
         self.processes = processes;
     }
@@ -84,12 +64,7 @@ pub enum PartsTabUiCommand {
     None,
 
     // internal
-    RowUpdated {
-        index: usize,
-        new_row: PartStatesRow,
-        old_row: PartStatesRow,
-    },
-    FilterCommand(FilterUiCommand),
+    PartTableUiCommand(PartTableUiCommand),
     NewSelection(Vec<Part>),
     PartsActionClicked(PartsAction),
     ProcessChanged(ProcessReference),
@@ -128,19 +103,8 @@ impl UiComponent for PartsTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let mut part_states_table = self.part_states_table.lock().unwrap();
-
-        if part_states_table.is_none() {
-            ui.spinner();
-            return;
-        }
-
-        let (viewer, table) = part_states_table.as_mut().unwrap();
-
         ui.horizontal(|ui| {
-            viewer
-                .filter
-                .ui(ui, &mut FilterUiContext::default());
+            self.part_table_ui.filter_ui(ui);
 
             ui.separator();
 
@@ -197,13 +161,8 @@ impl UiComponent for PartsTabUi {
 
         ui.separator();
 
-        let table_renderer = egui_data_table::Renderer::new(table, viewer)
-            .with_style_modify(|style| {
-                style.auto_shrink = [false, false].into();
-                style.scroll_bar_visibility = ScrollBarVisibility::AlwaysVisible;
-            })
-            .with_translator(Arc::new(FluentTranslator::default()));
-        ui.add(table_renderer);
+        self.part_table_ui
+            .ui(ui, &mut PartTableUiContext::default());
     }
 
     #[profiling::function]
@@ -218,38 +177,35 @@ impl UiComponent for PartsTabUi {
                 self.selected_process = Some(process);
                 None
             }
-            PartsTabUiCommand::RowUpdated {
-                index,
-                new_row,
-                old_row,
-            } => {
-                let (_, _) = (index, old_row);
-                let processes: HashMap<ProcessReference, bool> = new_row
-                    .enabled_processes
-                    .into_iter()
-                    .collect();
+            PartsTabUiCommand::PartTableUiCommand(command) => self
+                .part_table_ui
+                .update(command, &mut PartTableUiContext::default())
+                .map(|action| match action {
+                    PartTableUiAction::None => PartsTabUiAction::None,
+                    PartTableUiAction::RequestRepaint => PartsTabUiAction::RequestRepaint,
+                    PartTableUiAction::ItemUpdated {
+                        index,
+                        item,
+                        original_item,
+                    } => {
+                        let _ = index;
 
-                Some(PartsTabUiAction::UpdateProcessesForPart {
-                    part: new_row.part,
-                    processes,
-                })
-            }
-            PartsTabUiCommand::FilterCommand(command) => {
-                let mut table = self.part_states_table.lock().unwrap();
-                if let Some((viewer, _table)) = &mut *table {
-                    let action = viewer
-                        .filter
-                        .update(command, &mut FilterUiContext::default())
-                        .inspect(|action| debug!("filter action: {:?}", action));
+                        // the only thing that can change in the item, is the processes, otherwise we would need to look
+                        // at the item and original item to determine what changed and handle accordingly.
 
-                    match action {
-                        Some(FilterUiAction::ApplyFilter) => Some(PartsTabUiAction::RequestRepaint),
-                        None => None,
+                        let iter = self
+                            .processes
+                            .iter()
+                            .map(|process| (process.clone(), item.processes.contains(process)));
+
+                        let processes: HashMap<ProcessReference, bool> = HashMap::from_iter(iter);
+
+                        PartsTabUiAction::UpdateProcessesForPart {
+                            part: original_item.part,
+                            processes,
+                        }
                     }
-                } else {
-                    None
-                }
-            }
+                }),
             PartsTabUiCommand::NewSelection(selection) => {
                 self.selection = Some(selection);
                 None

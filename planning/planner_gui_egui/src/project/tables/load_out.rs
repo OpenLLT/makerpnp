@@ -10,6 +10,7 @@ use planner_app::{LoadOut, LoadOutItem, Reference};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
+use crate::project::tables::{ApplyChange, CellEditState, EditableDataSource, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 const SHOW_DEBUG_SHAPES: bool = false;
@@ -72,6 +73,51 @@ impl LoadOutDataSource {
 
     pub fn update_loadout(&mut self, mut load_out: LoadOut) {
         self.rows = load_out.items.drain(..).collect();
+    }
+}
+
+impl EditableDataSource for LoadOutDataSource {
+    type Value = LoadOutItem;
+    type ItemState = LoadoutItemCellEditState;
+    type EditState = CellEditState<Self::ItemState, Self::Value>;
+
+    fn build_edit_state(&self, cell_index: CellIndex) -> Option<(LoadoutItemCellEditState, LoadOutItem)> {
+        let original_item = &self.rows[cell_index.row];
+
+        match cell_index.column {
+            FEEDER_REFERENCE_COL => Some((
+                LoadoutItemCellEditState::FeederReference(
+                    original_item
+                        .reference
+                        .as_ref()
+                        .map_or("".to_string(), |value| value.to_string()),
+                ),
+                original_item.clone(),
+            )),
+            _ => None,
+        }
+    }
+
+    fn on_edit_complete(&mut self, cell_index: CellIndex, edit_state: Self::ItemState, original_item: LoadOutItem) {
+        self.sender
+            .send(LoadOutTableUiCommand::CellEditComplete(
+                cell_index,
+                edit_state,
+                original_item,
+            ))
+            .expect("sent");
+    }
+
+    fn set_edit_state(&mut self, edit_state: Self::EditState) {
+        self.cell.replace(edit_state);
+    }
+
+    fn edit_state(&self) -> Option<&Self::EditState> {
+        self.cell.as_ref()
+    }
+
+    fn take_state(&mut self) -> Self::EditState {
+        self.cell.take().unwrap()
     }
 }
 
@@ -191,7 +237,7 @@ impl LoadOutTableUi {
             .update_loadout(load_out);
     }
 
-    pub fn filter_ui(&self, ui: &mut egui::Ui) {
+    pub fn filter_ui(&self, ui: &mut Ui) {
         self.filter
             .ui(ui, &mut FilterUiContext::default());
     }
@@ -201,7 +247,6 @@ impl LoadOutTableUi {
 pub enum LoadOutTableUiCommand {
     None,
     FilterCommand(FilterUiCommand),
-    //FeederReferenceChanged { value: Option<Reference>, cell_index: CellIndex },
     ApplyCellEdit {
         edit: LoadoutItemCellEditState,
         cell_index: CellIndex,
@@ -231,7 +276,7 @@ impl UiComponent for LoadOutTableUi {
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
         let data_source = &mut *self.source.lock().unwrap();
 
-        let (_response, actions) = DeferredTable::new(ui.make_persistent_id("table_1"))
+        let (_response, actions) = DeferredTable::new(ui.make_persistent_id("load_out_table"))
             .min_size((400.0, 400.0).into())
             .show(
                 ui,
@@ -255,67 +300,7 @@ impl UiComponent for LoadOutTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    match data_source.cell.as_mut() {
-                        None => {
-                            // change selection
-                            data_source
-                                .cell
-                                .replace(CellEditState::Pivot(cell_index));
-                        }
-                        Some(CellEditState::Pivot(pivot_cell_index)) if *pivot_cell_index == cell_index => {
-                            debug!("clicked in selected cell");
-
-                            // change mode to edit
-                            let original_item = &data_source.rows[cell_index.row];
-                            let edit_state = match cell_index.column {
-                                FEEDER_REFERENCE_COL => Some(LoadoutItemCellEditState::FeederReference(
-                                    original_item
-                                        .reference
-                                        .as_ref()
-                                        .map_or("".to_string(), |value| value.to_string()),
-                                )),
-                                _ => None,
-                            };
-                            if let Some(edit) = edit_state {
-                                data_source
-                                    .cell
-                                    .replace(CellEditState::Editing(cell_index, edit, original_item.clone()));
-                            }
-                        }
-                        Some(CellEditState::Pivot(_)) => {
-                            debug!("clicked in different cell");
-
-                            // change selection
-                            data_source
-                                .cell
-                                .replace(CellEditState::Pivot(cell_index));
-                        }
-                        Some(CellEditState::Editing(editing_cell_index, _cell_edit_state, _original_item))
-                            if *editing_cell_index == cell_index =>
-                        {
-                            debug!("clicked in cell while editing");
-
-                            // nothing to do
-                        }
-                        Some(CellEditState::Editing(_editing_cell_index, _cell_edit_state, _original_item)) => {
-                            debug!("clicked in a different cell while editing");
-
-                            // apply edited value
-                            let CellEditState::Editing(index, state, original_item) = data_source.cell.take().unwrap()
-                            else {
-                                unreachable!();
-                            };
-                            self.component
-                                .sender
-                                .send(LoadOutTableUiCommand::CellEditComplete(index, state, original_item))
-                                .expect("sent");
-
-                            // change selection
-                            data_source
-                                .cell
-                                .replace(CellEditState::Pivot(cell_index));
-                        }
-                    }
+                    handle_cell_click(data_source, cell_index);
                 }
             }
         }
@@ -385,19 +370,3 @@ impl UiComponent for LoadOutTableUi {
 // let result = self.filter.matches(haystack.as_str());
 //
 // trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
-
-//
-// Code that probably needs moving into egui_deferred_table
-//
-
-#[derive(Debug, Clone)]
-enum CellEditState<E, T> {
-    /// the pivot point for selections, etc.
-    Pivot(CellIndex),
-    /// when editing a cell, we need state for the cell and a copy of the original row to be able to track changes
-    Editing(CellIndex, E, T),
-}
-
-trait ApplyChange<T, E> {
-    fn apply_change(&mut self, value: T) -> Result<(), E>;
-}
