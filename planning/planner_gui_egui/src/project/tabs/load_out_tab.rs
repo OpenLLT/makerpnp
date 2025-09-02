@@ -5,7 +5,7 @@ use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use util::path::clip_path;
 
 use crate::project::tables::load_out::{
@@ -65,6 +65,7 @@ pub enum LoadOutTabUiAction {
     UpdateFeederForPart {
         phase: Reference,
         part: Part,
+        /// A none here implies the user wants to remove the reference for the part
         feeder: Option<Reference>,
     },
     RequestRepaint,
@@ -102,17 +103,20 @@ impl UiComponent for LoadOutTabUi {
                 .map(|action| match action {
                     LoadOutTableUiAction::None => LoadOutTabUiAction::None,
                     LoadOutTableUiAction::RequestRepaint => LoadOutTabUiAction::RequestRepaint,
-                    LoadOutTableUiAction::RowUpdated {
+                    LoadOutTableUiAction::ItemUpdated {
                         index,
-                        new_row,
-                        old_row,
+                        item,
+                        original_item,
                     } => {
-                        let (_, _) = (index, old_row);
+                        let (_, _) = (index, original_item);
+
+                        // the only thing that can change in the item, is the feeder, otherwise we would need to look
+                        // at the item and original item to determine what changed and handle accordingly.
 
                         LoadOutTabUiAction::UpdateFeederForPart {
                             phase: self.phase.clone(),
-                            part: new_row.part,
-                            feeder: Reference::try_from(new_row.feeder).ok(),
+                            part: Part::new(item.manufacturer, item.mpn),
+                            feeder: item.reference,
                         }
                     }
                 }),
