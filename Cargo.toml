@@ -116,6 +116,7 @@ egui-data-table = { git = "https://github.com/makerpnp/egui-data-table", rev = "
 
 egui_deferred_table = { version = "=0.1.0" }
 #egui_deferred_table = { git = "https://github.com/makerpnp/egui_deferred_table", rev = "6edb67fa133d95d220f1556032461c32936098c2" }
+#egui_deferred_table = { path = "../../../libraries/rust/egui/egui_deferred_table" }
 
 #egui_double_slider = { version = "0.8.0"}
 egui_double_slider = { git = "https://github.com/hacknus/egui_double_slider", rev = "86df8ecd38d82198f042111ce58792e3fab546fe" }

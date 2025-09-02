@@ -1,53 +1,17 @@
-use std::borrow::Cow;
-use std::collections::BTreeSet;
-
-use egui::{Response, Ui};
-use egui_data_table::RowViewer;
-use egui_data_table::viewer::{CellWriteContext, TableColumnConfig};
+use egui::Ui;
+use egui_deferred_table::{
+    Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
+    TableDimensions,
+};
 use egui_i18n::tr;
+use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{Part, ProcessReference, RefDes};
-use tracing::{debug, trace};
+use planner_app::{PartStates, PartWithState, ProcessReference};
+use tracing::{debug, info, trace};
 
-use crate::filter::Filter;
-use crate::project::tabs::parts_tab::PartsTabUiCommand;
-
-#[derive(Debug, Clone)]
-pub struct PartStatesRow {
-    pub part: Part,
-    pub enabled_processes: Vec<(ProcessReference, bool)>,
-    pub ref_des_set: BTreeSet<RefDes>,
-    pub quantity: usize,
-}
-
-pub struct PartStatesRowViewer {
-    processes: Vec<ProcessReference>,
-    sender: Enqueue<PartsTabUiCommand>,
-
-    pub(crate) filter: Filter,
-}
-
-impl PartStatesRowViewer {
-    pub fn new(sender: Enqueue<PartsTabUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
-        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
-        // ordering.
-        processes.sort();
-
-        let mut filter = Filter::default();
-        filter
-            .component_state
-            .configure_mapper(sender.clone(), |filter_ui_command| {
-                trace!("filter ui mapper. command: {:?}", filter_ui_command);
-                PartsTabUiCommand::FilterCommand(filter_ui_command)
-            });
-
-        Self {
-            processes,
-            sender,
-            filter,
-        }
-    }
-}
+use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
+use crate::project::tables::{ApplyChange, CellEditState, EditableDataSource, handle_cell_click};
+use crate::ui_component::{ComponentState, UiComponent};
 
 mod columns {
     pub const MANUFACTURER_COL: usize = 0;
@@ -61,279 +25,395 @@ mod columns {
 }
 use columns::*;
 
-impl RowViewer<PartStatesRow> for PartStatesRowViewer {
-    fn column_render_config(&mut self, column: usize, is_last_visible_column: bool) -> TableColumnConfig {
-        let _ = column;
-        if is_last_visible_column {
-            TableColumnConfig::remainder()
-                .at_least(24.0)
-                .resizable(false)
-                .auto_size_this_frame(true)
-        } else {
-            TableColumnConfig::auto()
-                .resizable(true)
-                .clip(true)
+#[derive(Debug, Clone)]
+pub struct PartDataSource {
+    rows: Vec<PartWithState>,
+
+    processes: Vec<ProcessReference>,
+
+    // temporary implementation due to in-progress nature of egui_deferred_table
+    cell: Option<CellEditState<PartCellEditState, PartWithState>>,
+    sender: Enqueue<PartTableUiCommand>,
+}
+
+impl PartDataSource {}
+
+#[derive(Debug, Clone)]
+pub enum PartCellEditState {
+    Processes(Vec<(ProcessReference, bool)>),
+}
+
+enum PartCellEditStateError {
+    #[allow(dead_code)]
+    None,
+}
+
+impl ApplyChange<PartCellEditState, PartCellEditStateError> for PartWithState {
+    fn apply_change(&mut self, value: PartCellEditState) -> Result<(), PartCellEditStateError> {
+        match value {
+            PartCellEditState::Processes(value) => {
+                self.processes = value
+                    .into_iter()
+                    .filter_map(|(process, enabled)| if enabled { Some(process.clone()) } else { None })
+                    .collect();
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl PartDataSource {
+    pub fn new(sender: Enqueue<PartTableUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
+        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
+        // ordering.
+        processes.sort();
+
+        Self {
+            rows: Default::default(),
+
+            processes,
+            cell: Default::default(),
+            sender,
         }
     }
 
-    fn num_columns(&mut self) -> usize {
-        COLUMN_COUNT
+    pub fn update_parts(&mut self, mut part_states: PartStates) {
+        self.rows = part_states.parts.drain(..).collect();
     }
+}
 
-    fn is_sortable_column(&mut self, column: usize) -> bool {
-        [true, true, true, true, true][column]
-    }
+impl EditableDataSource for PartDataSource {
+    type Value = PartWithState;
+    type ItemState = PartCellEditState;
+    type EditState = CellEditState<Self::ItemState, Self::Value>;
 
-    fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PartStatesRow) -> bool {
-        column == PROCESSES_COL
-    }
+    fn build_edit_state(&self, cell_index: CellIndex) -> Option<(PartCellEditState, PartWithState)> {
+        let original_item = &self.rows[cell_index.row];
 
-    fn allow_row_insertions(&mut self) -> bool {
-        false
-    }
-
-    fn allow_row_deletions(&mut self) -> bool {
-        false
-    }
-
-    fn compare_cell(&self, row_l: &PartStatesRow, row_r: &PartStatesRow, column: usize) -> std::cmp::Ordering {
-        match column {
-            MANUFACTURER_COL => row_l
-                .part
-                .manufacturer
-                .cmp(&row_r.part.manufacturer),
-            MPN_COL => row_l.part.mpn.cmp(&row_r.part.mpn),
-            PROCESSES_COL => row_l
-                .enabled_processes
-                .iter()
-                .cmp(&row_r.enabled_processes),
-            REF_DES_SET_COL => row_l
-                .ref_des_set
-                .cmp(&row_r.ref_des_set),
-            QUANTITY_COL => row_l.quantity.cmp(&row_r.quantity),
-            _ => unreachable!(),
-        }
-    }
-
-    fn column_name(&mut self, column: usize) -> Cow<'static, str> {
-        match column {
-            MANUFACTURER_COL => tr!("table-parts-column-manufacturer"),
-            MPN_COL => tr!("table-parts-column-mpn"),
-            PROCESSES_COL => tr!("table-parts-column-processes"),
-            REF_DES_SET_COL => tr!("table-parts-column-ref-des-set"),
-            QUANTITY_COL => tr!("table-parts-column-quantity"),
-            _ => unreachable!(),
-        }
-        .into()
-    }
-
-    fn show_cell_view(&mut self, ui: &mut Ui, row: &PartStatesRow, column: usize) {
-        let _ = match column {
-            MANUFACTURER_COL => ui.label(&row.part.manufacturer),
-            MPN_COL => ui.label(&row.part.mpn),
+        match cell_index.column {
             PROCESSES_COL => {
-                // Note that the enabled_processes was built in the same order as self.processes.
-                let processes = row
-                    .enabled_processes
+                let enabled_processes = self
+                    .processes
                     .iter()
-                    .filter_map(|(name, enabled)| match enabled {
-                        true => Some(name.to_string()),
-                        false => None,
+                    .map(|process| {
+                        (
+                            process.clone(),
+                            original_item
+                                .processes
+                                .contains(process),
+                        )
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Vec<(ProcessReference, bool)>>();
 
-                let processes_label: String = processes.join(", ");
-                ui.label(processes_label)
+                Some((PartCellEditState::Processes(enabled_processes), original_item.clone()))
             }
-            REF_DES_SET_COL => {
-                let label: String = row
-                    .ref_des_set
-                    .iter()
-                    .cloned()
-                    .map(|meh| meh.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ");
-                ui.label(label)
-            }
-            QUANTITY_COL => ui.label(format!("{}", row.quantity)),
-            _ => unreachable!(),
-        };
+            _ => None,
+        }
     }
 
-    fn show_cell_editor(&mut self, ui: &mut Ui, row: &mut PartStatesRow, column: usize) -> Option<Response> {
-        match column {
-            MANUFACTURER_COL => None,
-            MPN_COL => None,
-            PROCESSES_COL => {
-                let response = ui.add(|ui: &mut Ui| {
-                    ui.horizontal_wrapped(|ui| {
-                        // Note that the enabled_processes was built in the same order as self.processes.
-                        // FIXME this is directly modifying state, we should be using ['Self::sender'] here and
-                        //       triggering calls to [`update`], but the egui-data-table api doesn't expose the row
-                        //       being edited
-                        for (name, enabled) in row.enabled_processes.iter_mut() {
-                            ui.checkbox(enabled, name.to_string());
+    fn on_edit_complete(&mut self, index: CellIndex, state: PartCellEditState, original_item: PartWithState) {
+        self.sender
+            .send(PartTableUiCommand::CellEditComplete(index, state, original_item))
+            .expect("sent");
+    }
+
+    fn set_edit_state(&mut self, edit_state: Self::EditState) {
+        self.cell.replace(edit_state);
+    }
+
+    fn edit_state(&self) -> Option<&Self::EditState> {
+        self.cell.as_ref()
+    }
+
+    fn take_state(&mut self) -> Self::EditState {
+        self.cell.take().unwrap()
+    }
+}
+
+impl DeferredTableDataSource for PartDataSource {
+    fn get_dimensions(&self) -> TableDimensions {
+        TableDimensions {
+            row_count: self.rows.len(),
+            column_count: COLUMN_COUNT,
+        }
+    }
+}
+
+impl DeferredTableRenderer for PartDataSource {
+    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex) {
+        let row = &self.rows[cell_index.row];
+
+        let handled = match &self.cell {
+            Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
+                if *selected_cell_index == cell_index =>
+            {
+                match edit {
+                    PartCellEditState::Processes(enabled_processes) => {
+                        let mut enabled_processes_mut = enabled_processes.clone();
+                        let _response = ui.add(|ui: &mut Ui| {
+                            // FIXME this doesn't always fit in the available space, what to do?
+                            ui.horizontal(|ui| {
+                                // Note that the enabled_processes was built in the same order as self.processes.
+                                for (name, enabled) in enabled_processes_mut.iter_mut() {
+                                    ui.checkbox(enabled, name.to_string());
+                                }
+                            })
+                            .response
+                        });
+
+                        if enabled_processes_mut != *enabled_processes {
+                            // NOTE: if we had &mut self here, we could apply the edit state now
+                            self.sender
+                                .send(PartTableUiCommand::ApplyCellEdit {
+                                    edit: PartCellEditState::Processes(enabled_processes_mut),
+                                    cell_index,
+                                })
+                                .expect("sent");
                         }
+
+                        true
+                    }
+                }
+            }
+            _ => false,
+        };
+
+        if !handled {
+            let _ = match cell_index.column {
+                MANUFACTURER_COL => ui.label(&row.part.manufacturer),
+                MPN_COL => ui.label(&row.part.mpn),
+                PROCESSES_COL => {
+                    // Build in the same order as self.processes, specifically not just iterating over `row.processes`
+                    let processes = self
+                        .processes
+                        .iter()
+                        .filter(|process| row.processes.contains(process))
+                        .map(|process| process.to_string())
+                        .collect::<Vec<String>>();
+
+                    let processes_label: String = processes.join(", ");
+                    ui.label(processes_label)
+                }
+                REF_DES_SET_COL => {
+                    let label: String = row
+                        .ref_des_set
+                        .iter()
+                        .cloned()
+                        .map(|meh| meh.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ");
+                    ui.label(label)
+                }
+                QUANTITY_COL => ui.label(format!("{}", row.quantity)),
+                _ => unreachable!(),
+            };
+        }
+    }
+}
+
+pub struct PartTableUi {
+    source: Value<PartDataSource>,
+    filter: Filter,
+
+    pub component: ComponentState<PartTableUiCommand>,
+}
+
+impl PartTableUi {
+    pub fn new(processes: Vec<ProcessReference>) -> Self {
+        let component = ComponentState::default();
+
+        let mut filter = Filter::default();
+        filter
+            .component_state
+            .configure_mapper(component.sender.clone(), |filter_ui_command| {
+                trace!("filter ui mapper. command: {:?}", filter_ui_command);
+                PartTableUiCommand::FilterCommand(filter_ui_command)
+            });
+
+        Self {
+            source: Value::new(PartDataSource::new(component.sender.clone(), processes)),
+            filter,
+            component,
+        }
+    }
+
+    pub fn update_processes(&mut self, processes: Vec<ProcessReference>) {
+        self.source.lock().unwrap().processes = processes;
+    }
+
+    pub fn update_parts(&mut self, part_states: PartStates) {
+        self.source
+            .lock()
+            .unwrap()
+            .update_parts(part_states);
+    }
+
+    pub fn filter_ui(&self, ui: &mut Ui) {
+        self.filter
+            .ui(ui, &mut FilterUiContext::default());
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PartTableUiCommand {
+    None,
+    FilterCommand(FilterUiCommand),
+    ApplyCellEdit {
+        edit: PartCellEditState,
+        cell_index: CellIndex,
+    },
+    CellEditComplete(CellIndex, PartCellEditState, PartWithState),
+}
+
+#[derive(Debug, Clone)]
+pub enum PartTableUiAction {
+    None,
+    RequestRepaint,
+    ItemUpdated {
+        index: CellIndex,
+        item: PartWithState,
+        original_item: PartWithState,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PartTableUiContext {}
+
+impl UiComponent for PartTableUi {
+    type UiContext<'context> = PartTableUiContext;
+    type UiCommand = PartTableUiCommand;
+    type UiAction = PartTableUiAction;
+
+    fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
+        let data_source = &mut *self.source.lock().unwrap();
+
+        let (_response, actions) = DeferredTable::new(ui.make_persistent_id("parts_table"))
+            .min_size((400.0, 400.0).into())
+            .show(
+                ui,
+                data_source,
+                |builder: &mut DeferredTableBuilder<'_, PartDataSource>| {
+                    builder.header(|header_builder| {
+                        header_builder
+                            .column(MANUFACTURER_COL, tr!("table-parts-column-manufacturer"))
+                            .default_width(200.0);
+                        header_builder
+                            .column(MPN_COL, tr!("table-parts-column-mpn"))
+                            .default_width(200.0);
+                        header_builder
+                            .column(QUANTITY_COL, tr!("table-parts-column-quantity"))
+                            .default_width(100.0);
+                        header_builder
+                            .column(PROCESSES_COL, tr!("table-parts-column-processes"))
+                            .default_width(100.0);
+                        header_builder
+                            .column(REF_DES_SET_COL, tr!("table-parts-column-ref-des-set"))
+                            .default_width(100.0);
                     })
-                    .response
-                });
-                Some(response)
+                },
+            );
+
+        for action in actions {
+            match action {
+                // TODO we need double-click to edit cells, not single-click, then single-click again
+                Action::CellClicked(cell_index) => {
+                    info!("Cell clicked. cell: {:?}", cell_index);
+
+                    handle_cell_click(data_source, cell_index);
+                }
             }
-            REF_DES_SET_COL => None,
-            QUANTITY_COL => None,
-            _ => unreachable!(),
         }
     }
 
-    fn set_cell_value(&mut self, src: &PartStatesRow, dst: &mut PartStatesRow, column: usize) {
-        match column {
-            MANUFACTURER_COL => dst
-                .part
-                .manufacturer
-                .clone_from(&src.part.manufacturer),
-            MPN_COL => dst.part.mpn.clone_from(&src.part.mpn),
-            PROCESSES_COL => {
-                dst.enabled_processes
-                    .clone_from(&src.enabled_processes);
-                dst.enabled_processes
-                    .clone_from(&src.enabled_processes);
-            }
-            REF_DES_SET_COL => dst
-                .ref_des_set
-                .clone_from(&src.ref_des_set),
-            QUANTITY_COL => dst.quantity.clone_from(&src.quantity),
-            _ => unreachable!(),
-        }
-    }
-
-    fn new_empty_row(&mut self) -> PartStatesRow {
-        let enabled_processes = self
-            .processes
-            .iter()
-            .map(|process| (process.clone(), false))
-            .collect::<Vec<(ProcessReference, bool)>>();
-
-        PartStatesRow {
-            part: Part {
-                manufacturer: "".to_string(),
-                mpn: "".to_string(),
-            },
-            enabled_processes,
-            ref_des_set: Default::default(),
-            quantity: 0,
-        }
-    }
-
-    fn confirm_cell_write_by_ui(
+    fn update<'context>(
         &mut self,
-        _current: &PartStatesRow,
-        _next: &PartStatesRow,
-        column: usize,
-        _context: CellWriteContext,
-    ) -> bool {
-        debug!(
-            "confirm cell write by ui. column: {}, current: {:?}, next: {:?}, context: {:?}",
-            column, _current, _next, _context
-        );
-        match column {
-            MANUFACTURER_COL => false,
-            MPN_COL => false,
-            PROCESSES_COL => true,
-            REF_DES_SET_COL => false,
-            QUANTITY_COL => false,
-            _ => unreachable!(),
+        command: Self::UiCommand,
+        _context: &mut Self::UiContext<'context>,
+    ) -> Option<Self::UiAction> {
+        match command {
+            PartTableUiCommand::None => Some(PartTableUiAction::None),
+            PartTableUiCommand::FilterCommand(command) => {
+                let action = self
+                    .filter
+                    .update(command, &mut FilterUiContext::default())
+                    .inspect(|action| debug!("filter action: {:?}", action));
+
+                match action {
+                    Some(FilterUiAction::ApplyFilter) => Some(PartTableUiAction::RequestRepaint),
+                    None => None,
+                }
+            }
+
+            PartTableUiCommand::ApplyCellEdit {
+                edit: new_edit_state,
+                cell_index,
+            } => {
+                let source = &mut *self.source.lock().unwrap();
+                match source.cell.as_mut() {
+                    Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
+                        if *current_cell_index == cell_index =>
+                    {
+                        debug!("edit state changed. cell: {:?}, edit: {:?}", cell_index, new_edit_state);
+                        *current_edit_state = new_edit_state;
+                    }
+                    _ => {}
+                }
+                None
+            }
+            PartTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
+                let source = &mut *self.source.lock().unwrap();
+                let row = &mut source.rows[cell_index.row];
+
+                row.apply_change(edit_state)
+                    .map(|_| PartTableUiAction::ItemUpdated {
+                        index: cell_index,
+                        item: row.clone(),
+                        original_item,
+                    })
+                    .ok()
+            }
         }
     }
-
-    fn confirm_row_deletion_by_ui(&mut self, _row: &PartStatesRow) -> bool {
-        false
-    }
-
-    fn on_row_updated(&mut self, row_index: usize, new_row: &PartStatesRow, old_row: &PartStatesRow) {
-        trace!(
-            "on_row_updated. row_index {}, old_row: {:?}, old_row: {:?}",
-            row_index, new_row, old_row
-        );
-        self.sender
-            .send(PartsTabUiCommand::RowUpdated {
-                index: row_index,
-                new_row: new_row.clone(),
-                old_row: old_row.clone(),
-            })
-            .expect("sent");
-    }
-
-    fn on_row_inserted(&mut self, row_index: usize, row: &PartStatesRow) {
-        trace!("on_row_inserted. row_index {}, row: {:?}", row_index, row);
-
-        // should not be possible, since row insertion/deletion is prevented, this is a bug.
-        unreachable!();
-    }
-
-    fn on_row_removed(&mut self, row_index: usize, row: &PartStatesRow) {
-        trace!("on_row_removed. row_index {}, row: {:?}", row_index, row);
-
-        // should not be possible, since row insertion/deletion is prevented, this is a bug.
-        unreachable!();
-    }
-
-    fn filter_row(&mut self, row: &PartStatesRow) -> bool {
-        let processes: String = enabled_processes_to_string(&row.enabled_processes);
-
-        let haystack = format!(
-            "manufacturer: '{}', mpn: '{}', processes: {}",
-            &row.part.manufacturer, &row.part.mpn, &processes,
-        );
-
-        // "Filter single row. If this returns false, the row will be hidden."
-        let result = self.filter.matches(haystack.as_str());
-
-        trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
-
-        result
-    }
-
-    fn row_filter_hash(&mut self) -> &impl std::hash::Hash {
-        &self.filter
-    }
-
-    fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
-        trace!(
-            "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
-            highlighted, unhighlighted
-        );
-
-        // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
-        //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
-        //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
-
-        // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected parts instead
-        //       of the parts themselves?
-
-        let parts = highlighted
-            .iter()
-            .map(|row| row.part.clone())
-            .collect::<Vec<_>>();
-        self.sender
-            .send(PartsTabUiCommand::NewSelection(parts))
-            .expect("sent");
-    }
-
-    fn on_highlight_cell(&mut self, row: &PartStatesRow, column: usize) {
-        trace!("on_highlight_cell: {:?}, column: {:?}", row, column);
-    }
 }
 
-fn enabled_processes_to_string(enabled_processes: &Vec<(ProcessReference, bool)>) -> String {
-    format!(
-        "[{}]",
-        enabled_processes
-            .iter()
-            .filter_map(|(process, enabled)| match enabled {
-                true => Some(format!("'{}'", process)),
-                false => None,
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
+//
+// Snippets of code remaining to be ported.
+//
+// fn filter_row(&mut self, row: &PartStatesRow) -> bool {
+//     let processes: String = enabled_processes_to_string(&row.enabled_processes);
+//
+//     let haystack = format!(
+//         "manufacturer: '{}', mpn: '{}', processes: {}",
+//         &row.part.manufacturer, &row.part.mpn, &processes,
+//     );
+//
+//     // "Filter single row. If this returns false, the row will be hidden."
+//     let result = self.filter.matches(haystack.as_str());
+//
+//     trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
+//
+//     result
+// }
+//
+// fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
+//     trace!(
+//             "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
+//             highlighted, unhighlighted
+//         );
+//
+//     // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
+//     //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
+//     //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
+//
+//     // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected parts instead
+//     //       of the parts themselves?
+//
+//     let parts = highlighted
+//         .iter()
+//         .map(|row| row.part.clone())
+//         .collect::<Vec<_>>();
+//     self.sender
+//         .send(PartsTabUiCommand::NewSelection(parts))
+//         .expect("sent");
+// }
