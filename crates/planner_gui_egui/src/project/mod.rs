@@ -2096,7 +2096,7 @@ impl UiComponent for Project {
                         feeder,
                     }) => {
                         debug!(
-                            "update feeder. phase: {:?}, part: {:?}, feeder: {}",
+                            "update feeder. phase: {:?}, part: {:?}, feeder: {:?}",
                             phase, part, feeder
                         );
                         self.planner_core_service

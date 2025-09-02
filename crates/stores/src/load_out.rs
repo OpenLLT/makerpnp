@@ -167,7 +167,7 @@ pub enum FeederAssignmentError {
 pub fn assign_feeder_to_load_out_item(
     load_out_source: &LoadOutSource,
     process: &ProcessDefinition,
-    feeder_reference: Reference,
+    feeder_reference: Option<Reference>,
     manufacturer: Regex,
     mpn: Regex,
 ) -> anyhow::Result<Vec<Part>> {
@@ -200,7 +200,7 @@ pub fn assign_feeder_to_load_out_item(
                 mpn: item.mpn.clone(),
             };
 
-            item.reference = Some(feeder_reference.clone());
+            item.reference = feeder_reference.clone();
 
             parts.push(part);
         }
@@ -209,10 +209,17 @@ pub fn assign_feeder_to_load_out_item(
     })?;
 
     for part in parts.iter() {
-        info!(
-            "Assigned feeder to load-out item. feeder: {}, part: {:?}",
-            feeder_reference, part
-        );
+        match &feeder_reference {
+            Some(reference) => {
+                info!(
+                    "Assigned feeder to load-out item. feeder: {:?}, part: {:?}",
+                    reference, part
+                );
+            }
+            None => {
+                info!("Removed feeder from load-out item. part: {:?}", part);
+            }
+        }
     }
 
     Ok(parts)

@@ -538,7 +538,7 @@ pub enum Event {
     },
     AssignFeederToLoadOutItem {
         phase: PhaseReference,
-        feeder_reference: Reference,
+        feeder_reference: Option<Reference>,
         #[serde(with = "serde_regex")]
         manufacturer: Regex,
         #[serde(with = "serde_regex")]
