@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Ui};
 use egui_deferred_table::{
     Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
@@ -203,8 +204,11 @@ impl DeferredTableRenderer for LoadOutDataSource {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct LoadOutTableUi {
     source: Value<LoadOutDataSource>,
+    #[derivative(Debug = "ignore")]
     filter: Filter,
 
     pub component: ComponentState<LoadOutTableUiCommand>,
