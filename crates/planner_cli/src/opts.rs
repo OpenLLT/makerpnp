@@ -439,7 +439,7 @@ pub(crate) enum ProjectCommand {
 
         /// Feeder reference (e.g. 'FEEDER_1')
         #[arg(long)]
-        feeder_reference: Reference,
+        feeder_reference: Option<Reference>,
 
         /// Manufacturer pattern (regexp)
         #[arg(long)]

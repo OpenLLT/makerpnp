@@ -3937,7 +3937,7 @@ mod help {
             let expected_output = indoc! {"
                 Assign feeder to load-out item
 
-                Usage: planner_cli project --project <PROJECT_NAME> assign-feeder-to-load-out-item [OPTIONS] --phase <PHASE> --feeder-reference <FEEDER_REFERENCE> --manufacturer <MANUFACTURER> --mpn <MPN>
+                Usage: planner_cli project --project <PROJECT_NAME> assign-feeder-to-load-out-item [OPTIONS] --phase <PHASE> --manufacturer <MANUFACTURER> --mpn <MPN>
 
                 Options:
                       --phase <PHASE>                        Phase reference (e.g. 'top_1')

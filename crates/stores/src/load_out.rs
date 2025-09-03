@@ -212,7 +212,7 @@ pub fn assign_feeder_to_load_out_item(
         match &feeder_reference {
             Some(reference) => {
                 info!(
-                    "Assigned feeder to load-out item. feeder: {:?}, part: {:?}",
+                    "Assigned feeder to load-out item. feeder: {}, part: {:?}",
                     reference, part
                 );
             }
