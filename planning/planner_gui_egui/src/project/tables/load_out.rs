@@ -80,7 +80,7 @@ impl EditableDataSource for LoadOutDataSource {
     type Value = LoadOutItem;
     type ItemState = LoadoutItemCellEditState;
 
-    fn build_edit_state(&self, cell_index: CellIndex) -> Option<(LoadoutItemCellEditState, LoadOutItem)> {
+    fn build_item_state(&self, cell_index: CellIndex) -> Option<(LoadoutItemCellEditState, LoadOutItem)> {
         let original_item = &self.rows[cell_index.row];
 
         match cell_index.column {
@@ -115,7 +115,7 @@ impl EditableDataSource for LoadOutDataSource {
         self.cell.as_ref()
     }
 
-    fn take_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
+    fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
         self.cell.take().unwrap()
     }
 }
