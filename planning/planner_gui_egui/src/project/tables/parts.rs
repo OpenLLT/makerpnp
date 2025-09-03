@@ -86,7 +86,6 @@ impl PartDataSource {
 impl EditableDataSource for PartDataSource {
     type Value = PartWithState;
     type ItemState = PartCellEditState;
-    type EditState = CellEditState<Self::ItemState, Self::Value>;
 
     fn build_edit_state(&self, cell_index: CellIndex) -> Option<(PartCellEditState, PartWithState)> {
         let original_item = &self.rows[cell_index.row];
@@ -118,15 +117,15 @@ impl EditableDataSource for PartDataSource {
             .expect("sent");
     }
 
-    fn set_edit_state(&mut self, edit_state: Self::EditState) {
+    fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>) {
         self.cell.replace(edit_state);
     }
 
-    fn edit_state(&self) -> Option<&Self::EditState> {
+    fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>> {
         self.cell.as_ref()
     }
 
-    fn take_state(&mut self) -> Self::EditState {
+    fn take_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
         self.cell.take().unwrap()
     }
 }
