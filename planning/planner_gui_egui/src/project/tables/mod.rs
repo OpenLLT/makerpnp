@@ -24,17 +24,16 @@ trait ApplyChange<T, E> {
 trait EditableDataSource {
     type Value;
     type ItemState;
-    type EditState;
 
     fn build_edit_state(&self, cell_index: CellIndex) -> Option<(Self::ItemState, Self::Value)>;
     fn on_edit_complete(&mut self, index: CellIndex, state: Self::ItemState, original_item: Self::Value);
 
-    fn set_edit_state(&mut self, edit_state: Self::EditState);
-    fn edit_state(&self) -> Option<&Self::EditState>;
-    fn take_state(&mut self) -> Self::EditState;
+    fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>);
+    fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>>;
+    fn take_state(&mut self) -> CellEditState<Self::ItemState, Self::Value>;
 }
 
-fn handle_cell_click<E, S: EditableDataSource<EditState = CellEditState<E, T>, Value = T, ItemState = E>, T: Clone>(
+fn handle_cell_click<E, S: EditableDataSource<Value = T, ItemState = E>, T: Clone>(
     data_source: &mut S,
     cell_index: CellIndex,
 ) {
