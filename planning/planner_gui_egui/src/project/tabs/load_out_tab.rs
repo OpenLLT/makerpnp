@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
-use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
 use tracing::{debug, trace};
 use util::path::clip_path;

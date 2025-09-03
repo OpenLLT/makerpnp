@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
     Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
@@ -211,8 +212,11 @@ impl DeferredTableRenderer for PartDataSource {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PartTableUi {
     source: Value<PartDataSource>,
+    #[derivative(Debug = "ignore")]
     filter: Filter,
 
     pub component: ComponentState<PartTableUiCommand>,
@@ -379,6 +383,7 @@ impl UiComponent for PartTableUi {
 //
 // Snippets of code remaining to be ported.
 //
+
 // fn filter_row(&mut self, row: &PartStatesRow) -> bool {
 //     let processes: String = enabled_processes_to_string(&row.enabled_processes);
 //
