@@ -9,7 +9,7 @@ use egui_dock::tab_viewer::OnCloseResponse;
 use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
-use tracing::{debug, error};
+use tracing::debug;
 use util::path::clip_path;
 
 use crate::filter::{FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -83,7 +83,7 @@ pub enum LoadOutTabUiAction {
     UpdateFeederForPart {
         phase: Reference,
         part: Part,
-        feeder: Reference,
+        feeder: Option<Reference>,
     },
     RequestRepaint,
 }
@@ -138,19 +138,11 @@ impl UiComponent for LoadOutTabUi {
             } => {
                 let (_, _) = (index, old_row);
 
-                // TODO how to handle invalid feeder reference properly?
-
-                if let Ok(feeder_reference) = Reference::try_from(new_row.feeder)
-                    .inspect_err(|err| error!("Invalid feeder reference. cause: {:?}", err))
-                {
-                    Some(LoadOutTabUiAction::UpdateFeederForPart {
-                        phase: self.phase.clone(),
-                        part: new_row.part,
-                        feeder: feeder_reference,
-                    })
-                } else {
-                    None
-                }
+                Some(LoadOutTabUiAction::UpdateFeederForPart {
+                    phase: self.phase.clone(),
+                    part: new_row.part,
+                    feeder: Reference::try_from(new_row.feeder).ok(),
+                })
             }
             LoadOutTabUiCommand::FilterCommand(command) => {
                 let mut table = self.load_out_table.lock().unwrap();
