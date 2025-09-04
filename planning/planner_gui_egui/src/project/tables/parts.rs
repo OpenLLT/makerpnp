@@ -32,6 +32,8 @@ pub struct PartDataSource {
 
     processes: Vec<ProcessReference>,
 
+    rows_to_filter: Vec<usize>,
+
     // temporary implementation due to in-progress nature of egui_deferred_table
     cell: Option<CellEditState<PartCellEditState, PartWithState>>,
     sender: Enqueue<PartTableUiCommand>,
@@ -74,6 +76,7 @@ impl PartDataSource {
             rows: Default::default(),
 
             processes,
+            rows_to_filter: Default::default(),
             cell: Default::default(),
             sender,
         }
@@ -137,6 +140,10 @@ impl DeferredTableDataSource for PartDataSource {
             row_count: self.rows.len(),
             column_count: COLUMN_COUNT,
         }
+    }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
     }
 }
 
@@ -343,7 +350,38 @@ impl UiComponent for PartTableUi {
                     .inspect(|action| debug!("filter action: {:?}", action));
 
                 match action {
-                    Some(FilterUiAction::ApplyFilter) => Some(PartTableUiAction::RequestRepaint),
+                    Some(FilterUiAction::ApplyFilter) => {
+                        let source = &mut *self.source.lock().unwrap();
+
+                        source.rows_to_filter = source
+                            .rows
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(id, row)| {
+                                let processes: String = format!(
+                                    "[{}]",
+                                    row.processes
+                                        .iter()
+                                        .map(|it| format!("'{}'", it))
+                                        .collect::<Vec<String>>()
+                                        .join(", ")
+                                );
+
+                                let haystack = format!(
+                                    "manufacturer: '{}', mpn: '{}', processes: {}",
+                                    &row.part.manufacturer, &row.part.mpn, &processes,
+                                );
+
+                                // "Filter single row. If this returns false, the row will be hidden."
+                                let result = self.filter.matches(haystack.as_str());
+
+                                trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
+                                if !result { Some(id) } else { None }
+                            })
+                            .collect::<Vec<usize>>();
+
+                        Some(PartTableUiAction::RequestRepaint)
+                    }
                     None => None,
                 }
             }
@@ -384,22 +422,6 @@ impl UiComponent for PartTableUi {
 // Snippets of code remaining to be ported.
 //
 
-// fn filter_row(&mut self, row: &PartStatesRow) -> bool {
-//     let processes: String = enabled_processes_to_string(&row.enabled_processes);
-//
-//     let haystack = format!(
-//         "manufacturer: '{}', mpn: '{}', processes: {}",
-//         &row.part.manufacturer, &row.part.mpn, &processes,
-//     );
-//
-//     // "Filter single row. If this returns false, the row will be hidden."
-//     let result = self.filter.matches(haystack.as_str());
-//
-//     trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
-//
-//     result
-// }
-//
 // fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
 //     trace!(
 //             "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
