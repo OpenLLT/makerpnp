@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+use std::fmt::Display;
 use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
@@ -7,7 +9,7 @@ use egui_deferred_table::{
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{PartStates, PartWithState, ProcessReference};
+use planner_app::{PartStates, PartWithState, ProcessReference, RefDes};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -38,8 +40,6 @@ pub struct PartDataSource {
     cell: Option<CellEditState<PartCellEditState, PartWithState>>,
     sender: Enqueue<PartTableUiCommand>,
 }
-
-impl PartDataSource {}
 
 #[derive(Debug, Clone)]
 pub enum PartCellEditState {
@@ -203,13 +203,7 @@ impl DeferredTableRenderer for PartDataSource {
                     ui.label(processes_label)
                 }
                 REF_DES_SET_COL => {
-                    let label: String = row
-                        .ref_des_set
-                        .iter()
-                        .cloned()
-                        .map(|meh| meh.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ");
+                    let label: String = refdes_set_to_string(&row.ref_des_set);
                     ui.label(label)
                 }
                 QUANTITY_COL => ui.label(format!("{}", row.quantity)),
@@ -358,18 +352,12 @@ impl UiComponent for PartTableUi {
                             .iter()
                             .enumerate()
                             .filter_map(|(id, row)| {
-                                let processes: String = format!(
-                                    "[{}]",
-                                    row.processes
-                                        .iter()
-                                        .map(|it| format!("'{}'", it))
-                                        .collect::<Vec<String>>()
-                                        .join(", ")
-                                );
+                                let processes: String = format_string_array(&row.processes);
+                                let ref_des_set: String = format_string_array(&row.ref_des_set);
 
                                 let haystack = format!(
-                                    "manufacturer: '{}', mpn: '{}', processes: {}",
-                                    &row.part.manufacturer, &row.part.mpn, &processes,
+                                    "manufacturer: '{}', mpn: '{}', processes: {}, ref_des_set: {}",
+                                    row.part.manufacturer, row.part.mpn, processes, ref_des_set,
                                 );
 
                                 // "Filter single row. If this returns false, the row will be hidden."
@@ -417,6 +405,31 @@ impl UiComponent for PartTableUi {
         }
     }
 }
+
+fn refdes_set_to_string(ref_des_set: &BTreeSet<RefDes>) -> String {
+    ref_des_set
+        .iter()
+        .cloned()
+        .map(|meh| meh.to_string())
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+fn format_string_array<T, I>(items: I) -> String
+where
+    T: Display,
+    I: IntoIterator<Item = T>,
+{
+    format!(
+        "[{}]",
+        items
+            .into_iter()
+            .map(|it| format!("'{}'", it))
+            .collect::<Vec<String>>()
+            .join(", ")
+    )
+}
+
 
 //
 // Snippets of code remaining to be ported.
