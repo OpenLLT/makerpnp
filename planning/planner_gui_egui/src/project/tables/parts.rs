@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::fmt::Display;
+
 use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
@@ -429,7 +430,6 @@ where
             .join(", ")
     )
 }
-
 
 //
 // Snippets of code remaining to be ported.
