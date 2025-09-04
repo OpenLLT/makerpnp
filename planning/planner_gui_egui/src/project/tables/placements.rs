@@ -479,9 +479,10 @@ impl UiComponent for PlacementsTableUi {
 
                         header_builder
                             .column(OBJECT_PATH_COL, tr!("table-placements-column-object-path"))
-                            .default_width(150.0);
+                            .default_width(200.0);
                         header_builder.column(ORDERING_COL, tr!("table-placements-column-ordering"));
-                        header_builder.column(REF_DES_COL, tr!("table-placements-column-refdes"));
+                        header_builder.column(REF_DES_COL, tr!("table-placements-column-refdes"))
+                            .default_width(50.0);
                         header_builder.column(PLACE_COL, tr!("table-placements-column-place"));
                         header_builder
                             .column(MANUFACTURER_COL, tr!("table-placements-column-manufacturer"))
