@@ -26,9 +26,13 @@ mod columns {
 }
 use columns::*;
 
+use crate::project::tables::parts::PartTableUiAction;
+
 #[derive(Debug, Clone)]
 pub struct LoadOutDataSource {
     rows: Vec<LoadOutItem>,
+
+    rows_to_filter: Vec<usize>,
 
     // temporary implementation due to in-progress nature of egui_deferred_table
     cell: Option<CellEditState<LoadoutItemCellEditState, LoadOutItem>>,
@@ -67,6 +71,7 @@ impl LoadOutDataSource {
     pub fn new(sender: Enqueue<LoadOutTableUiCommand>) -> Self {
         Self {
             rows: Default::default(),
+            rows_to_filter: Default::default(),
             cell: Default::default(),
             sender,
         }
@@ -127,6 +132,10 @@ impl DeferredTableDataSource for LoadOutDataSource {
             row_count: self.rows.len(),
             column_count: COLUMN_COUNT,
         }
+    }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
     }
 }
 
@@ -323,7 +332,34 @@ impl UiComponent for LoadOutTableUi {
                     .inspect(|action| debug!("filter action: {:?}", action));
 
                 match action {
-                    Some(FilterUiAction::ApplyFilter) => Some(LoadOutTableUiAction::RequestRepaint),
+                    Some(FilterUiAction::ApplyFilter) => {
+                        let source = &mut *self.source.lock().unwrap();
+
+                        source.rows_to_filter = source
+                            .rows
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(id, row)| {
+                                let haystack = format!(
+                                    "feeder: '{}', manufacturer: '{}', mpn: '{}'",
+                                    row.reference
+                                        .as_ref()
+                                        .map_or("".to_string(), |it| it.to_string()),
+                                    row.manufacturer,
+                                    row.mpn,
+                                );
+
+                                // "Filter single row. If this returns false, the row will be hidden."
+                                let result = self.filter.matches(haystack.as_str());
+
+                                trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
+
+                                if !result { Some(id) } else { None }
+                            })
+                            .collect::<Vec<usize>>();
+
+                        Some(LoadOutTableUiAction::RequestRepaint)
+                    }
                     None => None,
                 }
             }
@@ -359,17 +395,3 @@ impl UiComponent for LoadOutTableUi {
         }
     }
 }
-
-//
-// Snippets of code remaining to be ported.
-//
-
-// let haystack = format!(
-//     "feeder: {}, manufacturer: '{}', mpn: '{}'",
-//     &row.feeder, &row.part.manufacturer, &row.part.mpn,
-// );
-//
-// // "Filter single row. If this returns false, the row will be hidden."
-// let result = self.filter.matches(haystack.as_str());
-//
-// trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
