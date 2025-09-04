@@ -51,6 +51,8 @@ pub struct PlacementsDataSource {
     rows: Vec<PlacementsItem>,
     phases: Vec<PhaseOverview>,
 
+    rows_to_filter: Vec<usize>,
+
     // a cache to allow easy lookup for the 'is_editable_cell' for the 'placed' cell
     phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
     all_phases_pending: bool,
@@ -91,6 +93,7 @@ impl PlacementsDataSource {
         Self {
             rows: Default::default(),
             phases: Default::default(),
+            rows_to_filter: Default::default(),
             all_phases_pending: false,
             phase_placements_editability_map: BTreeMap::new(),
             cell: Default::default(),
@@ -195,6 +198,10 @@ impl DeferredTableDataSource for PlacementsDataSource {
             row_count: self.rows.len(),
             column_count: COLUMN_COUNT,
         }
+    }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
     }
 }
 
@@ -361,7 +368,6 @@ pub struct PlacementsTableUi {
     source: Value<PlacementsDataSource>,
     #[derivative(Debug = "ignore")]
     pub(crate) filter: Filter,
-    rows_to_filter: Vec<usize>,
 
     pub component: ComponentState<PlacementsTableUiCommand>,
 }
@@ -381,7 +387,6 @@ impl PlacementsTableUi {
         Self {
             source: Value::new(PlacementsDataSource::new(component.sender.clone())),
             filter,
-            rows_to_filter: Default::default(),
 
             component,
         }
@@ -461,7 +466,6 @@ impl UiComponent for PlacementsTableUi {
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("placements_table"))
             .min_size((400.0, 400.0).into())
-            .filter_rows(&self.rows_to_filter)
             .show(
                 ui,
                 data_source,
@@ -485,7 +489,8 @@ impl UiComponent for PlacementsTableUi {
                             .column(OBJECT_PATH_COL, tr!("table-placements-column-object-path"))
                             .default_width(200.0);
                         header_builder.column(ORDERING_COL, tr!("table-placements-column-ordering"));
-                        header_builder.column(REF_DES_COL, tr!("table-placements-column-refdes"))
+                        header_builder
+                            .column(REF_DES_COL, tr!("table-placements-column-refdes"))
                             .default_width(50.0);
                         header_builder.column(PLACE_COL, tr!("table-placements-column-place"));
                         header_builder
@@ -561,10 +566,9 @@ impl UiComponent for PlacementsTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-
                         let source = &mut *self.source.lock().unwrap();
 
-                        self.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
+                        source.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
 
                             let haystack = format!(
                                 "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",
@@ -603,7 +607,7 @@ impl UiComponent for PlacementsTableUi {
                         }).collect::<Vec<usize>>();
 
                         Some(PlacementsTableUiAction::RequestRepaint)
-                    },
+                    }
                     None => None,
                 }
             }
@@ -656,40 +660,6 @@ impl UiComponent for PlacementsTableUi {
 //
 // Snippets of code remaining to be ported.
 //
-
-// #[profiling::function]
-// fn filter_row(&mut self, row: &PlacementsRow) -> bool {
-//     let haystack = format!(
-//         "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",
-//         &row.object_path,
-//         &row.placement_state.placement.ref_des,
-//         &row.placement_state
-//             .placement
-//             .part
-//             .manufacturer,
-//         &row.placement_state.placement.part.mpn,
-//         &tr!(placement_place_to_i18n_key(row.placement_state.placement.place)),
-//         &tr!(placement_operation_status_to_i18n_key(
-//                 &row.placement_state.operation_status
-//             )),
-//         &tr!(pcb_side_to_i18n_key(&row.placement_state.placement.pcb_side)),
-//         &row.placement_state
-//             .phase
-//             .as_ref()
-//             .map(|phase| phase.to_string())
-//             .unwrap_or_default(),
-//         &tr!(placement_project_status_to_i18n_key(
-//                 &row.placement_state.project_status
-//             )),
-//     );
-//
-//     // "Filter single row. If this returns false, the row will be hidden."
-//     let result = self.filter.matches(haystack.as_str());
-//
-//     trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
-//
-//     result
-// }
 
 // fn on_highlight_change(&mut self, highlighted: &[&PlacementsRow], unhighlighted: &[&PlacementsRow]) {
 //     trace!(
