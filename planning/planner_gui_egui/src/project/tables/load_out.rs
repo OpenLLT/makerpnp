@@ -2,7 +2,7 @@ use derivative::Derivative;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Ui};
 use egui_deferred_table::{
     Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
-    TableDimensions,
+    TableDimensions, apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -26,13 +26,13 @@ mod columns {
 }
 use columns::*;
 
-use crate::project::tables::parts::PartTableUiAction;
-
 #[derive(Debug, Clone)]
 pub struct LoadOutDataSource {
     rows: Vec<LoadOutItem>,
 
     rows_to_filter: Vec<usize>,
+    row_ordering: Option<Vec<usize>>,
+    column_ordering: Option<Vec<usize>>,
 
     // temporary implementation due to in-progress nature of egui_deferred_table
     cell: Option<CellEditState<LoadoutItemCellEditState, LoadOutItem>>,
@@ -72,6 +72,8 @@ impl LoadOutDataSource {
         Self {
             rows: Default::default(),
             rows_to_filter: Default::default(),
+            row_ordering: None,
+            column_ordering: None,
             cell: Default::default(),
             sender,
         }
@@ -136,6 +138,18 @@ impl DeferredTableDataSource for LoadOutDataSource {
 
     fn rows_to_filter(&self) -> Option<&[usize]> {
         Some(self.rows_to_filter.as_slice())
+    }
+
+    fn row_ordering(&self) -> Option<&[usize]> {
+        self.row_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
+
+    fn column_ordering(&self) -> Option<&[usize]> {
+        self.column_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
     }
 }
 
@@ -313,6 +327,18 @@ impl UiComponent for LoadOutTableUi {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
                     handle_cell_click(data_source, cell_index);
+                }
+                Action::ColumnReorder {
+                    from,
+                    to,
+                } => {
+                    apply_reordering(&mut data_source.column_ordering, from, to);
+                }
+                Action::RowReorder {
+                    from,
+                    to,
+                } => {
+                    apply_reordering(&mut data_source.column_ordering, from, to);
                 }
             }
         }
