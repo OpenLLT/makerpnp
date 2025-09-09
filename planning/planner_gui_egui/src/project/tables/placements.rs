@@ -7,7 +7,7 @@ use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
 use egui_deferred_table::{
     Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
-    TableDimensions,
+    TableDimensions, apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -52,6 +52,8 @@ pub struct PlacementsDataSource {
     phases: Vec<PhaseOverview>,
 
     rows_to_filter: Vec<usize>,
+    row_ordering: Option<Vec<usize>>,
+    column_ordering: Option<Vec<usize>>,
 
     // a cache to allow easy lookup for the 'is_editable_cell' for the 'placed' cell
     phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
@@ -94,6 +96,8 @@ impl PlacementsDataSource {
             rows: Default::default(),
             phases: Default::default(),
             rows_to_filter: Default::default(),
+            row_ordering: None,
+            column_ordering: None,
             all_phases_pending: false,
             phase_placements_editability_map: BTreeMap::new(),
             cell: Default::default(),
@@ -202,6 +206,18 @@ impl DeferredTableDataSource for PlacementsDataSource {
 
     fn rows_to_filter(&self) -> Option<&[usize]> {
         Some(self.rows_to_filter.as_slice())
+    }
+
+    fn row_ordering(&self) -> Option<&[usize]> {
+        self.row_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
+
+    fn column_ordering(&self) -> Option<&[usize]> {
+        self.column_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
     }
 }
 
@@ -545,6 +561,18 @@ impl UiComponent for PlacementsTableUi {
                                 AngleUnit::new_degrees_decimal(row.state.unit_position.rotation),
                             ),
                         });
+                }
+                Action::ColumnReorder {
+                    from,
+                    to,
+                } => {
+                    apply_reordering(&mut data_source.column_ordering, from, to);
+                }
+                Action::RowReorder {
+                    from,
+                    to,
+                } => {
+                    apply_reordering(&mut data_source.column_ordering, from, to);
                 }
             }
         }
