@@ -1658,19 +1658,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "egui-data-table"
-version = "0.8.0"
-source = "git+https://github.com/makerpnp/egui-data-table?rev=935b9ac9bc5e8a3fcc483f19880b6a873dc67eb9#935b9ac9bc5e8a3fcc483f19880b6a873dc67eb9"
-dependencies = [
- "egui",
- "egui_extras",
- "itertools 0.14.0",
- "serde",
- "tap",
- "thiserror 2.0.16",
-]
-
-[[package]]
 name = "egui-i18n"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1768,7 +1755,6 @@ dependencies = [
  "enum-map",
  "log",
  "profiling",
- "serde",
 ]
 
 [[package]]
@@ -1879,7 +1865,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
 dependencies = [
  "enum-map-derive",
- "serde",
 ]
 
 [[package]]
@@ -4303,7 +4288,6 @@ dependencies = [
  "eda_units",
  "eframe",
  "egui",
- "egui-data-table",
  "egui-i18n",
  "egui_deferred_table",
  "egui_dock",
