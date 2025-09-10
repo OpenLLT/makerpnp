@@ -11,6 +11,7 @@ menu-item-quit = Salir
 
 modal-errors-title = Errores - { $file }
 modal-add-phase-title = Añadir fase - { $file }
+modal-package-sources-title = Fuentes de envases - { $file }
 modal-create-unit-assignment-title = Crear asignación de unidad - { $file }
 modal-phase-placement-orderings-title = Ordenación de la colocación de fases - { $phase }
 modal-manager-gerbers-title = Gestionar gerbers  - { $design }
@@ -33,6 +34,7 @@ project-toolbar-button-refresh = Actualizar
 project-toolbar-button-remove-unused-placements = Eliminar ubicaciones no utilizadas
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-add-phase = Añadir fase
+project-toolbar-button-package-sources = Fuentes de envases
 
 project-pcb-toolbar-button-create-unit-assignment = Crear asignacion de unidad
 project-pcb-toolbar-button-show-pcb = Mostrar PCB
@@ -180,6 +182,9 @@ form-create-unit-assignment-input-placements-directory = Directorio de ubicacion
 form-phase-placement-orderings-input-orderings = Ordenaciones
 
 form-process-operations = Operaciones
+
+form-package-sources-input-packages-source = Envases
+form-package-sources-input-package-mappings-source = Asignaciones de envases
 
 form-common-combo-select = Seleccionar...
 form-common-combo-none = Ninguno

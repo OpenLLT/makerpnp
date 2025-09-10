@@ -2,6 +2,8 @@ pub mod add_phase;
 pub mod errors;
 pub mod placement_orderings;
 
+pub mod package_sources;
+
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum PcbSideChoice {
     Top,

@@ -11,6 +11,7 @@ menu-item-quit = Quit
 
 modal-errors-title = Errors - { $file }
 modal-add-phase-title = Add phase - { $file }
+modal-package-sources-title = Package sources - { $file }
 modal-create-unit-assignment-title = Create unit assignment - { $file }
 modal-phase-placement-orderings-title = Phase placement orderings - { $phase }
 modal-manager-gerbers-title = Manage gerbers - { $design }
@@ -33,6 +34,7 @@ project-toolbar-button-refresh = Refresh
 project-toolbar-button-remove-unused-placements = Remove unused placements
 project-toolbar-button-add-pcb = Add PCB
 project-toolbar-button-add-phase = Add phase
+project-toolbar-button-package-sources = Package sources
 
 project-pcb-toolbar-button-create-unit-assignment = Create unit assignment
 project-pcb-toolbar-button-show-pcb = Show PCB
@@ -180,6 +182,9 @@ form-create-unit-assignment-input-placements-directory = Placements directory
 form-phase-placement-orderings-input-orderings = Orderings
 
 form-process-operations = Operations
+
+form-package-sources-input-packages-source = Packages
+form-package-sources-input-package-mappings-source = Package mappings
 
 form-common-combo-select = Select...
 form-common-combo-none = None

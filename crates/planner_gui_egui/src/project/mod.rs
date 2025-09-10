@@ -32,6 +32,9 @@ use crate::file_picker::Picker;
 use crate::planner_app_core::{PlannerCoreService, PlannerError};
 use crate::project::core_helper::ProjectCoreHelper;
 use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, AddPhaseModalUiCommand};
+use crate::project::dialogs::package_sources::{
+    PackageSourcesModal, PackageSourcesModalAction, PackageSourcesModalUiCommand,
+};
 use crate::project::tabs::parts_tab::PartsTabUiApplyAction;
 use crate::project::tabs::placements_tab::PlacementsTabUiApplyAction;
 use crate::project::tabs::process_tab::{
@@ -103,6 +106,7 @@ pub struct Project {
     pub component: ComponentState<(ProjectKey, ProjectUiCommand)>,
 
     add_phase_modal: Option<AddPhaseModal>,
+    package_sources_modal: Option<PackageSourcesModal>,
 
     file_picker: Value<Picker>,
 }
@@ -207,6 +211,7 @@ impl Project {
             toolbar,
             component,
             add_phase_modal: None,
+            package_sources_modal: None,
             file_picker: Default::default(),
         };
 
@@ -1071,6 +1076,9 @@ impl UiComponent for Project {
         if let Some(dialog) = &self.add_phase_modal {
             dialog.ui(ui, &mut ());
         }
+        if let Some(dialog) = &self.package_sources_modal {
+            dialog.ui(ui, &mut ());
+        }
 
         //
         // File Picker
@@ -1486,6 +1494,18 @@ impl UiComponent for Project {
                         self.add_phase_modal = Some(modal);
                         None
                     }
+                    Some(ProjectToolbarAction::ShowPackageSourcesDialog) => {
+                        let mut modal = PackageSourcesModal::new(self.path.clone());
+                        modal
+                            .component
+                            .configure_mapper(self.component.sender.clone(), move |command| {
+                                trace!("package sources modal mapper. command: {:?}", command);
+                                (key, ProjectUiCommand::PackageSourcesModalCommand(command))
+                            });
+
+                        self.package_sources_modal = Some(modal);
+                        None
+                    }
                     None => None,
                 }
             }
@@ -1563,6 +1583,33 @@ impl UiComponent for Project {
                         }
                         Some(AddPhaseModalAction::CloseDialog) => {
                             self.add_phase_modal.take();
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            ProjectUiCommand::PackageSourcesModalCommand(command) => {
+                if let Some(modal) = &mut self.package_sources_modal {
+                    let action = modal.update(command, &mut ());
+                    match action {
+                        None => None,
+                        Some(PackageSourcesModalAction::Submit(args)) => {
+                            self.package_sources_modal.take();
+
+                            debug!(
+                                "packages: {}, package_mappings: {}",
+                                args.packages_source.to_string(),
+                                args.package_mappings_source.to_string()
+                            );
+
+                            // TODO raise core event
+
+                            None
+                        }
+                        Some(PackageSourcesModalAction::CloseDialog) => {
+                            self.package_sources_modal.take();
                             None
                         }
                     }
@@ -2510,6 +2557,7 @@ pub enum ProjectUiCommand {
     // modals
     //
     AddPhaseModalCommand(AddPhaseModalUiCommand),
+    PackageSourcesModalCommand(PackageSourcesModalUiCommand),
 
     //
     // tabs

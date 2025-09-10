@@ -8,6 +8,7 @@ pub enum ProjectToolbarUiCommand {
     ProjectExplorerClicked,
     AddPcbClicked,
     AddPhaseClicked,
+    PackageSourcesClicked,
     RefreshClicked,
     GenerateArtifactsClicked,
     RemoveUnusedPlacements,
@@ -17,6 +18,7 @@ pub enum ProjectToolbarAction {
     ShowProjectExplorer,
     PickPcbFile,
     ShowAddPhaseDialog,
+    ShowPackageSourcesDialog,
     Refresh,
     GenerateArtifacts,
     RemoveUnusedPlacements,
@@ -79,6 +81,13 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::AddPhaseClicked)
             }
+            if ui
+                .button(tr!("project-toolbar-button-package-sources"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::PackageSourcesClicked)
+            }
         });
     }
 
@@ -93,6 +102,7 @@ impl UiComponent for ProjectToolbar {
             ProjectToolbarUiCommand::RefreshClicked => Some(ProjectToolbarAction::Refresh),
             ProjectToolbarUiCommand::AddPcbClicked => Some(ProjectToolbarAction::PickPcbFile),
             ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
+            ProjectToolbarUiCommand::PackageSourcesClicked => Some(ProjectToolbarAction::ShowPackageSourcesDialog),
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
             ProjectToolbarUiCommand::RemoveUnusedPlacements => Some(ProjectToolbarAction::RemoveUnusedPlacements),
         }
