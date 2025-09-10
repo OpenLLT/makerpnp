@@ -97,7 +97,7 @@ pcb-side-both = Ambos
 
 project-explorer-tab-label = Explorador de proyecto
 
-project-explorer-node-root = Raíz
+project-explorer-node-root = Resumen
 project-explorer-node-parts = Piezas
 project-explorer-node-placements = Ubicaciones
 project-explorer-node-phases = Fases

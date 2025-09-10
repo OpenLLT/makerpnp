@@ -97,7 +97,7 @@ pcb-side-both = Both
 
 project-explorer-tab-label = Project explorer
 
-project-explorer-node-root = Root
+project-explorer-node-root = Overview
 project-explorer-node-parts = Parts
 project-explorer-node-placements = Placements
 project-explorer-node-phases = Phases
