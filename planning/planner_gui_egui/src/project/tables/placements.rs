@@ -361,6 +361,7 @@ pub struct PlacementsTableUi {
     source: Value<PlacementsDataSource>,
     #[derivative(Debug = "ignore")]
     pub(crate) filter: Filter,
+    rows_to_filter: Vec<usize>,
 
     pub component: ComponentState<PlacementsTableUiCommand>,
 }
@@ -379,8 +380,10 @@ impl PlacementsTableUi {
 
         Self {
             source: Value::new(PlacementsDataSource::new(component.sender.clone())),
-            component,
             filter,
+            rows_to_filter: Default::default(),
+
+            component,
         }
     }
 
@@ -458,6 +461,7 @@ impl UiComponent for PlacementsTableUi {
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("placements_table"))
             .min_size((400.0, 400.0).into())
+            .filter_rows(&self.rows_to_filter)
             .show(
                 ui,
                 data_source,
@@ -556,7 +560,50 @@ impl UiComponent for PlacementsTableUi {
                     .inspect(|action| debug!("filter action: {:?}", action));
 
                 match action {
-                    Some(FilterUiAction::ApplyFilter) => Some(PlacementsTableUiAction::RequestRepaint),
+                    Some(FilterUiAction::ApplyFilter) => {
+
+                        let source = &mut *self.source.lock().unwrap();
+
+                        self.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
+
+                            let haystack = format!(
+                                "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",
+                                &row.path,
+                                &row.state.placement.ref_des,
+                                &row.state
+                                    .placement
+                                    .part
+                                    .manufacturer,
+                                &row.state.placement.part.mpn,
+                                &tr!(placement_place_to_i18n_key(row.state.placement.place)),
+                                &tr!(placement_operation_status_to_i18n_key(
+                                        &row.state.operation_status
+                                    )),
+                                &tr!(pcb_side_to_i18n_key(&row.state.placement.pcb_side)),
+                                &row.state
+                                    .phase
+                                    .as_ref()
+                                    .map(|phase| phase.to_string())
+                                    .unwrap_or_default(),
+                                &tr!(placement_project_status_to_i18n_key(
+                                        &row.state.project_status
+                                    )),
+                            );
+
+                            // "Filter single row. If this returns false, the row will be hidden."
+                            let result = self.filter.matches(haystack.as_str());
+
+                            trace!("row: {:?}, haystack: {}, result: {}", row, haystack, result);
+
+                            if !result {
+                                Some(id)
+                            } else {
+                                None
+                            }
+                        }).collect::<Vec<usize>>();
+
+                        Some(PlacementsTableUiAction::RequestRepaint)
+                    },
                     None => None,
                 }
             }
