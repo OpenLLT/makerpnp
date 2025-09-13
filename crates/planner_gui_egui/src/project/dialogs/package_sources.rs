@@ -52,9 +52,18 @@ pub struct PackageSourcesModal {
 }
 
 impl PackageSourcesModal {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn new(
+        path: PathBuf,
+        packages_source: Option<PackagesSource>,
+        package_mappings_source: Option<PackageMappingsSource>,
+    ) -> Self {
+        let fields = PackageSourcesFields {
+            packages_source,
+            package_mappings_source,
+            ..PackageSourcesFields::default()
+        };
         Self {
-            fields: Default::default(),
+            fields: Value::new(fields),
             path,
             component: Default::default(),
             file_picker: Default::default(),
@@ -126,7 +135,7 @@ impl PackageSourcesModal {
                                     flex_grow: 1.0,
                                     ..default_style()
                                 })
-                                .add(|tui| {
+                                .add_with_border(|tui| {
                                     tui.style(Style {
                                         flex_grow: 1.0,
                                         ..default_style()
@@ -135,6 +144,7 @@ impl PackageSourcesModal {
                                         |ui| {
                                             // NOTE text input does not resize with grid cell when using `.ui_add`, known issue - https://discord.com/channels/900275882684477440/904461220592119849/1338883750922293319
                                             //      as a workaround we use `ui_add_manual` for now, with `no_transform`.
+
                                             let mut chosen_path = fields
                                                 .packages_source
                                                 .as_ref()
@@ -145,6 +155,7 @@ impl PackageSourcesModal {
                                             TextEdit::singleline(&mut chosen_path)
                                                 .desired_width(ui.available_width())
                                                 .interactive(false)
+                                                .frame(false)
                                                 .ui(ui)
                                         },
                                         resize_x_transform,
@@ -155,11 +166,24 @@ impl PackageSourcesModal {
                                             flex_grow: 0.0,
                                             ..default_style()
                                         })
+                                        .ui_add(Button::new("x"))
+                                        .clicked()
+                                    {
+                                        sender
+                                            .send(PackageSourcesModalUiCommand::ClearPackagesSourceClicked)
+                                            .expect("sent");
+                                    }
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 0.0,
+                                            ..default_style()
+                                        })
                                         .ui_add(Button::new("..."))
                                         .clicked()
                                     {
                                         sender
-                                            .send(PackageSourcesModalUiCommand::PickPackageSourceClicked)
+                                            .send(PackageSourcesModalUiCommand::PickPackagesSourceClicked)
                                             .expect("sent");
                                     }
                                 })
@@ -179,7 +203,7 @@ impl PackageSourcesModal {
                                     flex_grow: 1.0,
                                     ..default_style()
                                 })
-                                .add(|tui| {
+                                .add_with_border(|tui| {
                                     tui.style(Style {
                                         flex_grow: 1.0,
                                         ..default_style()
@@ -198,10 +222,24 @@ impl PackageSourcesModal {
                                             TextEdit::singleline(&mut chosen_path)
                                                 .desired_width(ui.available_width())
                                                 .interactive(false)
+                                                .frame(false)
                                                 .ui(ui)
                                         },
                                         resize_x_transform,
                                     );
+
+                                    if tui
+                                        .style(Style {
+                                            flex_grow: 0.0,
+                                            ..default_style()
+                                        })
+                                        .ui_add(Button::new("x"))
+                                        .clicked()
+                                    {
+                                        sender
+                                            .send(PackageSourcesModalUiCommand::ClearPackageMappingsSourceClicked)
+                                            .expect("sent");
+                                    }
 
                                     if tui
                                         .style(Style {
@@ -226,10 +264,8 @@ impl PackageSourcesModal {
 
 #[derive(Clone, Debug, Default, Validate, serde::Deserialize, serde::Serialize)]
 pub struct PackageSourcesFields {
-    #[validate(required(code = "form-option-error-required"))]
+    // both fields are optional, the user can set both, one now and the other later and also remove the sources
     packages_source: Option<PackagesSource>,
-
-    #[validate(required(code = "form-option-error-required"))]
     package_mappings_source: Option<PackageMappingsSource>,
 }
 
@@ -238,10 +274,12 @@ pub enum PackageSourcesModalUiCommand {
     Submit,
     Cancel,
 
-    PickPackageSourceClicked,
+    PickPackagesSourceClicked,
     PickPackageMappingsSourceClicked,
     PackagesSourcePicked(PathBuf),
     PackageMappingsSourcePicked(PathBuf),
+    ClearPackagesSourceClicked,
+    ClearPackageMappingsSourceClicked,
 }
 
 #[derive(Debug, Clone)]
@@ -253,8 +291,8 @@ pub enum PackageSourcesModalAction {
 /// Value object
 #[derive(Debug, Clone)]
 pub struct PackageSourcesArgs {
-    pub packages_source: PackagesSource,
-    pub package_mappings_source: PackageMappingsSource,
+    pub packages_source: Option<PackagesSource>,
+    pub package_mappings_source: Option<PackageMappingsSource>,
 }
 
 impl UiComponent for PackageSourcesModal {
@@ -338,23 +376,32 @@ impl UiComponent for PackageSourcesModal {
             PackageSourcesModalUiCommand::Submit => {
                 let fields = self.fields.lock().unwrap();
                 let args = PackageSourcesArgs {
-                    // TODO Safety: form validation prevents source from being None
-                    packages_source: fields.packages_source.clone().unwrap(),
-                    // TODO Safety: form validation prevents source from being None
-                    package_mappings_source: fields
-                        .package_mappings_source
-                        .clone()
-                        .unwrap(),
+                    packages_source: fields.packages_source.clone(),
+                    package_mappings_source: fields.package_mappings_source.clone(),
                 };
                 Some(PackageSourcesModalAction::Submit(args))
             }
             PackageSourcesModalUiCommand::Cancel => Some(PackageSourcesModalAction::CloseDialog),
-            PackageSourcesModalUiCommand::PickPackageSourceClicked => {
+            PackageSourcesModalUiCommand::PickPackagesSourceClicked => {
                 self.pick_packages_file();
+                None
+            }
+            PackageSourcesModalUiCommand::ClearPackagesSourceClicked => {
+                self.fields
+                    .lock()
+                    .unwrap()
+                    .packages_source = None;
                 None
             }
             PackageSourcesModalUiCommand::PickPackageMappingsSourceClicked => {
                 self.pick_package_mappings_file();
+                None
+            }
+            PackageSourcesModalUiCommand::ClearPackageMappingsSourceClicked => {
+                self.fields
+                    .lock()
+                    .unwrap()
+                    .package_mappings_source = None;
                 None
             }
             PackageSourcesModalUiCommand::PackagesSourcePicked(path) => {

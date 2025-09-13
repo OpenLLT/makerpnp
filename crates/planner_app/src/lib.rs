@@ -18,6 +18,7 @@ use petgraph::Graph;
 pub use planning::actions::{AddOrRemoveAction, SetOrClearAction};
 pub use planning::design::{DesignIndex, DesignName, DesignNumber, DesignVariant};
 pub use planning::file::{FileReference, FileReferenceError};
+pub use planning::library::LibraryConfig;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::pcb::{PcbAssemblyFlip, PcbAssemblyOrientation};
 pub use planning::phase::PhaseReference;
@@ -363,6 +364,7 @@ pub enum Arg {
 pub struct ProjectOverview {
     pub name: String,
     pub processes: Vec<ProcessReference>,
+    pub library_config: LibraryConfig,
 
     pub pcbs: Vec<ProjectPcb>,
 }
@@ -498,6 +500,10 @@ pub enum Event {
     },
     DeleteProcess {
         process_reference: ProcessReference,
+    },
+    ApplyPackageSources {
+        packages_source: Option<PackagesSource>,
+        package_mappings_source: Option<PackageMappingsSource>,
     },
     AssignVariantToUnit {
         unit: ObjectPath,
@@ -1270,6 +1276,51 @@ impl Planner {
 
                 Ok(render::render())
             }),
+            Event::ApplyPackageSources {
+                packages_source: packages,
+                package_mappings_source: package_mappings,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let changed = match (
+                    &project.library_config.package_source,
+                    &project
+                        .library_config
+                        .package_mappings_source,
+                    &packages,
+                    &package_mappings,
+                ) {
+                    (
+                        Some(current_package_source),
+                        Some(current_package_mappings_source),
+                        Some(packages),
+                        Some(package_mappings),
+                    ) if current_package_source.eq(packages)
+                        && current_package_mappings_source.eq(package_mappings) =>
+                    {
+                        // both the same
+                        false
+                    }
+                    _ => true,
+                };
+
+                if changed {
+                    project.library_config.package_source = packages;
+                    project
+                        .library_config
+                        .package_mappings_source = package_mappings;
+                    *modified = true;
+                }
+
+                Ok(render::render())
+            }),
             Event::AssignVariantToUnit {
                 variant: variant_name,
                 unit,
@@ -1772,6 +1823,7 @@ impl Planner {
                         .iter()
                         .map(|process| process.reference.clone())
                         .collect(),
+                    library_config: project.library_config.clone(),
                     pcbs: project.pcbs.to_vec(),
                 };
                 Ok(project_view_renderer::view(ProjectView::Overview(overview)))

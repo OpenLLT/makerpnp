@@ -7,9 +7,9 @@ use egui::Ui;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use planner_app::{
-    AddOrRemoveAction, Event, FileReference, LoadOutSource, ObjectPath, PcbSide, PcbUnitIndex, PcbView, PcbViewRequest,
-    PhaseOverview, PhaseReference, PlacementOperation, PlacementPositionUnit, PlacementState, PlacementStatus,
-    ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
+    AddOrRemoveAction, Event, FileReference, LibraryConfig, LoadOutSource, ObjectPath, PcbSide, PcbUnitIndex, PcbView,
+    PcbViewRequest, PhaseOverview, PhaseReference, PlacementOperation, PlacementPositionUnit, PlacementState,
+    PlacementStatus, ProcessReference, ProjectOverview, ProjectView, ProjectViewRequest, Reference, SetOrClearAction,
 };
 use regex::Regex;
 use slotmap::new_key_type;
@@ -92,6 +92,9 @@ pub struct Project {
 
     /// initially empty until the OverviewView has been received and processed.
     processes: Vec<ProcessReference>,
+
+    /// initially empty until the OverviewView has been received and processed.
+    library_config: Option<LibraryConfig>,
 
     /// initially empty until the OverviewView has been received and processed.
     pcbs: Vec<PathBuf>,
@@ -206,6 +209,7 @@ impl Project {
             pcbs: Default::default(),
             errors: Default::default(),
             processes: Default::default(),
+            library_config: None,
             phases: Default::default(),
             project_tabs,
             toolbar,
@@ -814,6 +818,10 @@ impl Project {
             .collect();
     }
 
+    pub fn update_library_config(&mut self, library_config: &LibraryConfig) {
+        self.library_config = Some(library_config.clone())
+    }
+
     #[must_use]
     fn update_placement(
         planner_core_service: &mut PlannerCoreService,
@@ -1153,19 +1161,23 @@ impl UiComponent for Project {
             ProjectUiCommand::ProjectRefreshed => {
                 debug!("Project refreshed.");
 
-                //
-                // Update anything that uses data from views
-                //
-
                 // FUTURE The current approach is to know exactly what needs to happen, however, the child elements/tabs
                 //        themselves should be responsible for taking appropriate actions, this requires ui components
                 //        to subscribe to refresh events or something and there is no mechanism for that yet.
 
                 //
-                // refresh placements
+                // Update anything that uses data from views
                 //
 
                 let task1 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::Overview,
+                )));
+
+                //
+                // refresh placements
+                //
+
+                let task2 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::Placements,
                 )));
 
@@ -1181,7 +1193,7 @@ impl UiComponent for Project {
                     })
                     .collect::<Vec<_>>();
 
-                let mut tasks = vec![task1];
+                let mut tasks = vec![task1, task2];
                 tasks.extend(phase_tasks);
 
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
@@ -1268,6 +1280,7 @@ impl UiComponent for Project {
                         trace!("project overview: {:?}", project_overview);
                         self.update_processes(&project_overview);
                         self.update_pcbs(&project_overview);
+                        self.update_library_config(&project_overview.library_config);
 
                         let mut state = self.project_ui_state.lock().unwrap();
                         state.name = Some(project_overview.name.clone());
@@ -1495,15 +1508,23 @@ impl UiComponent for Project {
                         None
                     }
                     Some(ProjectToolbarAction::ShowPackageSourcesDialog) => {
-                        let mut modal = PackageSourcesModal::new(self.path.clone());
-                        modal
-                            .component
-                            .configure_mapper(self.component.sender.clone(), move |command| {
-                                trace!("package sources modal mapper. command: {:?}", command);
-                                (key, ProjectUiCommand::PackageSourcesModalCommand(command))
-                            });
+                        if let Some(library_config) = &self.library_config {
+                            let mut modal = PackageSourcesModal::new(
+                                self.path.clone(),
+                                library_config.package_source.clone(),
+                                library_config
+                                    .package_mappings_source
+                                    .clone(),
+                            );
+                            modal
+                                .component
+                                .configure_mapper(self.component.sender.clone(), move |command| {
+                                    trace!("package sources modal mapper. command: {:?}", command);
+                                    (key, ProjectUiCommand::PackageSourcesModalCommand(command))
+                                });
 
-                        self.package_sources_modal = Some(modal);
+                            self.package_sources_modal = Some(modal);
+                        }
                         None
                     }
                     None => None,
@@ -1599,14 +1620,21 @@ impl UiComponent for Project {
                             self.package_sources_modal.take();
 
                             debug!(
-                                "packages: {}, package_mappings: {}",
-                                args.packages_source.to_string(),
-                                args.package_mappings_source.to_string()
+                                "packages: {:?}, package_mappings: {:?}",
+                                args.packages_source, args.package_mappings_source
                             );
 
-                            // TODO raise core event
-
-                            None
+                            self.planner_core_service
+                                .update(Event::ApplyPackageSources {
+                                    packages_source: args.packages_source,
+                                    package_mappings_source: args.package_mappings_source,
+                                })
+                                .when_ok(key, |_| {
+                                    // we raise this event, since changing package souces
+                                    // can have an effect of the sort order of placements if they are sorted by
+                                    // something that uses package mappings and packages.
+                                    Some(ProjectUiCommand::ProjectRefreshed)
+                                })
                         }
                         Some(PackageSourcesModalAction::CloseDialog) => {
                             self.package_sources_modal.take();
