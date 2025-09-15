@@ -278,16 +278,23 @@ impl Project {
         )))
     }
 
-    pub fn show_overview(&mut self) -> Task<ProjectAction> {
+    pub fn show_overview(&mut self) -> Vec<Task<ProjectAction>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
         if result.is_err() {
             project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Overview(OverviewTab::default()));
         }
 
-        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-            ProjectViewRequest::Overview,
-        )))
+        let tasks = vec![
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                ProjectViewRequest::Overview,
+            ))),
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                ProjectViewRequest::Phases,
+            ))),
+        ];
+
+        tasks
     }
 
     pub fn show_parts(&mut self) -> Task<ProjectAction> {
@@ -1128,9 +1135,11 @@ impl UiComponent for Project {
                     .when_ok(key, |_| Some(ProjectUiCommand::Created))
             }
             ProjectUiCommand::Created => {
-                let task1 = self.show_explorer();
-                let task2 = self.show_overview();
-                let tasks = vec![task1, task2];
+                let show_explorer_task = self.show_explorer();
+                let show_overview_tasks = self.show_overview();
+                let mut tasks = vec![show_explorer_task];
+                tasks.extend(show_overview_tasks);
+
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::Load => {
@@ -1143,9 +1152,10 @@ impl UiComponent for Project {
                     .when_ok(key, |_tasks| Some(ProjectUiCommand::Loaded))
             }
             ProjectUiCommand::Loaded => {
-                let task1 = self.show_explorer();
-                let task2 = self.show_overview();
-                let tasks = vec![task1, task2];
+                let show_explorer_task = self.show_explorer();
+                let show_overview_tasks = self.show_overview();
+                let mut tasks = vec![show_explorer_task];
+                tasks.extend(show_overview_tasks);
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::Save => {
@@ -1730,8 +1740,8 @@ impl UiComponent for Project {
                 Some(ProjectAction::Task(key, task))
             }
             ProjectUiCommand::ShowOverview => {
-                let task = self.show_overview();
-                Some(ProjectAction::Task(key, task))
+                let tasks = self.show_overview();
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::ShowParts => {
                 let task = self.show_parts();
