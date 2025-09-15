@@ -1178,16 +1178,28 @@ impl UiComponent for Project {
                 //
                 // Update anything that uses data from views
                 //
-
                 let task1 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::Overview,
                 )));
 
                 //
+                // Update the tree, since phases may have been deleted, etc.
+                //
+                let task2 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::ProjectTree,
+                )));
+
+                //
+                // refresh phases
+                //
+                let task3 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    ProjectViewRequest::Phases,
+                )));
+
+                //
                 // refresh placements
                 //
-
-                let task2 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                let task4 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                     ProjectViewRequest::Placements,
                 )));
 
@@ -1203,7 +1215,7 @@ impl UiComponent for Project {
                     })
                     .collect::<Vec<_>>();
 
-                let mut tasks = vec![task1, task2];
+                let mut tasks = vec![task1, task2, task3, task4];
                 tasks.extend(phase_tasks);
 
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
@@ -1355,7 +1367,11 @@ impl UiComponent for Project {
                         let mut state = self.project_ui_state.lock().unwrap();
                         state
                             .placements_ui
-                            .update_phases(self.phases.clone())
+                            .update_phases(self.phases.clone());
+
+                        state
+                            .overview_ui
+                            .update_phases(self.phases.clone());
                     }
                     ProjectView::PhaseOverview(phase_overview) => {
                         trace!("phase overview: {:?}", phase_overview);
@@ -1824,8 +1840,14 @@ impl UiComponent for Project {
                     .overview_ui
                     .update(command, context);
                 match overview_ui_action {
-                    Some(OverviewTabUiAction::None) => None,
                     None => None,
+                    Some(OverviewTabUiAction::None) => None,
+                    Some(OverviewTabUiAction::DeletePhase(reference)) => self
+                        .planner_core_service
+                        .update(Event::DeletePhase {
+                            reference: reference.clone(),
+                        })
+                        .when_ok(key, |_| Some(ProjectUiCommand::PhaseDeleted(reference))),
                 }
             }
             ProjectUiCommand::PartsTabUiCommand(command) => {
@@ -2391,6 +2413,19 @@ impl UiComponent for Project {
                 ];
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
+            ProjectUiCommand::PhaseDeleted(phase) => {
+                self.phases
+                    .retain(|it| !it.phase_reference.eq(&phase));
+
+                // close any phase placements tabs using this phase reference
+                let mut tabs = self.project_tabs.lock().unwrap();
+                tabs.retain(|_key, kind| !matches!(kind, ProjectTabKind::Phase(tab) if tab.phase.eq(&phase)));
+                let mut ui_state = self.project_ui_state.lock().unwrap();
+                ui_state.phases_tab_uis.remove(&phase);
+
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ProjectRefreshed));
+                Some(ProjectAction::Task(key, task))
+            }
 
             //
             // other
@@ -2577,7 +2612,8 @@ pub enum ProjectUiCommand {
     // phases
     //
     RefreshPhases,
-    RefreshPhase(Reference),
+    RefreshPhase(PhaseReference),
+    PhaseDeleted(PhaseReference),
 
     //
     // pcbs

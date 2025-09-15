@@ -22,7 +22,7 @@ pub use planning::library::LibraryConfig;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::pcb::{PcbAssemblyFlip, PcbAssemblyOrientation};
 pub use planning::phase::PhaseReference;
-use planning::phase::{Phase, PhaseState};
+use planning::phase::{Phase, PhaseError, PhaseState};
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
 pub use planning::placement::PlacementStatus;
@@ -523,6 +523,9 @@ pub enum Event {
         reference: PhaseReference,
         load_out: LoadOutSource,
         pcb_side: PcbSide,
+    },
+    DeletePhase {
+        reference: PhaseReference,
     },
     SetPhaseOrdering {
         phases: Vec<PhaseReference>,
@@ -1236,7 +1239,7 @@ impl Planner {
                                     load_out_source,
                                     pcb_side,
                                 )
-                                .map_err(AppError::OperationError)?;
+                                .map_err(AppError::PhaseError)?;
                         }
                     }
                     ApplyMode::New => {
@@ -1419,7 +1422,27 @@ impl Planner {
 
                 project
                     .update_phase(reference, process.reference.clone(), load_out.to_string(), pcb_side)
-                    .map_err(AppError::OperationError)?;
+                    .map_err(AppError::PhaseError)?;
+
+                Ok(render::render())
+            }),
+            Event::DeletePhase {
+                reference,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                project
+                    .delete_phase(reference)
+                    .map_err(AppError::PhaseError)?;
+
+                *modified |= true;
 
                 Ok(render::render())
             }),
@@ -2650,6 +2673,8 @@ enum AppError {
     OperationRequiresProject,
     #[error("Operation error, cause: {0}")]
     OperationError(anyhow::Error),
+    #[error("Phase error. cause: {0}")]
+    PhaseError(PhaseError),
     #[error("Project error, cause: {0}")]
     ProjectError(ProjectError),
     #[error("Process error. cause: {0}")]

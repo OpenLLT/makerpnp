@@ -56,6 +56,7 @@ project-detail-name = Name: { $name }
 project-overview-tab-label = Overview
 project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
+project-overview-phases-header = Phases
 
 project-pcb-header = PCB
 project-pcb-designs-header = Designs
@@ -364,6 +365,9 @@ table-fiducials-column-actions = Actions
 table-operations-column-operation = Operation
 table-operations-column-actions = Actions
 table-operations-column-task = { $task }
+
+table-phases-column-name = Name
+table-phases-column-actions = Actions
 
 common-value-not-available = N/A
 common-actions = Actions

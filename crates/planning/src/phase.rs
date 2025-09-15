@@ -41,6 +41,10 @@ pub enum PhaseError {
     InvalidTaskForOperation(Reference, OperationReference, TaskReference, Vec<TaskReference>),
     // #[error("Preceding operation for phase incomplete. phase: '{0:}', preceding_operation: {1:?}")]
     // PrecedingOperationIncomplete(Reference, OperationReference),
+    #[error("Phase in use. phase: '{0:}'")]
+    PhaseInUse(Reference),
+    #[error("Unknown process. process: '{0:}'")]
+    UnknownProcess(ProcessReference),
 }
 
 pub struct PhaseOrderings<'a>(pub &'a IndexSet<Reference>);

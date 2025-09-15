@@ -210,8 +210,10 @@ impl Project {
         process_reference: ProcessReference,
         load_out_source: String,
         pcb_side: PcbSide,
-    ) -> anyhow::Result<()> {
-        let process = self.find_process(&process_reference)?;
+    ) -> Result<(), PhaseError> {
+        let process = self
+            .find_process(&process_reference)
+            .map_err(|_cause| PhaseError::UnknownProcess(process_reference.clone()))?;
         let phase_state = PhaseState::from_process(process);
 
         match self.phases.entry(reference.clone()) {
@@ -250,6 +252,42 @@ impl Project {
                 info!("Updated phase. old: {:?}, new: {:?}", old_phase, existing_phase);
             }
         }
+
+        Ok(())
+    }
+
+    /// Deletes a phase and unassigns the phase from all placements using it.
+    ///
+    /// If the phase is not 'pending' it is considered in-use and cannot be deleted.
+    ///
+    /// After deleting a phase, artifacts will need re-generating.
+    pub fn delete_phase(&mut self, reference: PhaseReference) -> Result<(), PhaseError> {
+        if !self.phases.contains_key(&reference) {
+            return Err(PhaseError::UnknownPhase(reference.clone()));
+        }
+
+        let phase_state = self
+            .phase_states
+            .get(&reference)
+            .unwrap();
+        if !phase_state.is_pending() {
+            return Err(PhaseError::PhaseInUse(reference.clone()));
+        }
+
+        let _phase = self.phases.remove(&reference).unwrap();
+        let _phase_state = self
+            .phase_states
+            .remove(&reference)
+            .unwrap();
+
+        for (_path, state) in self.placements.iter_mut() {
+            if matches!(&state.phase, Some(assigned_phase_reference) if assigned_phase_reference.eq(&reference)) {
+                state.phase.take();
+            }
+        }
+
+        self.phase_orderings
+            .shift_remove(&reference);
 
         Ok(())
     }
