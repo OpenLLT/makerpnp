@@ -98,7 +98,8 @@ impl UiComponent for LoadOutTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.label(tr!("project-load-out-header"));
+        ui.heading(tr!("project-load-out-header"));
+
         let mut load_out_table = self.load_out_table.lock().unwrap();
 
         if load_out_table.is_none() {
@@ -194,8 +195,6 @@ impl Tab for LoadOutTab {
     }
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
-        ui.strong(tr!("project-load-out-header"));
-
         let state = context.state.lock().unwrap();
         let Some(load_out_ui) = state
             .load_out_tab_uis
