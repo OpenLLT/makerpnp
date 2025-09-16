@@ -129,8 +129,6 @@ impl UiComponent for OverviewTabUi {
             .size
             .max(ui.spacing().interact_size.y);
 
-        ui.heading(tr!("project-overview-header"));
-
         if let Some(overview) = &self.overview {
             ui.label(tr!("project-overview-detail-name", { name: &overview.name }));
         }

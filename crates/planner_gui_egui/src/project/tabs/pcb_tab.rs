@@ -81,7 +81,6 @@ impl UiComponent for PcbTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.heading(tr!("project-pcb-header"));
         let (Some(project_pcb_overview), Some(pcb_overview)) = (&self.project_pcb_overview, &self.pcb_overview) else {
             ui.spinner();
             return;

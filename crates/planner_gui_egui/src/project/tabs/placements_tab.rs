@@ -111,8 +111,6 @@ impl UiComponent for PlacementsTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.heading(tr!("project-placements-header"));
-
         ui.horizontal(|ui| {
             // FIXME layout-pain - due to some vertical padding and sizing issues we render the filter first because it is tallest.
             //       attempts were made to fix this, but ultimately all resulted in failure, so we gave up and went

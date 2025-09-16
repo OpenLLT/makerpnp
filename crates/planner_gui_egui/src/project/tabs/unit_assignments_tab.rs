@@ -983,7 +983,6 @@ impl UiComponent for UnitAssignmentsTabUi {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
 
-        ui.heading(tr!("project-unit-assignments-header"));
         let Some(pcb_overview) = &self.pcb_overview else {
             ui.spinner();
             return;

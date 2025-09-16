@@ -411,8 +411,6 @@ impl UiComponent for ProcessTabUi {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
 
-        ui.heading(tr!("project-process-header"));
-
         let Some(state) = &self.state else {
             ui.spinner();
             return;

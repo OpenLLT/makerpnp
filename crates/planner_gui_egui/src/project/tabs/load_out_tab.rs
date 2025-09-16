@@ -6,7 +6,6 @@ use egui::scroll_area::ScrollBarVisibility;
 use egui::{Ui, WidgetText};
 use egui_data_table::DataTable;
 use egui_dock::tab_viewer::OnCloseResponse;
-use egui_i18n::tr;
 use egui_mobius::types::Value;
 use planner_app::{LoadOut, LoadOutSource, Part, Reference};
 use tracing::debug;
@@ -98,8 +97,6 @@ impl UiComponent for LoadOutTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.heading(tr!("project-load-out-header"));
-
         let mut load_out_table = self.load_out_table.lock().unwrap();
 
         if load_out_table.is_none() {

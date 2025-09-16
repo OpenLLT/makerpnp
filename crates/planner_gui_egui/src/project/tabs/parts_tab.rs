@@ -128,7 +128,6 @@ impl UiComponent for PartsTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.heading(tr!("project-parts-header"));
         let mut part_states_table = self.part_states_table.lock().unwrap();
 
         if part_states_table.is_none() {

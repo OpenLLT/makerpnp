@@ -50,38 +50,28 @@ project-detail-path = Path: { $path }
 project-detail-name = Name: { $name }
 
 project-overview-tab-label = Overview
-project-overview-header = Overview
 project-overview-detail-name = Name: { $name }
 project-overview-phases-header = Phases
 
-project-pcb-header = PCB
 project-pcb-designs-header = Designs
 
 project-placements-tab-label = Placements
-project-placements-header = Project placements
 
 project-parts-tab-label = Parts
-project-parts-header = Project Parts
 
 project-pcb-tab-label = PCB ({ $pcb })
 
-project-process-header = Process configuration
 project-process-tab-label = Process ({ $process })
 
 project-unit-assignments-tab-label = Unit assignments ({ $pcb })
-project-unit-assignments-header = Unit assignments
 
 phase-toolbar-add-parts-to-loadout = Add parts to load-out.
 phase-toolbar-placement-orderings = Placement orderings.
-
-phase-placements-header = Phase Placements
 
 phase-reference = Reference
 phase-load-out-source = Load-out source
 phase-pcb-side = PCB Side
 phase-process = Process
-
-project-load-out-header = Load-out
 
 table-load-out-column-reference = Reference
 table-load-out-column-manufacturer = Manufacturer
@@ -114,7 +104,6 @@ form-new-pcb-input-directory = Directory
 form-new-pcb-input-units = Units
 
 pcb-configuration-tab-label = Configuration
-pcb-configuration-header = Configuration
 pcb-configuration-detail-name = Name: { $name }
 
 pcb-panel-tab-label = Panelization
