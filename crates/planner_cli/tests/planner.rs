@@ -2295,7 +2295,7 @@ mod operation_sequence_1 {
             .with_phases_overview(&[
                 TestPhaseOverview {
                     phase: "top_1".to_string(),
-                    status: "Incomplete".to_string(),
+                    status: "Pending".to_string(),
                     process: "pnp".to_string(),
                     operations_overview: vec![
                         TestPhaseOperationOverview {
@@ -2330,7 +2330,7 @@ mod operation_sequence_1 {
                 },
                 TestPhaseOverview {
                     phase: "bottom_1".to_string(),
-                    status: "Incomplete".to_string(),
+                    status: "Pending".to_string(),
                     process: "manual".to_string(),
                     operations_overview: vec![
                         TestPhaseOperationOverview {

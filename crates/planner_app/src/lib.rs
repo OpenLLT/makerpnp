@@ -22,6 +22,7 @@ pub use planning::library::LibraryConfig;
 use planning::pcb::{Pcb, PcbError};
 pub use planning::pcb::{PcbAssemblyFlip, PcbAssemblyOrientation};
 pub use planning::phase::PhaseReference;
+pub use planning::phase::PhaseStatus;
 use planning::phase::{Phase, PhaseError, PhaseState};
 pub use planning::placement::PlacementSortingItem;
 pub use planning::placement::PlacementSortingMode;
@@ -286,6 +287,7 @@ pub struct LoadOut {
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
 pub struct Phases {
+    /// in the order defined by the project's phase orderings
     pub phases: Vec<PhaseOverview>,
 }
 
@@ -2258,9 +2260,13 @@ impl Planner {
                 ) = Self::model_project_and_directory(model)?;
 
                 let phases = project
-                    .phases
+                    .phase_orderings
                     .iter()
-                    .map(|(phase_reference, phase)| {
+                    .map(|phase_reference| {
+                        let phase = project
+                            .phases
+                            .get(phase_reference)
+                            .unwrap();
                         let phase_state = project
                             .phase_states
                             .get(phase_reference)

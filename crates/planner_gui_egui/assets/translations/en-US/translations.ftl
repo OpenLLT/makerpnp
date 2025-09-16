@@ -348,7 +348,9 @@ table-operations-column-operation = Operation
 table-operations-column-actions = Actions
 table-operations-column-task = { $task }
 
+table-phases-column-index = #
 table-phases-column-name = Name
+table-phases-column-status = Status
 table-phases-column-actions = Actions
 
 common-value-not-available = N/A

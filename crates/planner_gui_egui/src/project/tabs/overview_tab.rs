@@ -4,6 +4,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use planner_app::{PhaseOverview, PhaseReference, ProjectOverview};
 
+use crate::i18n::conversions::{phase_status_to_i18n_key};
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
@@ -54,14 +55,22 @@ impl OverviewTabUi {
                             TableBuilder::new(ui)
                                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                                 .min_scrolled_height(80.0)
+                                .column(Column::auto())
                                 .column(Column::remainder())
+                                .column(Column::auto())
                                 .column(Column::auto().resizable(false))
                                 .striped(true)
                                 .resizable(true)
                                 .auto_shrink([false, false])
                                 .header(20.0, |mut header| {
                                     header.col(|ui| {
+                                        ui.strong(tr!("table-phases-column-index"));
+                                    });
+                                    header.col(|ui| {
                                         ui.strong(tr!("table-phases-column-name"));
+                                    });
+                                    header.col(|ui| {
+                                        ui.strong(tr!("table-phases-column-status"));
                                     });
                                     header.col(|ui| {
                                         ui.strong(tr!("table-phases-column-actions"));
@@ -69,7 +78,11 @@ impl OverviewTabUi {
                                 })
                                 .body(|body| {
                                     body.rows(text_height, phases.len(), |mut row| {
-                                        if let Some(phase_overview) = phases.get(row.index()) {
+                                        let index = row.index();
+                                        if let Some(phase_overview) = phases.get(index) {
+                                            row.col(|ui| {
+                                                ui.label(index.to_string());
+                                            });
                                             row.col(|ui| {
                                                 ui.label(
                                                     phase_overview
@@ -77,7 +90,9 @@ impl OverviewTabUi {
                                                         .to_string(),
                                                 );
                                             });
-
+                                            row.col(|ui| {
+                                                ui.label(tr!(phase_status_to_i18n_key(&phase_overview.state.status())));
+                                            });
                                             row.col(|ui| {
                                                 let can_delete = phase_overview.state.is_pending();
 

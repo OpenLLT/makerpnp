@@ -1,5 +1,5 @@
 use planner_app::{
-    GerberFileFunction, GerberFileFunctionDiscriminants, OperationStatus, PcbAssemblyFlip, PcbSide,
+    GerberFileFunction, GerberFileFunctionDiscriminants, OperationStatus, PcbAssemblyFlip, PcbSide, PhaseStatus,
     PlacementSortingMode, PlacementStatus, ProjectPlacementStatus, TaskStatus,
 };
 use util::sorting::SortOrder;
@@ -71,6 +71,15 @@ pub fn process_task_status_to_i18n_key(status: &TaskStatus) -> &'static str {
         TaskStatus::Started => "process-status-incomplete",
         TaskStatus::Complete => "process-status-complete",
         TaskStatus::Abandoned => "process-status-abandoned",
+    }
+}
+
+pub fn phase_status_to_i18n_key(status: &PhaseStatus) -> &'static str {
+    match status {
+        PhaseStatus::Pending => "process-status-pending",
+        PhaseStatus::Incomplete => "process-status-incomplete",
+        PhaseStatus::Complete => "process-status-complete",
+        PhaseStatus::Abandoned => "process-status-abandoned",
     }
 }
 

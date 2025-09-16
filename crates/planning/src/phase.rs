@@ -117,6 +117,32 @@ impl PhaseState {
             .iter()
             .all(|os| os.status() == OperationStatus::Complete)
     }
+
+    pub fn is_abandoned(&self) -> bool {
+        self.operation_states
+            .iter()
+            .any(|os| os.status() == OperationStatus::Abandoned)
+    }
+
+    pub fn status(&self) -> PhaseStatus {
+        if self.is_pending() {
+            PhaseStatus::Pending
+        } else if self.is_complete() {
+            PhaseStatus::Complete
+        } else if self.is_abandoned() {
+            PhaseStatus::Abandoned
+        } else {
+            PhaseStatus::Incomplete
+        }
+    }
+}
+
+#[derive(Clone, serde::Serialize, PartialEq)]
+pub enum PhaseStatus {
+    Pending,
+    Incomplete,
+    Complete,
+    Abandoned,
 }
 
 pub(crate) fn make_task_state(task_reference: &TaskReference) -> Box<dyn SerializableTaskState> {
