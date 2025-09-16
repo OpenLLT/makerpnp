@@ -431,6 +431,8 @@ impl UiComponent for ProcessTabUi {
             }
         });
 
+        ui.separator();
+
         //
         // form
         //
