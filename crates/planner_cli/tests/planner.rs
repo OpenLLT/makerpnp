@@ -2460,6 +2460,7 @@ mod operation_sequence_1 {
                     message: "A part has not been assigned to a feeder".to_string(),
                     severity: TestIssueSeverity::Warning,
                     kind: TestIssueKind::UnassignedPartFeeder {
+                        phase: "top_1".to_string(),
                         part: TestPart {
                             manufacturer: "RES_MFR2".to_string(),
                             mpn: "RES2".to_string(),

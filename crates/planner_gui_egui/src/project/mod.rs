@@ -35,6 +35,9 @@ use crate::project::dialogs::add_phase::{AddPhaseModal, AddPhaseModalAction, Add
 use crate::project::dialogs::package_sources::{
     PackageSourcesModal, PackageSourcesModalAction, PackageSourcesModalUiCommand,
 };
+use crate::project::tabs::issues_tab::{
+    IssuesTab, IssuesTabUi, IssuesTabUiAction, IssuesTabUiCommand, IssuesTabUiContext,
+};
 use crate::project::tabs::parts_tab::PartsTabUiApplyAction;
 use crate::project::tabs::placements_tab::PlacementsTabUiApplyAction;
 use crate::project::tabs::process_tab::{
@@ -250,15 +253,16 @@ impl Project {
         project_tabs.filter_map(|(_key, tab)| {
             let command = match tab {
                 ProjectTabKind::Explorer(_tab) => ProjectUiCommand::ShowExplorer,
-                ProjectTabKind::Overview(_tab) => ProjectUiCommand::ShowOverview,
-                ProjectTabKind::Parts(_tab) => ProjectUiCommand::ShowParts,
-                ProjectTabKind::Phase(tab) => ProjectUiCommand::ShowPhase(tab.phase.clone()),
-                ProjectTabKind::Placements(_tab) => ProjectUiCommand::ShowPlacements,
-                ProjectTabKind::Process(tab) => ProjectUiCommand::ShowProcess(tab.process.clone()),
+                ProjectTabKind::Issues(_tab) => ProjectUiCommand::ShowIssues,
                 ProjectTabKind::LoadOut(tab) => ProjectUiCommand::ShowPhaseLoadout {
                     phase: tab.phase.clone(),
                 },
+                ProjectTabKind::Overview(_tab) => ProjectUiCommand::ShowOverview,
+                ProjectTabKind::Parts(_tab) => ProjectUiCommand::ShowParts,
                 ProjectTabKind::Pcb(tab) => ProjectUiCommand::ShowPcb(tab.pcb_index),
+                ProjectTabKind::Phase(tab) => ProjectUiCommand::ShowPhase(tab.phase.clone()),
+                ProjectTabKind::Placements(_tab) => ProjectUiCommand::ShowPlacements,
+                ProjectTabKind::Process(tab) => ProjectUiCommand::ShowProcess(tab.process.clone()),
                 ProjectTabKind::UnitAssignments(tab) => ProjectUiCommand::ShowPcbUnitAssignments(tab.pcb_index),
             };
 
@@ -278,6 +282,20 @@ impl Project {
         )))
     }
 
+    pub fn show_issues(&mut self) -> Vec<Task<ProjectAction>> {
+        let mut project_tabs = self.project_tabs.lock().unwrap();
+        let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Issues(_)));
+        if result.is_err() {
+            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Issues(IssuesTab::default()));
+        }
+
+        let tasks = vec![Task::done(ProjectAction::UiCommand(
+            ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectReport),
+        ))];
+
+        tasks
+    }
+
     pub fn show_overview(&mut self) -> Vec<Task<ProjectAction>> {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
@@ -291,10 +309,6 @@ impl Project {
             ))),
             Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                 ProjectViewRequest::Phases,
-            ))),
-            // XXX remove this when an issue tab is created, this is just for testing we can request and receive the project report
-            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-                ProjectViewRequest::ProjectReport,
             ))),
         ];
 
@@ -660,6 +674,16 @@ impl Project {
         }
 
         #[must_use]
+        fn handle_issues(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
+            if path.eq(&"/project/issues".into()) {
+                let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowIssues));
+                Some(ProjectAction::Task(*key, task))
+            } else {
+                None
+            }
+        }
+
+        #[must_use]
         fn handle_placements(key: &ProjectKey, path: &NavigationPath) -> Option<ProjectAction> {
             if path.eq(&"/project/placements".into()) {
                 let task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::ShowPlacements));
@@ -802,6 +826,7 @@ impl Project {
 
         let handlers = [
             handle_root,
+            handle_issues,
             handle_parts,
             handle_pcb,
             handle_phase,
@@ -1457,6 +1482,10 @@ impl UiComponent for Project {
                     }
                     ProjectView::ProjectReport(report) => {
                         info!("report:\n{:?}", report);
+
+                        let mut state = self.project_ui_state.lock().unwrap();
+
+                        state.issues_ui.update_report(report)
                     }
                 }
                 None
@@ -1780,6 +1809,10 @@ impl UiComponent for Project {
                 let task = self.show_explorer();
                 Some(ProjectAction::Task(key, task))
             }
+            ProjectUiCommand::ShowIssues => {
+                let tasks = self.show_issues();
+                Some(ProjectAction::Task(key, Task::batch(tasks)))
+            }
             ProjectUiCommand::ShowOverview => {
                 let tasks = self.show_overview();
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
@@ -1854,6 +1887,25 @@ impl UiComponent for Project {
                             Err(error_action) => Some(error_action),
                         }
                     }
+                }
+            }
+            ProjectUiCommand::IssuesTabUiCommand(command) => {
+                let context = &mut IssuesTabUiContext::default();
+                let issues_ui_action = self
+                    .project_ui_state
+                    .lock()
+                    .unwrap()
+                    .issues_ui
+                    .update(command, context);
+                match issues_ui_action {
+                    None => None,
+                    Some(IssuesTabUiAction::None) => None,
+                    Some(IssuesTabUiAction::RefreshIssues) => Some(ProjectAction::Task(
+                        key,
+                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                            ProjectViewRequest::ProjectReport,
+                        ))),
+                    )),
                 }
             }
             ProjectUiCommand::OverviewTabUiCommand(command) => {
@@ -2528,13 +2580,14 @@ pub struct ProjectUiState {
     name: Option<String>,
 
     explorer_tab_ui: ExplorerTabUi,
+    issues_ui: IssuesTabUi,
     load_out_tab_uis: HashMap<LoadOutSource, LoadOutTabUi>,
+    overview_ui: OverviewTabUi,
     parts_tab_ui: PartsTabUi,
     pcb_tab_uis: HashMap<usize, PcbTabUi>,
     phases_tab_uis: HashMap<PhaseReference, PhaseTabUi>,
     placements_ui: PlacementsTabUi,
     process_tab_uis: HashMap<ProcessReference, ProcessTabUi>,
-    overview_ui: OverviewTabUi,
     unit_assignment_tab_uis: HashMap<usize, UnitAssignmentsTabUi>,
 }
 
@@ -2548,13 +2601,14 @@ impl ProjectUiState {
         let mut instance = Self {
             name,
             explorer_tab_ui: ExplorerTabUi::new(project_directory),
+            issues_ui: IssuesTabUi::new(),
             load_out_tab_uis: HashMap::default(),
+            overview_ui: OverviewTabUi::new(),
             parts_tab_ui: PartsTabUi::new(),
             pcb_tab_uis: HashMap::default(),
             phases_tab_uis: HashMap::default(),
             placements_ui: PlacementsTabUi::new(),
             process_tab_uis: HashMap::default(),
-            overview_ui: OverviewTabUi::new(),
             unit_assignment_tab_uis: HashMap::default(),
         };
 
@@ -2572,6 +2626,14 @@ impl ProjectUiState {
             .configure_mapper(sender.clone(), move |command| {
                 trace!("overview ui mapper. command: {:?}", command);
                 (key, ProjectUiCommand::OverviewTabUiCommand(command))
+            });
+
+        instance
+            .issues_ui
+            .component
+            .configure_mapper(sender.clone(), move |command| {
+                trace!("issues ui mapper. command: {:?}", command);
+                (key, ProjectUiCommand::IssuesTabUiCommand(command))
             });
 
         instance
@@ -2598,14 +2660,15 @@ impl ProjectUiState {
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub enum ProjectTabKind {
     Explorer(ExplorerTab),
-    Overview(OverviewTab),
-    Phase(PhaseTab),
-    Placements(PlacementsTab),
-    Parts(PartsTab),
+    Issues(IssuesTab),
     LoadOut(LoadOutTab),
+    Overview(OverviewTab),
+    Parts(PartsTab),
     Pcb(PcbTab),
-    UnitAssignments(UnitAssignmentsTab),
+    Phase(PhaseTab),
     Process(ProcessTab),
+    Placements(PlacementsTab),
+    UnitAssignments(UnitAssignmentsTab),
 }
 
 #[derive(Debug, Clone)]
@@ -2665,8 +2728,12 @@ pub enum ProjectUiCommand {
     // tabs
     //
     TabCommand(ProjectTabUiCommand),
+
     ShowExplorer,
     ExplorerTabUiCommand(ExplorerTabUiCommand),
+
+    ShowIssues,
+    IssuesTabUiCommand(IssuesTabUiCommand),
 
     ShowOverview,
     OverviewTabUiCommand(OverviewTabUiCommand),

@@ -67,6 +67,7 @@ pub fn project_generate_report(
                     message: "A part has not been assigned to a feeder".to_string(),
                     severity: IssueSeverity::Warning,
                     kind: IssueKind::UnassignedPartFeeder {
+                        phase: phase_reference.clone(),
                         part: placement_state.placement.part.clone(),
                     },
                 };
@@ -388,12 +389,16 @@ fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
                                 ) => object_path_a.cmp(object_path_b),
                                 (
                                     IssueKind::UnassignedPartFeeder {
+                                        phase: phase_a,
                                         part: part_a,
                                     },
                                     IssueKind::UnassignedPartFeeder {
+                                        phase: phase_b,
                                         part: part_b,
                                     },
-                                ) => part_a.cmp(part_b),
+                                ) => phase_a
+                                    .cmp(phase_b)
+                                    .then(part_a.cmp(part_b)),
                                 _ => ordinal_ordering,
                             },
                             Ordering::Greater => ordinal_ordering,
@@ -424,6 +429,7 @@ mod report_issue_sorting {
     use pnp::object_path::ObjectPath;
     use pnp::part::Part;
 
+    use crate::phase::PhaseReference;
     use crate::report::{project_report_sort_issues, IssueKind, IssueSeverity, ProjectReportIssue};
 
     #[test]
@@ -475,6 +481,41 @@ mod report_issue_sorting {
     }
 
     #[test]
+    pub fn sort_by_phase() {
+        // given
+        let part = Part {
+            manufacturer: "MFR1".to_string(),
+            mpn: "MPN1".to_string(),
+        };
+
+        let issue1 = ProjectReportIssue {
+            message: "MESSAGE_1".to_string(),
+            severity: IssueSeverity::Warning,
+            kind: IssueKind::UnassignedPartFeeder {
+                phase: PhaseReference::from_raw_str("phase_1"),
+                part: part.clone(),
+            },
+        };
+        let issue2 = ProjectReportIssue {
+            message: "MESSAGE_1".to_string(),
+            severity: IssueSeverity::Warning,
+            kind: IssueKind::UnassignedPartFeeder {
+                phase: PhaseReference::from_raw_str("phase_2"),
+                part: part.clone(),
+            },
+        };
+
+        let mut issues: Vec<ProjectReportIssue> = vec![issue2.clone(), issue1.clone()];
+        let expected_issues: Vec<ProjectReportIssue> = vec![issue1.clone(), issue2.clone()];
+
+        // when
+        project_report_sort_issues(&mut issues);
+
+        // then
+        assert_eq!(&issues, &expected_issues);
+    }
+
+    #[test]
     pub fn sort_by_kind_with_equal_message_and_severity() {
         // given
         let issue1 = ProjectReportIssue {
@@ -505,6 +546,7 @@ mod report_issue_sorting {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
+                phase: PhaseReference::from_raw_str("phase_1"),
                 part: Part {
                     manufacturer: "MFR1".to_string(),
                     mpn: "MPN1".to_string(),
@@ -515,6 +557,7 @@ mod report_issue_sorting {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
+                phase: PhaseReference::from_raw_str("phase_1"),
                 part: Part {
                     manufacturer: "MFR1".to_string(),
                     mpn: "MPN2".to_string(),
@@ -525,6 +568,7 @@ mod report_issue_sorting {
             message: "EQUAL".to_string(),
             severity: IssueSeverity::Severe,
             kind: IssueKind::UnassignedPartFeeder {
+                phase: PhaseReference::from_raw_str("phase_1"),
                 part: Part {
                     manufacturer: "MFR2".to_string(),
                     mpn: "MPN1".to_string(),
@@ -865,6 +909,7 @@ pub enum IssueKind {
         object_path: ObjectPath,
     },
     UnassignedPartFeeder {
+        phase: PhaseReference,
         part: Part,
     },
 }

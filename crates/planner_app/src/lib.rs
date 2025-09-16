@@ -40,7 +40,7 @@ use planning::project::{
     PartStateError, PcbOperationError, ProcessPresetFactory, ProcessPresetFactoryError, Project, ProjectError,
     ProjectPcb,
 };
-use planning::report::ProjectReport;
+pub use planning::report::{IssueKind, IssueSeverity, ProjectReport};
 pub use planning::variant::VariantName;
 use planning::{file, pcb, project, report};
 pub use pnp::load_out::LoadOutItem;
@@ -2022,6 +2022,17 @@ impl Planner {
                         path: "/".to_string(),
                         ..ProjectTreeItem::default()
                     });
+
+                let issues_node = project_tree
+                    .tree
+                    .add_node(ProjectTreeItem {
+                        key: "issues".to_string(),
+                        path: "/issues".to_string(),
+                        ..ProjectTreeItem::default()
+                    });
+                project_tree
+                    .tree
+                    .add_edge(root_node, issues_node, ());
 
                 let parts_node = project_tree
                     .tree

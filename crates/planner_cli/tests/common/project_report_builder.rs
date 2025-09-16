@@ -174,7 +174,7 @@ pub enum TestIssueSeverity {
 #[derive(Clone, serde::Serialize)]
 pub enum TestIssueKind {
     UnassignedPlacement { object_path: String },
-    UnassignedPartFeeder { part: TestPart },
+    UnassignedPartFeeder { phase: String, part: TestPart },
 }
 
 #[derive(Clone, serde::Serialize)]

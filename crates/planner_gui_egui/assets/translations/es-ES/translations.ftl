@@ -50,6 +50,8 @@ form-new-project-input-directory = Directorio
 project-detail-path = Ruta: { $path }
 project-detail-name = Nombre: { $name }
 
+project-issues-tab-label = Problemas
+
 project-overview-tab-label = Visión general
 project-overview-detail-name = Nombre: { $name }
 project-overview-phases-header = Fases
@@ -85,6 +87,7 @@ pcb-side-both = Ambos
 project-explorer-tab-label = Explorador de proyecto
 
 project-explorer-node-root = Resumen
+project-explorer-node-issues = Problemas
 project-explorer-node-parts = Piezas
 project-explorer-node-placements = Ubicaciones
 project-explorer-node-phases = Fases
@@ -353,6 +356,12 @@ table-phases-column-index = #
 table-phases-column-name = Nombre
 table-phases-column-status = Estado
 table-phases-column-actions = Acciones
+
+table-issues-column-index = #
+table-issues-column-severity = Severidad
+table-issues-column-message = Mensaje
+table-issues-column-details = Detalles
+table-issues-column-actions = Acciones
 
 common-value-not-available = N/A
 common-actions = Acciones

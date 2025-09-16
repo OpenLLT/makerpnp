@@ -50,6 +50,8 @@ form-new-project-input-directory = Directory
 project-detail-path = Path: { $path }
 project-detail-name = Name: { $name }
 
+project-issues-tab-label = Issues
+
 project-overview-tab-label = Overview
 project-overview-detail-name = Name: { $name }
 project-overview-phases-header = Phases
@@ -85,6 +87,7 @@ pcb-side-both = Both
 project-explorer-tab-label = Project explorer
 
 project-explorer-node-root = Overview
+project-explorer-node-issues = Issues
 project-explorer-node-parts = Parts
 project-explorer-node-placements = Placements
 project-explorer-node-phases = Phases
@@ -353,6 +356,12 @@ table-phases-column-index = #
 table-phases-column-name = Name
 table-phases-column-status = Status
 table-phases-column-actions = Actions
+
+table-issues-column-index = #
+table-issues-column-severity = Severity
+table-issues-column-message = Message
+table-issues-column-details = Details
+table-issues-column-actions = Actions
 
 common-value-not-available = N/A
 common-actions = Actions

@@ -13,6 +13,7 @@ use crate::ui_component::{ComponentState, UiComponent};
 // tabs
 //
 pub mod explorer_tab;
+pub mod issues_tab;
 pub mod load_out_tab;
 pub mod overview_tab;
 pub mod parts_tab;
@@ -101,13 +102,14 @@ impl Tab for ProjectTabKind {
     fn label(&self) -> WidgetText {
         match self {
             ProjectTabKind::Explorer(tab) => tab.label(),
+            ProjectTabKind::Issues(tab) => tab.label(),
+            ProjectTabKind::LoadOut(tab) => tab.label(),
             ProjectTabKind::Overview(tab) => tab.label(),
             ProjectTabKind::Parts(tab) => tab.label(),
+            ProjectTabKind::Pcb(tab) => tab.label(),
             ProjectTabKind::Phase(tab) => tab.label(),
             ProjectTabKind::Placements(tab) => tab.label(),
             ProjectTabKind::Process(tab) => tab.label(),
-            ProjectTabKind::LoadOut(tab) => tab.label(),
-            ProjectTabKind::Pcb(tab) => tab.label(),
             ProjectTabKind::UnitAssignments(tab) => tab.label(),
         }
     }
@@ -115,13 +117,14 @@ impl Tab for ProjectTabKind {
     fn ui<'a>(&mut self, ui: &mut Ui, tab_key: &TabKey, context: &mut Self::Context) {
         match self {
             ProjectTabKind::Explorer(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Issues(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Overview(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Parts(tab) => tab.ui(ui, tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Phase(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Placements(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::Process(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::LoadOut(tab) => tab.ui(ui, tab_key, context),
-            ProjectTabKind::Pcb(tab) => tab.ui(ui, tab_key, context),
             ProjectTabKind::UnitAssignments(tab) => tab.ui(ui, tab_key, context),
         }
     }
@@ -129,13 +132,14 @@ impl Tab for ProjectTabKind {
     fn on_close<'a>(&mut self, tab_key: &TabKey, context: &mut Self::Context) -> OnCloseResponse {
         match self {
             ProjectTabKind::Explorer(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Issues(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Overview(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Parts(tab) => tab.on_close(tab_key, context),
+            ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Phase(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Placements(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::Process(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::LoadOut(tab) => tab.on_close(tab_key, context),
-            ProjectTabKind::Pcb(tab) => tab.on_close(tab_key, context),
             ProjectTabKind::UnitAssignments(tab) => tab.on_close(tab_key, context),
         }
     }
