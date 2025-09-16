@@ -1024,7 +1024,7 @@ impl UiComponent for ConfigurationUi {
             style.wrap_mode = Some(egui::TextWrapMode::Extend);
         });
 
-        ui.label(tr!("pcb-configuration-header"));
+        ui.heading(tr!("pcb-configuration-header"));
 
         let Some(pcb_overview) = &self.pcb_overview else {
             ui.spinner();

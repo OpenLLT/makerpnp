@@ -194,6 +194,8 @@ impl Tab for LoadOutTab {
     }
 
     fn ui<'a>(&mut self, ui: &mut Ui, _tab_key: &TabKey, context: &mut Self::Context) {
+        ui.strong(tr!("project-load-out-header"));
+
         let state = context.state.lock().unwrap();
         let Some(load_out_ui) = state
             .load_out_tab_uis

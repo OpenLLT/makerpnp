@@ -138,7 +138,7 @@ impl UiComponent for PhaseTabUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        ui.label(tr!("phase-placements-header"));
+        ui.heading(tr!("phase-placements-header"));
 
         //
         // State operation progress
