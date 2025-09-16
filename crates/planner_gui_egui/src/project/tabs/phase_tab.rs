@@ -238,6 +238,8 @@ impl UiComponent for PhaseTabUi {
 
                     previous_operation_status = Some(operation_status);
                 }
+            } else {
+                ui.spinner();
             }
         });
 

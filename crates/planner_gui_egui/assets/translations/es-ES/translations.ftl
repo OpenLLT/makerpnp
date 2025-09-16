@@ -31,6 +31,7 @@ project-toolbar-button-remove-unused-placements = Eliminar ubicaciones no utiliz
 project-toolbar-button-add-pcb = Añadir placa
 project-toolbar-button-add-phase = Añadir fase
 project-toolbar-button-package-sources = Fuentes de envases
+project-toolbar-button-reset-operations = Restablecer operaciones
 
 project-pcb-toolbar-button-create-unit-assignment = Crear asignacion de unidad
 project-pcb-toolbar-button-show-pcb = Mostrar PCB

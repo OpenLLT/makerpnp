@@ -11,7 +11,8 @@ pub enum ProjectToolbarUiCommand {
     PackageSourcesClicked,
     RefreshClicked,
     GenerateArtifactsClicked,
-    RemoveUnusedPlacements,
+    RemoveUnusedPlacementsClicked,
+    ResetOperationsClicked,
 }
 
 pub enum ProjectToolbarAction {
@@ -22,6 +23,7 @@ pub enum ProjectToolbarAction {
     Refresh,
     GenerateArtifacts,
     RemoveUnusedPlacements,
+    ResetOperations,
 }
 
 #[derive(Default, Debug)]
@@ -65,7 +67,7 @@ impl UiComponent for ProjectToolbar {
                 .clicked()
             {
                 self.component
-                    .send(ProjectToolbarUiCommand::RemoveUnusedPlacements)
+                    .send(ProjectToolbarUiCommand::RemoveUnusedPlacementsClicked)
             }
             if ui
                 .button(tr!("project-toolbar-button-add-pcb"))
@@ -88,6 +90,13 @@ impl UiComponent for ProjectToolbar {
                 self.component
                     .send(ProjectToolbarUiCommand::PackageSourcesClicked)
             }
+            if ui
+                .button(tr!("project-toolbar-button-reset-operations"))
+                .clicked()
+            {
+                self.component
+                    .send(ProjectToolbarUiCommand::ResetOperationsClicked)
+            }
         });
     }
 
@@ -104,7 +113,10 @@ impl UiComponent for ProjectToolbar {
             ProjectToolbarUiCommand::AddPhaseClicked => Some(ProjectToolbarAction::ShowAddPhaseDialog),
             ProjectToolbarUiCommand::PackageSourcesClicked => Some(ProjectToolbarAction::ShowPackageSourcesDialog),
             ProjectToolbarUiCommand::GenerateArtifactsClicked => Some(ProjectToolbarAction::GenerateArtifacts),
-            ProjectToolbarUiCommand::RemoveUnusedPlacements => Some(ProjectToolbarAction::RemoveUnusedPlacements),
+            ProjectToolbarUiCommand::RemoveUnusedPlacementsClicked => {
+                Some(ProjectToolbarAction::RemoveUnusedPlacements)
+            }
+            ProjectToolbarUiCommand::ResetOperationsClicked => Some(ProjectToolbarAction::ResetOperations),
         }
     }
 }

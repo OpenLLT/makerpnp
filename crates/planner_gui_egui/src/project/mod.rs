@@ -1199,48 +1199,37 @@ impl UiComponent for Project {
                 //        themselves should be responsible for taking appropriate actions, this requires ui components
                 //        to subscribe to refresh events or something and there is no mechanism for that yet.
 
-                //
-                // Update anything that uses data from views
-                //
-                let task1 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                let mut requests = vec![
+                    // Update anything that uses data from views
                     ProjectViewRequest::Overview,
-                )));
-
-                //
-                // Update the tree, since phases may have been deleted, etc.
-                //
-                let task2 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    // Update the tree, since phases may have been deleted, etc.
                     ProjectViewRequest::ProjectTree,
-                )));
-
-                //
-                // refresh phases
-                //
-                let task3 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    // refresh phases
                     ProjectViewRequest::Phases,
-                )));
-
-                //
-                // refresh placements
-                //
-                let task4 = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    // refresh placements
                     ProjectViewRequest::Placements,
-                )));
+                ];
 
-                let phase_tasks = self
+                let phase_requests = self
                     .phases
                     .iter()
-                    .map(|phase| {
-                        Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                    .flat_map(|phase| {
+                        vec![
+                            ProjectViewRequest::PhaseOverview {
+                                phase: phase.phase_reference.clone(),
+                            },
                             ProjectViewRequest::PhasePlacements {
                                 phase: phase.phase_reference.clone(),
                             },
-                        )))
+                        ]
                     })
                     .collect::<Vec<_>>();
+                requests.extend(phase_requests);
 
-                let mut tasks = vec![task1, task2, task3, task4];
-                tasks.extend(phase_tasks);
+                let tasks = requests
+                    .into_iter()
+                    .map(|request| Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(request))))
+                    .collect::<Vec<_>>();
 
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
@@ -1577,6 +1566,10 @@ impl UiComponent for Project {
                         }
                         None
                     }
+                    Some(ProjectToolbarAction::ResetOperations) => self
+                        .planner_core_service
+                        .update(Event::ResetOperations {})
+                        .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed)),
                     None => None,
                 }
             }

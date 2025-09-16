@@ -31,6 +31,7 @@ project-toolbar-button-remove-unused-placements = Remove unused placements
 project-toolbar-button-add-pcb = Add PCB
 project-toolbar-button-add-phase = Add phase
 project-toolbar-button-package-sources = Package sources
+project-toolbar-button-reset-operations = Reset operations
 
 project-pcb-toolbar-button-create-unit-assignment = Create unit assignment
 project-pcb-toolbar-button-show-pcb = Show PCB
