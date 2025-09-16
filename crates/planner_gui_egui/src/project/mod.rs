@@ -2401,6 +2401,9 @@ impl UiComponent for Project {
             ProjectUiCommand::RefreshPhase(phase) => {
                 let tasks = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                        ProjectViewRequest::Phases
+                    ))),
+                    Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhaseOverview {
                             phase: phase.clone(),
                         },

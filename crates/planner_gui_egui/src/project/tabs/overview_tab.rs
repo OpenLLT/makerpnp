@@ -4,7 +4,7 @@ use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
 use planner_app::{PhaseOverview, PhaseReference, ProjectOverview};
 
-use crate::i18n::conversions::{phase_status_to_i18n_key};
+use crate::i18n::conversions::phase_status_to_i18n_key;
 use crate::project::tabs::ProjectTabContext;
 use crate::tabs::{Tab, TabKey};
 use crate::ui_component::{ComponentState, UiComponent};
