@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,7 @@ use serde::Serialize;
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 use tracing::{error, info, trace};
+use util::dynamic::dynamic_eq::DynamicEq;
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
@@ -22,7 +24,7 @@ use crate::pcb::Pcb;
 use crate::phase::{PhaseReference, PhaseStatus};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
 use crate::process::{OperationReference, OperationStatus, TaskReference};
-use crate::project::Project;
+use crate::project::{build_phase_placement_states, Project};
 use crate::variant::VariantName;
 
 // FUTURE add a test to ensure that duplicate issues are not added to the report.
@@ -31,10 +33,11 @@ use crate::variant::VariantName;
 pub fn project_generate_report(
     project: &Project,
     pcbs: &[&Pcb],
-    phase_load_out_items_map: &BTreeMap<Reference, Vec<LoadOutItem>>,
-    issue_set: &mut BTreeSet<ProjectReportIssue>,
+    phase_load_out_items_map: &BTreeMap<PhaseReference, Vec<LoadOutItem>>,
 ) -> ProjectReport {
     let mut report = ProjectReport::default();
+
+    let mut issue_set: BTreeSet<ProjectReportIssue> = BTreeSet::new();
 
     report.name.clone_from(&project.name);
     if project.pcbs.is_empty() {
@@ -43,6 +46,33 @@ pub fn project_generate_report(
             severity: IssueSeverity::Severe,
             kind: IssueKind::NoPcbsAssigned,
         });
+    }
+
+    for phase_reference in project.phase_orderings.iter() {
+        let phase_placement_states = build_phase_placement_states(project, phase_reference);
+
+        for (_object_path, placement_state) in phase_placement_states.iter() {
+            let load_out_items = phase_load_out_items_map
+                .get(phase_reference)
+                .unwrap();
+
+            let feeder_reference =
+                match pnp::load_out::find_load_out_item_by_part(load_out_items, &placement_state.placement.part) {
+                    Some(load_out_item) => load_out_item.reference.clone(),
+                    _ => None,
+                };
+
+            if feeder_reference.is_none() {
+                let issue = ProjectReportIssue {
+                    message: "A part has not been assigned to a feeder".to_string(),
+                    severity: IssueSeverity::Warning,
+                    kind: IssueKind::UnassignedPartFeeder {
+                        part: placement_state.placement.part.clone(),
+                    },
+                };
+                issue_set.insert(issue);
+            };
+        }
     }
 
     let mut all_phases_complete = true;
@@ -146,7 +176,7 @@ pub fn project_generate_report(
         .phase_specifications
         .extend(phase_specifications);
 
-    project_report_add_placement_issues(project, issue_set);
+    project_report_add_placement_issues(project, &mut issue_set);
     let mut issues: Vec<ProjectReportIssue> = issue_set.iter().cloned().collect();
 
     project_report_sort_issues(&mut issues);
@@ -617,7 +647,7 @@ fn find_unit_assignments(project: &Project, pcbs: &[&Pcb], unit_path: &ObjectPat
     unit_assignments
 }
 
-#[derive(serde::Serialize, Default)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Default, Debug, PartialEq)]
 pub struct ProjectReport {
     pub name: String,
     pub status: ProjectStatus,
@@ -628,7 +658,7 @@ pub struct ProjectReport {
     pub issues: Vec<ProjectReportIssue>,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum ProjectStatus {
     Incomplete,
     Complete,
@@ -640,7 +670,7 @@ impl Default for ProjectStatus {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PhaseOverview {
     pub phase: PhaseReference,
     pub status: PhaseStatus,
@@ -648,36 +678,102 @@ pub struct PhaseOverview {
     pub operations_overview: Vec<PhaseOperationOverview>,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PhaseSpecification {
     pub phase: PhaseReference,
     pub operations: Vec<OperationItem>,
     pub load_out_assignments: Vec<PhaseLoadOutAssignmentItem>,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PhaseOperationOverview {
     pub operation: OperationReference,
     pub status: OperationStatus,
     pub tasks: Vec<(TaskReference, Option<Box<dyn TaskOverview>>)>,
 }
 
-#[derive(Clone, serde::Serialize)]
+impl PartialEq for PhaseOperationOverview {
+    fn eq(&self, other: &Self) -> bool {
+        if self.operation != other.operation {
+            return false;
+        }
+
+        if self.status != other.status {
+            return false;
+        }
+
+        for ((a_ref, a_spec), (b_ref, b_spec)) in self
+            .tasks
+            .iter()
+            .zip(other.tasks.iter())
+        {
+            if a_ref != b_ref {
+                return false;
+            }
+
+            match (a_spec, b_spec) {
+                (Some(a_spec), Some(b_spec)) => {
+                    if !a_spec.dynamic_eq(b_spec) {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+
+        true
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OperationItem {
     pub operation: OperationReference,
     pub task_specifications: Vec<(TaskReference, Option<Box<dyn TaskSpecification>>)>,
 }
 
-#[typetag::serialize(tag = "type")]
-pub trait TaskSpecification: DynClone {}
+impl PartialEq for OperationItem {
+    fn eq(&self, other: &Self) -> bool {
+        if self.operation != other.operation {
+            return false;
+        }
+
+        if self.task_specifications.len() != other.task_specifications.len() {
+            return false;
+        }
+
+        for ((a_ref, a_spec), (b_ref, b_spec)) in self
+            .task_specifications
+            .iter()
+            .zip(other.task_specifications.iter())
+        {
+            if a_ref != b_ref {
+                return false;
+            }
+
+            match (a_spec, b_spec) {
+                (Some(a_spec), Some(b_spec)) => {
+                    if !a_spec.dynamic_eq(b_spec) {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+
+        true
+    }
+}
+
+#[typetag::serde(tag = "type")]
+pub trait TaskSpecification: DynClone + DynamicEq + Debug + Send {}
 dyn_clone::clone_trait_object!(TaskSpecification);
 
 macro_rules! generic_task_specification {
     ($name:ident, $key:literal) => {
-        #[typetag::serialize(name = $key)]
+        #[typetag::serde(name = $key)]
         impl TaskSpecification for $name {}
 
-        #[derive(Clone, serde::Serialize)]
+        #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
         pub struct $name {}
     };
 }
@@ -686,24 +782,24 @@ generic_task_specification!(ManualSolderingTaskSpecification, "manual_soldering_
 generic_task_specification!(AutomatedSolderingTaskSpecification, "automated_soldering_specification");
 generic_task_specification!(PlaceComponentsTaskSpecification, "place_components_specification");
 
-#[typetag::serialize(name = "load_pcbs_specification")]
+#[typetag::serde(name = "load_pcbs_specification")]
 impl TaskSpecification for LoadPcbsTaskSpecification {}
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 struct LoadPcbsTaskSpecification {
     pub pcbs: Vec<PcbReportItem>,
 }
 
-#[typetag::serialize(tag = "type")]
-pub trait TaskOverview: DynClone {}
+#[typetag::serde(tag = "type")]
+pub trait TaskOverview: DynClone + DynamicEq + Debug + Send {}
 dyn_clone::clone_trait_object!(TaskOverview);
 
 macro_rules! generic_task_overview {
     ($name:ident, $key:literal) => {
-        #[typetag::serialize(name = $key)]
+        #[typetag::serde(name = $key)]
         impl TaskOverview for $name {}
 
-        #[derive(Clone, serde::Serialize)]
+        #[derive(Clone, serde::Serialize, serde::Deserialize, PartialEq, Debug)]
         pub struct $name {}
     };
 }
@@ -712,10 +808,10 @@ generic_task_overview!(LoadPcbsTaskOverview, "load_pcbs_overview");
 generic_task_overview!(ManualSolderingTaskOverview, "manual_soldering_overview");
 generic_task_overview!(AutomatedSolderingTaskOverview, "automated_soldering_overview");
 
-#[typetag::serialize(name = "place_components_overview")]
+#[typetag::serde(name = "place_components_overview")]
 impl TaskOverview for PlaceComponentsTaskOverview {}
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PlaceComponentsTaskOverview {
     pub placed: usize,
     pub skipped: usize,
@@ -723,7 +819,7 @@ pub struct PlaceComponentsTaskOverview {
 }
 
 #[serde_as]
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PcbUnitAssignmentItem {
     #[serde_as(as = "DisplayFromStr")]
     unit_path: ObjectPath,
@@ -731,13 +827,13 @@ pub struct PcbUnitAssignmentItem {
     variant_name: VariantName,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PcbReportItem {
     name: String,
     unit_assignments: Vec<PcbUnitAssignmentItem>,
 }
 
-#[derive(Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct PhaseLoadOutAssignmentItem {
     pub feeder_reference: Option<Reference>,
     pub manufacturer: String,
@@ -746,21 +842,21 @@ pub struct PhaseLoadOutAssignmentItem {
 }
 
 // FUTURE implement `Display` and improve info logging
-#[derive(Clone, serde::Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProjectReportIssue {
     pub message: String,
     pub severity: IssueSeverity,
     pub kind: IssueKind,
 }
 
-#[derive(Clone, serde::Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IssueSeverity {
     Severe,
     Warning,
 }
 
 #[serde_as]
-#[derive(Clone, serde::Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IssueKind {
     NoPcbsAssigned,
     NoPhasesCreated,

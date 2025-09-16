@@ -292,6 +292,10 @@ impl Project {
             Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                 ProjectViewRequest::Phases,
             ))),
+            // XXX remove this when an issue tab is created, this is just for testing we can request and receive the project report
+            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                ProjectViewRequest::ProjectReport,
+            ))),
         ];
 
         tasks
@@ -1303,6 +1307,7 @@ impl UiComponent for Project {
                     } => Event::RequestProcessDefinitionView {
                         process_reference: process,
                     },
+                    ProjectViewRequest::ProjectReport => Event::RequestProjectReportView {},
                 };
 
                 self.planner_core_service
@@ -1449,6 +1454,9 @@ impl UiComponent for Project {
                             .unwrap();
 
                         load_out_ui.update_load_out(load_out);
+                    }
+                    ProjectView::ProjectReport(report) => {
+                        info!("report:\n{:?}", report);
                     }
                 }
                 None

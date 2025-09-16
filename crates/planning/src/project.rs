@@ -50,7 +50,6 @@ use crate::process::{
 };
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
-use crate::report::{IssueKind, IssueSeverity, ProjectReportIssue};
 use crate::variant::VariantName;
 use crate::{file, operation_history, pcb, placement, report};
 
@@ -696,8 +695,6 @@ pub fn generate_artifacts(
     phase_load_out_items_map: BTreeMap<Reference, Vec<LoadOutItem>>,
     part_packages: &BTreeMap<&Part, &Package>,
 ) -> Result<(), ArtifactGenerationError> {
-    let mut issues: BTreeSet<ProjectReportIssue> = BTreeSet::new();
-
     for reference in project.phase_orderings.iter() {
         let phase = project.phases.get(reference).unwrap();
 
@@ -705,18 +702,19 @@ pub fn generate_artifacts(
             .get(reference)
             .unwrap();
 
+        let phase_placement_states = build_phase_placement_states(project, reference);
+
         generate_phase_artifacts(
-            project,
             pcbs,
             phase,
             load_out_items.as_slice(),
             part_packages,
             directory,
-            &mut issues,
+            &phase_placement_states,
         )?;
     }
 
-    let report = report::project_generate_report(project, pcbs, &phase_load_out_items_map, &mut issues);
+    let report = report::project_generate_report(project, pcbs, &phase_load_out_items_map);
 
     let report_file_path = report::build_report_file_path(&project.name, directory);
 
@@ -736,57 +734,47 @@ pub fn generate_artifacts(
     Ok(())
 }
 
+pub fn build_phase_placement_states<'a>(
+    project: &'a Project,
+    phase_reference: &'_ PhaseReference,
+) -> Vec<(&'a ObjectPath, &'a PlacementState)> {
+    let phase_placement_states: Vec<(&ObjectPath, &PlacementState)> = project
+        .placements
+        .iter()
+        .filter_map(|(object_path, state)| match &state.phase {
+            Some(placement_phase) if placement_phase.eq(phase_reference) => Some((object_path, state)),
+            _ => None,
+        })
+        .collect();
+
+    phase_placement_states
+}
+
 fn generate_phase_artifacts(
-    project: &Project,
     pcbs: &[&Pcb],
     phase: &Phase,
     load_out_items: &[LoadOutItem],
     part_packages: &BTreeMap<&Part, &Package>,
     directory: &Path,
-    issues: &mut BTreeSet<ProjectReportIssue>,
+    phase_placement_states: &[(&ObjectPath, &PlacementState)],
 ) -> Result<(), ArtifactGenerationError> {
-    let mut placement_states: Vec<(&ObjectPath, &PlacementState)> = project
-        .placements
-        .iter()
-        .filter_map(|(object_path, state)| match &state.phase {
-            Some(placement_phase) if placement_phase.eq(&phase.reference) => Some((object_path, state)),
-            _ => None,
-        })
-        .collect();
-
     let pcb_unit_positioning_map = build_pcbs_unit_positioning_map(pcbs);
 
+    // make a Vec so we can sort it, we're not cloning the paths and states themselves
+    let mut phase_placement_states = Vec::from(phase_placement_states);
+
     sort_placements(
-        &mut placement_states,
+        &mut phase_placement_states,
         &phase.placement_orderings,
         load_out_items,
         part_packages,
         &pcb_unit_positioning_map,
     );
 
-    for (_object_path, placement_state) in placement_states.iter() {
-        let feeder_reference =
-            match pnp::load_out::find_load_out_item_by_part(load_out_items, &placement_state.placement.part) {
-                Some(load_out_item) => load_out_item.reference.clone(),
-                _ => None,
-            };
-
-        if feeder_reference.is_none() {
-            let issue = ProjectReportIssue {
-                message: "A part has not been assigned to a feeder".to_string(),
-                severity: IssueSeverity::Warning,
-                kind: IssueKind::UnassignedPartFeeder {
-                    part: placement_state.placement.part.clone(),
-                },
-            };
-            issues.insert(issue);
-        };
-    }
-
     let mut phase_placements_path = PathBuf::from(directory);
     phase_placements_path.push(format!("{}_placements.csv", phase.reference));
 
-    store_phase_placements_as_csv(&phase_placements_path, &placement_states, load_out_items)
+    store_phase_placements_as_csv(&phase_placements_path, &phase_placement_states, load_out_items)
         .map_err(|e| ArtifactGenerationError::PhasePlacementsGenerationError(e))?;
 
     info!(

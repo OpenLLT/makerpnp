@@ -137,7 +137,7 @@ impl PhaseState {
     }
 }
 
-#[derive(Clone, serde::Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum PhaseStatus {
     Pending,
     Incomplete,

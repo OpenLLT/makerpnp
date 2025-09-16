@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::SystemTime;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Error};
 use crux_core::macros::effect;
 use crux_core::render::RenderOperation;
 pub use crux_core::Core;
@@ -40,8 +40,9 @@ use planning::project::{
     PartStateError, PcbOperationError, ProcessPresetFactory, ProcessPresetFactoryError, Project, ProjectError,
     ProjectPcb,
 };
+use planning::report::ProjectReport;
 pub use planning::variant::VariantName;
-use planning::{file, pcb, project};
+use planning::{file, pcb, project, report};
 pub use pnp::load_out::LoadOutItem;
 pub use pnp::object_path::ObjectPath;
 use pnp::package::Package;
@@ -428,6 +429,7 @@ pub enum ProjectView {
     Placements(PlacementsList),
     ProcessDefinition(ProcessDefinition),
     ProjectTree(ProjectTreeView),
+    ProjectReport(ProjectReport),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -443,6 +445,7 @@ pub enum ProjectViewRequest {
     Placements,
     ProcessDefinition { process: ProcessReference },
     ProjectTree,
+    ProjectReport,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
@@ -606,6 +609,7 @@ pub enum Event {
     RequestProcessDefinitionView {
         process_reference: ProcessReference,
     },
+    RequestProjectReportView {},
 
     //
     // PCB operations
@@ -1643,20 +1647,7 @@ impl Planner {
 
                 *modified |= project::refresh_phase_operation_states(project);
 
-                let phase_load_out_item_map = project
-                    .phases
-                    .iter()
-                    .try_fold(
-                        BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
-                        |mut map, (reference, phase)| {
-                            let load_out_items = stores::load_out::load_items(&LoadOutSource::try_from_path(
-                                &project_directory,
-                                PathBuf::from_str(&phase.load_out_source)?,
-                            )?)?;
-                            map.insert(reference.clone(), load_out_items);
-                            Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
-                        },
-                    )
+                let phase_load_out_item_map = Self::build_phase_load_out_item_map(project, &project_directory)
                     .map_err(AppError::OperationError)?;
 
                 let mut packages = Vec::new();
@@ -2476,7 +2467,40 @@ impl Planner {
 
                 Ok(project_view_renderer::view(ProjectView::PhaseLoadOut(load_out_view)))
             }),
+            Event::RequestProjectReportView {} => Box::new(|model: &mut Model| {
+                let (
+                    ModelProject {
+                        project, ..
+                    },
+                    pcbs,
+                    project_directory,
+                ) = { Self::model_project_and_pcbs(model) }?;
+
+                let phase_load_out_item_map = Self::build_phase_load_out_item_map(project, &project_directory)
+                    .map_err(AppError::OperationError)?;
+
+                let report = report::project_generate_report(project, &pcbs, &phase_load_out_item_map);
+
+                Ok(project_view_renderer::view(ProjectView::ProjectReport(report)))
+            }),
         }
+    }
+
+    fn build_phase_load_out_item_map(
+        project: &mut Project,
+        project_directory: &PathBuf,
+    ) -> Result<BTreeMap<Reference, Vec<LoadOutItem>>, Error> {
+        project.phases.iter().try_fold(
+            BTreeMap::<Reference, Vec<LoadOutItem>>::new(),
+            |mut map, (reference, phase)| {
+                let load_out_items = stores::load_out::load_items(&LoadOutSource::try_from_path(
+                    &project_directory,
+                    PathBuf::from_str(&phase.load_out_source)?,
+                )?)?;
+                map.insert(reference.clone(), load_out_items);
+                Ok::<BTreeMap<Reference, Vec<LoadOutItem>>, anyhow::Error>(map)
+            },
+        )
     }
 
     fn load_packages(packages_source: &PackagesSource) -> Result<Vec<Package>, AppError> {
