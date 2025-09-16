@@ -850,27 +850,44 @@ impl Project {
                 .phase
                 .eq(&old_placement.phase)
             {
-                let (phase, operation, update_placement_actions) = match (&new_placement.phase, &old_placement.phase) {
-                    (Some(new_phase), None) => (new_phase, SetOrClearAction::Set, vec![
-                        UpdatePlacementAction::RefreshPhasePlacements {
-                            phase: new_phase.clone(),
-                        },
-                    ]),
-                    (Some(new_phase), Some(old_phase)) => (new_phase, SetOrClearAction::Set, vec![
-                        UpdatePlacementAction::RefreshPhasePlacements {
-                            phase: new_phase.clone(),
-                        },
-                        UpdatePlacementAction::RefreshPhasePlacements {
-                            phase: old_phase.clone(),
-                        },
-                    ]),
-                    (None, Some(old_phase)) => (old_phase, SetOrClearAction::Clear, vec![
-                        UpdatePlacementAction::RefreshPhasePlacements {
-                            phase: old_phase.clone(),
-                        },
-                    ]),
-                    _ => unreachable!(),
-                };
+                // it's possible that assigning/clearing a placement could make the phase complete
+
+                let (phase, operation, mut update_placement_actions) =
+                    match (&new_placement.phase, &old_placement.phase) {
+                        (Some(new_phase), None) => (new_phase, SetOrClearAction::Set, vec![
+                            UpdatePlacementAction::RefreshPhasePlacements {
+                                phase: new_phase.clone(),
+                            },
+                            UpdatePlacementAction::RefreshPhaseOverview {
+                                phase: new_phase.clone(),
+                            },
+                        ]),
+                        (Some(new_phase), Some(old_phase)) => (new_phase, SetOrClearAction::Set, vec![
+                            UpdatePlacementAction::RefreshPhasePlacements {
+                                phase: new_phase.clone(),
+                            },
+                            UpdatePlacementAction::RefreshPhasePlacements {
+                                phase: old_phase.clone(),
+                            },
+                            UpdatePlacementAction::RefreshPhaseOverview {
+                                phase: new_phase.clone(),
+                            },
+                            UpdatePlacementAction::RefreshPhaseOverview {
+                                phase: old_phase.clone(),
+                            },
+                        ]),
+                        (None, Some(old_phase)) => (old_phase, SetOrClearAction::Clear, vec![
+                            UpdatePlacementAction::RefreshPhasePlacements {
+                                phase: old_phase.clone(),
+                            },
+                            UpdatePlacementAction::RefreshPhaseOverview {
+                                phase: old_phase.clone(),
+                            },
+                        ]),
+                        _ => unreachable!(),
+                    };
+
+                update_placement_actions.push(UpdatePlacementAction::RefreshPhases);
 
                 Some((
                     update_placement_actions,
@@ -910,13 +927,16 @@ impl Project {
                 };
 
                 Some((
-                    vec![UpdatePlacementAction::RefreshPhaseOverview {
-                        phase: new_placement
-                            .phase
-                            .as_ref()
-                            .unwrap()
-                            .clone(),
-                    }],
+                    vec![
+                        UpdatePlacementAction::RefreshPhaseOverview {
+                            phase: new_placement
+                                .phase
+                                .as_ref()
+                                .unwrap()
+                                .clone(),
+                        },
+                        UpdatePlacementAction::RefreshPhases,
+                    ],
                     planner_core_service
                         .update(Event::RecordPlacementsOperation {
                             object_path_patterns: vec![exact_match(&object_path.to_string())],
@@ -990,6 +1010,9 @@ impl Project {
     fn handle_update_placement_actions(tasks: &mut Vec<Task<ProjectAction>>, actions: Vec<UpdatePlacementAction>) {
         for action in actions {
             if let Some(task) = match action {
+                UpdatePlacementAction::RefreshPhases => Some(Task::done(ProjectAction::UiCommand(
+                    ProjectUiCommand::RequestProjectView(ProjectViewRequest::Phases),
+                ))),
                 UpdatePlacementAction::RefreshPhaseOverview {
                     phase,
                 } => Some(Task::done(ProjectAction::UiCommand(
@@ -1037,6 +1060,7 @@ impl Project {
 
 #[derive(Debug, PartialEq)]
 enum UpdatePlacementAction {
+    RefreshPhases,
     RefreshPhaseOverview { phase: PhaseReference },
     RefreshPhasePlacements { phase: PhaseReference },
 }
@@ -2401,7 +2425,7 @@ impl UiComponent for Project {
             ProjectUiCommand::RefreshPhase(phase) => {
                 let tasks = vec![
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-                        ProjectViewRequest::Phases
+                        ProjectViewRequest::Phases,
                     ))),
                     Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
                         ProjectViewRequest::PhaseOverview {
