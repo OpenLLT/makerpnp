@@ -24,10 +24,6 @@ toolbar-button-open-pcb = Open PCB
 toolbar-button-save = Save
 toolbar-button-close-all = Close all
 
-side-bar-header = Sidebar header
-side-bar-footer = Sidebar footer
-side-bar-item-path = Path
-
 project-toolbar-button-show-explorer = Show explorer
 project-toolbar-button-generate-artifacts = Generate artifacts
 project-toolbar-button-refresh = Refresh
@@ -79,9 +75,6 @@ phase-toolbar-add-parts-to-loadout = Add parts to load-out.
 phase-toolbar-placement-orderings = Placement orderings.
 
 phase-placements-header = Phase Placements
-
-phase-properties-header = Phase properties
-phase-properties-footer = { $count } items
 
 phase-reference = Reference
 phase-load-out-source = Load-out source

@@ -24,10 +24,6 @@ toolbar-button-open-pcb = Abrir PCB
 toolbar-button-save = Guardar
 toolbar-button-close-all = Cerrar todo
 
-side-bar-header = Encabezado de la barra lateral
-side-bar-footer = Pie de página de la barra lateral
-side-bar-item-path = Ruta
-
 project-toolbar-button-show-explorer = Mostrar explorador
 project-toolbar-button-generate-artifacts = Generar artefactos
 project-toolbar-button-refresh = Actualizar
@@ -80,8 +76,6 @@ phase-toolbar-placement-orderings = Ordenaciones de colocación.
 
 phase-placements-header = Ubicaciones de fase
 
-phase-properties-header = Propiedades de fase
-phase-properties-footer = { $count } items
 
 phase-reference = Referencia
 phase-load-out-source = Fuente de carga
