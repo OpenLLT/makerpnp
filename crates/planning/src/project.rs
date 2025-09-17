@@ -45,8 +45,8 @@ use crate::placement::{
     ProjectPlacementStatus,
 };
 use crate::process::{
-    OperationDefinition, OperationReference, OperationStatus, ProcessDefinition, ProcessError, ProcessReference,
-    ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
+    OperationDefinition, OperationReference, OperationState, OperationStatus, ProcessDefinition, ProcessError,
+    ProcessReference, ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
 };
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
@@ -1545,34 +1545,7 @@ pub fn update_placements_operation(
 ) -> anyhow::Result<bool> {
     let mut modified = false;
 
-    // first, find the only tasks for each phase that allow placement changes.
-
-    let phase_operation_task_map = project
-        .phase_states
-        .iter()
-        .filter_map(|(phase_reference, phase_state)| {
-            let operation_and_task_references = phase_state
-                .operation_states
-                .iter()
-                .find_map(|operation_state| {
-                    operation_state
-                        .task_states
-                        .iter()
-                        .find_map(|(task_reference, task_state)| {
-                            match task_state.requires_placements() && task_state.status() != TaskStatus::Abandoned {
-                                true => Some((operation_state.reference.clone(), task_reference.clone())),
-                                false => None,
-                            }
-                        })
-                });
-            operation_and_task_references.map(|(operation_reference, task_reference)| {
-                (
-                    phase_reference.clone(),
-                    (operation_reference.clone(), task_reference.clone()),
-                )
-            })
-        })
-        .collect::<BTreeMap<_, _>>();
+    let phase_operation_task_map = build_phase_operation_task_map(&placement_operation, &project.phase_states);
 
     let mut history_item_map: HashMap<Reference, Vec<Box<dyn OperationHistoryKind>>> = HashMap::new();
 
@@ -1711,11 +1684,279 @@ pub fn update_placements_operation(
     Ok(modified)
 }
 
+/// Checks if an operation can be modified:
+/// - All preceding operations must be complete
+/// - All following operations must be pending
+fn can_modify_operation(phase_state: &PhaseState, op_index: usize) -> bool {
+    // Check that all preceding operations are complete
+    let all_preceding_ops_complete = phase_state
+        .operation_states
+        .iter()
+        .take(op_index)
+        .all(|op| matches!(op.status(), OperationStatus::Complete));
+
+    // Check that all following operations are pending
+    let all_following_ops_pending = phase_state
+        .operation_states
+        .iter()
+        .skip(op_index + 1)
+        .all(|op| matches!(op.status(), OperationStatus::Pending));
+
+    all_preceding_ops_complete && all_following_ops_pending
+}
+
+/// Checks if a task can be modified:
+/// - All preceding tasks must be complete
+/// - All following tasks must be pending
+fn can_modify_task(operation_state: &OperationState, task_index: usize) -> bool {
+    // Check that all preceding tasks are complete
+    let all_preceding_tasks_complete = operation_state
+        .task_states
+        .iter()
+        .take(task_index)
+        .all(|(_, task)| matches!(task.status(), TaskStatus::Complete));
+
+    // Check that all following tasks are pending
+    let all_following_tasks_pending = operation_state
+        .task_states
+        .iter()
+        .skip(task_index + 1)
+        .all(|(_, task)| matches!(task.status(), TaskStatus::Pending));
+
+    all_preceding_tasks_complete && all_following_tasks_pending
+}
+
+/// find the only tasks for each phase that allow placement changes.
+fn build_phase_operation_task_map(
+    placement_operation: &PlacementOperation,
+    phase_states: &BTreeMap<Reference, PhaseState>,
+) -> BTreeMap<Reference, (OperationReference, TaskReference)> {
+    let phase_operation_task_map = phase_states
+        .iter()
+        .filter_map(|(phase_reference, phase_state)| {
+            let operation_and_task_references = phase_state
+                .operation_states
+                .iter()
+                .enumerate()
+                .find_map(|(op_index, operation_state)| {
+                    if !can_modify_operation(phase_state, op_index) {
+                        return None;
+                    }
+                    operation_state
+                        .task_states
+                        .iter()
+                        .enumerate()
+                        .find_map(|(task_index, (task_reference, task_state))| {
+                            if !task_state.requires_placements() {
+                                return None;
+                            }
+
+                            if !can_modify_task(operation_state, task_index) {
+                                return None;
+                            }
+
+                            let can_change = match (&placement_operation, task_state.status()) {
+                                (PlacementOperation::Reset, TaskStatus::Complete) => true,
+                                (_, TaskStatus::Started) => true,
+                                _ => false,
+                            };
+
+                            if can_change {
+                                Some((operation_state.reference.clone(), task_reference.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                });
+            operation_and_task_references.map(|(operation_reference, task_reference)| {
+                (
+                    phase_reference.clone(),
+                    (operation_reference.clone(), task_reference.clone()),
+                )
+            })
+        })
+        .collect::<BTreeMap<_, _>>();
+    phase_operation_task_map
+}
+
+#[cfg(test)]
+mod build_phase_operation_task_map_tests {
+    use std::collections::BTreeMap;
+
+    use indexmap::IndexMap;
+    use pnp::reference::Reference;
+    use rstest::rstest;
+
+    use crate::phase::{PhaseReference, PhaseState};
+    use crate::placement::{PlacementOperation, PlacementStatus};
+    use crate::process::{
+        LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState, PlacementTaskState,
+        SerializableTaskState, TaskReference,
+    };
+
+    fn build_phase_states_1() -> BTreeMap<Reference, PhaseState> {
+        BTreeMap::from([(PhaseReference::from_raw_str("phase_1"), PhaseState {
+            operation_states: vec![
+                OperationState {
+                    reference: OperationReference::from_raw_str("operation_1"),
+                    task_states: IndexMap::from([(
+                        TaskReference::from_raw_str("task_1"),
+                        Box::new(LoadPcbsTaskState::default()) as Box<dyn SerializableTaskState>,
+                    )]),
+                },
+                OperationState {
+                    reference: OperationReference::from_raw_str("operation_2"),
+                    task_states: IndexMap::from([
+                        (
+                            TaskReference::from_raw_str("task_2"),
+                            Box::new(PlacementTaskState::default()) as Box<dyn SerializableTaskState>,
+                        ),
+                        (
+                            TaskReference::from_raw_str("task_3"),
+                            Box::new(ManualSolderingTaskState::default()) as Box<dyn SerializableTaskState>,
+                        ),
+                    ]),
+                },
+            ],
+        })])
+    }
+
+    #[test]
+    pub fn test_build_phase_operation_task_map_reset_when_completed() {
+        // given
+        let placement_operation = PlacementOperation::Reset;
+        let mut phase_states = build_phase_states_1();
+
+        // and complete the first operation
+        let phase1_reference = phase_states
+            .iter()
+            .next()
+            .unwrap()
+            .0
+            .clone();
+        let phase1_state = phase_states
+            .get_mut(&phase1_reference)
+            .unwrap();
+        phase1_state.operation_states[0].task_states[0].set_completed();
+        // and complete the second
+        let placements_task = &mut phase1_state.operation_states[1].task_states[0];
+        if let Some(stuff) = placements_task.placements_state_mut() {
+            stuff.set_total_placements(1);
+            stuff.on_placement_status_change(&PlacementStatus::Pending, &PlacementStatus::Placed);
+        }
+
+        // and
+        let expected_result = BTreeMap::from([(
+            PhaseReference::from_raw_str("phase_1"),
+            (
+                OperationReference::from_raw_str("operation_2"),
+                TaskReference::from_raw_str("task_2"),
+            ),
+        )]);
+
+        // when
+        let result = super::build_phase_operation_task_map(&placement_operation, &phase_states);
+
+        // then
+        assert_eq!(result, expected_result);
+    }
+
+    #[rstest]
+    #[case(PlacementOperation::Place)]
+    #[case(PlacementOperation::Skip)]
+    #[case(PlacementOperation::Reset)]
+    pub fn test_build_phase_operation_task_map(#[case] placement_operation: PlacementOperation) {
+        // given
+        let mut phase_states = build_phase_states_1();
+
+        // and complete the first operation
+        let phase1_reference = phase_states
+            .iter()
+            .next()
+            .unwrap()
+            .0
+            .clone();
+        let phase1_state = phase_states
+            .get_mut(&phase1_reference)
+            .unwrap();
+        phase1_state.operation_states[0].task_states[0].set_completed();
+        // and start the second
+        phase1_state.operation_states[1].task_states[0].set_started();
+
+        // and
+        let expected_result = BTreeMap::from([(
+            PhaseReference::from_raw_str("phase_1"),
+            (
+                OperationReference::from_raw_str("operation_2"),
+                TaskReference::from_raw_str("task_2"),
+            ),
+        )]);
+
+        // when
+        let result = super::build_phase_operation_task_map(&placement_operation, &phase_states);
+
+        // then
+        assert_eq!(result, expected_result);
+    }
+
+    #[rstest]
+    #[case(PlacementOperation::Place)]
+    #[case(PlacementOperation::Skip)]
+    #[case(PlacementOperation::Reset)]
+    pub fn test_build_phase_operation_task_map_when_first_operation_not_started(
+        #[case] placement_operation: PlacementOperation,
+    ) {
+        // given
+        let phase_states = build_phase_states_1();
+
+        // and
+        let expected_result = BTreeMap::new();
+
+        // when
+        let result = super::build_phase_operation_task_map(&placement_operation, &phase_states);
+
+        // then
+        assert_eq!(result, expected_result);
+    }
+
+    #[rstest]
+    #[case(PlacementOperation::Place)]
+    #[case(PlacementOperation::Skip)]
+    #[case(PlacementOperation::Reset)]
+    pub fn test_build_phase_operation_task_map_when_second_operation_not_started(
+        #[case] placement_operation: PlacementOperation,
+    ) {
+        // given
+        let mut phase_states = build_phase_states_1();
+
+        // and complete the first operation
+        let phase1_reference = phase_states
+            .iter()
+            .next()
+            .unwrap()
+            .0
+            .clone();
+        let phase1_state = phase_states
+            .get_mut(&phase1_reference)
+            .unwrap();
+        phase1_state.operation_states[0].task_states[0].set_completed();
+
+        // and
+        let expected_result = BTreeMap::new();
+
+        // when
+        let result = super::build_phase_operation_task_map(&placement_operation, &phase_states);
+
+        // then
+        assert_eq!(result, expected_result);
+    }
+}
+
 /// Sometimes it's necessary to refresh the phase operation states
 ///
 /// e.g.
-/// 1) adding a placements may make a complete phase incomplete and removing
-/// 2) and removing placements my make a phase complete
+/// 1) adding placements may make a complete phase incomplete
+/// 2) removing placements may make a phase complete
 pub fn refresh_phase_operation_states(project: &mut Project) -> bool {
     let mut modified = false;
 
