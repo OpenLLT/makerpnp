@@ -955,14 +955,15 @@ impl Project {
                     PlacementStatus::Pending => PlacementOperation::Reset,
                 };
 
+                let phase = new_placement.phase.as_ref().unwrap();
+
                 Some((
                     vec![
                         UpdatePlacementAction::RefreshPhaseOverview {
-                            phase: new_placement
-                                .phase
-                                .as_ref()
-                                .unwrap()
-                                .clone(),
+                            phase: phase.clone(),
+                        },
+                        UpdatePlacementAction::RefreshPhasePlacements {
+                            phase: phase.clone(),
                         },
                         UpdatePlacementAction::RefreshPhases,
                     ],
