@@ -378,29 +378,7 @@ fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
 
                         match ordinal_ordering {
                             Ordering::Less => ordinal_ordering,
-                            Ordering::Equal => match (&a.kind, &b.kind) {
-                                (
-                                    IssueKind::UnassignedPlacement {
-                                        object_path: object_path_a,
-                                    },
-                                    IssueKind::UnassignedPlacement {
-                                        object_path: object_path_b,
-                                    },
-                                ) => object_path_a.cmp(object_path_b),
-                                (
-                                    IssueKind::UnassignedPartFeeder {
-                                        phase: phase_a,
-                                        part: part_a,
-                                    },
-                                    IssueKind::UnassignedPartFeeder {
-                                        phase: phase_b,
-                                        part: part_b,
-                                    },
-                                ) => phase_a
-                                    .cmp(phase_b)
-                                    .then(part_a.cmp(part_b)),
-                                _ => ordinal_ordering,
-                            },
+                            Ordering::Equal => a.kind.cmp(&b.kind),
                             Ordering::Greater => ordinal_ordering,
                         }
                     }
