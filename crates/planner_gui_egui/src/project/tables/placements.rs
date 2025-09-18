@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use derivative::Derivative;
@@ -10,8 +11,8 @@ use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
 use planner_app::{
-    ObjectPath, Part, PcbSide, PhaseOverview, Placement, PlacementPositionUnit, PlacementState, PlacementStatus,
-    PlacementsItem, ProjectPlacementStatus, Reference,
+    ObjectPath, Part, PcbSide, PhaseOverview, PhaseReference, Placement, PlacementPositionUnit, PlacementState,
+    PlacementStatus, PlacementsItem, ProjectPlacementStatus, Reference,
 };
 use tracing::{debug, trace};
 
@@ -65,7 +66,7 @@ impl PlacementsTableUi {
                 *part_states_table = Some((viewer, table));
             }
             Some((viewer, table)) => {
-                viewer.phases = phases;
+                viewer.update_phases(phases);
                 table.replace(rows);
             }
         }
@@ -78,7 +79,7 @@ impl PlacementsTableUi {
             .unwrap()
             .as_mut()
         {
-            viewer.phases = phases;
+            viewer.update_phases(phases);
         }
     }
 
@@ -222,17 +223,15 @@ pub struct PlacementsRow {
 
 pub struct PlacementsRowViewer {
     phases: Vec<PhaseOverview>,
+
+    // a cache to allow easy lookup for the 'is_editable_cell' for the 'placed' cell
+    phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
     sender: Enqueue<PlacementsTableUiCommand>,
     pub(crate) filter: Filter,
 }
 
 impl PlacementsRowViewer {
-    pub fn new(sender: Enqueue<PlacementsTableUiCommand>, mut phases: Vec<PhaseOverview>) -> Self {
-        phases.sort_by(|a, b| {
-            a.phase_reference
-                .cmp(&b.phase_reference)
-        });
-
+    pub fn new(sender: Enqueue<PlacementsTableUiCommand>, phases: Vec<PhaseOverview>) -> Self {
         let mut filter = Filter::default();
         filter
             .component_state
@@ -241,11 +240,39 @@ impl PlacementsRowViewer {
                 PlacementsTableUiCommand::FilterCommand(filter_ui_command)
             });
 
-        Self {
-            phases,
+        let mut instance = Self {
+            phases: Vec::new(),
+            phase_placements_editability_map: BTreeMap::new(),
             sender,
             filter,
-        }
+        };
+
+        instance.update_phases(phases);
+
+        instance
+    }
+
+    pub fn update_phases(&mut self, mut phases: Vec<PhaseOverview>) {
+        phases.sort_by(|a, b| {
+            a.phase_reference
+                .cmp(&b.phase_reference)
+        });
+
+        self.phase_placements_editability_map = BTreeMap::from_iter(phases.iter().map(|phase| {
+            (
+                phase.phase_reference.clone(),
+                phase
+                    .state
+                    .can_modify_placements()
+                    .is_ok(),
+            )
+        }));
+        self.phases = phases;
+
+        debug!(
+            "phases: {:?}, phase_placements_editability_map: {:?}",
+            self.phases, self.phase_placements_editability_map
+        );
     }
 }
 
@@ -332,14 +359,19 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
         true
     }
 
-    fn is_editable_cell(&mut self, column: usize, _row: usize, _row_value: &PlacementsRow) -> bool {
+    fn is_editable_cell(&mut self, column: usize, _row: usize, row_value: &PlacementsRow) -> bool {
         match column {
             PHASE_COL => true,
-            // FIXME also check that the phase state is appropriate
-            PLACED_COL => _row_value
+            PLACED_COL => row_value
                 .placement_state
                 .phase
-                .is_some(),
+                .as_ref()
+                .is_some_and(|phase_reference| {
+                    self.phase_placements_editability_map
+                        .get(phase_reference)
+                        .copied()
+                        .unwrap_or(false)
+                }),
             _ => false,
         }
     }

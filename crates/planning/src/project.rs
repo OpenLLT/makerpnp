@@ -45,8 +45,8 @@ use crate::placement::{
     ProjectPlacementStatus,
 };
 use crate::process::{
-    OperationDefinition, OperationReference, OperationState, OperationStatus, ProcessDefinition, ProcessError,
-    ProcessReference, ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
+    can_modify_operation, can_modify_task, OperationDefinition, OperationReference, OperationStatus, ProcessDefinition,
+    ProcessError, ProcessReference, ProcessRuleReference, SerializableTaskState, TaskAction, TaskReference, TaskStatus,
 };
 #[cfg(feature = "markdown")]
 use crate::report::project_report_json_to_markdown;
@@ -1682,48 +1682,6 @@ pub fn update_placements_operation(
     }
 
     Ok(modified)
-}
-
-/// Checks if an operation can be modified:
-/// - All preceding operations must be complete
-/// - All following operations must be pending
-fn can_modify_operation(phase_state: &PhaseState, op_index: usize) -> bool {
-    // Check that all preceding operations are complete
-    let all_preceding_ops_complete = phase_state
-        .operation_states
-        .iter()
-        .take(op_index)
-        .all(|op| matches!(op.status(), OperationStatus::Complete));
-
-    // Check that all following operations are pending
-    let all_following_ops_pending = phase_state
-        .operation_states
-        .iter()
-        .skip(op_index + 1)
-        .all(|op| matches!(op.status(), OperationStatus::Pending));
-
-    all_preceding_ops_complete && all_following_ops_pending
-}
-
-/// Checks if a task can be modified:
-/// - All preceding tasks must be complete
-/// - All following tasks must be pending
-fn can_modify_task(operation_state: &OperationState, task_index: usize) -> bool {
-    // Check that all preceding tasks are complete
-    let all_preceding_tasks_complete = operation_state
-        .task_states
-        .iter()
-        .take(task_index)
-        .all(|(_, task)| matches!(task.status(), TaskStatus::Complete));
-
-    // Check that all following tasks are pending
-    let all_following_tasks_pending = operation_state
-        .task_states
-        .iter()
-        .skip(task_index + 1)
-        .all(|(_, task)| matches!(task.status(), TaskStatus::Pending));
-
-    all_preceding_tasks_complete && all_following_tasks_pending
 }
 
 /// find the only tasks for each phase that allow placement changes.

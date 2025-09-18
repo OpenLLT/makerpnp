@@ -9,8 +9,9 @@ use crate::placement::PlacementSortingItem;
 #[cfg(test)]
 use crate::process::TestTaskState;
 use crate::process::{
-    AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState, OperationReference, OperationState,
-    OperationStatus, PlacementTaskState, ProcessDefinition, ProcessReference, SerializableTaskState, TaskReference,
+    can_modify_operation, can_modify_task, AutomatedSolderingTaskState, LoadPcbsTaskState, ManualSolderingTaskState,
+    OperationReference, OperationState, OperationStatus, PlacementTaskState, ProcessDefinition, ProcessReference,
+    SerializableTaskState, TaskReference,
 };
 
 pub type PhaseReference = Reference;
@@ -135,6 +136,41 @@ impl PhaseState {
             PhaseStatus::Incomplete
         }
     }
+
+    pub fn can_modify_placements(&self) -> Result<(&OperationReference, &TaskReference), PlacementsStateError> {
+        self.operation_states
+            .iter()
+            .enumerate()
+            .find_map(|(op_index, operation_state)| {
+                operation_state
+                    .task_states
+                    .iter()
+                    .enumerate()
+                    .find_map(|(task_index, (task_reference, task_state))| {
+                        if !task_state.requires_placements() {
+                            return None;
+                        }
+
+                        if !can_modify_operation(self, op_index) {
+                            return Some(Err(PlacementsStateError::InvalidOperationState));
+                        }
+
+                        if !can_modify_task(operation_state, task_index) {
+                            return Some(Err(PlacementsStateError::InvalidTaskState));
+                        }
+
+                        Some(Ok((&operation_state.reference, task_reference)))
+                    })
+            })
+            .unwrap_or(Err(PlacementsStateError::NoPlacementsTask))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PlacementsStateError {
+    InvalidOperationState,
+    InvalidTaskState,
+    NoPlacementsTask,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
