@@ -59,6 +59,9 @@ project-overview-phases-header = Phases
 project-pcb-designs-header = Designs
 
 project-placements-tab-label = Placements
+project-placements-tab-phase-hover-text-no-phases = No phases defined.
+project-placements-tab-phase-hover-text-no-selection = No selection.
+project-placements-tab-phase-hover-text-with-selection = Phase to apply to selection.
 
 project-parts-tab-label = Parts
 

@@ -129,7 +129,10 @@ impl UiComponent for PlacementsTabUi {
 
             ui.separator();
 
-            ui.add_enabled_ui(!self.phases.is_empty(), |ui|{
+            let have_selection = self.selection.is_some();
+            let have_phases = !self.phases.is_empty();
+
+            ui.add_enabled_ui(have_phases, |ui|{
                 egui::ComboBox::from_id_salt(ui.id().with("phase_selection"))
                     .selected_text(match &self.selected_phase {
                         Some(phase) => format!("{}", phase),
@@ -151,9 +154,17 @@ impl UiComponent for PlacementsTabUi {
                             }
                         }
                     });
-            });
+            })
+                .response
+                    // FIXME the `on_hover_text` does not work, no tooltip appears when hovering over an ENABLED combobox.
+                    //       the `on_disabled_hover_text` DOES work though.
+                    .on_hover_text(if have_selection {
+                        tr!("project-placements-tab-phase-hover-text-with-selection")
+                    } else {
+                        tr!("project-placements-tab-phase-hover-text-no-selection")
+                    })
+                    .on_disabled_hover_text(tr!("project-placements-tab-phase-hover-text-no-phases"));
 
-            let have_selection = self.selection.is_some();
             let have_phase = self.selected_phase.is_some();
 
             ui.add_enabled_ui(have_selection && have_phase, |ui| {
