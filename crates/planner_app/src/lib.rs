@@ -1503,7 +1503,9 @@ impl Planner {
                     .ok_or(AppError::UnknownPhaseReference(phase_reference.clone()))?
                     .clone();
 
-                let parts = project::assign_placements_to_phase(project, &phase, operation.clone(), placements_pattern);
+                let parts = project::assign_placements_to_phase(project, &phase, operation.clone(), placements_pattern)
+                    .map_err(|cause| AppError::ProjectError(ProjectError::UnableToAssignPhaseToPlacements(cause)))?;
+
                 trace!("Required load_out parts: {:?}", parts);
 
                 *modified |= project::refresh_phase_operation_states(project);

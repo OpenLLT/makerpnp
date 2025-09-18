@@ -226,6 +226,8 @@ pub struct PlacementsRowViewer {
 
     // a cache to allow easy lookup for the 'is_editable_cell' for the 'placed' cell
     phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
+    all_phases_pending: bool,
+
     sender: Enqueue<PlacementsTableUiCommand>,
     pub(crate) filter: Filter,
 }
@@ -242,6 +244,7 @@ impl PlacementsRowViewer {
 
         let mut instance = Self {
             phases: Vec::new(),
+            all_phases_pending: false,
             phase_placements_editability_map: BTreeMap::new(),
             sender,
             filter,
@@ -267,6 +270,10 @@ impl PlacementsRowViewer {
                     .is_ok(),
             )
         }));
+
+        self.all_phases_pending = phases
+            .iter()
+            .all(|phase| phase.state.is_pending());
         self.phases = phases;
 
         debug!(
@@ -361,7 +368,7 @@ impl RowViewer<PlacementsRow> for PlacementsRowViewer {
 
     fn is_editable_cell(&mut self, column: usize, _row: usize, row_value: &PlacementsRow) -> bool {
         match column {
-            PHASE_COL => true,
+            PHASE_COL => self.all_phases_pending,
             PLACED_COL => row_value
                 .placement_state
                 .phase

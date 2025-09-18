@@ -1043,12 +1043,30 @@ pub fn store_phase_placements_as_csv(
     Ok(())
 }
 
+#[derive(Error, Debug)]
+pub enum AssignmentError {
+    #[error("Project state error. All phases must be pending to perform assignments")]
+    ProjectStateError,
+}
+
 pub fn assign_placements_to_phase(
     project: &mut Project,
     phase: &Phase,
     action: SetOrClearAction,
     placements_pattern: Regex,
-) -> BTreeSet<Part> {
+) -> Result<BTreeSet<Part>, AssignmentError> {
+    if !project
+        .phase_states
+        .iter()
+        .all(|(_, phase_state)| phase_state.is_pending())
+    {
+        warn!(
+            "Unable to assign placements to phase, all phases must be pending. phase: '{}'",
+            phase.reference
+        );
+        return Err(AssignmentError::ProjectStateError);
+    }
+
     let mut required_load_out_parts = BTreeSet::new();
 
     debug!(
@@ -1115,7 +1133,7 @@ pub fn assign_placements_to_phase(
         let _inserted = required_load_out_parts.insert(state.placement.part.clone());
     }
 
-    required_load_out_parts
+    Ok(required_load_out_parts)
 }
 
 pub fn refresh_from_design_variants<'a>(
@@ -2615,4 +2633,6 @@ pub enum ProjectError {
     UnableToLoadPlacements(anyhow::Error),
     #[error("Unable to build unit positions. check pcb configuration. {0}")]
     UnableToBuildUnitPositions(String),
+    #[error("Unable to assign phase to placements, cause: {0}")]
+    UnableToAssignPhaseToPlacements(#[from] AssignmentError),
 }

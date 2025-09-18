@@ -27,6 +27,7 @@ pub struct PlacementsTabUi {
     phases: Vec<PhaseOverview>,
 
     pub component: ComponentState<PlacementsTabUiCommand>,
+    can_change_phase: bool,
 }
 
 impl PlacementsTabUi {
@@ -46,18 +47,24 @@ impl PlacementsTabUi {
             selection: None,
             selected_phase: None,
             phases: Vec::new(),
+            can_change_phase: false,
             component,
         }
     }
 
     pub fn update_placements(&mut self, placements: PlacementsList, phases: Vec<PhaseOverview>) {
         self.placements_table_ui
-            .update_placements(placements.placements, phases);
+            .update_placements(placements.placements, phases.clone());
+        self.update_phases(phases);
     }
+
     pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
-        self.phases = phases.clone();
         self.placements_table_ui
-            .update_phases(phases);
+            .update_phases(phases.clone());
+        self.can_change_phase = phases
+            .iter()
+            .all(|it| it.state.is_pending());
+        self.phases = phases;
     }
 }
 
@@ -151,28 +158,30 @@ impl UiComponent for PlacementsTabUi {
                 egui::ComboBox::from_id_salt(ui.id().with("phase_action"))
                     .selected_text(tr!("common-actions"))
                     .show_ui(ui, |ui| {
-                        if ui
-                            .add(egui::Button::selectable(false, tr!("form-common-button-apply")))
-                            .clicked()
-                        {
-                            self.component
-                                .sender
-                                .send(PlacementsTabUiCommand::PlacementActionClicked(
-                                    PlacementAction::ApplyPhase,
-                                ))
-                                .expect("sent");
-                        }
-                        if ui
-                            .add(egui::Button::selectable(false, tr!("form-common-button-remove")))
-                            .clicked()
-                        {
-                            self.component
-                                .sender
-                                .send(PlacementsTabUiCommand::PlacementActionClicked(
-                                    PlacementAction::RemovePhase,
-                                ))
-                                .expect("sent");
-                        }
+                        ui.add_enabled_ui(self.can_change_phase, |ui| {
+                            if ui
+                                .add(egui::Button::selectable(false, tr!("form-common-button-apply")))
+                                .clicked()
+                            {
+                                self.component
+                                    .sender
+                                    .send(PlacementsTabUiCommand::PlacementActionClicked(
+                                        PlacementAction::ApplyPhase,
+                                    ))
+                                    .expect("sent");
+                            }
+                            if ui
+                                .add(egui::Button::selectable(false, tr!("form-common-button-remove")))
+                                .clicked()
+                            {
+                                self.component
+                                    .sender
+                                    .send(PlacementsTabUiCommand::PlacementActionClicked(
+                                        PlacementAction::RemovePhase,
+                                    ))
+                                    .expect("sent");
+                            }
+                        });
                     });
             });
         });
