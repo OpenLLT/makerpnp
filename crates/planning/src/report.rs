@@ -20,6 +20,7 @@ use util::dynamic::dynamic_eq::DynamicEq;
 use util::sorting::SortOrder;
 
 use crate::design::{DesignName, DesignVariant};
+use crate::file::FileReference;
 use crate::pcb::Pcb;
 use crate::phase::{PhaseReference, PhaseStatus};
 use crate::placement::{PlacementState, ProjectPlacementStatus};
@@ -46,10 +47,39 @@ pub fn project_generate_report(
             severity: IssueSeverity::Severe,
             kind: IssueKind::NoPcbsAssigned,
         });
+    } else {
+        for pcb in project.pcbs.iter() {
+            if pcb.unit_assignments.is_empty() {
+                issue_set.insert(ProjectReportIssue {
+                    message: "A PCB has no unit assignments.".to_string(),
+                    severity: IssueSeverity::Severe,
+                    kind: IssueKind::PcbWithNoUnitAssignments {
+                        file: pcb.pcb_file.clone(),
+                    },
+                });
+            }
+        }
+    }
+
+    if project.placements.is_empty() {
+        issue_set.insert(ProjectReportIssue {
+            message: "No placements.".to_string(),
+            severity: IssueSeverity::Severe,
+            kind: IssueKind::NoPlacements,
+        });
     }
 
     for phase_reference in project.phase_orderings.iter() {
         let phase_placement_states = build_phase_placement_states(project, phase_reference);
+        if phase_placement_states.is_empty() {
+            issue_set.insert(ProjectReportIssue {
+                message: "Phase with no placements.".to_string(),
+                severity: IssueSeverity::Warning,
+                kind: IssueKind::PhaseWithNoPlacements {
+                    phase: phase_reference.clone(),
+                },
+            });
+        }
 
         for (_object_path, placement_state) in phase_placement_states.iter() {
             let load_out_items = phase_load_out_items_map
@@ -355,12 +385,19 @@ fn project_report_sort_issues(issues: &mut [ProjectReportIssue]) {
                     match kind {
                         IssueKind::NoPcbsAssigned => 0,
                         IssueKind::NoPhasesCreated => 1,
-                        IssueKind::UnassignedPlacement {
+                        IssueKind::PcbWithNoUnitAssignments {
                             ..
                         } => 2,
+                        IssueKind::NoPlacements => 3,
+                        IssueKind::PhaseWithNoPlacements {
+                            ..
+                        } => 4,
+                        IssueKind::UnassignedPlacement {
+                            ..
+                        } => 5,
                         IssueKind::UnassignedPartFeeder {
                             ..
-                        } => 3,
+                        } => 6,
                     }
                 }
                 fn severity_ordinal(severity: &IssueSeverity) -> usize {
@@ -889,6 +926,13 @@ pub enum IssueKind {
     UnassignedPartFeeder {
         phase: PhaseReference,
         part: Part,
+    },
+    PcbWithNoUnitAssignments {
+        file: FileReference,
+    },
+    NoPlacements,
+    PhaseWithNoPlacements {
+        phase: PhaseReference,
     },
 }
 

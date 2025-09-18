@@ -103,6 +103,17 @@ impl IssuesTabUi {
                                             } => {
                                                 ui.label(format!("{} - {} {}", phase, part.mpn, part.manufacturer));
                                             }
+                                            IssueKind::PcbWithNoUnitAssignments {
+                                                file,
+                                            } => {
+                                                ui.label(file.to_string());
+                                            }
+                                            IssueKind::NoPlacements => {}
+                                            IssueKind::PhaseWithNoPlacements {
+                                                phase,
+                                            } => {
+                                                ui.label(phase.to_string());
+                                            }
                                         });
                                         row.col(|ui| {
                                             let _ = ui;
@@ -126,6 +137,19 @@ impl IssuesTabUi {
                                                 } => {
                                                     // TODO add button to show the part in the phase placements
                                                     let (_, _) = (phase, part);
+                                                }
+                                                IssueKind::PcbWithNoUnitAssignments {
+                                                    file,
+                                                } => {
+                                                    // TODO add button to show the PCB's unit assignment
+                                                    let _ = file;
+                                                }
+                                                IssueKind::NoPlacements => {}
+                                                IssueKind::PhaseWithNoPlacements {
+                                                    phase,
+                                                } => {
+                                                    // TODO add button to show all placements so that assignments can be made
+                                                    let _ = phase;
                                                 }
                                             }
                                         });

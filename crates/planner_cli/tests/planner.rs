@@ -2450,6 +2450,13 @@ mod operation_sequence_1 {
             ])
             .with_issues(&[
                 TestIssue {
+                    message: "Phase with no placements.".to_string(),
+                    severity: TestIssueSeverity::Warning,
+                    kind: TestIssueKind::PhaseWithNoPlacements {
+                        phase: "bottom_1".to_string(),
+                    },
+                },
+                TestIssue {
                     message: "A placement has not been assigned to a phase".to_string(),
                     severity: TestIssueSeverity::Warning,
                     kind: TestIssueKind::UnassignedPlacement {
