@@ -129,27 +129,29 @@ impl UiComponent for PlacementsTabUi {
 
             ui.separator();
 
-            egui::ComboBox::from_id_salt(ui.id().with("phase_selection"))
-                .selected_text(match &self.selected_phase {
-                    Some(phase) => format!("{}", phase),
-                    None => tr!("form-common-choice-phase"),
-                })
-                .show_ui(ui, |ui| {
-                    for phase in &self.phases {
-                        if ui
-                            .add(egui::Button::selectable(
-                                matches!(&self.selected_phase, Some(selection) if selection.eq(&phase.phase_reference)),
-                                format!("{}", phase.phase_reference),
-                            ))
-                            .clicked()
-                        {
-                            self.component
-                                .sender
-                                .send(PlacementsTabUiCommand::PhaseChanged(phase.phase_reference.clone()))
-                                .expect("sent");
+            ui.add_enabled_ui(!self.phases.is_empty(), |ui|{
+                egui::ComboBox::from_id_salt(ui.id().with("phase_selection"))
+                    .selected_text(match &self.selected_phase {
+                        Some(phase) => format!("{}", phase),
+                        None => tr!("form-common-choice-phase"),
+                    })
+                    .show_ui(ui, |ui| {
+                        for phase in &self.phases {
+                            if ui
+                                .add(egui::Button::selectable(
+                                    matches!(&self.selected_phase, Some(selection) if selection.eq(&phase.phase_reference)),
+                                    format!("{}", phase.phase_reference),
+                                ))
+                                .clicked()
+                            {
+                                self.component
+                                    .sender
+                                    .send(PlacementsTabUiCommand::PhaseChanged(phase.phase_reference.clone()))
+                                    .expect("sent");
+                            }
                         }
-                    }
-                });
+                    });
+            });
 
             let have_selection = self.selection.is_some();
             let have_phase = self.selected_phase.is_some();
