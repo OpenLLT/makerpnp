@@ -3748,7 +3748,7 @@ mod help {
             let expected_output = indoc! {"
                 Assign a design variant to a PCB unit
 
-                Usage: planner_cli project --project <PROJECT_NAME> assign-variant-to-unit [OPTIONS] --unit <OBJECT_PATH> --variant <VARIANT_NAME>
+                Usage: planner_cli project --project <PROJECT_NAME> assign-variant-to-unit [OPTIONS] --unit <OBJECT_PATH>
 
                 Options:
                       --unit <OBJECT_PATH>      PCB unit path

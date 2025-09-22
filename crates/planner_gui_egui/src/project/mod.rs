@@ -2468,8 +2468,6 @@ impl UiComponent for Project {
                             });
                         }
 
-                        // TODO support un-assigning, no-events are created when the map doesn't contain any entries.
-
                         let mut tasks = vec![];
                         for event in events {
                             match self

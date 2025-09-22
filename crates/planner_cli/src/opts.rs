@@ -365,7 +365,7 @@ pub(crate) enum ProjectCommand {
 
         /// Variant of the design
         #[arg(long, value_parser = clap::value_parser!(VariantName), value_name = "VARIANT_NAME")]
-        variant: VariantName,
+        variant: Option<VariantName>,
     },
     /// Refresh from design variants
     RefreshFromDesignVariants,
