@@ -681,16 +681,14 @@ fn find_unit_assignments(project: &Project, pcbs: &[&Pcb], unit_path: &ObjectPat
 
     let unit_assignments = all_unit_assignments
         .iter()
-        .filter_map(
-            |(
-                assignment_unit_path,
-                DesignVariant {
-                    design_name,
-                    variant_name,
-                },
-            )| {
-                let mut result = None;
+        .filter_map(|(assignment_unit_path, unit_assignment)| {
+            let mut result = None;
 
+            if let Some(DesignVariant {
+                design_name,
+                variant_name,
+            }) = unit_assignment
+            {
                 if assignment_unit_path.eq(unit_path) {
                     result = Some(PcbUnitAssignmentItem {
                         unit_path: unit_path.clone(),
@@ -698,9 +696,9 @@ fn find_unit_assignments(project: &Project, pcbs: &[&Pcb], unit_path: &ObjectPat
                         variant_name: variant_name.clone(),
                     })
                 }
-                result
-            },
-        )
+            }
+            result
+        })
         .collect();
 
     unit_assignments

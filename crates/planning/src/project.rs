@@ -110,7 +110,7 @@ impl Project {
     /// Safety: Silently ignores errors when building unit assignments fails. e.g. pcb not loaded.
     ///
     /// FUTURE improve this so it returns a `Result` with an `Err` if one of the Pcbs has not been loaded.
-    pub fn all_unit_assignments(&self, pcbs: &[&Pcb]) -> Vec<(ObjectPath, DesignVariant)> {
+    pub fn all_unit_assignments(&self, pcbs: &[&Pcb]) -> Vec<(ObjectPath, Option<DesignVariant>)> {
         self.pcbs
             .iter()
             .zip(pcbs)
@@ -121,14 +121,12 @@ impl Project {
                     .unwrap_or_default()
                     .into_iter()
                     .enumerate()
-                    .filter_map(move |(unit_index, unit_assignment)| {
-                        unit_assignment.map(|design_variant| {
-                            let mut object_path = ObjectPath::default();
-                            object_path.set_pcb_instance(pcb_index as u16 + 1);
-                            object_path.set_pcb_unit(unit_index as u16 + 1);
+                    .map(move |(unit_index, unit_assignment)| {
+                        let mut object_path = ObjectPath::default();
+                        object_path.set_pcb_instance(pcb_index as u16 + 1);
+                        object_path.set_pcb_unit(unit_index as u16 + 1);
 
-                            (object_path, design_variant)
-                        })
+                        (object_path, unit_assignment)
                     })
             })
             .collect::<Vec<_>>()
@@ -497,6 +495,8 @@ impl ProjectPcb {
         Ok(())
     }
 
+    /// Returns an vector of optional design variant assignments, one for each unit of the pcb.
+    /// The assignment for a pcb unit can be None when the design name is unknown or no assignment is made.
     pub fn unit_assignments(&self, pcb: &Pcb) -> Result<Vec<Option<DesignVariant>>, ProjectPcbError> {
         let mut unit_assignments = vec![None; pcb.units as usize];
 
@@ -1282,7 +1282,7 @@ fn refresh_placements(
 /// there should be one pcb_orientation for each pcb.
 pub(crate) fn build_placement_unit_positions(
     placements: Vec<(ObjectPath, &Placement)>,
-    unit_assignments: &Vec<(ObjectPath, DesignVariant)>,
+    unit_assignments: &Vec<(ObjectPath, Option<DesignVariant>)>,
     pcbs: &[&Pcb],
 ) -> Result<BTreeMap<ObjectPath, UnitPlacementPosition>, ProjectError> {
     type BuildTransformResult = Result<PcbUnitTransform, PcbError>;
@@ -1348,18 +1348,22 @@ pub(crate) fn build_placement_unit_positions(
 fn find_placement_changes(
     project: &mut Project,
     design_variant_placement_map: &BTreeMap<DesignVariant, Vec<Placement>>,
-    unit_assignments: &Vec<(ObjectPath, DesignVariant)>,
+    unit_assignments: &Vec<(ObjectPath, Option<DesignVariant>)>,
 ) -> Vec<(Change, ObjectPath, Placement)> {
     let mut changes: Vec<(Change, ObjectPath, Placement)> = vec![];
 
     // find new or existing placements that are in the updated design_variant_placement_map
 
     for (design_variant, placements) in design_variant_placement_map.iter() {
-        for (unit_path, assignment_design_variant) in unit_assignments.iter() {
-            if !design_variant.eq(assignment_design_variant) {
-                continue;
-            }
-
+        for (unit_path, _assigned_design_variant) in unit_assignments
+            .iter()
+            .filter_map(|(path, assignment)| {
+                assignment
+                    .as_ref()
+                    .filter(|assignment_design_variant| assignment_design_variant.eq(&design_variant))
+                    .map(|assigned_design_variant| (path, assigned_design_variant))
+            })
+        {
             for placement in placements {
                 let mut path: ObjectPath = unit_path.clone();
                 path.set_ref_des(placement.ref_des.clone());
@@ -1374,10 +1378,10 @@ fn find_placement_changes(
         }
     }
 
-    // find the placements that we knew about previously, but that are no-longer in the design_variant_placement_map
+    // find the placements that we knew about previously, but that are no-longer used.
 
     for (path, state) in project.placements.iter_mut() {
-        for (unit_path, design_variant) in unit_assignments.iter() {
+        for (unit_path, unit_assignment) in unit_assignments.iter() {
             let path_str = path.to_string();
             let unit_path_str = unit_path.to_string();
             let is_matched_unit = path_str.starts_with(&unit_path_str);
@@ -1389,25 +1393,31 @@ fn find_placement_changes(
             );
 
             if is_matched_unit {
-                if let Some(placements) = design_variant_placement_map.get(design_variant) {
-                    match placements.iter().find(|placement| {
-                        placement
-                            .ref_des
-                            .eq(&state.placement.ref_des)
-                    }) {
-                        Some(_) => {
-                            trace!("known placement");
-                        }
-                        None => {
-                            trace!("unknown placement");
-                            match state.project_status {
-                                ProjectPlacementStatus::Unused => (),
-                                ProjectPlacementStatus::Used => {
-                                    changes.push((Change::Unused, path.clone(), state.placement.clone()))
+                if let Some(design_variant) = unit_assignment {
+                    if let Some(placements) = design_variant_placement_map.get(design_variant) {
+                        match placements.iter().find(|placement| {
+                            placement
+                                .ref_des
+                                .eq(&state.placement.ref_des)
+                        }) {
+                            Some(_) => {
+                                trace!("known placement");
+                            }
+                            None => {
+                                trace!("unknown placement");
+                                match state.project_status {
+                                    ProjectPlacementStatus::Unused => (),
+                                    ProjectPlacementStatus::Used => {
+                                        changes.push((Change::Unused, path.clone(), state.placement.clone()))
+                                    }
                                 }
                             }
                         }
                     }
+                } else {
+                    // the unit is no longer assigned, all the associated placements must be marked as unused
+                    trace!("unknown placement, unused design_variant");
+                    changes.push((Change::Unused, path.clone(), state.placement.clone()))
                 }
             }
         }
