@@ -166,7 +166,6 @@ impl Pcb {
         let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Configuration(_)));
         if result.is_err() {
             pcb_tabs.add_tab_to_leaf_or_split(
-                0,
                 PcbTabKind::Configuration(ConfigurationTab::default()),
                 0.25,
                 Split::Right,
@@ -228,7 +227,6 @@ impl Pcb {
             .show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::GerberViewer(tab) if tab.args.eq(&args)))
             .inspect_err(|_| {
                 pcb_tabs.add_tab_to_leaf_or_split(
-                    0,
                     PcbTabKind::GerberViewer(GerberViewerTab::new(args.clone())),
                     0.25,
                     Split::Right,

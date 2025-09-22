@@ -425,14 +425,11 @@ macro_rules! tabs_impl {
             tree.retain_tabs(|tab_key| tab_keys_to_retain.contains(&tab_key));
         }
 
+        // FIXME This only works when all the tabs are closed and they are added in a particular order.
+        //       this is because the user can move tabs between surfaces and nodes, so later trying to use
+        //       a desired surface will not do what you want.
         #[allow(dead_code)]
-        pub fn add_tab_to_leaf_or_split(
-            &mut self,
-            desired_leaf_index: usize,
-            tab_kind: $tab_kind,
-            parent_fraction: f32,
-            split: Split,
-        ) -> TabKey {
+        pub fn add_tab_to_leaf_or_split(&mut self, tab_kind: $tab_kind, parent_fraction: f32, split: Split) -> TabKey {
             let mut tabs = self.tabs.lock().unwrap();
             let tab_key = tabs.add(tab_kind);
 
@@ -450,7 +447,7 @@ macro_rules! tabs_impl {
                     continue;
                 }
 
-                if leaf_index > desired_leaf_index {
+                if leaf_index > 0 {
                     node.append_tab(tab_key);
                     return tab_key;
                 }

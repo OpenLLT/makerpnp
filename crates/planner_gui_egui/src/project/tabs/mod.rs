@@ -1,7 +1,7 @@
 use derivative::Derivative;
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
-use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
+use egui_dock::{DockArea, DockState, NodeIndex, Split, Style};
 use egui_mobius::types::Value;
 
 use crate::project::{ProjectTabKind, ProjectUiState};
