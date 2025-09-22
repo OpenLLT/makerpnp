@@ -1,5 +1,5 @@
 use egui::scroll_area::ScrollBarVisibility;
-use egui::{Resize, Ui, WidgetText};
+use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
 use egui_extras::{Column, TableBuilder};
 use egui_i18n::tr;
@@ -16,7 +16,7 @@ pub struct IssuesTabUi {
 }
 
 impl IssuesTabUi {
-    const TABLE_SCROLL_HEIGHT_MIN: f32 = 150.0;
+    const TABLE_SCROLL_HEIGHT_MIN: f32 = 100.0;
 
     pub fn new() -> Self {
         Self {
@@ -32,131 +32,117 @@ impl IssuesTabUi {
     fn show_issues(&self, ui: &mut Ui, text_height: f32) {
         let Some(report) = &self.report else { return };
 
-        let available_size = ui.available_size();
-
-        Resize::default()
-            .resizable([false, true])
-            .default_width(available_size.x)
-            .min_width(available_size.x)
-            .max_width(available_size.x)
-            .show(ui, |ui| {
-                // HACK: search codebase for 'HACK: table-resize-hack' for details
-                egui::Frame::new()
-                    .outer_margin(4.0)
-                    .show(ui, |ui| {
-                        TableBuilder::new(ui)
-                            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
-                            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
-                            .column(Column::auto())
-                            .column(Column::auto())
-                            .column(Column::remainder())
-                            .column(Column::remainder())
-                            .column(Column::auto().resizable(false))
-                            .striped(true)
-                            .resizable(true)
-                            .auto_shrink([false, false])
-                            .header(20.0, |mut header| {
-                                header.col(|ui| {
-                                    ui.strong(tr!("table-issues-column-index"));
-                                });
-                                header.col(|ui| {
-                                    ui.strong(tr!("table-issues-column-severity"));
-                                });
-                                header.col(|ui| {
-                                    ui.strong(tr!("table-issues-column-message"));
-                                });
-                                header.col(|ui| {
-                                    ui.strong(tr!("table-issues-column-details"));
-                                });
-                                header.col(|ui| {
-                                    ui.strong(tr!("table-issues-column-actions"));
-                                });
-                            })
-                            .body(|body| {
-                                body.rows(text_height, report.issues.len(), |mut row| {
-                                    let index = row.index();
-                                    if let Some(issue) = report.issues.get(index) {
-                                        row.col(|ui| {
-                                            ui.label(index.to_string());
-                                        });
-                                        row.col(|ui| {
-                                            // TODO translate
-                                            ui.label(format!("{:?}", issue.severity));
-                                        });
-                                        row.col(|ui| {
-                                            // TODO translate - this highlights an issue with the message generation, it
-                                            //      needs an i18n key and args, not an actual message
-                                            ui.label(&issue.message);
-                                        });
-                                        row.col(|ui| match &issue.kind {
-                                            IssueKind::NoPcbsAssigned => {}
-                                            IssueKind::NoPhasesCreated => {}
-                                            IssueKind::UnassignedPlacement {
-                                                object_path,
-                                            } => {
-                                                ui.label(object_path.to_string());
-                                            }
-                                            IssueKind::UnassignedPartFeeder {
-                                                phase,
-                                                part,
-                                            } => {
-                                                ui.label(format!("{} - {} {}", phase, part.mpn, part.manufacturer));
-                                            }
-                                            IssueKind::PcbWithNoUnitAssignments {
-                                                file,
-                                            } => {
-                                                ui.label(file.to_string());
-                                            }
-                                            IssueKind::NoPlacements => {}
-                                            IssueKind::PhaseWithNoPlacements {
-                                                phase,
-                                            } => {
-                                                ui.label(phase.to_string());
-                                            }
-                                        });
-                                        row.col(|ui| {
-                                            let _ = ui;
-                                            // TODO translate
-                                            match &issue.kind {
-                                                IssueKind::NoPcbsAssigned => {
-                                                    // TODO add button to show add pcbs form or similar
-                                                }
-                                                IssueKind::NoPhasesCreated => {
-                                                    // TODO add button to create a phase
-                                                }
-                                                IssueKind::UnassignedPlacement {
-                                                    object_path,
-                                                } => {
-                                                    // TODO add button to show the placement in the list of placements
-                                                    let _ = object_path;
-                                                }
-                                                IssueKind::UnassignedPartFeeder {
-                                                    phase,
-                                                    part,
-                                                } => {
-                                                    // TODO add button to show the part in the phase placements
-                                                    let (_, _) = (phase, part);
-                                                }
-                                                IssueKind::PcbWithNoUnitAssignments {
-                                                    file,
-                                                } => {
-                                                    // TODO add button to show the PCB's unit assignment
-                                                    let _ = file;
-                                                }
-                                                IssueKind::NoPlacements => {}
-                                                IssueKind::PhaseWithNoPlacements {
-                                                    phase,
-                                                } => {
-                                                    // TODO add button to show all placements so that assignments can be made
-                                                    let _ = phase;
-                                                }
-                                            }
-                                        });
-                                    }
-                                });
-                            });
-                    });
+        TableBuilder::new(ui)
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .min_scrolled_height(Self::TABLE_SCROLL_HEIGHT_MIN)
+            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+            .column(Column::auto())
+            .column(Column::auto())
+            .column(Column::remainder())
+            .column(Column::remainder())
+            .column(Column::auto().resizable(false))
+            .striped(true)
+            .resizable(true)
+            .auto_shrink([false, false])
+            .header(20.0, |mut header| {
+                header.col(|ui| {
+                    ui.strong(tr!("table-issues-column-index"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-issues-column-severity"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-issues-column-message"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-issues-column-details"));
+                });
+                header.col(|ui| {
+                    ui.strong(tr!("table-issues-column-actions"));
+                });
+            })
+            .body(|body| {
+                body.rows(text_height, report.issues.len(), |mut row| {
+                    let index = row.index();
+                    if let Some(issue) = report.issues.get(index) {
+                        row.col(|ui| {
+                            ui.label(index.to_string());
+                        });
+                        row.col(|ui| {
+                            // TODO translate
+                            ui.label(format!("{:?}", issue.severity));
+                        });
+                        row.col(|ui| {
+                            // TODO translate - this highlights an issue with the message generation, it
+                            //      needs an i18n key and args, not an actual message
+                            ui.label(&issue.message);
+                        });
+                        row.col(|ui| match &issue.kind {
+                            IssueKind::NoPcbsAssigned => {}
+                            IssueKind::NoPhasesCreated => {}
+                            IssueKind::UnassignedPlacement {
+                                object_path,
+                            } => {
+                                ui.label(object_path.to_string());
+                            }
+                            IssueKind::UnassignedPartFeeder {
+                                phase,
+                                part,
+                            } => {
+                                ui.label(format!("{} - {} {}", phase, part.mpn, part.manufacturer));
+                            }
+                            IssueKind::PcbWithNoUnitAssignments {
+                                file,
+                            } => {
+                                ui.label(file.to_string());
+                            }
+                            IssueKind::NoPlacements => {}
+                            IssueKind::PhaseWithNoPlacements {
+                                phase,
+                            } => {
+                                ui.label(phase.to_string());
+                            }
+                        });
+                        row.col(|ui| {
+                            let _ = ui;
+                            // TODO translate
+                            match &issue.kind {
+                                IssueKind::NoPcbsAssigned => {
+                                    // TODO add button to show add pcbs form or similar
+                                }
+                                IssueKind::NoPhasesCreated => {
+                                    // TODO add button to create a phase
+                                }
+                                IssueKind::UnassignedPlacement {
+                                    object_path,
+                                } => {
+                                    // TODO add button to show the placement in the list of placements
+                                    let _ = object_path;
+                                }
+                                IssueKind::UnassignedPartFeeder {
+                                    phase,
+                                    part,
+                                } => {
+                                    // TODO add button to show the part in the phase placements
+                                    let (_, _) = (phase, part);
+                                }
+                                IssueKind::PcbWithNoUnitAssignments {
+                                    file,
+                                } => {
+                                    // TODO add button to show the PCB's unit assignment
+                                    let _ = file;
+                                }
+                                IssueKind::NoPlacements => {}
+                                IssueKind::PhaseWithNoPlacements {
+                                    phase,
+                                } => {
+                                    // TODO add button to show all placements so that assignments can be made
+                                    let _ = phase;
+                                }
+                            }
+                        });
+                    }
+                });
             });
     }
 }

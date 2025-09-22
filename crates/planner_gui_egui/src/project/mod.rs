@@ -1200,8 +1200,10 @@ impl UiComponent for Project {
             ProjectUiCommand::Created => {
                 let show_explorer_task = self.show_explorer();
                 let show_overview_tasks = self.show_overview();
+                let show_issues_tasks = self.show_issues();
                 let mut tasks = vec![show_explorer_task];
                 tasks.extend(show_overview_tasks);
+                tasks.extend(show_issues_tasks);
 
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
@@ -1217,8 +1219,11 @@ impl UiComponent for Project {
             ProjectUiCommand::Loaded => {
                 let show_explorer_task = self.show_explorer();
                 let show_overview_tasks = self.show_overview();
+                let show_issues_tasks = self.show_issues();
                 let mut tasks = vec![show_explorer_task];
                 tasks.extend(show_overview_tasks);
+                tasks.extend(show_issues_tasks);
+
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
             ProjectUiCommand::Save => {
