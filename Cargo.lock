@@ -1665,8 +1665,9 @@ dependencies = [
 
 [[package]]
 name = "egui-i18n"
-version = "0.1.0"
-source = "git+https://github.com/makerpnp/egui-i18n?rev=087c62591d8027b51641bf4bcf556106d17ea799#087c62591d8027b51641bf4bcf556106d17ea799"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8c22bf30b6ac742d2a0fd2999982f5bea18a1625a9247e6be8b439cc42ada0b"
 dependencies = [
  "fluent",
  "fluent-bundle",
