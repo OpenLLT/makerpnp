@@ -37,7 +37,7 @@ fn main() {
                 width: 384,
                 height: 384,
             }))
-            .with_inner_size([600.0, 440.0])
+            .with_inner_size([1024.0, 768.0])
             .with_min_inner_size([300.0, 220.0]),
         ..Default::default()
     };
