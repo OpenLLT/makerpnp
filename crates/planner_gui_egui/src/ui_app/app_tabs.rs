@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use egui::{Ui, WidgetText};
 use egui_dock::tab_viewer::OnCloseResponse;
-use egui_dock::{DockArea, DockState, Node, NodeIndex, Split, Style, Tree};
+use egui_dock::{DockArea, DockState, NodeIndex, Split, Style};
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use serde::{Deserialize, Serialize};
 use slotmap::SlotMap;
@@ -426,26 +426,40 @@ macro_rules! tabs_impl {
         }
 
         #[allow(dead_code)]
-        pub fn add_tab_to_second_leaf_or_split(&mut self, tab_kind: $tab_kind) -> TabKey {
+        pub fn add_tab_to_leaf_or_split(
+            &mut self,
+            desired_leaf_index: usize,
+            tab_kind: $tab_kind,
+            parent_fraction: f32,
+            split: Split,
+        ) -> TabKey {
             let mut tabs = self.tabs.lock().unwrap();
             let tab_key = tabs.add(tab_kind);
 
             let mut tree = self.tree.lock().unwrap();
 
-            fn get_leaf_mut<T>(tree: &mut Tree<T>, target_index: usize) -> Option<&mut Node<T>> {
-                tree.iter_mut()
-                    .filter(|node| node.is_leaf())
-                    .nth(target_index)
+            let surface = tree.main_surface_mut();
+            if surface.is_empty() {
+                surface.push_to_first_leaf(tab_key);
+                return tab_key;
             }
 
-            if let Some(leaf) = get_leaf_mut(tree.main_surface_mut(), 1) {
-                leaf.append_tab(tab_key);
-            } else {
-                let [_old_node_index, _new_node_index] =
-                    tree.main_surface_mut()
-                        .split_tabs(NodeIndex::root(), Split::Right, 0.25, vec![tab_key]);
+            let mut leaf_index = 0;
+            for (_node_index, node) in surface.iter_mut().enumerate() {
+                if !node.is_leaf() {
+                    continue;
+                }
+
+                if leaf_index > desired_leaf_index {
+                    node.append_tab(tab_key);
+                    return tab_key;
+                }
+
+                leaf_index += 1;
             }
 
+            let [_old_node_index, _new_node_index] =
+                surface.split_tabs(NodeIndex::root(), split, parent_fraction, vec![tab_key]);
             tab_key
         }
     };

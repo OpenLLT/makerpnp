@@ -7,6 +7,7 @@ use eda_units::eda_units::dimension_unit::{
 };
 use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
+use egui_dock::Split;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
 use planner_app::{
@@ -164,7 +165,12 @@ impl Pcb {
         let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
         let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Configuration(_)));
         if result.is_err() {
-            pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::Configuration(ConfigurationTab::default()));
+            pcb_tabs.add_tab_to_leaf_or_split(
+                0,
+                PcbTabKind::Configuration(ConfigurationTab::default()),
+                0.25,
+                Split::Right,
+            );
         }
 
         Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
@@ -221,7 +227,12 @@ impl Pcb {
         pcb_tabs
             .show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::GerberViewer(tab) if tab.args.eq(&args)))
             .inspect_err(|_| {
-                pcb_tabs.add_tab_to_second_leaf_or_split(PcbTabKind::GerberViewer(GerberViewerTab::new(args.clone())));
+                pcb_tabs.add_tab_to_leaf_or_split(
+                    0,
+                    PcbTabKind::GerberViewer(GerberViewerTab::new(args.clone())),
+                    0.25,
+                    Split::Right,
+                );
             })
             .ok();
 

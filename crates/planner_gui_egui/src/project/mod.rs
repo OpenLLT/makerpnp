@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use derivative::Derivative;
 use egui::Ui;
+use egui_dock::Split;
 use egui_i18n::tr;
 use egui_mobius::types::{Enqueue, Value, ValueGuard};
 use planner_app::{
@@ -286,7 +287,7 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Issues(_)));
         if result.is_err() {
-            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Issues(IssuesTab::default()));
+            project_tabs.add_tab_to_leaf_or_split(1, ProjectTabKind::Issues(IssuesTab::default()), 0.75, Split::Below);
         }
 
         let tasks = vec![Task::done(ProjectAction::UiCommand(
@@ -300,7 +301,12 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Overview(_)));
         if result.is_err() {
-            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Overview(OverviewTab::default()));
+            project_tabs.add_tab_to_leaf_or_split(
+                0,
+                ProjectTabKind::Overview(OverviewTab::default()),
+                0.25,
+                Split::Right,
+            );
         }
 
         let tasks = vec![
@@ -319,7 +325,7 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Parts(_)));
         if result.is_err() {
-            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Parts(PartsTab::default()));
+            project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::Parts(PartsTab::default()), 0.25, Split::Right);
         }
 
         Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
@@ -331,7 +337,12 @@ impl Project {
         let mut project_tabs = self.project_tabs.lock().unwrap();
         let result = project_tabs.show_tab(|candidate_tab| matches!(candidate_tab, ProjectTabKind::Placements(_)));
         if result.is_err() {
-            project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Placements(PlacementsTab::default()));
+            project_tabs.add_tab_to_leaf_or_split(
+                0,
+                ProjectTabKind::Placements(PlacementsTab::default()),
+                0.25,
+                Split::Right,
+            );
         }
 
         let tasks = vec![
@@ -358,7 +369,7 @@ impl Project {
                 debug!("showing existing phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .inspect_err(|_| {
-                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Phase(tab));
+                let tab_key = project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::Phase(tab), 0.25, Split::Right);
                 debug!("adding phase tab. phase: {:?}, tab_key: {:?}", phase, tab_key);
             })
             .ok();
@@ -392,7 +403,7 @@ impl Project {
                 debug!("showing existing process tab. process: {:?}, tab_key: {:?}", process, tab_key);
             })
             .inspect_err(|_| {
-                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Process(tab));
+                let tab_key = project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::Process(tab), 0.25, Split::Right);
                 debug!("adding process tab. process: {:?}, tab_key: {:?}", process, tab_key);
             })
             .ok();
@@ -426,7 +437,7 @@ impl Project {
                 debug!("showing existing load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .inspect_err(|_| {
-                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::LoadOut(tab));
+                let tab_key = project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::LoadOut(tab), 0.25, Split::Right);
                 debug!("adding load-out tab. load_out_source: {:?}, tab_key: {:?}", load_out_source, tab_key);
             })
             .ok();
@@ -453,7 +464,7 @@ impl Project {
                 debug!("showing existing pcb tab. pcb: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .inspect_err(|_|{
-                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::Pcb(tab));
+                let tab_key = project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::Pcb(tab), 0.25, Split::Right);
                 debug!("adding pcb tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
@@ -480,7 +491,7 @@ impl Project {
                 debug!("showing existing unit assignments tab. pcb: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .inspect_err(|_|{
-                let tab_key = project_tabs.add_tab_to_second_leaf_or_split(ProjectTabKind::UnitAssignments(tab));
+                let tab_key = project_tabs.add_tab_to_leaf_or_split(0, ProjectTabKind::UnitAssignments(tab), 0.25, Split::Right);
                 debug!("adding unit assignments tab. pcb_index: {:?}, tab_key: {:?}", pcb_index, tab_key);
             })
             .ok();
