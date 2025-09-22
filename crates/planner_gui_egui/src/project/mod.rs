@@ -1037,7 +1037,14 @@ impl Project {
         (tasks, update_placement_actions)
     }
 
-    fn handle_update_placement_actions(tasks: &mut Vec<Task<ProjectAction>>, actions: Vec<UpdatePlacementAction>) {
+    fn handle_update_placement_actions(
+        tasks: &mut Vec<Task<ProjectAction>>,
+        actions: Vec<UpdatePlacementAction>,
+        request_issues_refresh: &mut bool,
+    ) {
+        // Updating placements can create/clear issues.
+        *request_issues_refresh = true;
+
         for action in actions {
             if let Some(task) = match action {
                 UpdatePlacementAction::RefreshPhases => Some(Task::done(ProjectAction::UiCommand(
@@ -1175,7 +1182,9 @@ impl UiComponent for Project {
     ) -> Option<Self::UiAction> {
         let (key, command) = command;
 
-        match command {
+        let mut request_issues_refresh = false;
+
+        let action = match command {
             ProjectUiCommand::None => None,
             ProjectUiCommand::Create => {
                 let state = self.project_ui_state.lock().unwrap();
@@ -1484,6 +1493,8 @@ impl UiComponent for Project {
                     ProjectView::ProjectReport(report) => {
                         info!("report:\n{:?}", report);
 
+                        request_issues_refresh = false;
+
                         let mut state = self.project_ui_state.lock().unwrap();
 
                         state.issues_ui.update_report(report)
@@ -1621,6 +1632,9 @@ impl UiComponent for Project {
 
                 let mut tasks = vec![];
 
+                // Adding PCBs can clear issues.
+                request_issues_refresh = true;
+
                 match self
                     .planner_core_service
                     .update(Event::AddPcb {
@@ -1663,6 +1677,9 @@ impl UiComponent for Project {
                                 .into_actions()
                             {
                                 Ok(actions) => {
+                                    // Adding phases can clear issues.
+                                    request_issues_refresh = true;
+
                                     let mut tasks = actions
                                         .into_iter()
                                         .map(Task::done)
@@ -1920,12 +1937,16 @@ impl UiComponent for Project {
                 match overview_ui_action {
                     None => None,
                     Some(OverviewTabUiAction::None) => None,
-                    Some(OverviewTabUiAction::DeletePhase(reference)) => self
-                        .planner_core_service
-                        .update(Event::DeletePhase {
-                            reference: reference.clone(),
-                        })
-                        .when_ok(key, |_| Some(ProjectUiCommand::PhaseDeleted(reference))),
+                    Some(OverviewTabUiAction::DeletePhase(reference)) => {
+                        // Deleting phases can create issues (no phases, unassigned placements)
+                        request_issues_refresh = true;
+
+                        self.planner_core_service
+                            .update(Event::DeletePhase {
+                                reference: reference.clone(),
+                            })
+                            .when_ok(key, |_| Some(ProjectUiCommand::PhaseDeleted(reference)))
+                    }
                 }
             }
             ProjectUiCommand::PartsTabUiCommand(command) => {
@@ -2068,7 +2089,7 @@ impl UiComponent for Project {
                             new_placement,
                             old_placement,
                         );
-                        Self::handle_update_placement_actions(&mut tasks, actions);
+                        Self::handle_update_placement_actions(&mut tasks, actions, &mut request_issues_refresh);
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
@@ -2076,14 +2097,18 @@ impl UiComponent for Project {
                         phase,
                         manufacturer_pattern,
                         mpn_pattern,
-                    }) => self
-                        .planner_core_service
-                        .update(Event::AddPartsToLoadout {
-                            phase,
-                            manufacturer: manufacturer_pattern,
-                            mpn: mpn_pattern,
-                        })
-                        .when_ok(key, |_| None),
+                    }) => {
+                        // Adding parts to loadouts can clear issues
+                        request_issues_refresh = true;
+
+                        self.planner_core_service
+                            .update(Event::AddPartsToLoadout {
+                                phase,
+                                manufacturer: manufacturer_pattern,
+                                mpn: mpn_pattern,
+                            })
+                            .when_ok(key, |_| None)
+                    }
                     Some(PhaseTabUiAction::SetPlacementOrderings(args)) => self
                         .planner_core_service
                         .update(Event::SetPlacementOrdering {
@@ -2280,6 +2305,9 @@ impl UiComponent for Project {
                         part,
                         feeder,
                     }) => {
+                        // Changing loadouts can create/clear issues.
+                        request_issues_refresh = true;
+
                         debug!(
                             "update feeder. phase: {:?}, part: {:?}, feeder: {:?}",
                             phase, part, feeder
@@ -2318,7 +2346,7 @@ impl UiComponent for Project {
                             new_placement,
                             old_placement,
                         );
-                        Self::handle_update_placement_actions(&mut tasks, actions);
+                        Self::handle_update_placement_actions(&mut tasks, actions, &mut request_issues_refresh);
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
@@ -2362,7 +2390,7 @@ impl UiComponent for Project {
 
                         actions.dedup_by(|a, b| a == b);
 
-                        Self::handle_update_placement_actions(&mut tasks, actions);
+                        Self::handle_update_placement_actions(&mut tasks, actions, &mut request_issues_refresh);
 
                         Some(ProjectAction::Task(key, Task::batch(tasks)))
                     }
@@ -2419,6 +2447,9 @@ impl UiComponent for Project {
                         pcb_index,
                         variant_map,
                     })) => {
+                        // Changing assignments can create/clear issues.
+                        request_issues_refresh = true;
+
                         let mut events = vec![];
 
                         for (pcb_unit_index, variant_name) in variant_map.iter().enumerate() {
@@ -2431,6 +2462,8 @@ impl UiComponent for Project {
                                 unit: object_path,
                             });
                         }
+
+                        // TODO support un-assigning, no-events are created when the map doesn't contain any entries.
 
                         let mut tasks = vec![];
                         for event in events {
@@ -2570,7 +2603,19 @@ impl UiComponent for Project {
                 }
                 Some(ProjectAction::Task(key, Task::batch(tasks)))
             }
+        };
+
+        //
+        // Issues refresh
+        //
+        if request_issues_refresh {
+            self.component.send((
+                key,
+                ProjectUiCommand::RequestProjectView(ProjectViewRequest::ProjectReport),
+            ))
         }
+
+        action
     }
 }
 
