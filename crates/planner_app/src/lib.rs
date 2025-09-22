@@ -512,7 +512,8 @@ pub enum Event {
     },
     AssignVariantToUnit {
         unit: ObjectPath,
-        variant: VariantName,
+        /// some to make assignment, none to un-assign.
+        variant: Option<VariantName>,
     },
     RefreshFromDesignVariants,
     AssignProcessToParts {

@@ -808,12 +808,10 @@ impl UnitAssignmentsTabUi {
         let variant_map = fields
             .variant_map
             .iter()
-            .filter(|assigned_design_variant| assigned_design_variant.is_some())
             .map(|assigned_design_variant| {
                 assigned_design_variant
-                    .clone()
-                    .unwrap()
-                    .variant_name
+                    .as_ref()
+                    .map(|design_variant| design_variant.variant_name.clone())
             })
             .collect::<Vec<_>>();
 
@@ -932,7 +930,7 @@ impl UnitAssignmentsFields {
 pub struct UpdateUnitAssignmentsArgs {
     pub pcb_index: u16,
     /// vector index = pcb unit index
-    pub variant_map: Vec<VariantName>,
+    pub variant_map: Vec<Option<VariantName>>,
 }
 
 #[derive(Debug, Clone)]

@@ -149,7 +149,7 @@ impl Project {
         &mut self,
         pcbs: &[&Pcb],
         object_path: ObjectPath,
-        variant_name: VariantName,
+        variant_name: Option<VariantName>,
     ) -> anyhow::Result<bool> {
         // reminder: instance and pcb_unit are 1-based in the object path
 
@@ -171,28 +171,51 @@ impl Project {
             return Err(anyhow::anyhow!("Unable to find PCB. instance: {}", pcb_instance));
         };
 
-        let modified = match project_pcb.assign_unit(pcb, pcb_unit_index, variant_name.clone()) {
-            Ok(None) => {
+        let modified = match (
+            project_pcb.assign_unit(pcb, pcb_unit_index, variant_name.clone()),
+            variant_name,
+        ) {
+            (Ok(None), Some(variant_name)) => {
                 info!(
                     "Unit assignment added. unit: '{}', variant_name: {}",
                     object_path, variant_name
                 );
                 true
             }
-            Ok(Some(old_design_variant)) => {
+            (Ok(Some(old_design_variant)), Some(variant_name)) => {
                 info!(
                     "Unit assignment updated. unit: '{}', old: {}, new: {}",
                     object_path, old_design_variant, variant_name
                 );
                 true
             }
-            Err(ProjectPcbError::UnitAlreadyAssigned {
-                ..
-            }) => {
-                info!("Unit assignment unchanged.");
+            (Ok(Some(old_design_variant)), None) => {
+                info!(
+                    "Unit assignment removed. unit: '{}', old: {}",
+                    object_path, old_design_variant
+                );
+                true
+            }
+            (Ok(None), None) => unreachable!(),
+            (
+                Err(ProjectPcbError::UnitAlreadyAssigned {
+                    ..
+                }),
+                Some(_),
+            ) => {
+                info!("Unit already assigned.");
                 false
             }
-            Err(cause) => return Err(anyhow::anyhow!("Unable to assign unit to PCB. cause: {:?}", cause)),
+            (
+                Err(ProjectPcbError::UnitNotAssignedToADesign {
+                    ..
+                }),
+                None,
+            ) => {
+                info!("Unit not assigned.");
+                false
+            }
+            (Err(cause), _) => return Err(anyhow::anyhow!("Unable to assign unit to PCB. cause: {:?}", cause)),
         };
 
         Ok(modified)
@@ -490,7 +513,7 @@ impl ProjectPcb {
         Ok(unit_assignments)
     }
 
-    /// Makes an assignment
+    /// Makes an assignment, or un-assigns a unit
     ///
     /// unit is 0-based
     ///
@@ -503,7 +526,7 @@ impl ProjectPcb {
         &mut self,
         pcb: &Pcb,
         unit: u16,
-        variant_name: VariantName,
+        variant_name: Option<VariantName>,
     ) -> Result<Option<DesignVariant>, ProjectPcbError> {
         if unit >= pcb.units {
             return Err(ProjectPcbError::UnitOutOfRange {
@@ -520,29 +543,34 @@ impl ProjectPcb {
                 unit,
             })?;
 
-        let design_name = pcb.design_names[design_index as usize].clone();
-        let design_variant = DesignVariant {
-            design_name,
-            variant_name,
-        };
+        if let Some(variant_name) = variant_name {
+            let design_name = pcb.design_names[design_index as usize].clone();
+            let design_variant = DesignVariant {
+                design_name,
+                variant_name,
+            };
 
-        match self.unit_assignments.entry(unit) {
-            Entry::Vacant(entry) => {
-                entry.insert(design_variant);
-                Ok(None)
-            }
-            Entry::Occupied(mut entry) => {
-                let other_design_variant = entry.get();
-                if other_design_variant.eq(&design_variant) {
-                    return Err(ProjectPcbError::UnitAlreadyAssigned {
-                        unit,
-                    });
+            match self.unit_assignments.entry(unit) {
+                Entry::Vacant(entry) => {
+                    entry.insert(design_variant);
+                    Ok(None)
                 }
+                Entry::Occupied(mut entry) => {
+                    let other_design_variant = entry.get();
+                    if other_design_variant.eq(&design_variant) {
+                        return Err(ProjectPcbError::UnitAlreadyAssigned {
+                            unit,
+                        });
+                    }
 
-                let old_assigment = entry.insert(design_variant);
+                    let old_assigment = entry.insert(design_variant);
 
-                Ok(Some(old_assigment))
+                    Ok(Some(old_assigment))
+                }
             }
+        } else {
+            let old_assignment = self.unit_assignments.remove(&unit);
+            Ok(old_assignment)
         }
     }
 }
