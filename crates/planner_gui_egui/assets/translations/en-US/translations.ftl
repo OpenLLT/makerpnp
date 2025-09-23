@@ -55,6 +55,8 @@ project-issues-tab-label = Issues
 project-overview-tab-label = Overview
 project-overview-detail-name = Name: { $name }
 project-overview-phases-header = Phases
+project-overview-pcbs-header = PCBs
+project-overview-pcbs-input-remove-disabled-hover-text-in-use-1 = In use - remove PCB unit assignments.
 
 project-pcb-designs-header = Designs
 
@@ -359,6 +361,10 @@ table-phases-column-index = #
 table-phases-column-name = Name
 table-phases-column-status = Status
 table-phases-column-actions = Actions
+
+table-pcbs-column-index = #
+table-pcbs-column-file = File
+table-pcbs-column-actions = Actions
 
 table-issues-column-index = #
 table-issues-column-severity = Severity

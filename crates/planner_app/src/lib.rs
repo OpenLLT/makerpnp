@@ -49,7 +49,7 @@ use pnp::package::Package;
 pub use pnp::panel::{DesignSizing, Dimensions, FiducialParameters, PanelSizing, PcbUnitPositioning, Unit};
 pub use pnp::part::Part;
 pub use pnp::pcb::PcbSide;
-pub use pnp::pcb::{PcbUnitIndex, PcbUnitNumber};
+pub use pnp::pcb::{PcbInstanceIndex, PcbInstanceNumber, PcbUnitIndex, PcbUnitNumber};
 pub use pnp::placement::RefDes;
 pub use pnp::placement::{Placement, PlacementPosition, PlacementPositionUnit};
 pub use pnp::reference::Reference;

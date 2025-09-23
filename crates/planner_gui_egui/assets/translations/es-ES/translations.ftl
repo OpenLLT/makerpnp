@@ -19,8 +19,8 @@ modal-manager-gerbers-title = Gestionar gerbers  - { $design }
 toolbar-button-home = Inicio
 toolbar-button-new-project = Nuevo proyecto
 toolbar-button-open-project = Abrir proyecto
-toolbar-button-new-pcb = Nuevo PCB
-toolbar-button-open-pcb = Abrir PCB
+toolbar-button-new-pcb = Nuevo Placa
+toolbar-button-open-pcb = Abrir Placa
 toolbar-button-save = Guardar
 toolbar-button-close-all = Cerrar todo
 
@@ -34,11 +34,11 @@ project-toolbar-button-package-sources = Fuentes de envases
 project-toolbar-button-reset-operations = Restablecer operaciones
 
 project-pcb-toolbar-button-create-unit-assignment = Crear asignacion de unidad
-project-pcb-toolbar-button-show-pcb = Mostrar PCB
+project-pcb-toolbar-button-show-pcb = Mostrar Placa
 
 tab-label-home = Inicio
 tab-label-new-project = Nuevo proyecto
-tab-label-new-pcb = New PCB
+tab-label-new-pcb = New placa
 
 home-banner = MakerPnP - Planner
 home-checkbox-label-show-on-startup = Mostrar al inicio
@@ -55,6 +55,8 @@ project-issues-tab-label = Problemas
 project-overview-tab-label = Visión general
 project-overview-detail-name = Nombre: { $name }
 project-overview-phases-header = Fases
+project-overview-pcbs-header = Placas
+project-overview-pcbs-input-remove-disabled-hover-text-in-use-1 = En uso: eliminar asignaciones de unidades PCB.
 
 project-pcb-designs-header = Diseños
 
@@ -65,7 +67,7 @@ project-placements-tab-phase-hover-text-with-selection = Fase que se aplicará a
 
 project-parts-tab-label = Piezas
 
-project-pcb-tab-label = PCB ({ $pcb })
+project-pcb-tab-label = Placa ({ $pcb })
 
 project-process-tab-label = Proceso ({ $process })
 
@@ -76,7 +78,7 @@ phase-toolbar-placement-orderings = Ordenaciones de colocación.
 
 phase-reference = Referencia
 phase-load-out-source = Fuente de carga
-phase-pcb-side = Lado PCB
+phase-pcb-side = Lado de Placa
 phase-process = Proceso
 
 table-load-out-column-reference = Reference
@@ -99,21 +101,21 @@ project-explorer-node-phase-loadout = { $source }
 project-explorer-node-unit-assignments = Asignaciones de unidad
 project-explorer-node-unit-assignment-assigned = { $name } {$design_name} = {$variant_name}
 project-explorer-node-unit-assignment-unassigned = { $name } {$design_name} = (No asignado)
-project-explorer-node-pcbs = PCBs
+project-explorer-node-pcbs = Placas
 project-explorer-node-pcb = { $name }
 project-explorer-node-processes = Procesos
 project-explorer-node-process = { $name }
 
-new-pcb-banner = New PCB
-form-new-pcb-input-name = Nombre PCB
-form-new-pcb-input-name-placeholder = (por ejemplo, el número de referencia del pedido de la fábrica de PCB)
+new-pcb-banner = New placa
+form-new-pcb-input-name = Nombre de placa
+form-new-pcb-input-name-placeholder = (por ejemplo, el número de referencia del pedido de la fábrica de placa)
 form-new-pcb-input-directory = Directorio
 form-new-pcb-input-units = Unidades
 
 pcb-configuration-tab-label = Configuración
 pcb-configuration-detail-name = Nombre: { $name }
 
-pcb-panel-tab-label = Panelización de PCB
+pcb-panel-tab-label = Panelización de placa
 pcb-panel-tab-panel-orientation-header = Orientación del montaje
 pcb-panel-tab-panel-size-header = Tamaño del panel
 pcb-panel-tab-panel-edge-rails-header = Raíles de borde
@@ -129,11 +131,11 @@ pcb-assembly-orientation-flip-roll = Alabeo (reflejo X)
 pcb-assembly-orientation-flip-pitch = Cabeceo (reflejo Y)
 pcb-assembly-orientation-flip-none = Ninguno
 
-pcb-explorer-tab-label = Explorador de PCB
+pcb-explorer-tab-label = Explorador de placa
 pcb-explorer-node-root = { $name }
 pcb-explorer-node-configuration = Configuración
-pcb-explorer-node-panel = Panelización de PCB
-pcb-explorer-node-pcb-view = PCB
+pcb-explorer-node-panel = Panelización de placa
+pcb-explorer-node-pcb-view = Placa
 pcb-explorer-node-designs = Diseños
 pcb-explorer-node-units = Unidad
 pcb-explorer-node-units-assignment-assigned = { $pcb_number }: {$design_name}
@@ -161,9 +163,9 @@ form-create-unit-assignment-input-design-name = Nombre del diseño
 form-create-unit-assignment-input-design-name-placeholder = Nombre del diseño (por ejemplo, 'mi diseño')
 form-create-unit-assignment-input-variant-name = Nombre de la variante
 form-create-unit-assignment-input-variant-name-placeholder = Nombre de la variante (por ejemplo, 'default')
-form-create-unit-assignment-input-pcb-instance = Instancia PCB
+form-create-unit-assignment-input-pcb-instance = Instancia placa
 form-create-unit-assignment-input-pcb-instance-placeholder = Un número > 0
-form-create-unit-assignment-input-pcb-unit-range = Unidades PCB
+form-create-unit-assignment-input-pcb-unit-range = Unidades placa
 form-create-unit-assignment-input-pcb-unit-placeholder = Un número > 0
 form-create-unit-assignment-input-placements-filename = Nombre de archivo de las ubicaciones
 form-create-unit-assignment-input-placements-filename-placeholder = '<diseño>_<variante>_placements.csv'
@@ -183,7 +185,7 @@ form-common-choice-pcb-kind = Tipo
 form-common-choice-pcb-kind-single = Individual
 form-common-choice-pcb-kind-panel = Panel
 
-form-common-choice-pcb-side = Lado PCB
+form-common-choice-pcb-side = Lado de placa
 form-common-choice-pcb-side-top = Alto
 form-common-choice-pcb-side-bottom = Bajo
 
@@ -257,10 +259,10 @@ sort-mode-area = Área
 sort-mode-feeder-reference = Referencia del alimentador
 sort-mode-height = Altura
 sort-mode-part = Parte
-sort-mode-pcb = Instancia PCB
-sort-mode-pcb-unit = Unidad PCB
-sort-mode-pcb-unit-xy = Unidad PCB X, luego Y
-sort-mode-pcb-unit-yx = Unidad PCB Y, luego X
+sort-mode-pcb = Instancia placa
+sort-mode-pcb-unit = Unidad placa
+sort-mode-pcb-unit-xy = Unidad placa X, luego Y
+sort-mode-pcb-unit-yx = Unidad placa Y, luego X
 sort-mode-ref-des = Des. de Ref.
 
 sort-order-ascending = Ascendente
@@ -308,22 +310,22 @@ table-designs-column-name = Nombre
 
 tabla-gerbers-column-index = #
 table-gerbers-column-file = Archivo
-table-gerbers-column-pcb-side = Lado PCB
+table-gerbers-column-pcb-side = Lado de placa
 table-gerbers-column-gerber-file-function = Propósito
 table-gerbers-column-actions = Acciones
 
 table-gerber-viewer-layers-column-index = #
 table-gerber-viewer-layers-column-file = Archivo
-table-gerber-viewer-layers-column-pcb-side = Lado PCB
+table-gerber-viewer-layers-column-pcb-side = Lado de placa
 table-gerber-viewer-layers-column-gerber-file-function = Propósito
 
-table-design-assignments-column-pcb-unit = Unidad PCB
+table-design-assignments-column-pcb-unit = Unidad de placa
 table-design-assignments-column-design = Nombre del diseño
 
 table-design-variants-column-design = Nombre del diseño
 table-design-variants-column-variant = Nombre de la variante
 
-table-unit-assignments-column-pcb-unit = Unidad PCB
+table-unit-assignments-column-pcb-unit = Unidad de placa
 table-unit-assignments-column-design = Nombre del diseño
 table-unit-assignments-column-variant = Nombre de la variante
 
@@ -359,6 +361,10 @@ table-phases-column-index = #
 table-phases-column-name = Nombre
 table-phases-column-status = Estado
 table-phases-column-actions = Acciones
+
+table-pcbs-column-index = #
+table-pcbs-column-file = Archivo
+table-pcbs-column-actions = Acciones
 
 table-issues-column-index = #
 table-issues-column-severity = Severidad

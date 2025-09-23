@@ -1130,6 +1130,11 @@ impl Project {
             self.package_sources_modal = Some(modal);
         }
     }
+
+    fn pick_pcb_file(&mut self) {
+        let mut picker = self.file_picker.lock().unwrap();
+        picker.pick_file();
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -1620,9 +1625,7 @@ impl UiComponent for Project {
                         })
                         .when_ok(key, |_| Some(ProjectUiCommand::ProjectRefreshed)),
                     Some(ProjectToolbarAction::PickPcbFile) => {
-                        let mut picker = self.file_picker.lock().unwrap();
-
-                        picker.pick_file();
+                        self.pick_pcb_file();
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPhaseDialog) => {
@@ -1959,6 +1962,10 @@ impl UiComponent for Project {
                         self.show_add_phase_modal(key);
                         None
                     }
+                    Some(OverviewTabUiAction::AddPcb) => {
+                        self.pick_pcb_file();
+                        None
+                    }
                     Some(OverviewTabUiAction::DeletePhase(reference)) => {
                         // Deleting phases can create issues (no phases, unassigned placements)
                         request_issues_refresh = true;
@@ -1968,6 +1975,10 @@ impl UiComponent for Project {
                                 reference: reference.clone(),
                             })
                             .when_ok(key, |_| Some(ProjectUiCommand::PhaseDeleted(reference)))
+                    }
+                    Some(OverviewTabUiAction::RemovePcb(pcb_unit_index)) => {
+                        info!("TODO");
+                        None
                     }
                 }
             }
@@ -2506,10 +2517,15 @@ impl UiComponent for Project {
                             }
                         }
 
-                        let final_task = Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
-                            ProjectViewRequest::ProjectTree,
-                        )));
-                        tasks.push(final_task);
+                        let additional_tasks = vec![
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                                ProjectViewRequest::ProjectTree,
+                            ))),
+                            Task::done(ProjectAction::UiCommand(ProjectUiCommand::RequestProjectView(
+                                ProjectViewRequest::Overview,
+                            ))),
+                        ];
+                        tasks.extend(additional_tasks);
 
                         let action = ProjectAction::Task(key, Task::batch(tasks));
 
