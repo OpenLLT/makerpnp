@@ -37,21 +37,39 @@ impl OverviewTabUi {
     }
 
     fn show_phases(&self, ui: &mut Ui, text_height: f32) {
-        if let Some(phases) = &self.phases {
-            ui.label(tr!("project-overview-phases-header"));
+        egui::Sides::new().show(
+            ui,
+            |ui| {
+                ui.heading(tr!("project-overview-phases-header"));
+            },
+            |ui| {
+                ui.horizontal(|ui| {
+                    if ui
+                        .button(tr!("form-common-button-add"))
+                        .clicked()
+                    {
+                        self.component
+                            .send(OverviewTabUiCommand::AddPhaseClicked);
+                    }
+                });
+            },
+        );
 
-            let available_size = ui.available_size();
+        let available_size = ui.available_size();
 
-            Resize::default()
-                .resizable([true, true])
-                .default_size(available_size / 2.0)
-                .max_width(available_size.x)
-                .max_height(Self::TABLE_HEIGHT_MAX)
-                .show(ui, |ui| {
-                    // HACK: search codebase for 'HACK: table-resize-hack' for details
-                    egui::Frame::new()
-                        .outer_margin(4.0)
-                        .show(ui, |ui| {
+        Resize::default()
+            .resizable([false, true])
+            .default_size(available_size / 2.0)
+            .default_width(available_size.x)
+            .min_width(available_size.x)
+            .max_width(available_size.x)
+            .max_height(Self::TABLE_HEIGHT_MAX)
+            .show(ui, |ui| {
+                // HACK: search codebase for 'HACK: table-resize-hack' for details
+                egui::Frame::new()
+                    .outer_margin(4.0)
+                    .show(ui, |ui| {
+                        if let Some(phases) = &self.phases {
                             TableBuilder::new(ui)
                                 .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                                 .min_scrolled_height(80.0)
@@ -111,21 +129,23 @@ impl OverviewTabUi {
                                         }
                                     });
                                 });
-                        });
-                });
-        }
+                        }
+                    });
+            });
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum OverviewTabUiCommand {
     None,
+    AddPhaseClicked,
     PhaseDeleteClicked(PhaseReference),
 }
 
 #[derive(Debug, Clone)]
 pub enum OverviewTabUiAction {
     None,
+    AddPhase,
     DeletePhase(PhaseReference),
 }
 
@@ -161,6 +181,7 @@ impl UiComponent for OverviewTabUi {
     ) -> Option<Self::UiAction> {
         match command {
             OverviewTabUiCommand::None => Some(OverviewTabUiAction::None),
+            OverviewTabUiCommand::AddPhaseClicked => Some(OverviewTabUiAction::AddPhase),
             OverviewTabUiCommand::PhaseDeleteClicked(reference) => Some(OverviewTabUiAction::DeletePhase(reference)),
         }
     }

@@ -1098,6 +1098,38 @@ impl Project {
                 unit_position,
             })
     }
+
+    fn show_add_phase_modal(&mut self, key: ProjectKey) {
+        let mut modal = AddPhaseModal::new(self.path.clone(), self.processes.clone());
+        modal
+            .component
+            .configure_mapper(self.component.sender.clone(), move |command| {
+                trace!("add phase modal mapper. command: {:?}", command);
+                (key, ProjectUiCommand::AddPhaseModalCommand(command))
+            });
+
+        self.add_phase_modal = Some(modal);
+    }
+
+    fn show_package_sources_modal(&mut self, key: ProjectKey) {
+        if let Some(library_config) = &self.library_config {
+            let mut modal = PackageSourcesModal::new(
+                self.path.clone(),
+                library_config.package_source.clone(),
+                library_config
+                    .package_mappings_source
+                    .clone(),
+            );
+            modal
+                .component
+                .configure_mapper(self.component.sender.clone(), move |command| {
+                    trace!("package sources modal mapper. command: {:?}", command);
+                    (key, ProjectUiCommand::PackageSourcesModalCommand(command))
+                });
+
+            self.package_sources_modal = Some(modal);
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -1594,35 +1626,11 @@ impl UiComponent for Project {
                         None
                     }
                     Some(ProjectToolbarAction::ShowAddPhaseDialog) => {
-                        let mut modal = AddPhaseModal::new(self.path.clone(), self.processes.clone());
-                        modal
-                            .component
-                            .configure_mapper(self.component.sender.clone(), move |command| {
-                                trace!("add phase modal mapper. command: {:?}", command);
-                                (key, ProjectUiCommand::AddPhaseModalCommand(command))
-                            });
-
-                        self.add_phase_modal = Some(modal);
+                        self.show_add_phase_modal(key);
                         None
                     }
                     Some(ProjectToolbarAction::ShowPackageSourcesDialog) => {
-                        if let Some(library_config) = &self.library_config {
-                            let mut modal = PackageSourcesModal::new(
-                                self.path.clone(),
-                                library_config.package_source.clone(),
-                                library_config
-                                    .package_mappings_source
-                                    .clone(),
-                            );
-                            modal
-                                .component
-                                .configure_mapper(self.component.sender.clone(), move |command| {
-                                    trace!("package sources modal mapper. command: {:?}", command);
-                                    (key, ProjectUiCommand::PackageSourcesModalCommand(command))
-                                });
-
-                            self.package_sources_modal = Some(modal);
-                        }
+                        self.show_package_sources_modal(key);
                         None
                     }
                     Some(ProjectToolbarAction::ResetOperations) => self
@@ -1947,6 +1955,10 @@ impl UiComponent for Project {
                 match overview_ui_action {
                     None => None,
                     Some(OverviewTabUiAction::None) => None,
+                    Some(OverviewTabUiAction::AddPhase) => {
+                        self.show_add_phase_modal(key);
+                        None
+                    }
                     Some(OverviewTabUiAction::DeletePhase(reference)) => {
                         // Deleting phases can create issues (no phases, unassigned placements)
                         request_issues_refresh = true;
