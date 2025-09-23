@@ -205,6 +205,12 @@ impl Project {
                 false
             }
             (
+                Err(ProjectPcbError::UnitNotAssignedToAVariant {
+                    ..
+                }),
+                None,
+            )
+            | (
                 Err(ProjectPcbError::UnitNotAssignedToADesign {
                     ..
                 }),
@@ -570,6 +576,11 @@ impl ProjectPcb {
             }
         } else {
             let old_assignment = self.unit_assignments.remove(&unit);
+            if old_assignment.is_none() {
+                return Err(ProjectPcbError::UnitNotAssignedToAVariant {
+                    unit,
+                });
+            }
             Ok(old_assignment)
         }
     }
@@ -589,6 +600,8 @@ pub enum ProjectPcbError {
     NotLoaded,
     #[error("Unit {unit} has not been assigned to a design.")]
     UnitNotAssignedToADesign { unit: u16 },
+    #[error("Unit {unit} has not been assigned to a design variant.")]
+    UnitNotAssignedToAVariant { unit: u16 },
 }
 
 #[derive(Error, Debug)]
