@@ -199,12 +199,7 @@ impl ExplorerUi {
                         tree_view_state.expand_node(&node_id);
                     }
                 }
-                Action::Move(_dd) | Action::Drag(_dd) => {
-                    unreachable!();
-                }
-                Action::DragExternal(_dde) | Action::MoveExternal(_dde) => {
-                    unreachable!();
-                }
+                _ => {}
             }
         }
     }
