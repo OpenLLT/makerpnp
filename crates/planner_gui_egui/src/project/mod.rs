@@ -1645,8 +1645,12 @@ impl UiComponent for Project {
             }
 
             //
-            // pcb file
+            // pcbs
             //
+            ProjectUiCommand::PcbRemoved => Some(ProjectAction::Task(
+                key,
+                Task::done(ProjectAction::UiCommand(ProjectUiCommand::RefreshFromDesignVariants)),
+            )),
             ProjectUiCommand::PcbFilePicked(pcb_path) => {
                 // FUTURE consider storing a relative file if the pcb_path is in a subdirectory of the project path.
                 let pcb_file = FileReference::Absolute(pcb_path);
@@ -1977,8 +1981,13 @@ impl UiComponent for Project {
                             .when_ok(key, |_| Some(ProjectUiCommand::PhaseDeleted(reference)))
                     }
                     Some(OverviewTabUiAction::RemovePcb(pcb_unit_index)) => {
-                        info!("TODO");
-                        None
+                        // Deleting pcbs can create issues (no pcbs, etc)
+                        request_issues_refresh = true;
+                        self.planner_core_service
+                            .update(Event::RemovePcb {
+                                index: pcb_unit_index,
+                            })
+                            .when_ok(key, |_| Some(ProjectUiCommand::PcbRemoved))
                     }
                 }
             }
@@ -2794,6 +2803,7 @@ pub enum ProjectUiCommand {
     RequestPcbView(PcbViewRequest),
     PcbView(PcbView),
     PcbFilePicked(PathBuf),
+    PcbRemoved,
 
     //
     // toolbar

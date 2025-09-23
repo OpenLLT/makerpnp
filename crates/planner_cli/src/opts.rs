@@ -357,6 +357,12 @@ pub(crate) enum ProjectCommand {
         #[arg(long, value_parser = cli::parsers::FileReferenceParser::default(), value_name = "FILE_REFERENCE")]
         file: FileReference,
     },
+    /// Remove a PCB from the project
+    RemovePcb {
+        /// The zero-based index of the PCB
+        #[arg(long)]
+        index: u16,
+    },
     /// Assign a design variant to a PCB unit
     AssignVariantToUnit {
         /// PCB unit path
@@ -608,6 +614,11 @@ impl TryFrom<Opts> for Event {
                     file,
                 } => Ok(Event::AddPcb {
                     pcb_file: file,
+                }),
+                ProjectCommand::RemovePcb {
+                    index,
+                } => Ok(Event::RemovePcb {
+                    index,
                 }),
                 ProjectCommand::AssignVariantToUnit {
                     unit,

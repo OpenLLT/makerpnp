@@ -14,7 +14,7 @@ use pnp::load_out::LoadOutItem;
 use pnp::object_path::ObjectPath;
 use pnp::package::Package;
 use pnp::part::Part;
-use pnp::pcb::{PcbInstanceNumber, PcbSide, PcbUnitIndex, PcbUnitNumber};
+use pnp::pcb::{PcbInstanceIndex, PcbInstanceNumber, PcbSide, PcbUnitIndex, PcbUnitNumber};
 use pnp::placement::Placement;
 use pnp::reference::Reference;
 use regex::Regex;
@@ -693,6 +693,8 @@ pub enum PcbOperationError {
 
     #[error("Invalid design set. Entries must be unique.")]
     InvalidDesignSet,
+    #[error("Invalid instance index.")]
+    InvalidInstanceIndex,
 
     #[error("Design sizing count mismatch. expected: {expected}, actual: {actual}")]
     DesignSizingCountMismatch { expected: usize, actual: usize },
@@ -702,6 +704,8 @@ pub enum PcbOperationError {
     MissingDesignSizing(String),
     #[error("Missing unit sizing. unit: {0}")]
     MissingPcbUnitPositioning(PcbUnitIndex),
+    #[error("PCB is in use.")]
+    PcbInUse,
 }
 
 pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), PcbOperationError> {
@@ -712,6 +716,35 @@ pub fn add_pcb(project: &mut Project, pcb_file: &FileReference) -> Result<(), Pc
         .push(ProjectPcb::new(pcb_file.clone()));
 
     Ok(())
+}
+
+pub fn remove_pcb(
+    project: &mut Project,
+    pcb_instance_index: PcbInstanceIndex,
+    project_directory: &PathBuf,
+) -> Result<PathBuf, PcbOperationError> {
+    if let Some(pcb) = project
+        .pcbs
+        .get(pcb_instance_index as usize)
+    {
+        if !pcb.unit_assignments.is_empty() {
+            return Err(PcbOperationError::PcbInUse);
+        }
+    } else {
+        return Err(PcbOperationError::InvalidInstanceIndex);
+    }
+
+    let pcb = project
+        .pcbs
+        .remove(pcb_instance_index as usize);
+
+    info!("Removed PCB from project. pcb_file: {}", pcb.pcb_file);
+
+    let path = pcb
+        .pcb_file
+        .build_path(project_directory);
+
+    Ok(path)
 }
 
 #[derive(Error, Debug)]

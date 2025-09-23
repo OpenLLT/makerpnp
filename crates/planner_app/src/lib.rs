@@ -489,6 +489,9 @@ pub enum Event {
     AddPcb {
         pcb_file: FileReference,
     },
+    RemovePcb {
+        index: PcbUnitIndex,
+    },
     CreateProjectPcb {
         name: String,
         units: u16,
@@ -1125,6 +1128,27 @@ impl Planner {
                         pcb,
                         modified: false,
                     });
+
+                *modified |= true;
+
+                Ok(render::render())
+            }),
+            Event::RemovePcb {
+                index,
+            } => Box::new(move |model: &mut Model| {
+                let ModelProject {
+                    project,
+                    modified,
+                    path,
+                    ..
+                } = model
+                    .model_project
+                    .as_mut()
+                    .ok_or(AppError::OperationRequiresProject)?;
+
+                let pcb_path = project::remove_pcb(project, index, path).map_err(AppError::PcbOperationError)?;
+
+                model.model_pcbs.remove(&pcb_path);
 
                 *modified |= true;
 
