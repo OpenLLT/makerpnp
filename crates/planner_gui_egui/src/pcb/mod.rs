@@ -183,7 +183,7 @@ impl Pcb {
         let mut pcb_tabs = self.pcb_tabs.lock().unwrap();
         let result = pcb_tabs.show_tab(|candidate_tab| matches!(candidate_tab, PcbTabKind::Panel(_)));
         if result.is_err() {
-            pcb_tabs.add_tab(PcbTabKind::Panel(PanelTab::default()));
+            pcb_tabs.add_tab_to_leaf_or_split(PcbTabKind::Panel(PanelTab::default()), 0.25, Split::Right);
         }
 
         Task::done(PcbAction::UiCommand(PcbUiCommand::RequestPcbView(
