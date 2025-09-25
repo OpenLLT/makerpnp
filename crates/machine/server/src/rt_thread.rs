@@ -3,20 +3,20 @@ use std::marker::PhantomData;
 use std::mem;
 use std::thread::{self, JoinHandle};
 
-use libc::{self, PTHREAD_EXPLICIT_SCHED, SCHED_FIFO, pthread_attr_t, pthread_t, sched_param};
+use libc::{self, PTHREAD_EXPLICIT_SCHED, SCHED_FIFO, pthread_attr_t, sched_param};
 use server_rt_shared::sendable_ptr::SendablePtr;
 
 // Type for thread entry function
-type ThreadEntryFn = extern "C" fn(*mut c_void) -> ();
+type ThreadEntryFn<T> = extern "C" fn(*mut c_void) -> T;
 
 // A generic RT thread that can work with any RT core
-pub struct RtThread<T> {
-    thread_handle: Option<JoinHandle<()>>,
+pub struct RtThread<T, R: Send> {
+    thread_handle: Option<JoinHandle<R>>,
     priority: i32,
     _phantom: PhantomData<T>, // To mark the type parameter without using it
 }
 
-impl<T> RtThread<T> {
+impl<T, R: Send + 'static> RtThread<T, Result<R, RtThreadError>> {
     pub fn new(priority: i32) -> Self {
         Self {
             thread_handle: None,
@@ -25,7 +25,12 @@ impl<T> RtThread<T> {
         }
     }
 
-    pub fn start<F>(&mut self, data_ptr: *mut T, create_fn: F, thread_entry: ThreadEntryFn)
+    pub fn start<F>(
+        &mut self,
+        data_ptr: *mut T,
+        create_fn: F,
+        thread_entry: ThreadEntryFn<R>,
+    ) -> Result<(), RtThreadError>
     where
         F: FnOnce(*mut T) -> *mut c_void + Send + 'static,
         T: 'static,
@@ -37,6 +42,7 @@ impl<T> RtThread<T> {
                     "Failed to lock memory with mlockall: {}",
                     std::io::Error::last_os_error()
                 );
+                return Err(RtThreadError::FailedToLockMemory);
             }
         }
 
@@ -60,26 +66,26 @@ impl<T> RtThread<T> {
                 // Initialize pthread attributes
                 if libc::pthread_attr_init(&mut attr) != 0 {
                     eprintln!("Failed to initialize pthread attributes");
-                    return;
+                    return Err(RtThreadError::FailedToInitialisePThreadAttributes);
                 }
 
                 // Set scheduling policy to SCHED_FIFO (real-time)
                 if libc::pthread_attr_setschedpolicy(&mut attr, SCHED_FIFO) != 0 {
                     eprintln!("Failed to set scheduling policy");
-                    return;
+                    return Err(RtThreadError::FailedToSetSchedulingPolicy);
                 }
 
                 // Set priority (1-99 for RT, higher = more priority)
                 param.sched_priority = priority;
                 if libc::pthread_attr_setschedparam(&mut attr, &param) != 0 {
                     eprintln!("Failed to set scheduling parameters");
-                    return;
+                    return Err(RtThreadError::FailedToSetSchedulingParameters);
                 }
 
                 // Explicitly set scheduling attributes (don't inherit)
                 if libc::pthread_attr_setinheritsched(&mut attr, PTHREAD_EXPLICIT_SCHED) != 0 {
                     eprintln!("Failed to set explicit scheduling");
-                    return;
+                    return Err(RtThreadError::FailedToSetExcplicitScheduling);
                 }
 
                 // Apply RT scheduling to current thread
@@ -89,16 +95,35 @@ impl<T> RtThread<T> {
                         "Failed to set thread scheduling parameters: {}",
                         std::io::Error::last_os_error()
                     );
-                    // Continue anyway, as we may still be able to run with reduced capabilities
+                    return Err(RtThreadError::FailedToApplySchedulingParameters);
                 }
             }
 
             println!("RT thread starting with priority {}", priority);
 
             // Call the provided thread entry function with the core pointer
-            thread_entry(thread_data);
+            let result = thread_entry(thread_data);
 
-            // Note: This line should never be reached as thread_entry contains an infinite loop
+            Ok(result)
         }));
+
+        Ok(())
     }
+
+    pub fn join(self) -> std::thread::Result<Result<R, RtThreadError>> {
+        let thread_handle = self.thread_handle.unwrap();
+        let result = thread_handle.join();
+
+        result
+    }
+}
+
+#[derive(Debug)]
+pub enum RtThreadError {
+    FailedToLockMemory,
+    FailedToInitialisePThreadAttributes,
+    FailedToSetSchedulingPolicy,
+    FailedToSetSchedulingParameters,
+    FailedToSetExcplicitScheduling,
+    FailedToApplySchedulingParameters,
 }

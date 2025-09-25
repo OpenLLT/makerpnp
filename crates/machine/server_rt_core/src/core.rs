@@ -2,7 +2,7 @@ use alloc::boxed::Box;
 use core::ffi::c_void;
 
 use server_rt_shared::IoStatus;
-
+use crate::rt_time::{get_time_ns, sleep_until_ns};
 use crate::SharedState;
 
 #[repr(C)]
@@ -17,10 +17,27 @@ impl Core {
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> usize {
         // this will be called once, when the rt thread is started
 
-        // todo call run every 1ms.
+        // Calculate initial wake time
+        let mut next_wake_ns = get_time_ns();
+        let period_ns: u64 = 1_000_000; // 1ms in nanoseconds
+
+        // Main real-time loop
+        loop {
+            // Run core processing
+            self.run();
+
+            // Calculate next wake time
+            next_wake_ns += period_ns;
+
+            // Sleep until next wake time using clock_nanosleep with TIMER_ABSTIME
+            // for deterministic timing
+            sleep_until_ns(next_wake_ns);
+        }
+
+        0
     }
 
     pub fn run(&mut self) {
@@ -40,9 +57,22 @@ impl Core {
     pub fn process_rt_tasks(&mut self, _shared_state: &mut SharedState) {}
 }
 
-// Create a new Core instance and return opaque pointer for rt_thread_entry
-#[unsafe(no_mangle)]
-pub extern "C" fn create_core_for_thread(shared_state_ptr: *mut c_void) -> *mut c_void {
-    let core = Box::new(Core::new(shared_state_ptr as *mut crate::SharedState));
-    Box::into_raw(core) as *mut c_void
+pub mod core_ffi {
+    use super::*;
+    // Create a new Core instance and return opaque pointer for rt_thread_entry
+    #[unsafe(no_mangle)]
+    pub extern "C" fn create_core_for_thread(shared_state_ptr: *mut c_void) -> *mut c_void {
+        let core = Box::new(Core::new(shared_state_ptr as *mut crate::SharedState));
+        Box::into_raw(core) as *mut c_void
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn rt_thread_entry(data_ptr: *mut c_void) -> usize {
+        // This function receives an opaque pointer and manages the real-time loop
+        // The pointer should be a properly initialized Core instance
+        let core_ptr = data_ptr as *mut Core;
+        let core = unsafe { &mut *core_ptr };
+
+        core.start()
+    }
 }

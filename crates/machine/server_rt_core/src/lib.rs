@@ -7,34 +7,8 @@ extern crate server_rt_shared;
 use server_rt_shared::IoStatus;
 
 pub mod core;
-pub mod rt_thread_entry;
 pub mod rt_time;
 
-pub mod rt_ffi {
-    use alloc::boxed::Box;
-
-    use crate::SharedState;
-    use crate::core::Core;
-
-    // Export a C-compatible interface for the RT thread to call
-    #[unsafe(no_mangle)]
-    pub extern "C" fn core_new(shared_state_ptr: *mut SharedState) -> *mut Core {
-        let core = Box::new(Core::new(shared_state_ptr));
-        Box::into_raw(core)
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn core_run(core_ptr: *mut Core) {
-        let core = unsafe { &mut *core_ptr };
-        core.run();
-    }
-
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn core_start(core_ptr: *mut Core) {
-        let core = unsafe { &mut *core_ptr };
-        core.start();
-    }
-}
 
 // Define communication structures with careful memory layout for RT safety
 #[repr(C)]
