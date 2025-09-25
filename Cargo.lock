@@ -5324,6 +5324,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "server"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "server_rt_core",
+ "server_rt_shared",
+]
+
+[[package]]
+name = "server_rt_core"
+version = "0.1.0"
+dependencies = [
+ "server_rt_shared",
+]
+
+[[package]]
+name = "server_rt_shared"
+version = "0.1.0"
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

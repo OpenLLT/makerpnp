@@ -27,6 +27,9 @@ members = [
     "crates/variantbuilder_app",
     "crates/variantbuilder_cli",
     "crates/util",
+    "crates/machine/server",
+    "crates/machine/server_rt_core",
+    "crates/machine/server_rt_shared",
 ]
 
 [workspace.dependencies]
