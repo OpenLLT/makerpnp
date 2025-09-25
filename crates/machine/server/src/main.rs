@@ -1,8 +1,9 @@
 use std::ffi::c_void;
 use std::thread;
 use std::time::Duration;
-use server_rt_core::core::core_ffi::{create_core_for_thread, rt_thread_entry};
+
 use server_rt_core::SharedState;
+use server_rt_core::core::core_ffi::{create_core_for_thread, rt_thread_entry};
 use server_rt_shared::IoStatus;
 
 use crate::rt_thread::{RtThread, RtThreadError};
@@ -37,6 +38,7 @@ fn main() {
 
     for index in 10..0 {
         // Non-RT processing
+        println!("Processing...");
         thread::sleep(Duration::from_millis(1000));
         println!("{}", index);
     }

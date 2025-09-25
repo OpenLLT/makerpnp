@@ -2,18 +2,23 @@ use alloc::boxed::Box;
 use core::ffi::c_void;
 
 use server_rt_shared::IoStatus;
-use crate::rt_time::{get_time_ns, sleep_until_ns};
+
 use crate::SharedState;
+use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 #[repr(C)]
 pub struct Core {
     shared_state: *mut SharedState,
+    done: bool,
+    counter: usize,
 }
 
 impl Core {
     pub fn new(shared_state_ptr: *mut SharedState) -> Self {
         Self {
             shared_state: shared_state_ptr,
+            done: false,
+            counter: 0,
         }
     }
 
@@ -26,8 +31,13 @@ impl Core {
 
         // Main real-time loop
         loop {
+            self.counter += 1;
             // Run core processing
             self.run();
+
+            if self.done {
+                break;
+            }
 
             // Calculate next wake time
             next_wake_ns += period_ns;
@@ -37,7 +47,7 @@ impl Core {
             sleep_until_ns(next_wake_ns);
         }
 
-        0
+        self.counter
     }
 
     pub fn run(&mut self) {
@@ -54,7 +64,11 @@ impl Core {
         self.process_rt_tasks(shared_state);
     }
 
-    pub fn process_rt_tasks(&mut self, _shared_state: &mut SharedState) {}
+    pub fn process_rt_tasks(&mut self, _shared_state: &mut SharedState) {
+        if self.counter == 5000 {
+            self.done = true;
+        }
+    }
 }
 
 pub mod core_ffi {
