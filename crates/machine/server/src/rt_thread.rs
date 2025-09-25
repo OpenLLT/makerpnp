@@ -1,29 +1,35 @@
+use std::ffi::c_void;
+use std::marker::PhantomData;
 use std::mem;
-use std::ptr;
 use std::thread::{self, JoinHandle};
 
-use libc::{
-    self, CLOCK_MONOTONIC, EINTR, PTHREAD_EXPLICIT_SCHED, SCHED_FIFO, TIMER_ABSTIME, pthread_attr_t, sched_param,
-    timespec,
-};
-use server_rt_core::{SharedState, rt_ffi};
+use libc::{self, PTHREAD_EXPLICIT_SCHED, SCHED_FIFO, pthread_attr_t, pthread_t, sched_param};
 use server_rt_shared::sendable_ptr::SendablePtr;
 
-pub struct RtThread {
+// Type for thread entry function
+type ThreadEntryFn = extern "C" fn(*mut c_void) -> ();
+
+// A generic RT thread that can work with any RT core
+pub struct RtThread<T> {
     thread_handle: Option<JoinHandle<()>>,
     priority: i32,
+    _phantom: PhantomData<T>, // To mark the type parameter without using it
 }
 
-// Based on the C++ Thread class in the reference article
-impl RtThread {
+impl<T> RtThread<T> {
     pub fn new(priority: i32) -> Self {
         Self {
             thread_handle: None,
             priority,
+            _phantom: PhantomData,
         }
     }
 
-    pub fn start(&mut self, shared_state_ptr: *mut SharedState) {
+    pub fn start<F>(&mut self, data_ptr: *mut T, create_fn: F, thread_entry: ThreadEntryFn)
+    where
+        F: FnOnce(*mut T) -> *mut c_void + Send + 'static,
+        T: 'static,
+    {
         // First ensure memory is locked to prevent paging
         unsafe {
             if libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) != 0 {
@@ -35,13 +41,16 @@ impl RtThread {
         }
 
         // Create a SendablePtr to allow the pointer to cross thread boundaries
-        let sendable_ptr = SendablePtr::new(shared_state_ptr);
+        let sendable_ptr = SendablePtr::new(data_ptr);
         let priority = self.priority;
 
         // Spawn thread that will configure itself for RT
         self.thread_handle = Some(thread::spawn(move || {
             // Get raw pointer back
-            let shared_state_ptr = sendable_ptr.get();
+            let data_ptr = sendable_ptr.get();
+
+            // Call the provided create function to transform data_ptr into the appropriate core
+            let thread_data = create_fn(data_ptr);
 
             // Initialize RT thread attributes
             let mut attr: pthread_attr_t = unsafe { mem::zeroed() };
@@ -86,53 +95,10 @@ impl RtThread {
 
             println!("RT thread starting with priority {}", priority);
 
-            // Create RT core instance and initialize it
-            let core_ptr = rt_ffi::core_new(shared_state_ptr);
-            unsafe { rt_ffi::core_start(core_ptr) };
+            // Call the provided thread entry function with the core pointer
+            thread_entry(thread_data);
 
-            // Calculate initial wake time
-            let mut next_wake_ns = Self::get_time_ns();
-            let period_ns: u64 = 1_000_000; // 1ms in nanoseconds
-
-            // Main real-time loop
-            loop {
-                // Run core processing
-                unsafe { rt_ffi::core_run(core_ptr) };
-
-                // Calculate next wake time
-                next_wake_ns += period_ns;
-
-                // Sleep until next wake time using clock_nanosleep with TIMER_ABSTIME
-                // for deterministic timing
-                Self::sleep_until_ns(next_wake_ns);
-            }
+            // Note: This line should never be reached as thread_entry contains an infinite loop
         }));
-    }
-
-    // Get current time in nanoseconds using CLOCK_MONOTONIC
-    fn get_time_ns() -> u64 {
-        let mut ts: timespec = unsafe { mem::zeroed() };
-        unsafe {
-            libc::clock_gettime(CLOCK_MONOTONIC, &mut ts);
-        }
-        (ts.tv_sec as u64) * 1_000_000_000 + (ts.tv_nsec as u64)
-    }
-
-    // Sleep until specific time using high-precision clock_nanosleep
-    fn sleep_until_ns(target_ns: u64) {
-        let sec = (target_ns / 1_000_000_000) as i64;
-        let nsec = (target_ns % 1_000_000_000) as i64;
-
-        let ts = timespec {
-            tv_sec: sec,
-            tv_nsec: nsec,
-        };
-
-        // Use TIMER_ABSTIME for absolute timing (not relative)
-        unsafe {
-            while libc::clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, ptr::null_mut()) == EINTR {
-                // If interrupted by signal, retry
-            }
-        }
     }
 }

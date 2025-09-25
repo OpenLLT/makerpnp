@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 server_rt_shared = { path = "../server_rt_shared" }
+libc = { version = "0.2.176" }
