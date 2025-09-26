@@ -44,6 +44,7 @@ pub enum RtResponse {
 #[derive(Copy, Clone)]
 pub enum MainRequest {
     Ping,
+    RequestShutdown,
 }
 
 #[derive(Debug)]

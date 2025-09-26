@@ -142,6 +142,9 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
                             .try_send(response)
                             .expect("sent");
                     }
+                    MainRequest::RequestShutdown => {
+                        self.done = true;
+                    }
                 },
                 Message::Response(response) => match response.payload {
                     MainResponse::None => {}

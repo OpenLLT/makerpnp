@@ -74,17 +74,22 @@ fn main() {
     println!("RT system started and running");
 
     let mut message_index = 0;
-
-    let message = Message::Request(Request {
-        index: message_index,
-        payload: MainRequest::Ping,
-    });
-    main_to_rt_sender
-        .try_send(message)
-        .expect("Failed to send message");
-    message_index += 1;
+    let mut pong_counter = 0;
 
     loop {
+        //
+        // send ping
+        //
+
+        let message = Message::Request(Request {
+            index: message_index,
+            payload: MainRequest::Ping,
+        });
+        main_to_rt_sender
+            .try_send(message)
+            .expect("Failed to send message");
+        message_index += 1;
+
         if let Some(message) = rt_to_main_receiver.try_receive() {
             println!();
 
@@ -99,9 +104,21 @@ fn main() {
                 Message::Response(response) => match response.payload {
                     RtResponse::Pong => {
                         println!("PONG");
+                        pong_counter += 1;
                     }
                 },
             }
+        }
+
+        if pong_counter > 10 {
+            let message = Message::Request(Request {
+                index: message_index,
+                payload: MainRequest::RequestShutdown,
+            });
+            main_to_rt_sender
+                .try_send(message)
+                .expect("Failed to send message");
+            message_index += 1;
         }
         print!(".");
         thread::sleep(Duration::from_millis(1000));
