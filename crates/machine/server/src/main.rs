@@ -59,6 +59,7 @@ fn main() {
     let mut stabilized_ticker = 0;
     let mut stabilized = false;
     loop {
+        println!(".");
         thread::sleep(Duration::from_millis(500));
         while let Some(message) = rt_to_main_receiver.try_receive() {
             println!("Received message: {:?}", message);
@@ -67,7 +68,6 @@ fn main() {
                     RtRequest::StabilityChanged(details) => {
                         if matches!(details, StabilizationStatus::Stable) {
                             stabilized = true;
-                            break;
                         }
                     }
                     _ => {
@@ -80,7 +80,7 @@ fn main() {
             }
         }
 
-        if stabilized_ticker > 20 {
+        if stabilized || stabilized_ticker > 20 {
             break;
         }
         stabilized_ticker += 1;
