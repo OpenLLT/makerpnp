@@ -2,14 +2,12 @@ use std::thread;
 use std::time::Duration;
 
 use rt_spsc::Spsc;
+use rt_thread::RtThread;
 use server_rt_core::SharedState;
 use server_rt_core::core::Core;
 use server_rt_shared::sendable_ptr::SendablePtr;
 use server_rt_shared::{IoStatus, MainRequest, MainResponse, Message, Request, RtRequest, RtResponse};
 
-use crate::rt_thread::RtThread;
-
-mod rt_thread;
 
 pub(crate) const QUEUE_SIZE: usize = 1024;
 pub(crate) const MAX_LOG_LENGTH: usize = 1024;

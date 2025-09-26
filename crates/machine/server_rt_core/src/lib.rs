@@ -1,7 +1,6 @@
 #![no_std]
 
 extern crate alloc;
-extern crate libc;
 extern crate rt_circular_buffer;
 extern crate server_rt_shared;
 

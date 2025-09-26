@@ -8,5 +8,3 @@ server_rt_shared = { path = "../server_rt_shared" }
 rt_circular_buffer = { path = "../rt_circular_buffer" }
 rt_time = { path = "../rt_time" }
 rt_spsc = { path = "../rt_spsc" }
-
-libc = { version = "0.2.176" }
