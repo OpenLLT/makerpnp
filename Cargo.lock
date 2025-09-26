@@ -5034,6 +5034,13 @@ name = "rt_circular_buffer"
 version = "0.1.0"
 
 [[package]]
+name = "rt_time"
+version = "0.1.0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "rust_decimal"
 version = "1.37.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5342,6 +5349,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "rt_circular_buffer",
+ "rt_time",
  "server_rt_shared",
 ]
 

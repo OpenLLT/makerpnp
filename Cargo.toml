@@ -29,7 +29,7 @@ members = [
     "crates/util",
     "crates/machine/server",
     "crates/machine/server_rt_core",
-    "crates/machine/server_rt_shared", "crates/machine/rt_circular_buffer",
+    "crates/machine/server_rt_shared", "crates/machine/rt_circular_buffer", "crates/machine/rt_time",
 ]
 
 [workspace.dependencies]
