@@ -60,11 +60,15 @@ fn main() {
 
     println!("RT system started and running");
 
-    for index in 10..0 {
+    for index in (0..=10).rev() {
         // Non-RT processing
         println!("Processing...");
         thread::sleep(Duration::from_millis(1000));
         println!("{}", index);
+
+        if handle.is_finished() {
+            break;
+        }
     }
 
     let result = handle.join();
