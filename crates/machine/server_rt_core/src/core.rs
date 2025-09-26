@@ -1,6 +1,3 @@
-use alloc::boxed::Box;
-use core::ffi::c_void;
-
 use rt_circular_buffer::CircularBuffer;
 use rt_time::{get_time_ns, sleep_until_ns};
 use server_rt_shared::IoStatus;
@@ -24,10 +21,7 @@ pub struct Core {
 }
 
 impl Core {
-    pub fn new(shared_state_ptr: *mut SharedState) -> Self {
-        // Safely access shared state without atomics
-        let shared_state = unsafe { &mut *shared_state_ptr };
-
+    pub fn new(shared_state: &'static mut SharedState) -> Self {
         Self {
             shared_state,
             done: false,
@@ -145,25 +139,5 @@ impl Core {
         if self.tick >= 5000 {
             self.done = true;
         }
-    }
-}
-
-pub mod core_ffi {
-    use super::*;
-    // Create a new Core instance and return opaque pointer for rt_thread_entry
-    #[unsafe(no_mangle)]
-    pub extern "C" fn create_core_for_thread(shared_state_ptr: *mut c_void) -> *mut c_void {
-        let core = Box::new(Core::new(shared_state_ptr as *mut crate::SharedState));
-        Box::into_raw(core) as *mut c_void
-    }
-
-    #[unsafe(no_mangle)]
-    pub extern "C" fn rt_thread_entry(data_ptr: *mut c_void) -> usize {
-        // This function receives an opaque pointer and manages the real-time loop
-        // The pointer should be a properly initialized Core instance
-        let core_ptr = data_ptr as *mut Core;
-        let core = unsafe { &mut *core_ptr };
-
-        core.start()
     }
 }

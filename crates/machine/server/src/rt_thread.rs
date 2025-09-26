@@ -1,37 +1,23 @@
-use std::ffi::c_void;
 use std::mem;
 use std::thread::{self, JoinHandle};
 
 use libc::{self, PTHREAD_EXPLICIT_SCHED, SCHED_FIFO, pthread_attr_t, sched_param};
-use server_rt_shared::sendable_ptr::SendablePtr;
-
-// Type for thread entry function
-type ThreadEntryFn<T> = extern "C" fn(*mut c_void) -> T;
 
 // A generic RT thread that can work with any RT core
 pub struct RtThread {}
 
 impl RtThread {
-    pub fn spawn<T, R, F>(priority: u8, data_ptr: *mut T, create_fn: F, thread_entry: ThreadEntryFn<R>) -> JoinHandle<R>
+    pub fn spawn<F, T>(priority: u8, f: F) -> JoinHandle<T>
     where
-        F: FnOnce(*mut T) -> *mut c_void + Send + 'static,
-        T: 'static,
-        R: Send + 'static,
+        F: FnOnce() -> T,
+        F: Send + 'static,
+        T: Send + 'static,
     {
         // Set priority (1-99 for RT, higher = more priority)
         assert!(priority >= 1 && priority <= 99);
 
-        // Create a SendablePtr to allow the pointer to cross thread boundaries
-        let sendable_ptr = SendablePtr::new(data_ptr);
-
         // Spawn thread that will configure itself for RT
         let join_handle = thread::spawn(move || {
-            // Get raw pointer back
-            let data_ptr = sendable_ptr.get();
-
-            // Call the provided create function to transform data_ptr into the appropriate core
-            let thread_data = create_fn(data_ptr);
-
             // Initialize RT thread attributes
             let mut attr: pthread_attr_t = unsafe { mem::zeroed() };
             let mut param: sched_param = unsafe { mem::zeroed() };
@@ -70,7 +56,7 @@ impl RtThread {
             println!("RT thread starting with priority {}", priority);
 
             // Call the provided thread entry function with the core pointer
-            let result = thread_entry(thread_data);
+            let result = f();
 
             result
         });

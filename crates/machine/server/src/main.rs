@@ -1,10 +1,10 @@
-use std::ffi::c_void;
 use std::thread;
 use std::time::Duration;
 
 use server_rt_core::SharedState;
-use server_rt_core::core::core_ffi::{create_core_for_thread, rt_thread_entry};
+use server_rt_core::core::Core;
 use server_rt_shared::IoStatus;
+use server_rt_shared::sendable_ptr::SendablePtr;
 
 use crate::rt_thread::RtThread;
 
@@ -17,12 +17,16 @@ fn main() {
     let shared_state_ptr = Box::into_raw(shared_state);
 
     // Create RT thread with priority 80 (out of 1-99)
-    let handle = RtThread::spawn(
-        80,
-        shared_state_ptr,
-        |ptr| create_core_for_thread(ptr as *mut c_void),
-        rt_thread_entry,
-    );
+    let handle = RtThread::spawn(80, {
+        let shared_state_ptr = SendablePtr::new(shared_state_ptr);
+        move || {
+            // Safely access shared state without atomics
+            let shared_state = unsafe { &mut *shared_state_ptr.get() };
+
+            let mut core = Core::new(shared_state);
+            core.start();
+        }
+    });
     println!("RT thread launched");
 
     // create a shared reference to the shared state from the pointer
