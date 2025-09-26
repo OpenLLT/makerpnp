@@ -60,48 +60,54 @@ impl Core {
             sleep_until_ns(next_wake_ns);
             let wake_ns = get_time_ns();
 
-            // Calculate latency deviation (signed value)
-            // This represents how far off we are from the target wakeup time
-            let latency_deviation = wake_ns as i64 - next_wake_ns as i64;
-
-            // Convert to i32 for storage in the buffer (safe for reasonable latencies)
-            let latency_deviation_i32 = latency_deviation as i32;
-
-            // Record the latency deviation in the circular buffer
-            self.latency_buffer
-                .push(latency_deviation_i32);
-
-            // Calculate the average absolute latency deviation
-            let buffer_len = self.latency_buffer.len();
-
-            // We need to calculate mean absolute deviation
-            // First, we need to iterate through values to calculate absolute deviation
-            let abs_sum = self
-                .latency_buffer
-                .iter()
-                .fold(0, |acc, &x| acc + x.abs());
-
-            // Time-constant division (avoid division by zero)
-            let avg_abs_deviation = if buffer_len > 0 { abs_sum / buffer_len as i32 } else { 0 };
-
-            // Determine if the average absolute deviation is acceptable
-            let latency_ok = avg_abs_deviation <= ACCEPTABLE_DEVIATION_NS;
-            self.shared_state
-                .set_stabilized(latency_ok);
-
-            let mut latency_stats = [0; 100];
-            self.latency_buffer
-                .iter()
-                .enumerate()
-                .for_each(|(i, latency)| {
-                    latency_stats[i] = *latency;
-                });
-
-            self.shared_state
-                .set_latency_stats(latency_stats)
+            self.determine_stability(&mut next_wake_ns, wake_ns);
+            self.update_latency_stats();
         }
 
         self.counter
+    }
+
+    fn update_latency_stats(&mut self) {
+        let mut latency_stats = [0; 100];
+        self.latency_buffer
+            .iter()
+            .enumerate()
+            .for_each(|(i, latency)| {
+                latency_stats[i] = *latency;
+            });
+
+        self.shared_state
+            .set_latency_stats(latency_stats)
+    }
+
+    fn determine_stability(&mut self, next_wake_ns: &mut u64, wake_ns: u64) {
+        // Calculate latency deviation (signed value)
+        // This represents how far off we are from the target wakeup time
+        let latency_deviation = wake_ns as i64 - next_wake_ns as i64;
+
+        // Convert to i32 for storage in the buffer (safe for reasonable latencies)
+        let latency_deviation_i32 = latency_deviation as i32;
+
+        // Record the latency deviation in the circular buffer
+        self.latency_buffer
+            .push(latency_deviation_i32);
+
+        // Calculate statistics for acceptability check
+        let buffer_len = self.latency_buffer.len();
+
+        // Check if each individual latency value is within acceptable range
+        let acceptable_entries = self.latency_buffer
+            .iter()
+            .filter(|&&x| x.abs() <= ACCEPTABLE_DEVIATION_NS)
+            .count();
+
+        // We consider the system stable if at least 95% of the measurements
+        // are within the acceptable range
+        let stability_threshold = (buffer_len * 95) / 100;
+        let latency_ok = acceptable_entries >= stability_threshold;
+
+        self.shared_state
+            .set_stabilized(latency_ok);
     }
 
     pub fn run(&mut self) {
