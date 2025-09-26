@@ -8,7 +8,8 @@ use crate::circular_buffer::CircularBuffer;
 use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 const LATENCY_BUFFER_SIZE: usize = 100;
-const ACCEPTABLE_LATENCY_MICROS: u32 = 500;
+/// 50 microseconds = 50_000 nanoseconds
+const ACCEPTABLE_DEVIATION_NS: i32 = 50_000;
 
 #[repr(C)]
 pub struct Core {
@@ -18,7 +19,7 @@ pub struct Core {
 
     /// Circular buffer to store latency measurements
     /// Note: maximum recorded latency is limited by using a u32 for speed here
-    latency_buffer: CircularBuffer<u32, LATENCY_BUFFER_SIZE>,
+    latency_buffer: CircularBuffer<i32, LATENCY_BUFFER_SIZE>,
 }
 
 impl Core {
@@ -56,31 +57,39 @@ impl Core {
 
             // Sleep until next wake time using clock_nanosleep with TIMER_ABSTIME
             // for deterministic timing
-            let sleep_ns = get_time_ns();
             sleep_until_ns(next_wake_ns);
-
             let wake_ns = get_time_ns();
-            let latency: u64 = wake_ns - sleep_ns;
 
-            // Record the latency in a circular buffer
-            self.latency_buffer.push(latency as u32);
+            // Calculate latency deviation (signed value)
+            // This represents how far off we are from the target wakeup time
+            let latency_deviation = wake_ns as i64 - next_wake_ns as i64;
 
-            // Calculate the average latency of the entries in the buffer
-            let sum = self.latency_buffer.sum();
+            // Convert to i32 for storage in the buffer (safe for reasonable latencies)
+            let latency_deviation_i32 = latency_deviation as i32;
+
+            // Record the latency deviation in the circular buffer
+            self.latency_buffer
+                .push(latency_deviation_i32);
+
+            // Calculate the average absolute latency deviation
+            let buffer_len = self.latency_buffer.len();
+
+            // We need to calculate mean absolute deviation
+            // First, we need to iterate through values to calculate absolute deviation
+            let abs_sum = self
+                .latency_buffer
+                .iter()
+                .fold(0, |acc, &x| acc + x.abs());
 
             // Time-constant division (avoid division by zero)
-            let buffer_len = self.latency_buffer.len();
-            let avg_latency = if buffer_len > 0 { sum / buffer_len as u32 } else { 0 };
+            let avg_abs_deviation = if buffer_len > 0 { abs_sum / buffer_len as i32 } else { 0 };
 
-            // Determine if the average latency is acceptable (+/- 50 micro seconds)
-            // 1 microsecond = 1000 nanoseconds
-            let acceptable_latency_ns = ACCEPTABLE_LATENCY_MICROS * 1000;
-            let latency_ok = avg_latency <= acceptable_latency_ns;
-
+            // Determine if the average absolute deviation is acceptable
+            let latency_ok = avg_abs_deviation <= ACCEPTABLE_DEVIATION_NS;
             self.shared_state
                 .set_stabilized(latency_ok);
 
-            let mut latency_stats = [0_u32; 100];
+            let mut latency_stats = [0; 100];
             self.latency_buffer
                 .iter()
                 .enumerate()
