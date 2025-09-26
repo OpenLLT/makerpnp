@@ -145,6 +145,19 @@ mod tests {
     }
 
     #[test]
+    fn spsc_receive_on_empty_channel() {
+        // given
+        let mut spsc = Spsc::<(), 1024>::new(); // Now works with capacity of 1
+        let (sender, receiver) = spsc.split();
+
+        // when
+        let result = receiver.try_receive();
+
+        // then
+        assert_eq!(result, None);
+    }
+
+    #[test]
     fn spsc_full_then_empty() {
         // given
         let mut spsc = Spsc::<_, 1>::new();
