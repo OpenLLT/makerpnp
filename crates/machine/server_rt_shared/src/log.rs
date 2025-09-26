@@ -1,3 +1,4 @@
+use core::fmt::{Display, Formatter};
 use core::mem::MaybeUninit;
 
 #[derive(Debug)]
@@ -25,5 +26,25 @@ impl<const N: usize> LogBuffer<N> {
         }
 
         buffer
+    }
+}
+
+impl<const N: usize> Display for LogBuffer<N> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        // Get a safe reference to the bytes
+        let bytes_ptr = self.bytes.as_ptr() as *const u8;
+        let byte_slice = unsafe { core::slice::from_raw_parts(bytes_ptr, self.length) };
+
+        // Convert bytes to a string, handling invalid UTF-8
+        match core::str::from_utf8(byte_slice) {
+            Ok(s) => write!(f, "{}", s),
+            Err(_) => {
+                write!(f, "[invalid utf-8]")
+                // TODO do this with some compiler flags that check if std feature is available or something
+                // // Handle invalid UTF-8 by creating a lossy conversion
+                // let lossy_string = String::from_utf8_lossy(byte_slice);
+                // write!(f, "{}", lossy_string)
+            }
+        }
     }
 }
