@@ -5034,6 +5034,10 @@ name = "rt_circular_buffer"
 version = "0.1.0"
 
 [[package]]
+name = "rt_spsc"
+version = "0.1.0"
+
+[[package]]
 name = "rt_time"
 version = "0.1.0"
 dependencies = [
@@ -5339,6 +5343,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "rt_spsc",
  "server_rt_core",
  "server_rt_shared",
 ]

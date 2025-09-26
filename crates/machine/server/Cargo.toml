@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 server_rt_core = { path = "../server_rt_core" }
 server_rt_shared = { path = "../server_rt_shared" }
+rt_spsc = { path = "../rt_spsc" }
 libc = "0.2"
