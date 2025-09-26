@@ -29,11 +29,20 @@ fn main() {
     let shared_state = unsafe { &mut *shared_state_ptr };
 
     println!("Waiting for RT system to stabilize...");
+    let mut stabilized_ticker = 0;
     loop {
         thread::sleep(Duration::from_millis(500));
-        if shared_state.is_stabilized() {
+        if shared_state.is_stabilized() || stabilized_ticker > 100 {
             break;
         }
+        stabilized_ticker += 1;
+    }
+
+    if !shared_state.is_stabilized() {
+        eprintln!("RT system failed to stabilize");
+        shared_state.request_shutdown();
+        handle.join().unwrap();
+        return;
     }
     println!("RT system stabilized");
 

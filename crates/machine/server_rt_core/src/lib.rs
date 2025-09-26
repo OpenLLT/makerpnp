@@ -16,6 +16,7 @@ pub struct SharedState {
     // Using a raw u8 instead of atomic for deterministic latency
     io_status: IoStatus,
     thread_timing_stabilized: bool,
+    shutdown_requested: bool,
 }
 
 impl SharedState {
@@ -27,6 +28,7 @@ impl SharedState {
         Self {
             io_status: IoStatus::Pending,
             thread_timing_stabilized: false,
+            shutdown_requested: false,
         }
     }
 
@@ -36,6 +38,10 @@ impl SharedState {
 
     pub const fn is_stabilized(&self) -> bool {
         self.thread_timing_stabilized
+    }
+
+    pub const fn request_shutdown(&mut self) {
+        self.shutdown_requested = true;
     }
 
     //
@@ -48,5 +54,9 @@ impl SharedState {
 
     const fn set_stabilized(&mut self, stabilized: bool) {
         self.thread_timing_stabilized = stabilized;
+    }
+
+    const fn is_shutdown_requested(&self) -> bool {
+        self.shutdown_requested
     }
 }

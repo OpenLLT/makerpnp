@@ -87,6 +87,14 @@ impl Core {
     pub fn run(&mut self) {
         // this will be called at a frequency of 1000hz by the `start` method.
 
+        if self
+            .shared_state
+            .is_shutdown_requested()
+        {
+            self.done = true;
+            return;
+        }
+
         // wait for ready signal from main thread
         if !matches!(self.shared_state.get_io_status(), IoStatus::Ready) {
             return;
