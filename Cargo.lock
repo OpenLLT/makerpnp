@@ -5354,6 +5354,7 @@ version = "0.1.0"
 dependencies = [
  "libc",
  "rt_circular_buffer",
+ "rt_spsc",
  "rt_time",
  "server_rt_shared",
 ]

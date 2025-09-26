@@ -1,17 +1,27 @@
+use std::mem::MaybeUninit;
 use std::thread;
 use std::time::Duration;
 
+use rt_spsc::Spsc;
 use server_rt_core::SharedState;
 use server_rt_core::core::Core;
-use server_rt_shared::IoStatus;
 use server_rt_shared::sendable_ptr::SendablePtr;
+use server_rt_shared::{IoStatus, MainRequest, MainResponse, Message, Request, RtRequest, RtResponse};
 
 use crate::rt_thread::RtThread;
 
 mod rt_thread;
 
+pub(crate) const QUEUE_SIZE: usize = 1024;
+pub(crate) const MAX_LOG_LENGTH: usize = 1024;
+
 fn main() {
     lock_memory();
+
+    let (main_to_rt_sender, main_to_rt_receiver) =
+        Spsc::<Message<MainRequest, MainResponse>, QUEUE_SIZE>::new().split();
+    let (rt_to_main_sender, rt_to_main_receiver) =
+        Spsc::<Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, QUEUE_SIZE>::new().split();
 
     let shared_state = Box::new(SharedState::new());
     let shared_state_ptr = Box::into_raw(shared_state);
@@ -23,7 +33,7 @@ fn main() {
             // Safely access shared state without atomics
             let shared_state = unsafe { &mut *shared_state_ptr.get() };
 
-            let mut core = Core::new(shared_state);
+            let mut core = Core::new(shared_state, rt_to_main_sender, main_to_rt_receiver);
             core.start();
         }
     });
@@ -64,15 +74,38 @@ fn main() {
 
     println!("RT system started and running");
 
-    for index in (0..=10).rev() {
-        // Non-RT processing
-        println!("Processing...");
-        thread::sleep(Duration::from_millis(1000));
-        println!("{}", index);
+    let mut message_index = 0;
 
-        if handle.is_finished() {
-            break;
+    let message = Message::Request(Request {
+        index: message_index,
+        payload: MainRequest::Ping,
+    });
+    main_to_rt_sender
+        .try_send(message)
+        .expect("Failed to send message");
+    message_index += 1;
+
+    loop {
+        if let Some(message) = rt_to_main_receiver.try_receive() {
+            println!();
+
+            println!("Received message: {:?}", message);
+            match message {
+                Message::Request(request) => match request.payload {
+                    RtRequest::Log(log_buffer) => {
+                        println!("LOG: {:?}", log_buffer);
+                    }
+                    RtRequest::Shutdown => break,
+                },
+                Message::Response(response) => match response.payload {
+                    RtResponse::Pong => {
+                        println!("PONG");
+                    }
+                },
+            }
         }
+        print!(".");
+        thread::sleep(Duration::from_millis(1000));
     }
 
     let result = handle.join();

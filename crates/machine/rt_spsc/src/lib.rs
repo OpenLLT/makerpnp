@@ -51,7 +51,7 @@ impl<T: Send + 'static, const N: usize> Sender<T, N> {
         }
     }
 
-    pub fn send(&self, value: T) -> Result<(), T> {
+    pub fn try_send(&self, value: T) -> Result<(), T> {
         unsafe {
             let spcs = &mut *self.spcs;
 
@@ -137,7 +137,7 @@ mod tests {
         let (sender, receiver) = spsc.split();
 
         // when
-        sender.send(1).expect("not full");
+        sender.try_send(1).expect("not full");
         let result = receiver.try_receive();
 
         // then
@@ -151,15 +151,15 @@ mod tests {
         let (sender, receiver) = spsc.split();
 
         // expect
-        sender.send(1).expect("not full");
+        sender.try_send(1).expect("not full");
         // Should be full now
-        assert!(sender.send(2).is_err(), "Queue should be full");
+        assert!(sender.try_send(2).is_err(), "Queue should be full");
         // Read the item
         assert_eq!(receiver.try_receive(), Some(1));
         // Should be empty now
         assert_eq!(receiver.try_receive(), None);
         // Should be able to write again
-        sender.send(3).expect("not full");
+        sender.try_send(3).expect("not full");
         assert_eq!(receiver.try_receive(), Some(3));
     }
 
@@ -182,7 +182,7 @@ mod tests {
             // Send value
             println!("Sender thread: sending value");
             sender
-                .send(42)
+                .try_send(42)
                 .expect("Failed to send value");
             println!("Sender thread: value sent");
 
@@ -241,7 +241,7 @@ mod tests {
 
             println!("Sender thread: sending value");
             sender
-                .send(69)
+                .try_send(69)
                 .expect("Failed to send value");
             println!("Sender thread: value sent");
 

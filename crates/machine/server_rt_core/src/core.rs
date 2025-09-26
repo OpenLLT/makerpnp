@@ -1,6 +1,7 @@
 use rt_circular_buffer::CircularBuffer;
+use rt_spsc::{Receiver, Sender};
 use rt_time::{get_time_ns, sleep_until_ns};
-use server_rt_shared::IoStatus;
+use server_rt_shared::{IoStatus, MainRequest, MainResponse, Message, Response, RtRequest, RtResponse};
 
 use crate::SharedState;
 
@@ -10,7 +11,7 @@ const ACCEPTABLE_DEVIATION_NS: u32 = 200_000;
 const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 
 #[repr(C)]
-pub struct Core {
+pub struct Core<const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
     shared_state: &'static mut SharedState,
     done: bool,
     tick: usize,
@@ -18,15 +19,23 @@ pub struct Core {
     /// Circular buffer to store latency measurements
     /// Note: maximum recorded latency is limited by using a u32 for speed here
     latency_buffer: CircularBuffer<i32, LATENCY_BUFFER_SIZE>,
+    pub sender: Sender<Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
+    pub receiver: Receiver<Message<MainRequest, MainResponse>, { Q2 }>,
 }
 
-impl Core {
-    pub fn new(shared_state: &'static mut SharedState) -> Self {
+impl<const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<Q1, Q2, MAX_LOG_LENGTH> {
+    pub fn new(
+        shared_state: &'static mut SharedState,
+        sender: Sender<Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, Q1>,
+        receiver: Receiver<Message<MainRequest, MainResponse>, Q2>,
+    ) -> Self {
         Self {
             shared_state,
             done: false,
             tick: 0,
             latency_buffer: CircularBuffer::new(),
+            sender,
+            receiver,
         }
     }
 
@@ -118,6 +127,27 @@ impl Core {
 
     pub fn run(&mut self) {
         // this will be called at a frequency of 1000hz by the `start` method.
+
+        // TODO we shouldn't try and receive messages since we can't respond if the sender cannot send.
+
+        if let Some(message) = self.receiver.try_receive() {
+            match message {
+                Message::Request(request) => match request.payload {
+                    MainRequest::Ping => {
+                        let response = Message::Response(Response {
+                            request_reference: request.index,
+                            payload: RtResponse::Pong,
+                        });
+                        self.sender
+                            .try_send(response)
+                            .expect("sent");
+                    }
+                },
+                Message::Response(response) => match response.payload {
+                    MainResponse::None => {}
+                },
+            }
+        }
 
         if self
             .shared_state

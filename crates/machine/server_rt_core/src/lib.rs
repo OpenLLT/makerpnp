@@ -8,7 +8,6 @@ extern crate server_rt_shared;
 use server_rt_shared::IoStatus;
 
 pub mod core;
-pub mod rt_time;
 
 // Define communication structures with careful memory layout for RT safety
 #[repr(C)]
