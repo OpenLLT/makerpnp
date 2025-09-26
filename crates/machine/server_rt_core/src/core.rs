@@ -1,7 +1,9 @@
 use rt_circular_buffer::CircularBuffer;
 use rt_spsc::{Receiver, Sender};
 use rt_time::{get_time_ns, sleep_until_ns};
-use server_rt_shared::{IoStatus, MainRequest, MainResponse, Message, Response, RtRequest, RtResponse};
+use server_rt_shared::{
+    IoStatus, MainRequest, MainResponse, Message, Request, Response, RtRequest, RtResponse, StabilizationStatus,
+};
 
 use crate::SharedState;
 
@@ -13,14 +15,19 @@ const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 #[repr(C)]
 pub struct Core<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
     shared_state: &'static mut SharedState,
+
     done: bool,
     tick: usize,
+    io_status: IoStatus,
 
     /// Circular buffer to store latency measurements
     /// Note: maximum recorded latency is limited by using a u32 for speed here
     latency_buffer: CircularBuffer<i32, LATENCY_BUFFER_SIZE>,
-    pub sender: Sender<'a, Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
-    pub receiver: Receiver<'a, Message<MainRequest, MainResponse>, { Q2 }>,
+
+    sender: Sender<'a, Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
+    receiver: Receiver<'a, Message<MainRequest, MainResponse>, { Q2 }>,
+    stabilization: StabilizationStatus,
+    message_index: usize,
 }
 
 impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a, Q1, Q2, MAX_LOG_LENGTH> {
@@ -33,9 +40,12 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
             shared_state,
             done: false,
             tick: 0,
+            io_status: IoStatus::Pending,
             latency_buffer: CircularBuffer::new(),
             sender,
             receiver,
+            stabilization: StabilizationStatus::Stable,
+            message_index: 0,
         }
     }
 
@@ -119,10 +129,30 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
             .count();
 
         let stability_threshold = (buffer_len * threshold_percentage as usize) / 100;
-        let latency_ok = acceptable_entries >= stability_threshold;
+        let state = if acceptable_entries >= stability_threshold {
+            StabilizationStatus::Stable
+        } else {
+            StabilizationStatus::Unstable
+        };
 
-        self.shared_state
-            .set_stabilized(latency_ok);
+        if state != self.stabilization {
+            self.stabilization = state;
+            let message = Message::Request(Request {
+                index: self.message_index,
+                payload: RtRequest::StabilityChanged(state),
+            });
+            self.send_message(message);
+        }
+    }
+
+    // TODO don't panic if unable to send messages and/or add an unchecked_send_message
+
+    /// Safety: panics if unable to send
+    fn send_message(&mut self, message: Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>) {
+        self.sender
+            .try_send(message)
+            .expect("sent");
+        self.message_index += 1;
     }
 
     pub fn run(&mut self) {
@@ -145,6 +175,7 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
                     MainRequest::RequestShutdown => {
                         self.done = true;
                     }
+                    MainRequest::EnableIo => self.io_status = IoStatus::Ready,
                 },
                 Message::Response(response) => match response.payload {
                     MainResponse::None => {}
@@ -152,25 +183,13 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
             }
         }
 
-        if self
-            .shared_state
-            .is_shutdown_requested()
-        {
-            self.done = true;
-            return;
-        }
-
         // wait for ready signal from main thread
-        if !matches!(self.shared_state.get_io_status(), IoStatus::Ready) {
+        if !matches!(self.io_status, IoStatus::Ready) {
             return;
         }
 
-        self.process_rt_tasks();
+        self.process_io_tasks();
     }
 
-    pub fn process_rt_tasks(&mut self) {
-        if self.tick >= 5000 {
-            self.done = true;
-        }
-    }
+    pub fn process_io_tasks(&mut self) {}
 }

@@ -140,7 +140,6 @@ impl<'a, T: Send + 'static, const N: usize> Receiver<'a, T, N> {
 mod tests {
     extern crate std;
 
-    use alloc::boxed::Box;
     use std::sync::{Arc, Barrier};
     use std::thread;
 
@@ -164,7 +163,7 @@ mod tests {
     fn spsc_receive_on_empty_channel() {
         // given
         let mut spsc = SpscChannel::<(), 1024>::new(); // Now works with capacity of 1
-        let (sender, receiver) = spsc.split();
+        let (_sender, receiver) = spsc.split();
 
         // when
         let result = receiver.try_receive();

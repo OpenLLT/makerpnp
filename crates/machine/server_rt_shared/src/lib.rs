@@ -45,6 +45,7 @@ pub enum RtResponse {
 pub enum MainRequest {
     Ping,
     RequestShutdown,
+    EnableIo,
 }
 
 #[derive(Debug)]
@@ -52,10 +53,18 @@ pub enum MainRequest {
 pub enum RtRequest<const MAX_LOG_LENGTH: usize> {
     Log(LogBuffer<MAX_LOG_LENGTH>),
     Shutdown,
+    StabilityChanged(StabilizationStatus),
 }
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
 pub enum MainResponse {
     None,
+}
+
+#[derive(Debug)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum StabilizationStatus {
+    Stable,
+    Unstable,
 }
