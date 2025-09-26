@@ -30,6 +30,7 @@ impl<T: Copy + Default, const N: usize> CircularBuffer<T, N> {
     }
 
     /// Pushes a value into the buffer, overwriting the oldest value if full
+    #[inline(always)]
     pub fn push(&mut self, value: T) {
         self.buffer[self.position].write(value);
 
@@ -45,11 +46,13 @@ impl<T: Copy + Default, const N: usize> CircularBuffer<T, N> {
     }
 
     /// Returns the number of elements currently in the buffer
+    #[inline(always)]
     pub const fn len(&self) -> usize {
         self.count
     }
 
     /// Returns true if the buffer is empty
+    #[inline(always)]
     pub const fn is_empty(&self) -> bool {
         self.count == 0
     }
@@ -60,6 +63,7 @@ impl<T: Copy + Default, const N: usize> CircularBuffer<T, N> {
     ///
     /// This function doesn't perform bounds checking. The caller must
     /// ensure that `index < self.count`.
+    #[inline(always)]
     unsafe fn get_unchecked(&self, index: usize) -> &T {
         debug_assert!(index < self.count, "Index out of bounds");
         unsafe { self.buffer[index].assume_init_ref() }

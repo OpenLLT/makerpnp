@@ -6,6 +6,7 @@ use core::ptr;
 use libc::{self, CLOCK_MONOTONIC, EINTR, TIMER_ABSTIME, timespec};
 
 // Get current time in nanoseconds using CLOCK_MONOTONIC
+#[inline(always)]
 pub fn get_time_ns() -> u64 {
     let mut ts: timespec = unsafe { mem::zeroed() };
     unsafe {
