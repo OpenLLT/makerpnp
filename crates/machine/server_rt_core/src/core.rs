@@ -8,7 +8,7 @@ use crate::circular_buffer::CircularBuffer;
 use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 const LATENCY_BUFFER_SIZE: usize = 100;
-const ACCEPTABLE_LATENCY_MICROS: u32 = 50; // +/- 50 microseconds
+const ACCEPTABLE_LATENCY_MICROS: u32 = 500;
 
 #[repr(C)]
 pub struct Core {
@@ -79,6 +79,17 @@ impl Core {
 
             self.shared_state
                 .set_stabilized(latency_ok);
+
+            let mut latency_stats = [0_u32; 100];
+            self.latency_buffer
+                .iter()
+                .enumerate()
+                .for_each(|(i, latency)| {
+                    latency_stats[i] = *latency;
+                });
+
+            self.shared_state
+                .set_latency_stats(latency_stats)
         }
 
         self.counter

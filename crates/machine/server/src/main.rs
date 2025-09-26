@@ -38,6 +38,8 @@ fn main() {
         stabilized_ticker += 1;
     }
 
+    println!("RT latency: {:?}", shared_state.get_latency_stats());
+
     if !shared_state.is_stabilized() {
         eprintln!("RT system failed to stabilize");
         shared_state.request_shutdown();

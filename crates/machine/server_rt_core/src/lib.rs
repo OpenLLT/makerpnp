@@ -17,6 +17,8 @@ pub struct SharedState {
     io_status: IoStatus,
     thread_timing_stabilized: bool,
     shutdown_requested: bool,
+
+    latency_stats: [u32; 100],
 }
 
 impl SharedState {
@@ -29,6 +31,7 @@ impl SharedState {
             io_status: IoStatus::Pending,
             thread_timing_stabilized: false,
             shutdown_requested: false,
+            latency_stats: [0; 100],
         }
     }
 
@@ -42,6 +45,11 @@ impl SharedState {
 
     pub const fn request_shutdown(&mut self) {
         self.shutdown_requested = true;
+    }
+
+    /// Safety: no locking here, the values could be updated by the RT thread
+    pub fn get_latency_stats(&self) -> &[u32; 100] {
+        &self.latency_stats
     }
 
     //
@@ -58,5 +66,9 @@ impl SharedState {
 
     const fn is_shutdown_requested(&self) -> bool {
         self.shutdown_requested
+    }
+
+    const fn set_latency_stats(&mut self, latency_stats: [u32; 100]) {
+        self.latency_stats = latency_stats;
     }
 }
