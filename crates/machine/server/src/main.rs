@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use rt_spsc::{Sender, make_static_channel};
 use rt_thread::RtThread;
-use server_rt_core::SharedState;
 use server_rt_core::core::Core;
+use server_rt_core::shared_state::SharedState;
 use server_rt_shared::sendable_ptr::SendablePtr;
 use server_rt_shared::{MainRequest, MainResponse, Message, Request, RtRequest, RtResponse, StabilizationStatus};
 

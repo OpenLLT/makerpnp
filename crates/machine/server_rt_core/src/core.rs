@@ -5,7 +5,7 @@ use server_rt_shared::{
     IoStatus, MainRequest, MainResponse, Message, Request, Response, RtRequest, RtResponse, StabilizationStatus,
 };
 
-use crate::SharedState;
+use crate::shared_state::SharedState;
 
 const LATENCY_BUFFER_SIZE: usize = 100;
 /// 50 microseconds = 50_000 nanoseconds
