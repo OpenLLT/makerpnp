@@ -6,25 +6,23 @@ use server_rt_core::SharedState;
 use server_rt_core::core::core_ffi::{create_core_for_thread, rt_thread_entry};
 use server_rt_shared::IoStatus;
 
-use crate::rt_thread::{RtThread, RtThreadError};
+use crate::rt_thread::RtThread;
 
 mod rt_thread;
 
 fn main() {
+    lock_memory();
+    
     let shared_state = Box::new(SharedState::new());
     let shared_state_ptr = Box::into_raw(shared_state);
 
     // Create RT thread with priority 80 (out of 1-99)
-    let mut rt_thread = RtThread::<SharedState, Result<usize, RtThreadError>>::new(80);
-    rt_thread
-        .start(
+    let handle = RtThread::spawn(
+        80,
             shared_state_ptr,
             |ptr| create_core_for_thread(ptr as *mut c_void),
             rt_thread_entry,
-        )
-        .unwrap_or_else(|error| {
-            println!("RT thead failed to start, cause: {:?}", error);
-        });
+        );
     println!("RT thread launched");
 
     // TODO busy wait until rt thread sets some state
@@ -43,7 +41,7 @@ fn main() {
         println!("{}", index);
     }
 
-    let result = rt_thread.join();
+    let result = handle.join();
     println!("RT thread result: {:?}", result);
 
     println!("RT system stopped");
@@ -62,4 +60,17 @@ fn set_rt_ready(shared_state_ptr: *mut SharedState) {
         (*shared_state_ptr).set_io_status(IoStatus::Ready);
     }
     println!("IO Ready signal sent to RT thread");
+}
+
+
+/// ensure memory is locked to prevent paging
+fn lock_memory() {
+    unsafe {
+        if libc::mlockall(libc::MCL_CURRENT | libc::MCL_FUTURE) != 0 {
+            panic!(
+                "Failed to lock memory with mlockall: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+    }    
 }
