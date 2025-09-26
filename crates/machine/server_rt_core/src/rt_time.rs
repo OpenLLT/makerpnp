@@ -2,7 +2,7 @@
 use core::mem;
 use core::ptr;
 
-use libc::{self, CLOCK_MONOTONIC, EINTR, TIMER_ABSTIME, clockid_t, timespec};
+use libc::{self, CLOCK_MONOTONIC, EINTR, TIMER_ABSTIME, timespec};
 
 // Get current time in nanoseconds using CLOCK_MONOTONIC
 pub fn get_time_ns() -> u64 {
@@ -18,7 +18,7 @@ pub fn sleep_until_ns(target_ns: u64) {
     let sec = (target_ns / 1_000_000_000) as i64;
     let nsec = (target_ns % 1_000_000_000) as i64;
 
-    let mut ts = timespec {
+    let ts = timespec {
         tv_sec: sec,
         tv_nsec: nsec,
     };

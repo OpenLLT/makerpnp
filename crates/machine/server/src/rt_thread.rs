@@ -9,16 +9,10 @@ use server_rt_shared::sendable_ptr::SendablePtr;
 type ThreadEntryFn<T> = extern "C" fn(*mut c_void) -> T;
 
 // A generic RT thread that can work with any RT core
-pub struct RtThread {
-}
+pub struct RtThread {}
 
 impl RtThread {
-    pub fn spawn<T, R, F>(
-        priority: u8,
-        data_ptr: *mut T,
-        create_fn: F,
-        thread_entry: ThreadEntryFn<R>,
-    ) -> JoinHandle<R>
+    pub fn spawn<T, R, F>(priority: u8, data_ptr: *mut T, create_fn: F, thread_entry: ThreadEntryFn<R>) -> JoinHandle<R>
     where
         F: FnOnce(*mut T) -> *mut c_void + Send + 'static,
         T: 'static,

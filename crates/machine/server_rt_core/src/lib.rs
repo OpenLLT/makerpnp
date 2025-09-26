@@ -6,6 +6,7 @@ extern crate server_rt_shared;
 
 use server_rt_shared::IoStatus;
 
+pub mod circular_buffer;
 pub mod core;
 pub mod rt_time;
 
@@ -13,7 +14,8 @@ pub mod rt_time;
 #[repr(C)]
 pub struct SharedState {
     // Using a raw u8 instead of atomic for deterministic latency
-    pub io_status: IoStatus,
+    io_status: IoStatus,
+    thread_timing_stabilized: bool,
 }
 
 impl SharedState {
@@ -24,11 +26,16 @@ impl SharedState {
     pub const fn new() -> Self {
         Self {
             io_status: IoStatus::Pending,
+            thread_timing_stabilized: false,
         }
     }
 
     pub const fn set_io_status(&mut self, io_status: IoStatus) {
         self.io_status = io_status;
+    }
+
+    pub const fn is_stabilized(&self) -> bool {
+        self.thread_timing_stabilized
     }
 
     //
@@ -37,5 +44,9 @@ impl SharedState {
 
     const fn get_io_status(&self) -> IoStatus {
         self.io_status
+    }
+
+    const fn set_stabilized(&mut self, stabilized: bool) {
+        self.thread_timing_stabilized = stabilized;
     }
 }

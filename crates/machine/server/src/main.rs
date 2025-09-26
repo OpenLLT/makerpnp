@@ -12,25 +12,36 @@ mod rt_thread;
 
 fn main() {
     lock_memory();
-    
+
     let shared_state = Box::new(SharedState::new());
     let shared_state_ptr = Box::into_raw(shared_state);
 
     // Create RT thread with priority 80 (out of 1-99)
     let handle = RtThread::spawn(
         80,
-            shared_state_ptr,
-            |ptr| create_core_for_thread(ptr as *mut c_void),
-            rt_thread_entry,
-        );
+        shared_state_ptr,
+        |ptr| create_core_for_thread(ptr as *mut c_void),
+        rt_thread_entry,
+    );
     println!("RT thread launched");
 
-    // TODO busy wait until rt thread sets some state
+    // create a shared reference to the shared state from the pointer
+    let shared_state = unsafe { &mut *shared_state_ptr };
+
+    println!("Waiting for RT system to stabilize...");
+    loop {
+        thread::sleep(Duration::from_millis(500));
+        if shared_state.is_stabilized() {
+            break;
+        }
+    }
+    println!("RT system stabilized");
 
     init_io();
 
     // Signal RT thread that IO is ready
-    set_rt_ready(shared_state_ptr);
+    shared_state.set_io_status(IoStatus::Ready);
+    println!("IO Ready signal sent to RT thread");
 
     println!("RT system started and running");
 
@@ -54,15 +65,6 @@ fn init_io() {
     println!("IO initialized");
 }
 
-fn set_rt_ready(shared_state_ptr: *mut SharedState) {
-    // Signal to RT thread that IO is ready
-    unsafe {
-        (*shared_state_ptr).set_io_status(IoStatus::Ready);
-    }
-    println!("IO Ready signal sent to RT thread");
-}
-
-
 /// ensure memory is locked to prevent paging
 fn lock_memory() {
     unsafe {
@@ -72,5 +74,5 @@ fn lock_memory() {
                 std::io::Error::last_os_error()
             );
         }
-    }    
+    }
 }
