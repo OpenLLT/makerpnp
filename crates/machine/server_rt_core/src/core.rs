@@ -1,10 +1,10 @@
 use alloc::boxed::Box;
 use core::ffi::c_void;
 
+use rt_circular_buffer::CircularBuffer;
 use server_rt_shared::IoStatus;
 
 use crate::SharedState;
-use crate::circular_buffer::CircularBuffer;
 use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 const LATENCY_BUFFER_SIZE: usize = 100;

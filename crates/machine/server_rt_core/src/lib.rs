@@ -2,11 +2,11 @@
 
 extern crate alloc;
 extern crate libc;
+extern crate rt_circular_buffer;
 extern crate server_rt_shared;
 
 use server_rt_shared::IoStatus;
 
-pub mod circular_buffer;
 pub mod core;
 pub mod rt_time;
 

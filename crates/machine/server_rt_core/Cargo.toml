@@ -5,4 +5,6 @@ edition = "2024"
 
 [dependencies]
 server_rt_shared = { path = "../server_rt_shared" }
+rt_circular_buffer = { path = "../rt_circular_buffer" }
+
 libc = { version = "0.2.176" }

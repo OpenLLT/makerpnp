@@ -1,3 +1,6 @@
+#![cfg_attr(not(test), no_std)]
+extern crate alloc;
+
 use core::mem::MaybeUninit;
 
 /// A fixed-size circular buffer that operates in constant time
@@ -127,5 +130,36 @@ impl<'a, T, const N: usize> Iterator for CircularBufferIter<'a, T, N> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec;
+    use alloc::vec::Vec;
+
+    use super::*;
+
+    #[test]
+    pub fn test_circular_buffer() {
+        // given
+        let mut buffer = CircularBuffer::<u32, 3>::new();
+
+        // when
+        buffer.push(1);
+        buffer.push(2);
+        buffer.push(3);
+        buffer.push(4);
+
+        // then
+        assert_eq!(buffer.len(), 3);
+        assert_eq!(buffer.sum(), 9);
+        assert_eq!(
+            buffer
+                .iter()
+                .cloned()
+                .collect::<Vec<_>>(),
+            vec![4, 2, 3]
+        );
     }
 }
