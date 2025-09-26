@@ -118,21 +118,46 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
         self.latency_buffer
             .push(latency_deviation_i32);
 
-        // Calculate statistics for acceptability check
-        let buffer_len = self.latency_buffer.len();
+        // TODO determine which method is actually best
+        //      it is observed that the 'percentage' method results in more stability change notification messages
 
-        // Check if each individual latency value is within acceptable range
-        let acceptable_entries = self
-            .latency_buffer
-            .iter()
-            .filter(|&&x| x.abs() <= acceptable_deviation as i32)
-            .count();
+        let state = if false {
+            // Calculate statistics for acceptability check
+            let buffer_len = self.latency_buffer.len();
 
-        let stability_threshold = (buffer_len * threshold_percentage as usize) / 100;
-        let state = if acceptable_entries >= stability_threshold {
-            StabilizationStatus::Stable
+            // Check if each individual latency value is within acceptable range
+            let acceptable_entries = self
+                .latency_buffer
+                .iter()
+                .filter(|&&x| x.abs() <= acceptable_deviation as i32)
+                .count();
+
+            let stability_threshold = (buffer_len * threshold_percentage as usize) / 100;
+            if acceptable_entries >= stability_threshold {
+                StabilizationStatus::Stable
+            } else {
+                StabilizationStatus::Unstable
+            }
         } else {
-            StabilizationStatus::Unstable
+            // Calculate the average absolute latency deviation
+            let buffer_len = self.latency_buffer.len();
+
+            // We need to calculate mean absolute deviation
+            // First, we need to iterate through values to calculate absolute deviation
+            let abs_sum = self
+                .latency_buffer
+                .iter()
+                .fold(0_u32, |acc, &x| acc + x.abs() as u32);
+
+            // Time-constant division (avoid division by zero)
+            let avg_abs_deviation = if buffer_len > 0 { abs_sum / buffer_len as u32 } else { 0 };
+
+            // Determine if the average absolute deviation is acceptable
+            if avg_abs_deviation <= acceptable_deviation {
+                StabilizationStatus::Stable
+            } else {
+                StabilizationStatus::Unstable
+            }
         };
 
         if state != self.stabilization {
