@@ -1,13 +1,12 @@
 use std::thread;
 use std::time::Duration;
 
-use rt_spsc::Spsc;
+use rt_spsc::make_static_channel;
 use rt_thread::RtThread;
 use server_rt_core::SharedState;
 use server_rt_core::core::Core;
 use server_rt_shared::sendable_ptr::SendablePtr;
 use server_rt_shared::{IoStatus, MainRequest, MainResponse, Message, Request, RtRequest, RtResponse};
-
 
 pub(crate) const QUEUE_SIZE: usize = 1024;
 pub(crate) const MAX_LOG_LENGTH: usize = 1024;
@@ -15,10 +14,13 @@ pub(crate) const MAX_LOG_LENGTH: usize = 1024;
 fn main() {
     lock_memory();
 
-    let (main_to_rt_sender, main_to_rt_receiver) =
-        Spsc::<Message<MainRequest, MainResponse>, QUEUE_SIZE>::new().split();
-    let (rt_to_main_sender, rt_to_main_receiver) =
-        Spsc::<Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, QUEUE_SIZE>::new().split();
+    let (main_channel, boxed_main_channel) = make_static_channel::<QUEUE_SIZE, Message<MainRequest, MainResponse>>();
+
+    let (main_to_rt_sender, main_to_rt_receiver) = main_channel.split();
+
+    let (rt_channel, boxed_rt_channel) =
+        make_static_channel::<QUEUE_SIZE, Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>>();
+    let (rt_to_main_sender, rt_to_main_receiver) = rt_channel.split();
 
     let shared_state = Box::new(SharedState::new());
     let shared_state_ptr = Box::into_raw(shared_state);
@@ -109,6 +111,9 @@ fn main() {
     println!("RT thread result: {:?}", result);
 
     println!("RT system stopped");
+
+    drop(boxed_rt_channel);
+    drop(boxed_main_channel);
 }
 
 fn init_io() {

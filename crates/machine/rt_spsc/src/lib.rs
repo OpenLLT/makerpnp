@@ -1,13 +1,24 @@
 #![cfg_attr(not(test), no_std)]
 extern crate alloc;
 
+use alloc::boxed::Box;
 use core::cell::UnsafeCell;
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 use core::sync::atomic::{Ordering, compiler_fence};
 
-pub struct Spsc<T: Send + 'static, const N: usize> {
-    _phantom: PhantomData<T>,
+pub fn make_static_channel<const Q: usize, T: Send + Copy + Clone>()
+-> (&'static mut SpscChannel<T, Q>, Box<SpscChannel<T, Q>>) {
+    let spsc = Box::new(SpscChannel::<T, Q>::new());
+    let spsc_ptr = Box::into_raw(spsc);
+    let spsc = unsafe { &mut *spsc_ptr };
+
+    let boxed_spsc = unsafe { Box::from_raw(spsc_ptr) };
+    (spsc, boxed_spsc)
+}
+
+pub struct SpscChannel<T: Send + 'static, const N: usize> {
+    //_phantom: PhantomData<T>,
     buffer: [MaybeUninit<T>; N],
     read_index: UnsafeCell<usize>,
     write_index: UnsafeCell<usize>,
@@ -15,11 +26,11 @@ pub struct Spsc<T: Send + 'static, const N: usize> {
     is_split: bool,
 }
 
-impl<T: Send + Copy + 'static, const N: usize> Spsc<T, N> {
-    pub fn new() -> Self {
+impl<T: Send + Copy + 'static, const N: usize> SpscChannel<T, N> {
+    pub const fn new() -> Self {
         Self {
-            _phantom: PhantomData,
-            buffer: [MaybeUninit::uninit(); N],
+            //_phantom: PhantomData,
+            buffer: [const { MaybeUninit::uninit() }; N],
             read_index: UnsafeCell::new(0),
             write_index: UnsafeCell::new(0),
             is_empty: UnsafeCell::new(true), // Initially empty
@@ -27,7 +38,7 @@ impl<T: Send + Copy + 'static, const N: usize> Spsc<T, N> {
         }
     }
 
-    pub fn split(&mut self) -> (Sender<T, N>, Receiver<T, N>) {
+    pub fn split<'a>(&'a mut self) -> (Sender<'a, T, N>, Receiver<'a, T, N>) {
         if self.is_split {
             panic!("Spsc can only be split once");
         }
@@ -38,16 +49,18 @@ impl<T: Send + Copy + 'static, const N: usize> Spsc<T, N> {
     }
 }
 
-pub struct Sender<T: Send + 'static, const N: usize> {
-    spcs: *mut Spsc<T, N>,
+pub struct Sender<'a, T: Send + 'static, const N: usize> {
+    spcs: *mut SpscChannel<T, N>,
+    _phantom: PhantomData<&'a mut SpscChannel<T, N>>,
 }
 
-unsafe impl<T: Send + 'static, const N: usize> Send for Sender<T, N> {}
+unsafe impl<'a, T: Send + 'static, const N: usize> Send for Sender<'a, T, N> {}
 
-impl<T: Send + 'static, const N: usize> Sender<T, N> {
-    fn new(spcs: *mut Spsc<T, { N }>) -> Sender<T, N> {
+impl<'a, T: Send + 'static, const N: usize> Sender<'a, T, N> {
+    fn new(spcs: *mut SpscChannel<T, { N }>) -> Sender<'a, T, N> {
         Self {
             spcs,
+            _phantom: Default::default(),
         }
     }
 
@@ -79,16 +92,18 @@ impl<T: Send + 'static, const N: usize> Sender<T, N> {
     }
 }
 
-pub struct Receiver<T: Send + 'static, const N: usize> {
-    spcs: *mut Spsc<T, N>,
+pub struct Receiver<'a, T: Send + 'static, const N: usize> {
+    spcs: *mut SpscChannel<T, N>,
+    _phantom: PhantomData<&'a mut SpscChannel<T, N>>,
 }
 
-unsafe impl<T: Send + 'static, const N: usize> Send for Receiver<T, N> {}
+unsafe impl<'a, T: Send + 'static, const N: usize> Send for Receiver<'a, T, N> {}
 
-impl<T: Send + 'static, const N: usize> Receiver<T, N> {
-    fn new(spcs: *mut Spsc<T, { N }>) -> Receiver<T, N> {
+impl<'a, T: Send + 'static, const N: usize> Receiver<'a, T, N> {
+    fn new(spcs: *mut SpscChannel<T, { N }>) -> Receiver<'a, T, N> {
         Self {
             spcs,
+            _phantom: Default::default(),
         }
     }
 
@@ -125,6 +140,7 @@ impl<T: Send + 'static, const N: usize> Receiver<T, N> {
 mod tests {
     extern crate std;
 
+    use alloc::boxed::Box;
     use std::sync::{Arc, Barrier};
     use std::thread;
 
@@ -133,7 +149,7 @@ mod tests {
     #[test]
     fn spsc_test() {
         // given
-        let mut spsc = Spsc::<_, 1>::new(); // Now works with capacity of 1
+        let mut spsc = SpscChannel::<_, 1>::new(); // Now works with capacity of 1
         let (sender, receiver) = spsc.split();
 
         // when
@@ -147,7 +163,7 @@ mod tests {
     #[test]
     fn spsc_receive_on_empty_channel() {
         // given
-        let mut spsc = Spsc::<(), 1024>::new(); // Now works with capacity of 1
+        let mut spsc = SpscChannel::<(), 1024>::new(); // Now works with capacity of 1
         let (sender, receiver) = spsc.split();
 
         // when
@@ -160,7 +176,7 @@ mod tests {
     #[test]
     fn spsc_full_then_empty() {
         // given
-        let mut spsc = Spsc::<_, 1>::new();
+        let mut spsc = SpscChannel::<_, 1>::new();
         let (sender, receiver) = spsc.split();
 
         // expect
@@ -182,7 +198,9 @@ mod tests {
         let barrier = Arc::new(Barrier::new(3)); // Main + 2 threads
 
         // Create the channel
-        let mut spsc = Spsc::<i32, 1>::new();
+
+        let (spsc, boxed_spsc) = make_static_channel::<1, i32>();
+
         let (sender, receiver) = spsc.split();
 
         // Clone barrier for the sender thread
@@ -239,12 +257,14 @@ mod tests {
             .expect("Receiver thread panicked");
 
         println!("Main thread: test completed successfully");
+
+        drop(boxed_spsc);
     }
 
     #[test]
     fn spsc_blocking_receive() {
         // Create a channel
-        let mut spsc = Spsc::<i32, 1>::new();
+        let (spsc, boxed_spsc) = make_static_channel::<1, i32>();
         let (sender, receiver) = spsc.split();
 
         // Spawn sender thread that waits briefly before sending

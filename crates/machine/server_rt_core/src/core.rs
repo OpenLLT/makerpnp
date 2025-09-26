@@ -11,7 +11,7 @@ const ACCEPTABLE_DEVIATION_NS: u32 = 200_000;
 const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 
 #[repr(C)]
-pub struct Core<const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
+pub struct Core<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
     shared_state: &'static mut SharedState,
     done: bool,
     tick: usize,
@@ -19,15 +19,15 @@ pub struct Core<const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
     /// Circular buffer to store latency measurements
     /// Note: maximum recorded latency is limited by using a u32 for speed here
     latency_buffer: CircularBuffer<i32, LATENCY_BUFFER_SIZE>,
-    pub sender: Sender<Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
-    pub receiver: Receiver<Message<MainRequest, MainResponse>, { Q2 }>,
+    pub sender: Sender<'a, Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
+    pub receiver: Receiver<'a, Message<MainRequest, MainResponse>, { Q2 }>,
 }
 
-impl<const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<Q1, Q2, MAX_LOG_LENGTH> {
+impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a, Q1, Q2, MAX_LOG_LENGTH> {
     pub fn new(
         shared_state: &'static mut SharedState,
-        sender: Sender<Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, Q1>,
-        receiver: Receiver<Message<MainRequest, MainResponse>, Q2>,
+        sender: Sender<'a, Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, Q1>,
+        receiver: Receiver<'a, Message<MainRequest, MainResponse>, Q2>,
     ) -> Self {
         Self {
             shared_state,
