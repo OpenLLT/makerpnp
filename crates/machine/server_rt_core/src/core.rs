@@ -9,7 +9,7 @@ use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 const LATENCY_BUFFER_SIZE: usize = 100;
 /// 50 microseconds = 50_000 nanoseconds
-const ACCEPTABLE_DEVIATION_NS: i32 = 50_000;
+const ACCEPTABLE_DEVIATION_NS: i32 = 200_000;
 
 #[repr(C)]
 pub struct Core {

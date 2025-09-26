@@ -32,7 +32,7 @@ fn main() {
     let mut stabilized_ticker = 0;
     loop {
         thread::sleep(Duration::from_millis(500));
-        if shared_state.is_stabilized() || stabilized_ticker > 100 {
+        if shared_state.is_stabilized() || stabilized_ticker > 20 {
             break;
         }
         stabilized_ticker += 1;
