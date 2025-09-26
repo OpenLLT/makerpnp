@@ -39,10 +39,10 @@ fn main() {
     }
 
     let latency_stats = shared_state.get_latency_stats().clone();
-    println!("RT recent latency values: {:?}", latency_stats);
+    println!("RT recent latency values (ns): {:?}", latency_stats);
 
     let average_latency = latency_stats.iter().sum::<i32>() / latency_stats.len() as i32;
-    println!("RT average latency: {}", average_latency);
+    println!("RT average latency: {}ns", average_latency);
 
     if !shared_state.is_stabilized() {
         eprintln!("RT system failed to stabilize");
