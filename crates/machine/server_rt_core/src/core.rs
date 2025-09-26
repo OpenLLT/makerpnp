@@ -9,7 +9,8 @@ use crate::rt_time::{get_time_ns, sleep_until_ns};
 
 const LATENCY_BUFFER_SIZE: usize = 100;
 /// 50 microseconds = 50_000 nanoseconds
-const ACCEPTABLE_DEVIATION_NS: i32 = 200_000;
+const ACCEPTABLE_DEVIATION_NS: u32 = 200_000;
+const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 
 #[repr(C)]
 pub struct Core {
@@ -60,7 +61,12 @@ impl Core {
             sleep_until_ns(next_wake_ns);
             let wake_ns = get_time_ns();
 
-            self.determine_stability(&mut next_wake_ns, wake_ns);
+            self.determine_stability(
+                next_wake_ns,
+                wake_ns,
+                LATENCY_DEVIATION_THRESHOLD_PERCENTAGE,
+                ACCEPTABLE_DEVIATION_NS,
+            );
             self.update_latency_stats();
         }
 
@@ -80,7 +86,14 @@ impl Core {
             .set_latency_stats(latency_stats)
     }
 
-    fn determine_stability(&mut self, next_wake_ns: &mut u64, wake_ns: u64) {
+    /// System is considered stable when a percentage of the latency measurements are within the acceptable range
+    fn determine_stability(
+        &mut self,
+        next_wake_ns: u64,
+        wake_ns: u64,
+        threshold_percentage: u8,
+        acceptable_deviation: u32,
+    ) {
         // Calculate latency deviation (signed value)
         // This represents how far off we are from the target wakeup time
         let latency_deviation = wake_ns as i64 - next_wake_ns as i64;
@@ -96,14 +109,13 @@ impl Core {
         let buffer_len = self.latency_buffer.len();
 
         // Check if each individual latency value is within acceptable range
-        let acceptable_entries = self.latency_buffer
+        let acceptable_entries = self
+            .latency_buffer
             .iter()
-            .filter(|&&x| x.abs() <= ACCEPTABLE_DEVIATION_NS)
+            .filter(|&&x| x.abs() <= acceptable_deviation as i32)
             .count();
 
-        // We consider the system stable if at least 95% of the measurements
-        // are within the acceptable range
-        let stability_threshold = (buffer_len * 95) / 100;
+        let stability_threshold = (buffer_len * threshold_percentage as usize) / 100;
         let latency_ok = acceptable_entries >= stability_threshold;
 
         self.shared_state
