@@ -29,7 +29,7 @@ impl<T: Send + Copy + 'static, const N: usize> Spsc<T, N> {
 
     pub fn split(&mut self) -> (Sender<T, N>, Receiver<T, N>) {
         if self.is_split {
-            panic!("Spcs can only be split once");
+            panic!("Spsc can only be split once");
         }
         self.is_split = true;
 
