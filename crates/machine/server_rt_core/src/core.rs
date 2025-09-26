@@ -44,7 +44,7 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
             latency_buffer: CircularBuffer::new(),
             sender,
             receiver,
-            stabilization: StabilizationStatus::Stable,
+            stabilization: StabilizationStatus::Unstable,
             message_index: 0,
         }
     }
