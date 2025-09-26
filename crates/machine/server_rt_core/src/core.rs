@@ -60,7 +60,7 @@ impl Core {
             sleep_until_ns(next_wake_ns);
 
             let wake_ns = get_time_ns();
-            let latency: u64 = wake_ns - sleep_ns - period_ns;
+            let latency: u64 = wake_ns - sleep_ns;
 
             // Record the latency in a circular buffer
             self.latency_buffer.push(latency as u32);
