@@ -16,7 +16,7 @@ const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 pub struct Core {
     shared_state: &'static mut SharedState,
     done: bool,
-    counter: usize,
+    tick: usize,
 
     /// Circular buffer to store latency measurements
     /// Note: maximum recorded latency is limited by using a u32 for speed here
@@ -31,7 +31,7 @@ impl Core {
         Self {
             shared_state,
             done: false,
-            counter: 0,
+            tick: 0,
             latency_buffer: CircularBuffer::new(),
         }
     }
@@ -45,7 +45,7 @@ impl Core {
 
         // Main real-time loop
         loop {
-            self.counter += 1;
+            self.tick += 1;
             // Run core processing
             self.run();
 
@@ -70,7 +70,7 @@ impl Core {
             self.update_latency_stats();
         }
 
-        self.counter
+        self.tick
     }
 
     fn update_latency_stats(&mut self) {
@@ -142,7 +142,7 @@ impl Core {
     }
 
     pub fn process_rt_tasks(&mut self) {
-        if self.counter == 5000 {
+        if self.tick >= 5000 {
             self.done = true;
         }
     }
