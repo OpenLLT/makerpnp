@@ -21,6 +21,13 @@ fn main() {
 
     let main_node = NodeBuilder::new().create::<ipc::Service>().unwrap();
 
+    let client_service = main_node
+        .service_builder(&"rt_thread".try_into().unwrap())
+        .request_response::<MainRequest, RtResponse>()
+        .open_or_create().unwrap();
+
+    let rt_client = client_service.client_builder().create().unwrap();
+
     let main_service = main_node
         .service_builder(&"main_thread".try_into().unwrap())
         .request_response::<RtRequest<MAX_LOG_LENGTH>, MainResponse>()
@@ -28,12 +35,6 @@ fn main() {
 
     let main_server = main_service.server_builder().create().unwrap();
 
-    let client_service = main_node
-        .service_builder(&"rt_thread".try_into().unwrap())
-        .request_response::<MainRequest, RtResponse>()
-        .open_or_create().unwrap();
-
-    let rt_client = client_service.client_builder().create().unwrap();
 
     let mut message_index = 0;
 
@@ -57,18 +58,18 @@ fn main() {
             let shared_state = unsafe { &mut *shared_state_ptr.get() };
 
             let rt_node = NodeBuilder::new().create::<ipc::Service>().unwrap();
+            
+            let client_service = rt_node
+                .service_builder(&"rt_thread".try_into().unwrap())
+                .request_response::<MainRequest, RtResponse>()
+                .open_or_create().unwrap();
+            let rt_server = client_service.server_builder().create().unwrap();
 
             let main_service = rt_node
                 .service_builder(&"main_thread".try_into().unwrap())
                 .request_response::<RtRequest<MAX_LOG_LENGTH>, MainResponse>()
                 .open_or_create().unwrap();
             let main_client = main_service.client_builder().create().unwrap();
-
-            let client_service = rt_node
-                .service_builder(&"rt_thread".try_into().unwrap())
-                .request_response::<MainRequest, RtResponse>()
-                .open_or_create().unwrap();
-            let rt_server = client_service.server_builder().create().unwrap();
 
             let mut core = Core::new(shared_state, main_client, rt_server, rt_node);
             core.start()
