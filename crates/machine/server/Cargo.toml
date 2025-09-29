@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 server_rt_core = { path = "../server_rt_core" }
 server_rt_shared = { path = "../server_rt_shared" }
-rt_spsc = { path = "../rt_spsc" }
 rt_thread = { path = "../rt_thread" }
 
 libc = "0.2"
+
+iceoryx2 = "0.7.0"

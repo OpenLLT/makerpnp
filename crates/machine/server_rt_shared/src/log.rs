@@ -1,8 +1,11 @@
 use core::fmt::{Display, Formatter};
 use core::mem::MaybeUninit;
+use iceoryx2::prelude::ZeroCopySend;
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub struct LogBuffer<const MAX_LOG_LENGTH: usize> {
     bytes: MaybeUninit<[u8; MAX_LOG_LENGTH]>,
     length: usize,

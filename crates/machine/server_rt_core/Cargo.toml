@@ -7,4 +7,4 @@ edition = "2024"
 server_rt_shared = { path = "../server_rt_shared" }
 rt_circular_buffer = { path = "../rt_circular_buffer" }
 rt_time = { path = "../rt_time" }
-rt_spsc = { path = "../rt_spsc" }
+iceoryx2 = "0.7.0"

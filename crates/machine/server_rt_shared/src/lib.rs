@@ -1,5 +1,6 @@
 #![no_std]
 
+use iceoryx2::prelude::ZeroCopySend;
 use crate::log::LogBuffer;
 
 pub mod log;
@@ -14,34 +15,16 @@ pub enum IoStatus {
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
-pub enum Message<REQ: Copy + Clone, RES: Copy + Clone> {
-    Request(Request<REQ>),
-    // request reference, response payload
-    Response(Response<RES>),
-}
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-pub struct Request<T: Copy + Clone> {
-    pub index: usize,
-    pub payload: T,
-}
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
-pub struct Response<T: Copy + Clone> {
-    pub request_reference: usize,
-    pub payload: T,
-}
-
-#[derive(Debug)]
-#[derive(Copy, Clone)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub enum RtResponse {
     Pong,
 }
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub enum MainRequest {
     Ping,
     RequestShutdown,
@@ -50,6 +33,8 @@ pub enum MainRequest {
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub enum RtRequest<const MAX_LOG_LENGTH: usize> {
     Log(LogBuffer<MAX_LOG_LENGTH>),
     Shutdown,
@@ -58,12 +43,18 @@ pub enum RtRequest<const MAX_LOG_LENGTH: usize> {
 
 #[derive(Debug)]
 #[derive(Copy, Clone)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub enum MainResponse {
     None,
+    Ack,
+    Nack,
 }
 
 #[derive(Debug)]
 #[derive(Copy, Clone, PartialEq)]
+#[derive(ZeroCopySend)]
+#[repr(C)]
 pub enum StabilizationStatus {
     Stable,
     Unstable,

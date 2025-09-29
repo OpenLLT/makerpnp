@@ -1,8 +1,10 @@
+use iceoryx2::port::client::Client;
+use iceoryx2::port::server::Server;
+use iceoryx2::prelude::ipc::Service;
 use rt_circular_buffer::CircularBuffer;
-use rt_spsc::{Receiver, Sender};
 use rt_time::{get_time_ns, sleep_until_ns};
 use server_rt_shared::{
-    IoStatus, MainRequest, MainResponse, Message, Request, Response, RtRequest, RtResponse, StabilizationStatus,
+    IoStatus, MainRequest, MainResponse, RtRequest, RtResponse, StabilizationStatus,
 };
 
 use crate::shared_state::SharedState;
@@ -13,7 +15,7 @@ const ACCEPTABLE_DEVIATION_NS: u32 = 200_000;
 const LATENCY_DEVIATION_THRESHOLD_PERCENTAGE: u8 = 95;
 
 #[repr(C)]
-pub struct Core<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> {
+pub struct Core<const MAX_LOG_LENGTH: usize> {
     shared_state: &'static mut SharedState,
 
     done: bool,
@@ -24,17 +26,17 @@ pub struct Core<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usiz
     /// Note: maximum recorded latency is limited by using a u32 for speed here
     latency_buffer: CircularBuffer<i32, LATENCY_BUFFER_SIZE>,
 
-    sender: Sender<'a, Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>, { Q1 }>,
-    receiver: Receiver<'a, Message<MainRequest, MainResponse>, { Q2 }>,
     stabilization: StabilizationStatus,
     message_index: usize,
+    main_client: Client<Service, RtRequest<{ MAX_LOG_LENGTH }>, (), MainResponse, ()>,
+    rt_server: Server<Service, MainRequest, (), RtResponse, ()>,
 }
 
-impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a, Q1, Q2, MAX_LOG_LENGTH> {
+impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
     pub fn new(
         shared_state: &'static mut SharedState,
-        sender: Sender<'a, Message<RtRequest<MAX_LOG_LENGTH>, RtResponse>, Q1>,
-        receiver: Receiver<'a, Message<MainRequest, MainResponse>, Q2>,
+        main_client: Client<Service, RtRequest<{ MAX_LOG_LENGTH }>, (), MainResponse, ()>,
+        rt_server: Server<Service, MainRequest, (), RtResponse, ()>,
     ) -> Self {
         Self {
             shared_state,
@@ -42,8 +44,8 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
             tick: 0,
             io_status: IoStatus::Pending,
             latency_buffer: CircularBuffer::new(),
-            sender,
-            receiver,
+            main_client,
+            rt_server,
             stabilization: StabilizationStatus::Unstable,
             message_index: 0,
         }
@@ -162,21 +164,17 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
 
         if state != self.stabilization {
             self.stabilization = state;
-            let message = Message::Request(Request {
-                index: self.message_index,
-                payload: RtRequest::StabilityChanged(state),
-            });
-            self.send_message(message);
+            self.send_request(RtRequest::StabilityChanged(state));
         }
     }
 
     // TODO don't panic if unable to send messages and/or add an unchecked_send_message
 
     /// Safety: panics if unable to send
-    fn send_message(&mut self, message: Message<RtRequest<{ MAX_LOG_LENGTH }>, RtResponse>) {
-        self.sender
-            .try_send(message)
+    fn send_request(&mut self, payload: RtRequest<{ MAX_LOG_LENGTH }>) {
+        self.main_client.send_copy(payload)
             .expect("sent");
+
         self.message_index += 1;
     }
 
@@ -185,26 +183,18 @@ impl<'a, const Q1: usize, const Q2: usize, const MAX_LOG_LENGTH: usize> Core<'a,
 
         // TODO we shouldn't try and receive messages since we can't respond if the sender cannot send.
 
-        if let Some(message) = self.receiver.try_receive() {
-            match message {
-                Message::Request(request) => match request.payload {
-                    MainRequest::Ping => {
-                        let response = Message::Response(Response {
-                            request_reference: request.index,
-                            payload: RtResponse::Pong,
-                        });
-                        self.sender
-                            .try_send(response)
-                            .expect("sent");
-                    }
-                    MainRequest::RequestShutdown => {
-                        self.done = true;
-                    }
-                    MainRequest::EnableIo => self.io_status = IoStatus::Ready,
-                },
-                Message::Response(response) => match response.payload {
-                    MainResponse::None => {}
-                },
+        if let Ok(Some(request)) = self.rt_server.receive() {
+            match request.payload() {
+                MainRequest::Ping => {
+                    let response = request.loan_uninit().unwrap();
+                    let response = response.write_payload(RtResponse::Pong);
+                    response.send()
+                        .expect("sent");
+                }
+                MainRequest::RequestShutdown => {
+                    self.done = true;
+                }
+                MainRequest::EnableIo => self.io_status = IoStatus::Ready,
             }
         }
 
