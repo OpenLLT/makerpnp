@@ -1,9 +1,10 @@
+use core::time::Duration;
 use iceoryx2::node::Node;
 use iceoryx2::port::client::Client;
 use iceoryx2::port::server::Server;
 use iceoryx2::prelude::ipc::Service;
 use rt_circular_buffer::CircularBuffer;
-use rt_time::{get_time_ns, sleep_until_ns};
+use rt_time::get_time_ns;
 use server_rt_shared::{
     IoStatus, MainRequest, MainResponse, RtRequest, RtResponse, StabilizationStatus,
 };
@@ -59,7 +60,6 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
         // this will be called once, when the rt thread is started
 
         // Calculate initial wake time
-        let mut next_wake_ns = get_time_ns();
         let period_ns: u64 = 1_000_000; // 1ms in nanoseconds
 
         // Main real-time loop
@@ -72,19 +72,18 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
                 break;
             }
 
-            // Calculate next wake time
-            next_wake_ns += period_ns;
-
-            // Sleep until next wake time using clock_nanosleep with TIMER_ABSTIME
-            // for deterministic timing
-            sleep_until_ns(next_wake_ns);
+            let sleep_ns = get_time_ns();
+            if self.rt_node.wait(Duration::from_nanos(period_ns)).is_err() {
+                break;
+            }
             let wake_ns = get_time_ns();
 
             self.determine_stability(
-                next_wake_ns,
+                sleep_ns,
                 wake_ns,
                 LATENCY_DEVIATION_THRESHOLD_PERCENTAGE,
                 ACCEPTABLE_DEVIATION_NS,
+                period_ns,
             );
             self.update_latency_stats();
         }
@@ -108,14 +107,15 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
     /// System is considered stable when a percentage of the latency measurements are within the acceptable range
     fn determine_stability(
         &mut self,
-        next_wake_ns: u64,
+        sleep_ns: u64,
         wake_ns: u64,
         threshold_percentage: u8,
         acceptable_deviation: u32,
+        period_ns: u64,
     ) {
         // Calculate latency deviation (signed value)
         // This represents how far off we are from the target wakeup time
-        let latency_deviation = wake_ns as i64 - next_wake_ns as i64;
+        let latency_deviation = wake_ns as i64 - sleep_ns as i64 - period_ns as i64;
 
         // Convert to i32 for storage in the buffer (safe for reasonable latencies)
         let latency_deviation_i32 = latency_deviation as i32;
