@@ -1,3 +1,4 @@
+use iceoryx2::node::Node;
 use iceoryx2::port::client::Client;
 use iceoryx2::port::server::Server;
 use iceoryx2::prelude::ipc::Service;
@@ -30,6 +31,7 @@ pub struct Core<const MAX_LOG_LENGTH: usize> {
     message_index: usize,
     main_client: Client<Service, RtRequest<{ MAX_LOG_LENGTH }>, (), MainResponse, ()>,
     rt_server: Server<Service, MainRequest, (), RtResponse, ()>,
+    rt_node: Node<Service>,
 }
 
 impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
@@ -37,6 +39,7 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
         shared_state: &'static mut SharedState,
         main_client: Client<Service, RtRequest<{ MAX_LOG_LENGTH }>, (), MainResponse, ()>,
         rt_server: Server<Service, MainRequest, (), RtResponse, ()>,
+        rt_node: Node<Service>,
     ) -> Self {
         Self {
             shared_state,
@@ -46,6 +49,7 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
             latency_buffer: CircularBuffer::new(),
             main_client,
             rt_server,
+            rt_node,
             stabilization: StabilizationStatus::Unstable,
             message_index: 0,
         }
@@ -181,9 +185,7 @@ impl<const MAX_LOG_LENGTH: usize> Core<MAX_LOG_LENGTH> {
     pub fn run(&mut self) {
         // this will be called at a frequency of 1000hz by the `start` method.
 
-        // TODO we shouldn't try and receive messages since we can't respond if the sender cannot send.
-
-        if let Ok(Some(request)) = self.rt_server.receive() {
+        while let Ok(Some(request)) = self.rt_server.receive() {
             match request.payload() {
                 MainRequest::Ping => {
                     let response = request.loan_uninit().unwrap();

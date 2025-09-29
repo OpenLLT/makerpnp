@@ -10,6 +10,7 @@ use server_rt_shared::sendable_ptr::SendablePtr;
 use server_rt_shared::{MainRequest, MainResponse, RtRequest, RtResponse, StabilizationStatus};
 
 pub(crate) const MAX_LOG_LENGTH: usize = 1024;
+const CYCLE_TIME: Duration = Duration::from_millis(1000);
 
 fn main() {
     lock_memory();
@@ -18,16 +19,16 @@ fn main() {
     // messaging
     //
 
-    let node = NodeBuilder::new().create::<ipc::Service>().unwrap();
+    let main_node = NodeBuilder::new().create::<ipc::Service>().unwrap();
 
-    let main_service = node
+    let main_service = main_node
         .service_builder(&"main_thread".try_into().unwrap())
         .request_response::<RtRequest<MAX_LOG_LENGTH>, MainResponse>()
         .open_or_create().unwrap();
 
     let main_server = main_service.server_builder().create().unwrap();
 
-    let client_service = node
+    let client_service = main_node
         .service_builder(&"rt_thread".try_into().unwrap())
         .request_response::<MainRequest, RtResponse>()
         .open_or_create().unwrap();
@@ -55,19 +56,21 @@ fn main() {
             // Safely access shared state without atomics
             let shared_state = unsafe { &mut *shared_state_ptr.get() };
 
-            let main_service = node
+            let rt_node = NodeBuilder::new().create::<ipc::Service>().unwrap();
+
+            let main_service = rt_node
                 .service_builder(&"main_thread".try_into().unwrap())
                 .request_response::<RtRequest<MAX_LOG_LENGTH>, MainResponse>()
                 .open_or_create().unwrap();
             let main_client = main_service.client_builder().create().unwrap();
 
-            let client_service = node
+            let client_service = rt_node
                 .service_builder(&"rt_thread".try_into().unwrap())
                 .request_response::<MainRequest, RtResponse>()
                 .open_or_create().unwrap();
             let rt_server = client_service.server_builder().create().unwrap();
 
-            let mut core = Core::new(shared_state, main_client, rt_server);
+            let mut core = Core::new(shared_state, main_client, rt_server, rt_node);
             core.start()
         }
     });
@@ -81,7 +84,9 @@ fn main() {
     let mut stabilized = false;
     loop {
         println!(".");
-        thread::sleep(Duration::from_millis(500));
+        if main_node.wait(CYCLE_TIME).is_err() {
+            break;
+        }
         while let Ok(Some(message)) = main_server.receive() {
             println!("Received message: {:?}", message);
             let response = message.loan_uninit().unwrap();
@@ -103,6 +108,7 @@ fn main() {
             break;
         }
         stabilized_ticker += 1;
+
     }
 
     let latency_stats = shared_state.get_latency_stats().clone();
@@ -131,7 +137,7 @@ fn main() {
 
     let mut pong_counter = 0;
 
-    loop {
+    while main_node.wait(CYCLE_TIME).is_ok() {
         if handle.is_finished() {
             break;
         }
@@ -141,6 +147,8 @@ fn main() {
         //
 
         if let Ok(pending_response) = rt_client.send_copy(MainRequest::Ping) {
+            println!("Sent ping");
+            message_index += 1;
             while let Ok(Some(response)) = pending_response.receive() {
                 println!("Received response: {:?}", response);
                 match response.payload() {
@@ -151,8 +159,6 @@ fn main() {
                 }
             }
         }
-
-        message_index += 1;
 
         while let Some(active_request) = main_server.receive().unwrap() {
             println!("Received message: {:?}", active_request);
@@ -179,8 +185,6 @@ fn main() {
             send_rt_request_shutdown(&mut message_index, &rt_client);
             break;
         }
-
-        thread::sleep(Duration::from_millis(1000));
     }
 
     let result = handle.join();
