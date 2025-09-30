@@ -161,8 +161,21 @@ impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
 
         match cell_index.column {
             PLACED_COL => {
-                // FIXME also check that the phase state is appropriate
-                // only allow editing if there is a phase
+                let editable = original_item
+                    .state
+                    .phase
+                    .as_ref()
+                    .is_some_and(|phase_reference| {
+                        self.phase_placements_editability_map
+                            .get(phase_reference)
+                            .copied()
+                            .unwrap_or(false)
+                    });
+
+                if !editable {
+                    return None;
+                }
+
                 original_item
                     .state
                     .phase
@@ -179,10 +192,18 @@ impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
                         )
                     })
             }
-            PHASE_COL => Some((
-                PlacementsItemCellEditState::Phase(original_item.state.phase.clone()),
-                original_item.clone(),
-            )),
+            PHASE_COL => {
+                let editable = self.all_phases_pending;
+
+                if !editable {
+                    return None;
+                }
+
+                Some((
+                    PlacementsItemCellEditState::Phase(original_item.state.phase.clone()),
+                    original_item.clone(),
+                ))
+            }
             _ => None,
         }
     }
@@ -237,105 +258,86 @@ impl DeferredTableRenderer<PlacementsDataSource> for PlacementsRenderer {
             {
                 match edit {
                     PlacementsItemCellEditState::Placed(value) => {
-                        // TODO prevent cell being in editable state in the first place
-                        let editable = row
-                            .state
-                            .phase
-                            .as_ref()
-                            .is_some_and(|phase_reference| {
-                                self.phase_placements_editability_map
-                                    .get(phase_reference)
-                                    .copied()
-                                    .unwrap_or(false)
-                            });
+                        let mut value_mut = value.clone();
+                        ui.radio_value(
+                            &mut value_mut,
+                            PlacementStatus::Pending,
+                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)),
+                        );
+                        ui.radio_value(
+                            &mut value_mut,
+                            PlacementStatus::Placed,
+                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)),
+                        );
+                        ui.radio_value(
+                            &mut value_mut,
+                            PlacementStatus::Skipped,
+                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)),
+                        );
 
-                        if editable {
-                            let mut value_mut = value.clone();
-                            ui.radio_value(
-                                &mut value_mut,
-                                PlacementStatus::Pending,
-                                tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)),
-                            );
-                            ui.radio_value(
-                                &mut value_mut,
-                                PlacementStatus::Placed,
-                                tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)),
-                            );
-                            ui.radio_value(
-                                &mut value_mut,
-                                PlacementStatus::Skipped,
-                                tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)),
-                            );
-
-                            if value_mut != *value {
-                                // NOTE: if we had &mut self here, we could apply the edit state now
-                                self.sender
-                                    .send(PlacementsTableUiCommand::ApplyCellEdit {
-                                        edit: PlacementsItemCellEditState::Placed(value_mut),
-                                        cell_index,
-                                    })
-                                    .expect("sent");
-                            }
+                        if value_mut != *value {
+                            // NOTE: if we had &mut self here, we could apply the edit state now
+                            self.sender
+                                .send(PlacementsTableUiCommand::ApplyCellEdit {
+                                    edit: PlacementsItemCellEditState::Placed(value_mut),
+                                    cell_index,
+                                })
+                                .expect("sent");
                         }
 
-                        editable
+                        true
                     }
                     PlacementsItemCellEditState::Phase(value) => {
-                        // TODO prevent cell being in editable state in the first place
-                        let editable = self.all_phases_pending;
+                        let mut value_mut = value.clone();
 
-                        if editable {
-                            let mut value_mut = value.clone();
+                        ui.add(|ui: &mut Ui| {
+                            egui::ComboBox::from_id_salt(ui.id().with("phase").with(cell_index.row))
+                                .width(ui.available_width())
+                                .selected_text(match &value_mut {
+                                    None => tr!("form-common-combo-none"),
+                                    Some(phase) => phase.to_string(),
+                                })
+                                .show_ui(ui, |ui| {
+                                    // Note: with the arguments to this method, there is no command we can send that will be able
+                                    //       to do anything useful with the row as there is probably no API to access the
+                                    //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
+                                    if ui
+                                        .add(egui::Button::selectable(
+                                            value_mut.is_none(),
+                                            tr!("form-common-combo-none")
+                                        ))
+                                        .clicked()
+                                    {
+                                        value_mut = None;
+                                    }
 
-                            ui.add(|ui: &mut Ui| {
-                                egui::ComboBox::from_id_salt(ui.id().with("phase").with(cell_index.row))
-                                    .width(ui.available_width())
-                                    .selected_text(match &value_mut {
-                                        None => tr!("form-common-combo-none"),
-                                        Some(phase) => phase.to_string(),
-                                    })
-                                    .show_ui(ui, |ui| {
-                                        // Note: with the arguments to this method, there is no command we can send that will be able
-                                        //       to do anything useful with the row as there is probably no API to access the
-                                        //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
+                                    for phase in self.phases.iter()
+                                        .filter(|phase| row.state.placement.pcb_side.eq(&phase.pcb_side))
+                                    {
                                         if ui
                                             .add(egui::Button::selectable(
-                                                value_mut.is_none(),
-                                                tr!("form-common-combo-none")
+                                                matches!(&value_mut, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
+                                                phase.phase_reference.to_string(),
                                             ))
                                             .clicked()
                                         {
-                                            value_mut = None;
+                                            value_mut = Some(phase.phase_reference.clone());
                                         }
+                                    }
+                                }).response
+                        });
 
-                                        for phase in self.phases.iter()
-                                            .filter(|phase| row.state.placement.pcb_side.eq(&phase.pcb_side))
-                                        {
-                                            if ui
-                                                .add(egui::Button::selectable(
-                                                    matches!(&value_mut, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
-                                                    phase.phase_reference.to_string(),
-                                                ))
-                                                .clicked()
-                                            {
-                                                value_mut = Some(phase.phase_reference.clone());
-                                            }
-                                        }
-                                    }).response
-                            });
-
-                            if value_mut != *value {
-                                // NOTE: if we had &mut self here, we could apply the edit state now
-                                self.sender
-                                    .send(PlacementsTableUiCommand::ApplyCellEdit {
-                                        edit: PlacementsItemCellEditState::Phase(value_mut),
-                                        cell_index,
-                                    })
-                                    .expect("sent");
-                            }
+                        if value_mut != *value {
+                            // NOTE: if we had &mut self here, we could apply the edit state now
+                            self.sender
+                                .send(PlacementsTableUiCommand::ApplyCellEdit {
+                                    edit: PlacementsItemCellEditState::Phase(value_mut),
+                                    cell_index,
+                                })
+                                .expect("sent");
                         }
 
-                        editable
+                        true
                     }
                 }
             }
