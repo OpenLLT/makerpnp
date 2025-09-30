@@ -1,8 +1,8 @@
 use derivative::Derivative;
 use egui::{Color32, CornerRadius, Stroke, StrokeKind, Ui};
 use egui_deferred_table::{
-    Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
-    TableDimensions, apply_reordering,
+    Action, AxisParameters, CellIndex, DeferredTable, DeferredTableDataSource, DeferredTableRenderer, TableDimensions,
+    apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -11,7 +11,7 @@ use planner_app::{LoadOut, LoadOutItem, Reference};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::project::tables::{ApplyChange, CellEditState, EditableDataSource, handle_cell_click};
+use crate::project::tables::{ApplyChange, CellEditState, EditableTableRenderer, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 const SHOW_DEBUG_SHAPES: bool = false;
@@ -29,7 +29,10 @@ use columns::*;
 #[derive(Debug, Clone)]
 pub struct LoadOutDataSource {
     rows: Vec<LoadOutItem>,
+}
 
+#[derive(Debug)]
+struct LoadOutRenderer {
     rows_to_filter: Vec<usize>,
     row_ordering: Option<Vec<usize>>,
     column_ordering: Option<Vec<usize>>,
@@ -68,14 +71,9 @@ impl ApplyChange<LoadoutItemCellEditState, LoadoutItemCellEditStateError> for Lo
 }
 
 impl LoadOutDataSource {
-    pub fn new(sender: Enqueue<LoadOutTableUiCommand>) -> Self {
+    pub fn new() -> Self {
         Self {
             rows: Default::default(),
-            rows_to_filter: Default::default(),
-            row_ordering: None,
-            column_ordering: None,
-            cell: Default::default(),
-            sender,
         }
     }
 
@@ -84,12 +82,28 @@ impl LoadOutDataSource {
     }
 }
 
-impl EditableDataSource for LoadOutDataSource {
+impl LoadOutRenderer {
+    pub fn new(sender: Enqueue<LoadOutTableUiCommand>) -> Self {
+        Self {
+            rows_to_filter: Default::default(),
+            row_ordering: None,
+            column_ordering: None,
+            cell: Default::default(),
+            sender,
+        }
+    }
+}
+
+impl EditableTableRenderer<LoadOutDataSource> for LoadOutRenderer {
     type Value = LoadOutItem;
     type ItemState = LoadoutItemCellEditState;
 
-    fn build_item_state(&self, cell_index: CellIndex) -> Option<(LoadoutItemCellEditState, LoadOutItem)> {
-        let original_item = &self.rows[cell_index.row];
+    fn build_item_state(
+        &self,
+        cell_index: CellIndex,
+        source: &mut LoadOutDataSource,
+    ) -> Option<(LoadoutItemCellEditState, LoadOutItem)> {
+        let original_item = &source.rows[cell_index.row];
 
         match cell_index.column {
             FEEDER_REFERENCE_COL => Some((
@@ -105,7 +119,15 @@ impl EditableDataSource for LoadOutDataSource {
         }
     }
 
-    fn on_edit_complete(&mut self, cell_index: CellIndex, edit_state: Self::ItemState, original_item: LoadOutItem) {
+    fn on_edit_complete(
+        &mut self,
+        cell_index: CellIndex,
+        edit_state: Self::ItemState,
+        original_item: LoadOutItem,
+        source: &mut LoadOutDataSource,
+    ) {
+        let _ = source;
+
         self.sender
             .send(LoadOutTableUiCommand::CellEditComplete(
                 cell_index,
@@ -135,27 +157,11 @@ impl DeferredTableDataSource for LoadOutDataSource {
             column_count: COLUMN_COUNT,
         }
     }
-
-    fn rows_to_filter(&self) -> Option<&[usize]> {
-        Some(self.rows_to_filter.as_slice())
-    }
-
-    fn row_ordering(&self) -> Option<&[usize]> {
-        self.row_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
-
-    fn column_ordering(&self) -> Option<&[usize]> {
-        self.column_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
 }
 
-impl DeferredTableRenderer for LoadOutDataSource {
-    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex) {
-        let row = &self.rows[cell_index.row];
+impl DeferredTableRenderer<LoadOutDataSource> for LoadOutRenderer {
+    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &LoadOutDataSource) {
+        let row = &source.rows[cell_index.row];
 
         let handled = match &self.cell {
             Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
@@ -225,12 +231,28 @@ impl DeferredTableRenderer for LoadOutDataSource {
             }
         }
     }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
+    }
+
+    fn row_ordering(&self) -> Option<&[usize]> {
+        self.row_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
+
+    fn column_ordering(&self) -> Option<&[usize]> {
+        self.column_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct LoadOutTableUi {
-    source: Value<LoadOutDataSource>,
+    table_state: Value<(LoadOutDataSource, LoadOutRenderer)>,
     #[derivative(Debug = "ignore")]
     filter: Filter,
 
@@ -250,17 +272,16 @@ impl LoadOutTableUi {
             });
 
         Self {
-            source: Value::new(LoadOutDataSource::new(component.sender.clone())),
+            table_state: Value::new((LoadOutDataSource::new(), LoadOutRenderer::new(component.sender.clone()))),
             filter,
             component,
         }
     }
 
     pub fn update_loadout(&mut self, load_out: LoadOut) {
-        self.source
-            .lock()
-            .unwrap()
-            .update_loadout(load_out);
+        let (source, _renderer) = &mut *self.table_state.lock().unwrap();
+
+        source.update_loadout(load_out);
     }
 
     pub fn filter_ui(&self, ui: &mut Ui) {
@@ -300,25 +321,19 @@ impl UiComponent for LoadOutTableUi {
     type UiAction = LoadOutTableUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let data_source = &mut *self.source.lock().unwrap();
+        let (source, renderer) = &mut *self.table_state.lock().unwrap();
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("load_out_table"))
             .min_size((400.0, 400.0).into())
-            .show(
-                ui,
-                data_source,
-                |builder: &mut DeferredTableBuilder<'_, LoadOutDataSource>| {
-                    builder.header(|header_builder| {
-                        header_builder.column(FEEDER_REFERENCE_COL, tr!("table-load-out-column-reference"));
-                        header_builder
-                            .column(MANUFACTURER_COL, tr!("table-load-out-column-manufacturer"))
-                            .default_width(200.0);
-                        header_builder
-                            .column(MPN_COL, tr!("table-load-out-column-mpn"))
-                            .default_width(200.0);
-                    })
-                },
-            );
+            .column_parameters(&vec![
+                AxisParameters::default()
+                    .default_dimension(200.0)
+                    .name(tr!("table-load-out-column-manufacturer")),
+                AxisParameters::default()
+                    .default_dimension(200.0)
+                    .name(tr!("table-load-out-column-mpn")),
+            ])
+            .show(ui, source, renderer);
 
         for action in actions {
             match action {
@@ -326,19 +341,19 @@ impl UiComponent for LoadOutTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    handle_cell_click(data_source, cell_index);
+                    handle_cell_click(source, renderer, cell_index);
                 }
                 Action::ColumnReorder {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
                 Action::RowReorder {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
             }
         }
@@ -359,9 +374,9 @@ impl UiComponent for LoadOutTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-                        let source = &mut *self.source.lock().unwrap();
+                        let (source, renderer) = &mut *self.table_state.lock().unwrap();
 
-                        source.rows_to_filter = source
+                        renderer.rows_to_filter = source
                             .rows
                             .iter()
                             .enumerate()
@@ -394,8 +409,8 @@ impl UiComponent for LoadOutTableUi {
                 edit: new_edit_state,
                 cell_index,
             } => {
-                let source = &mut *self.source.lock().unwrap();
-                match source.cell.as_mut() {
+                let (_source, renderer) = &mut *self.table_state.lock().unwrap();
+                match renderer.cell.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
@@ -407,7 +422,7 @@ impl UiComponent for LoadOutTableUi {
                 None
             }
             LoadOutTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
-                let source = &mut *self.source.lock().unwrap();
+                let (source, _renderer) = &mut *self.table_state.lock().unwrap();
                 let row = &mut source.rows[cell_index.row];
 
                 row.apply_change(edit_state)

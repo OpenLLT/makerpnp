@@ -4,8 +4,8 @@ use std::fmt::Display;
 use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
-    Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
-    TableDimensions, apply_reordering,
+    Action, AxisParameters, CellIndex, DeferredTable, DeferredTableDataSource, DeferredTableRenderer, TableDimensions,
+    apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -14,7 +14,7 @@ use planner_app::{PartStates, PartWithState, ProcessReference, RefDes};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::project::tables::{ApplyChange, CellEditState, EditableDataSource, handle_cell_click};
+use crate::project::tables::{ApplyChange, CellEditState, EditableTableRenderer, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod columns {
@@ -32,9 +32,11 @@ use columns::*;
 #[derive(Debug, Clone)]
 pub struct PartDataSource {
     rows: Vec<PartWithState>,
+}
 
+#[derive(Debug, Clone)]
+pub struct PartRenderer {
     processes: Vec<ProcessReference>,
-
     rows_to_filter: Vec<usize>,
     row_ordering: Option<Vec<usize>>,
     column_ordering: Option<Vec<usize>>,
@@ -70,20 +72,9 @@ impl ApplyChange<PartCellEditState, PartCellEditStateError> for PartWithState {
 }
 
 impl PartDataSource {
-    pub fn new(sender: Enqueue<PartTableUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
-        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
-        // ordering.
-        processes.sort();
-
+    pub fn new() -> Self {
         Self {
             rows: Default::default(),
-
-            processes,
-            rows_to_filter: Default::default(),
-            row_ordering: None,
-            column_ordering: None,
-            cell: Default::default(),
-            sender,
         }
     }
 
@@ -92,12 +83,33 @@ impl PartDataSource {
     }
 }
 
-impl EditableDataSource for PartDataSource {
+impl PartRenderer {
+    pub fn new(sender: Enqueue<PartTableUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
+        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
+        // ordering.
+        processes.sort();
+
+        Self {
+            processes,
+            rows_to_filter: Default::default(),
+            row_ordering: None,
+            column_ordering: None,
+            cell: Default::default(),
+            sender,
+        }
+    }
+}
+
+impl EditableTableRenderer<PartDataSource> for PartRenderer {
     type Value = PartWithState;
     type ItemState = PartCellEditState;
 
-    fn build_item_state(&self, cell_index: CellIndex) -> Option<(PartCellEditState, PartWithState)> {
-        let original_item = &self.rows[cell_index.row];
+    fn build_item_state(
+        &self,
+        cell_index: CellIndex,
+        source: &mut PartDataSource,
+    ) -> Option<(PartCellEditState, PartWithState)> {
+        let original_item = &source.rows[cell_index.row];
 
         match cell_index.column {
             PROCESSES_COL => {
@@ -120,7 +132,15 @@ impl EditableDataSource for PartDataSource {
         }
     }
 
-    fn on_edit_complete(&mut self, index: CellIndex, state: PartCellEditState, original_item: PartWithState) {
+    fn on_edit_complete(
+        &mut self,
+        index: CellIndex,
+        state: PartCellEditState,
+        original_item: PartWithState,
+        source: &mut PartDataSource,
+    ) {
+        let _ = source;
+
         self.sender
             .send(PartTableUiCommand::CellEditComplete(index, state, original_item))
             .expect("sent");
@@ -146,27 +166,11 @@ impl DeferredTableDataSource for PartDataSource {
             column_count: COLUMN_COUNT,
         }
     }
-
-    fn rows_to_filter(&self) -> Option<&[usize]> {
-        Some(self.rows_to_filter.as_slice())
-    }
-
-    fn row_ordering(&self) -> Option<&[usize]> {
-        self.row_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
-
-    fn column_ordering(&self) -> Option<&[usize]> {
-        self.column_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
 }
 
-impl DeferredTableRenderer for PartDataSource {
-    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex) {
-        let row = &self.rows[cell_index.row];
+impl DeferredTableRenderer<PartDataSource> for PartRenderer {
+    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PartDataSource) {
+        let row = &source.rows[cell_index.row];
 
         let handled = match &self.cell {
             Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
@@ -228,12 +232,28 @@ impl DeferredTableRenderer for PartDataSource {
             };
         }
     }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
+    }
+
+    fn row_ordering(&self) -> Option<&[usize]> {
+        self.row_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
+
+    fn column_ordering(&self) -> Option<&[usize]> {
+        self.column_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PartTableUi {
-    source: Value<PartDataSource>,
+    source: Value<(PartDataSource, PartRenderer)>,
     #[derivative(Debug = "ignore")]
     filter: Filter,
 
@@ -253,21 +273,25 @@ impl PartTableUi {
             });
 
         Self {
-            source: Value::new(PartDataSource::new(component.sender.clone(), processes)),
+            source: Value::new((
+                PartDataSource::new(),
+                PartRenderer::new(component.sender.clone(), processes),
+            )),
             filter,
             component,
         }
     }
 
     pub fn update_processes(&mut self, processes: Vec<ProcessReference>) {
-        self.source.lock().unwrap().processes = processes;
+        let (_source, renderer) = &mut *self.source.lock().unwrap();
+
+        renderer.processes = processes;
     }
 
     pub fn update_parts(&mut self, part_states: PartStates) {
-        self.source
-            .lock()
-            .unwrap()
-            .update_parts(part_states);
+        let (source, _renderer) = &mut *self.source.lock().unwrap();
+
+        source.update_parts(part_states);
     }
 
     pub fn filter_ui(&self, ui: &mut Ui) {
@@ -307,33 +331,28 @@ impl UiComponent for PartTableUi {
     type UiAction = PartTableUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let data_source = &mut *self.source.lock().unwrap();
+        let (source, renderer) = &mut *self.source.lock().unwrap();
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("parts_table"))
             .min_size((400.0, 400.0).into())
-            .show(
-                ui,
-                data_source,
-                |builder: &mut DeferredTableBuilder<'_, PartDataSource>| {
-                    builder.header(|header_builder| {
-                        header_builder
-                            .column(MANUFACTURER_COL, tr!("table-parts-column-manufacturer"))
-                            .default_width(200.0);
-                        header_builder
-                            .column(MPN_COL, tr!("table-parts-column-mpn"))
-                            .default_width(200.0);
-                        header_builder
-                            .column(QUANTITY_COL, tr!("table-parts-column-quantity"))
-                            .default_width(100.0);
-                        header_builder
-                            .column(PROCESSES_COL, tr!("table-parts-column-processes"))
-                            .default_width(100.0);
-                        header_builder
-                            .column(REF_DES_SET_COL, tr!("table-parts-column-ref-des-set"))
-                            .default_width(100.0);
-                    })
-                },
-            );
+            .column_parameters(&vec![
+                AxisParameters::default()
+                    .name(tr!("table-parts-column-manufacturer"))
+                    .default_dimension(200.0),
+                AxisParameters::default()
+                    .name(tr!("table-parts-column-mpn"))
+                    .default_dimension(200.0),
+                AxisParameters::default()
+                    .name(tr!("table-parts-column-quantity"))
+                    .default_dimension(100.0),
+                AxisParameters::default()
+                    .name(tr!("table-parts-column-processes"))
+                    .default_dimension(100.0),
+                AxisParameters::default()
+                    .name(tr!("table-parts-column-ref-des-set"))
+                    .default_dimension(100.0),
+            ])
+            .show(ui, source, renderer);
 
         for action in actions {
             match action {
@@ -341,19 +360,19 @@ impl UiComponent for PartTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    handle_cell_click(data_source, cell_index);
+                    handle_cell_click(source, renderer, cell_index);
                 }
                 Action::ColumnReorder {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
                 Action::RowReorder {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
             }
         }
@@ -374,9 +393,9 @@ impl UiComponent for PartTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-                        let source = &mut *self.source.lock().unwrap();
+                        let (source, renderer) = &mut *self.source.lock().unwrap();
 
-                        source.rows_to_filter = source
+                        renderer.rows_to_filter = source
                             .rows
                             .iter()
                             .enumerate()
@@ -407,8 +426,8 @@ impl UiComponent for PartTableUi {
                 edit: new_edit_state,
                 cell_index,
             } => {
-                let source = &mut *self.source.lock().unwrap();
-                match source.cell.as_mut() {
+                let (_source, renderer) = &mut *self.source.lock().unwrap();
+                match renderer.cell.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
@@ -420,7 +439,7 @@ impl UiComponent for PartTableUi {
                 None
             }
             PartTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
-                let source = &mut *self.source.lock().unwrap();
+                let (source, _renderer) = &mut *self.source.lock().unwrap();
                 let row = &mut source.rows[cell_index.row];
 
                 row.apply_change(edit_state)

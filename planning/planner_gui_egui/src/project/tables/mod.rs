@@ -22,7 +22,7 @@ trait ApplyChange<T, E> {
 }
 
 /// Implement this to enable data source editing support.
-trait EditableDataSource {
+trait EditableTableRenderer<DataSource> {
     /// Usually a type containing the data for a single row.
     type Value;
     /// Usually an enum, with variants for each type of cell that can be edited.
@@ -32,13 +32,23 @@ trait EditableDataSource {
     /// Called when the cell needs to be edited.
     ///
     /// Return None to prevent editing or a tuple containing the ItemState and the original value.
-    fn build_item_state(&self, cell_index: CellIndex) -> Option<(Self::ItemState, Self::Value)>;
+    fn build_item_state(
+        &self,
+        cell_index: CellIndex,
+        source: &mut DataSource,
+    ) -> Option<(Self::ItemState, Self::Value)>;
 
     /// Called when the cell is no-longer being edited.
     ///
     /// Implementations usually modify the data source directly, or build and send a command that will change
     /// eventually update the datasource, e.g. in a background thread.
-    fn on_edit_complete(&mut self, index: CellIndex, state: Self::ItemState, original_item: Self::Value);
+    fn on_edit_complete(
+        &mut self,
+        index: CellIndex,
+        state: Self::ItemState,
+        original_item: Self::Value,
+        source: &mut DataSource,
+    );
 
     // The data source needs to own a `CellEditState`, the following three methods are used to modify it.
     // typically the data source just has a member like this: `cell: Option<CellEditState<MyItemState, MyRow>>`
@@ -48,29 +58,30 @@ trait EditableDataSource {
     fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value>;
 }
 
-fn handle_cell_click<E, S: EditableDataSource<Value = T, ItemState = E>, T: Clone>(
-    data_source: &mut S,
+fn handle_cell_click<E, S, R: EditableTableRenderer<S, Value = T, ItemState = E>, T: Clone>(
+    source: &mut S,
+    renderer: &mut R,
     cell_index: CellIndex,
 ) {
-    match data_source.edit_state() {
+    match renderer.edit_state() {
         None => {
             // change selection
-            data_source.set_edit_state(CellEditState::Pivot(cell_index));
+            renderer.set_edit_state(CellEditState::Pivot(cell_index));
         }
         Some(CellEditState::Pivot(pivot_cell_index)) if *pivot_cell_index == cell_index => {
             debug!("clicked in selected cell");
 
             // change mode to edit
-            let edit_state = data_source.build_item_state(cell_index);
+            let edit_state = renderer.build_item_state(cell_index, source);
             if let Some((edit, original_item)) = edit_state {
-                data_source.set_edit_state(CellEditState::Editing(cell_index, edit, original_item));
+                renderer.set_edit_state(CellEditState::Editing(cell_index, edit, original_item));
             }
         }
         Some(CellEditState::Pivot(_)) => {
             debug!("clicked in different cell");
 
             // change selection
-            data_source.set_edit_state(CellEditState::Pivot(cell_index));
+            renderer.set_edit_state(CellEditState::Pivot(cell_index));
         }
         Some(CellEditState::Editing(editing_cell_index, _cell_edit_state, _original_item))
             if *editing_cell_index == cell_index =>
@@ -83,13 +94,13 @@ fn handle_cell_click<E, S: EditableDataSource<Value = T, ItemState = E>, T: Clon
             debug!("clicked in a different cell while editing");
 
             // apply edited value
-            let CellEditState::Editing(index, state, original_item) = data_source.take_edit_state() else {
+            let CellEditState::Editing(index, state, original_item) = renderer.take_edit_state() else {
                 unreachable!();
             };
-            data_source.on_edit_complete(index, state, original_item);
+            renderer.on_edit_complete(index, state, original_item, source);
 
             // change selection
-            data_source.set_edit_state(CellEditState::Pivot(cell_index));
+            renderer.set_edit_state(CellEditState::Pivot(cell_index));
         }
     }
 }
