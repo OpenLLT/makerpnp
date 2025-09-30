@@ -108,7 +108,7 @@ egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", t
 # 1 - https://github.com/LennysLounge/egui_ltreeview/pull/23
 egui_ltreeview = { git = "https://github.com/makerpnp/egui_ltreeview", rev = "6e44b06e6ab3b22d3c0f3d790be77650ae74cb53" }
 
-egui_deferred_table = { version = "=0.1.4" }
+egui_deferred_table = { version = "=0.1.5" }
 #egui_deferred_table = { git = "https://github.com/makerpnp/egui_deferred_table", rev = "c924373a543a757b1c948a1e7d04eea0a9fe0982" }
 #egui_deferred_table = { path = "../../../libraries/rust/egui/egui_deferred_table" }
 

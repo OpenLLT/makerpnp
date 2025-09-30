@@ -6,8 +6,8 @@ use eda_units::eda_units::dimension_unit::{DimensionUnitPoint2, DimensionUnitPoi
 use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
 use egui_deferred_table::{
-    Action, CellIndex, DeferredTable, DeferredTableBuilder, DeferredTableDataSource, DeferredTableRenderer,
-    TableDimensions, apply_reordering,
+    Action, AxisParameters, CellIndex, DeferredTable, DeferredTableDataSource, DeferredTableRenderer, TableDimensions,
+    apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -23,7 +23,7 @@ use crate::i18n::conversions::{
     pcb_side_to_i18n_key, placement_operation_status_to_i18n_key, placement_place_to_i18n_key,
     placement_project_status_to_i18n_key,
 };
-use crate::project::tables::{ApplyChange, CellEditState, EditableDataSource, handle_cell_click};
+use crate::project::tables::{ApplyChange, CellEditState, EditableTableRenderer, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod columns {
@@ -49,6 +49,10 @@ use columns::*;
 #[derive(Debug, Clone)]
 pub struct PlacementsDataSource {
     rows: Vec<PlacementsItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlacementsRenderer {
     phases: Vec<PhaseOverview>,
 
     rows_to_filter: Vec<usize>,
@@ -91,25 +95,18 @@ impl ApplyChange<PlacementsItemCellEditState, PlacementsItemCellEditStateError> 
 }
 
 impl PlacementsDataSource {
-    pub fn new(sender: Enqueue<PlacementsTableUiCommand>) -> Self {
+    pub fn new() -> Self {
         Self {
             rows: Default::default(),
-            phases: Default::default(),
-            rows_to_filter: Default::default(),
-            row_ordering: None,
-            column_ordering: None,
-            all_phases_pending: false,
-            phase_placements_editability_map: BTreeMap::new(),
-            cell: Default::default(),
-            sender,
         }
     }
 
-    pub fn update_placements(&mut self, placements: Vec<PlacementsItem>, phases: Vec<PhaseOverview>) {
-        self.update_phases(phases);
+    pub fn update_placements(&mut self, placements: Vec<PlacementsItem>) {
         self.rows = placements;
     }
+}
 
+impl PlacementsRenderer {
     pub fn update_phases(&mut self, mut phases: Vec<PhaseOverview>) {
         phases.sort_by(|a, b| {
             a.phase_reference
@@ -138,12 +135,31 @@ impl PlacementsDataSource {
     }
 }
 
-impl EditableDataSource for PlacementsDataSource {
+impl PlacementsRenderer {
+    pub fn new(sender: Enqueue<PlacementsTableUiCommand>) -> Self {
+        Self {
+            phases: Default::default(),
+            rows_to_filter: Default::default(),
+            row_ordering: None,
+            column_ordering: None,
+            all_phases_pending: false,
+            phase_placements_editability_map: BTreeMap::new(),
+            cell: Default::default(),
+            sender,
+        }
+    }
+}
+
+impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
     type Value = PlacementsItem;
     type ItemState = PlacementsItemCellEditState;
 
-    fn build_item_state(&self, cell_index: CellIndex) -> Option<(PlacementsItemCellEditState, PlacementsItem)> {
-        let original_item = &self.rows[cell_index.row];
+    fn build_item_state(
+        &self,
+        cell_index: CellIndex,
+        source: &mut PlacementsDataSource,
+    ) -> Option<(PlacementsItemCellEditState, PlacementsItem)> {
+        let original_item = &source.rows[cell_index.row];
 
         match cell_index.column {
             PLACED_COL => {
@@ -173,7 +189,15 @@ impl EditableDataSource for PlacementsDataSource {
         }
     }
 
-    fn on_edit_complete(&mut self, cell_index: CellIndex, edit_state: Self::ItemState, original_item: PlacementsItem) {
+    fn on_edit_complete(
+        &mut self,
+        cell_index: CellIndex,
+        edit_state: Self::ItemState,
+        original_item: PlacementsItem,
+        source: &mut PlacementsDataSource,
+    ) {
+        let _ = source;
+
         self.sender
             .send(PlacementsTableUiCommand::CellEditComplete(
                 cell_index,
@@ -203,27 +227,11 @@ impl DeferredTableDataSource for PlacementsDataSource {
             column_count: COLUMN_COUNT,
         }
     }
-
-    fn rows_to_filter(&self) -> Option<&[usize]> {
-        Some(self.rows_to_filter.as_slice())
-    }
-
-    fn row_ordering(&self) -> Option<&[usize]> {
-        self.row_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
-
-    fn column_ordering(&self) -> Option<&[usize]> {
-        self.column_ordering
-            .as_ref()
-            .map(|v| v.as_slice())
-    }
 }
 
-impl DeferredTableRenderer for PlacementsDataSource {
-    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex) {
-        let row = &self.rows[cell_index.row];
+impl DeferredTableRenderer<PlacementsDataSource> for PlacementsRenderer {
+    fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PlacementsDataSource) {
+        let row = &source.rows[cell_index.row];
 
         let handled = match &self.cell {
             Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
@@ -376,12 +384,28 @@ impl DeferredTableRenderer for PlacementsDataSource {
             };
         }
     }
+
+    fn rows_to_filter(&self) -> Option<&[usize]> {
+        Some(self.rows_to_filter.as_slice())
+    }
+
+    fn row_ordering(&self) -> Option<&[usize]> {
+        self.row_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
+
+    fn column_ordering(&self) -> Option<&[usize]> {
+        self.column_ordering
+            .as_ref()
+            .map(|v| v.as_slice())
+    }
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PlacementsTableUi {
-    source: Value<PlacementsDataSource>,
+    source: Value<(PlacementsDataSource, PlacementsRenderer)>,
     #[derivative(Debug = "ignore")]
     pub(crate) filter: Filter,
 
@@ -401,7 +425,10 @@ impl PlacementsTableUi {
             });
 
         Self {
-            source: Value::new(PlacementsDataSource::new(component.sender.clone())),
+            source: Value::new((
+                PlacementsDataSource::new(),
+                PlacementsRenderer::new(component.sender.clone()),
+            )),
             filter,
 
             component,
@@ -409,17 +436,16 @@ impl PlacementsTableUi {
     }
 
     pub fn update_placements(&mut self, placements: Vec<PlacementsItem>, phases: Vec<PhaseOverview>) {
-        self.source
-            .lock()
-            .unwrap()
-            .update_placements(placements, phases);
+        let (source, renderer) = &mut *self.source.lock().unwrap();
+
+        source.update_placements(placements);
+        renderer.update_phases(phases);
     }
 
     pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
-        self.source
-            .lock()
-            .unwrap()
-            .update_phases(phases);
+        let (_source, renderer) = &mut *self.source.lock().unwrap();
+
+        renderer.update_phases(phases);
     }
 
     pub fn filter_ui(&self, ui: &mut Ui) {
@@ -478,53 +504,34 @@ impl UiComponent for PlacementsTableUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let data_source = &mut *self.source.lock().unwrap();
+        let (source, renderer) = &mut *self.source.lock().unwrap();
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("placements_table"))
             .min_size((400.0, 400.0).into())
-            .show(
-                ui,
-                data_source,
-                |builder: &mut DeferredTableBuilder<'_, PlacementsDataSource>| {
-                    builder.header(|header_builder| {
-                        // OBJECT_PATH_COL => tr!("table-placements-column-object-path"),
-                        // REF_DES_COL => tr!("table-placements-column-refdes"),
-                        // PLACE_COL => tr!("table-placements-column-place"),
-                        // MANUFACTURER_COL => tr!("table-placements-column-manufacturer"),
-                        // MPN_COL => tr!("table-placements-column-mpn"),
-                        // ROTATION_COL => tr!("table-placements-column-rotation"),
-                        // X_COL => tr!("table-placements-column-x"),
-                        // Y_COL => tr!("table-placements-column-y"),
-                        // PCB_SIDE_COL => tr!("table-placements-column-pcb-side"),
-                        // PHASE_COL => tr!("table-placements-column-phase"),
-                        // PLACED_COL => tr!("table-placements-column-placed"),
-                        // STATUS_COL => tr!("table-placements-column-status"),
-                        // ORDERING_COL => tr!("table-placements-column-ordering"),
-
-                        header_builder
-                            .column(OBJECT_PATH_COL, tr!("table-placements-column-object-path"))
-                            .default_width(200.0);
-                        header_builder.column(ORDERING_COL, tr!("table-placements-column-ordering"));
-                        header_builder
-                            .column(REF_DES_COL, tr!("table-placements-column-refdes"))
-                            .default_width(50.0);
-                        header_builder.column(PLACE_COL, tr!("table-placements-column-place"));
-                        header_builder
-                            .column(MANUFACTURER_COL, tr!("table-placements-column-manufacturer"))
-                            .default_width(200.0);
-                        header_builder
-                            .column(MPN_COL, tr!("table-placements-column-mpn"))
-                            .default_width(200.0);
-                        header_builder.column(ROTATION_COL, tr!("table-placements-column-rotation"));
-                        header_builder.column(X_COL, tr!("table-placements-column-x"));
-                        header_builder.column(Y_COL, tr!("table-placements-column-y"));
-                        header_builder.column(PCB_SIDE_COL, tr!("table-placements-column-pcb-side"));
-                        header_builder.column(PHASE_COL, tr!("table-placements-column-phase"));
-                        header_builder.column(PLACED_COL, tr!("table-placements-column-placed"));
-                        header_builder.column(STATUS_COL, tr!("table-placements-column-status"));
-                    })
-                },
-            );
+            .column_parameters(&vec![
+                AxisParameters::default()
+                    .name(tr!("table-placements-column-object-path"))
+                    .default_dimension(200.0),
+                AxisParameters::default().name(tr!("table-placements-column-ordering")),
+                AxisParameters::default()
+                    .name(tr!("table-placements-column-refdes"))
+                    .default_dimension(50.0),
+                AxisParameters::default().name(tr!("table-placements-column-place")),
+                AxisParameters::default()
+                    .name(tr!("table-placements-column-manufacturer"))
+                    .default_dimension(200.0),
+                AxisParameters::default()
+                    .name(tr!("table-placements-column-mpn"))
+                    .default_dimension(200.0),
+                AxisParameters::default().name(tr!("table-placements-column-rotation")),
+                AxisParameters::default().name(tr!("table-placements-column-x")),
+                AxisParameters::default().name(tr!("table-placements-column-y")),
+                AxisParameters::default().name(tr!("table-placements-column-pcb-side")),
+                AxisParameters::default().name(tr!("table-placements-column-phase")),
+                AxisParameters::default().name(tr!("table-placements-column-placed")),
+                AxisParameters::default().name(tr!("table-placements-column-status")),
+            ])
+            .show(ui, source, renderer);
 
         for action in actions {
             match action {
@@ -532,11 +539,11 @@ impl UiComponent for PlacementsTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    handle_cell_click(data_source, cell_index);
+                    handle_cell_click(source, renderer, cell_index);
 
                     // FUTURE only do this if a *different* cell is clicked, requires tracking the current cell
 
-                    let row = &data_source.rows[cell_index.row];
+                    let row = &source.rows[cell_index.row];
 
                     self.component
                         .send(PlacementsTableUiCommand::LocatePlacement {
@@ -566,13 +573,13 @@ impl UiComponent for PlacementsTableUi {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
                 Action::RowReorder {
                     from,
                     to,
                 } => {
-                    apply_reordering(&mut data_source.column_ordering, from, to);
+                    apply_reordering(&mut renderer.column_ordering, from, to);
                 }
             }
         }
@@ -594,9 +601,9 @@ impl UiComponent for PlacementsTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-                        let source = &mut *self.source.lock().unwrap();
+                        let (source, renderer) = &mut *self.source.lock().unwrap();
 
-                        source.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
+                        renderer.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
 
                             let haystack = format!(
                                 "object_path: '{}', refdes: '{}', manufacturer: '{}', mpn: '{}', place: {}, placed: {}, side: {}, phase: '{}', status: '{}'",
@@ -644,8 +651,8 @@ impl UiComponent for PlacementsTableUi {
                 edit: new_edit_state,
                 cell_index,
             } => {
-                let source = &mut *self.source.lock().unwrap();
-                match source.cell.as_mut() {
+                let (_source, renderer) = &mut *self.source.lock().unwrap();
+                match renderer.cell.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
@@ -657,7 +664,7 @@ impl UiComponent for PlacementsTableUi {
                 None
             }
             PlacementsTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
-                let source = &mut *self.source.lock().unwrap();
+                let (source, _renderer) = &mut *self.source.lock().unwrap();
                 let row = &mut source.rows[cell_index.row];
 
                 row.apply_change(edit_state)
