@@ -4,8 +4,8 @@ use std::fmt::Display;
 use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
-    Action, AxisParameters, CellIndex, DeferredTable, DeferredTableDataSource, DeferredTableRenderer, TableDimensions,
-    apply_reordering,
+    Action, ApplyChange, AxisParameters, CellEditState, CellIndex, DeferredTable, DeferredTableDataSource,
+    DeferredTableRenderer, EditableTableRenderer, TableDimensions, apply_reordering, handle_editable_cell_click,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -14,7 +14,6 @@ use planner_app::{PartStates, PartWithState, ProcessReference, RefDes};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
-use crate::project::tables::{ApplyChange, CellEditState, EditableTableRenderer, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod columns {
@@ -41,8 +40,7 @@ pub struct PartRenderer {
     row_ordering: Option<Vec<usize>>,
     column_ordering: Option<Vec<usize>>,
 
-    // temporary implementation due to in-progress nature of egui_deferred_table
-    cell: Option<CellEditState<PartCellEditState, PartWithState>>,
+    edit_state: Option<CellEditState<PartCellEditState, PartWithState>>,
     sender: Enqueue<PartTableUiCommand>,
 }
 
@@ -94,7 +92,7 @@ impl PartRenderer {
             rows_to_filter: Default::default(),
             row_ordering: None,
             column_ordering: None,
-            cell: Default::default(),
+            edit_state: Default::default(),
             sender,
         }
     }
@@ -147,15 +145,15 @@ impl EditableTableRenderer<PartDataSource> for PartRenderer {
     }
 
     fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>) {
-        self.cell.replace(edit_state);
+        self.edit_state.replace(edit_state);
     }
 
     fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>> {
-        self.cell.as_ref()
+        self.edit_state.as_ref()
     }
 
     fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
-        self.cell.take().unwrap()
+        self.edit_state.take().unwrap()
     }
 }
 
@@ -172,7 +170,7 @@ impl DeferredTableRenderer<PartDataSource> for PartRenderer {
     fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PartDataSource) {
         let row = &source.rows[cell_index.row];
 
-        let handled = match &self.cell {
+        let handled = match &self.edit_state {
             Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
                 if *selected_cell_index == cell_index =>
             {
@@ -360,7 +358,7 @@ impl UiComponent for PartTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    handle_cell_click(source, renderer, cell_index);
+                    handle_editable_cell_click(source, renderer, cell_index);
                 }
                 Action::ColumnReorder {
                     from,
@@ -427,7 +425,7 @@ impl UiComponent for PartTableUi {
                 cell_index,
             } => {
                 let (_source, renderer) = &mut *self.source.lock().unwrap();
-                match renderer.cell.as_mut() {
+                match renderer.edit_state.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {

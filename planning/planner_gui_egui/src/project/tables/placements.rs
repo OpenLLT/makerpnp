@@ -6,8 +6,8 @@ use eda_units::eda_units::dimension_unit::{DimensionUnitPoint2, DimensionUnitPoi
 use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
 use egui_deferred_table::{
-    Action, AxisParameters, CellIndex, DeferredTable, DeferredTableDataSource, DeferredTableRenderer, TableDimensions,
-    apply_reordering,
+    Action, ApplyChange, AxisParameters, CellEditState, CellIndex, DeferredTable, DeferredTableDataSource,
+    DeferredTableRenderer, EditableTableRenderer, TableDimensions, apply_reordering, handle_editable_cell_click,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -23,7 +23,6 @@ use crate::i18n::conversions::{
     pcb_side_to_i18n_key, placement_operation_status_to_i18n_key, placement_place_to_i18n_key,
     placement_project_status_to_i18n_key,
 };
-use crate::project::tables::{ApplyChange, CellEditState, EditableTableRenderer, handle_cell_click};
 use crate::ui_component::{ComponentState, UiComponent};
 
 mod columns {
@@ -63,8 +62,7 @@ pub struct PlacementsRenderer {
     phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
     all_phases_pending: bool,
 
-    // temporary implementation due to in-progress nature of egui_deferred_table
-    cell: Option<CellEditState<PlacementsItemCellEditState, PlacementsItem>>,
+    edit_state: Option<CellEditState<PlacementsItemCellEditState, PlacementsItem>>,
     sender: Enqueue<PlacementsTableUiCommand>,
 }
 
@@ -144,7 +142,7 @@ impl PlacementsRenderer {
             column_ordering: None,
             all_phases_pending: false,
             phase_placements_editability_map: BTreeMap::new(),
-            cell: Default::default(),
+            edit_state: Default::default(),
             sender,
         }
     }
@@ -208,15 +206,15 @@ impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
     }
 
     fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>) {
-        self.cell.replace(edit_state);
+        self.edit_state.replace(edit_state);
     }
 
     fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>> {
-        self.cell.as_ref()
+        self.edit_state.as_ref()
     }
 
     fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
-        self.cell.take().unwrap()
+        self.edit_state.take().unwrap()
     }
 }
 
@@ -233,7 +231,7 @@ impl DeferredTableRenderer<PlacementsDataSource> for PlacementsRenderer {
     fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PlacementsDataSource) {
         let row = &source.rows[cell_index.row];
 
-        let handled = match &self.cell {
+        let handled = match &self.edit_state {
             Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
                 if *selected_cell_index == cell_index =>
             {
@@ -539,7 +537,7 @@ impl UiComponent for PlacementsTableUi {
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
 
-                    handle_cell_click(source, renderer, cell_index);
+                    handle_editable_cell_click(source, renderer, cell_index);
 
                     // FUTURE only do this if a *different* cell is clicked, requires tracking the current cell
 
@@ -652,7 +650,7 @@ impl UiComponent for PlacementsTableUi {
                 cell_index,
             } => {
                 let (_source, renderer) = &mut *self.source.lock().unwrap();
-                match renderer.cell.as_mut() {
+                match renderer.edit_state.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
