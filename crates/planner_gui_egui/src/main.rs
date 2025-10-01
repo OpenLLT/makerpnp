@@ -1,4 +1,6 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+// hide console window on Windows in release
 use i18n::I18nConfig;
 use planner_gui_egui::ui_app::UiApp;
 /// Run as follows:
@@ -27,7 +29,7 @@ fn main() {
         fallback: "en-US".to_string(),
     });
 
-    let options = eframe::NativeOptions {
+    let default_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_icon(std::sync::Arc::new(egui::IconData {
                 rgba: image::load_from_memory(include_bytes!("../../../assets/logos/makerpnp_icon_1_384x384.png"))
@@ -42,11 +44,30 @@ fn main() {
         ..Default::default()
     };
 
+    let app_name = "MakerPnP - Planner";
     if let Err(e) = eframe::run_native(
-        "MakerPnP - Planner",
-        options,
+        app_name,
+        default_options.clone(),
         Box::new(|cc| Ok(Box::new(UiApp::new(cc)))),
     ) {
-        eprintln!("Failed to run eframe: {:?}", e);
+        eprintln!(
+            "Failed to run eframe: {:?}, trying with hardware acceleration disabled.",
+            e
+        );
+
+        // Fallback: force software renderer
+        let mut sw_options = default_options.clone();
+        sw_options.hardware_acceleration = eframe::HardwareAcceleration::Off;
+
+        if let Err(e) = eframe::run_native(
+            app_name,
+            default_options.clone(),
+            Box::new(|cc| Ok(Box::new(UiApp::new(cc)))),
+        ) {
+            eprintln!(
+                "Failed to run eframe with hardware acceleration disabled, cause: {:?}",
+                e
+            );
+        }
     }
 }
