@@ -5,7 +5,7 @@ use derivative::Derivative;
 use egui::Ui;
 use egui_deferred_table::{
     Action, ApplyChange, AxisParameters, CellEditState, CellIndex, DeferredTable, DeferredTableDataSource,
-    DeferredTableRenderer, EditableTableRenderer, TableDimensions, apply_reordering, handle_editable_cell_click,
+    DeferredTableRenderer, EditableTableRenderer, EditorState, TableDimensions, apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -28,19 +28,22 @@ mod columns {
 }
 use columns::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PartDataSource {
     rows: Vec<PartWithState>,
+
+    processes: Vec<ProcessReference>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PartRenderer {
-    processes: Vec<ProcessReference>,
     rows_to_filter: Vec<usize>,
     row_ordering: Option<Vec<usize>>,
     column_ordering: Option<Vec<usize>>,
+}
 
-    edit_state: Option<CellEditState<PartCellEditState, PartWithState>>,
+#[derive(Debug)]
+pub struct PartEditor {
     sender: Enqueue<PartTableUiCommand>,
 }
 
@@ -70,8 +73,13 @@ impl ApplyChange<PartCellEditState, PartCellEditStateError> for PartWithState {
 }
 
 impl PartDataSource {
-    pub fn new() -> Self {
+    pub fn new(mut processes: Vec<ProcessReference>) -> Self {
+        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
+        // ordering.
+        processes.sort();
+
         Self {
+            processes,
             rows: Default::default(),
         }
     }
@@ -82,23 +90,24 @@ impl PartDataSource {
 }
 
 impl PartRenderer {
-    pub fn new(sender: Enqueue<PartTableUiCommand>, mut processes: Vec<ProcessReference>) -> Self {
-        // sorting the processes here helps to ensure that the view vs edit list of processes has the same
-        // ordering.
-        processes.sort();
-
+    pub fn new() -> Self {
         Self {
-            processes,
             rows_to_filter: Default::default(),
             row_ordering: None,
             column_ordering: None,
-            edit_state: Default::default(),
+        }
+    }
+}
+
+impl PartEditor {
+    pub fn new(sender: Enqueue<PartTableUiCommand>) -> Self {
+        Self {
             sender,
         }
     }
 }
 
-impl EditableTableRenderer<PartDataSource> for PartRenderer {
+impl EditableTableRenderer<PartDataSource> for PartEditor {
     type Value = PartWithState;
     type ItemState = PartCellEditState;
 
@@ -111,7 +120,7 @@ impl EditableTableRenderer<PartDataSource> for PartRenderer {
 
         match cell_index.column {
             PROCESSES_COL => {
-                let enabled_processes = self
+                let enabled_processes = source
                     .processes
                     .iter()
                     .map(|process| {
@@ -144,16 +153,39 @@ impl EditableTableRenderer<PartDataSource> for PartRenderer {
             .expect("sent");
     }
 
-    fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>) {
-        self.edit_state.replace(edit_state);
-    }
+    fn render_cell_editor(
+        &self,
+        ui: &mut Ui,
+        cell_index: &CellIndex,
+        state: &mut Self::ItemState,
+        _original_item: &Self::Value,
+        _source: &mut PartDataSource,
+    ) {
+        match state {
+            PartCellEditState::Processes(enabled_processes) => {
+                let mut enabled_processes_mut = enabled_processes.clone();
+                let _response = ui.add(|ui: &mut Ui| {
+                    // FIXME this doesn't always fit in the available space, what to do?
+                    ui.horizontal(|ui| {
+                        // Note that the enabled_processes was built in the same order as self.processes.
+                        for (name, enabled) in enabled_processes_mut.iter_mut() {
+                            ui.checkbox(enabled, name.to_string());
+                        }
+                    })
+                    .response
+                });
 
-    fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>> {
-        self.edit_state.as_ref()
-    }
-
-    fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
-        self.edit_state.take().unwrap()
+                if enabled_processes_mut != *enabled_processes {
+                    // NOTE: if we had &mut self here, we could apply the edit state now
+                    self.sender
+                        .send(PartTableUiCommand::ApplyCellEdit {
+                            edit: PartCellEditState::Processes(enabled_processes_mut),
+                            cell_index: *cell_index,
+                        })
+                        .expect("sent");
+                }
+            }
+        }
     }
 }
 
@@ -170,65 +202,28 @@ impl DeferredTableRenderer<PartDataSource> for PartRenderer {
     fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PartDataSource) {
         let row = &source.rows[cell_index.row];
 
-        let handled = match &self.edit_state {
-            Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
-                if *selected_cell_index == cell_index =>
-            {
-                match edit {
-                    PartCellEditState::Processes(enabled_processes) => {
-                        let mut enabled_processes_mut = enabled_processes.clone();
-                        let _response = ui.add(|ui: &mut Ui| {
-                            // FIXME this doesn't always fit in the available space, what to do?
-                            ui.horizontal(|ui| {
-                                // Note that the enabled_processes was built in the same order as self.processes.
-                                for (name, enabled) in enabled_processes_mut.iter_mut() {
-                                    ui.checkbox(enabled, name.to_string());
-                                }
-                            })
-                            .response
-                        });
+        let _ = match cell_index.column {
+            MANUFACTURER_COL => ui.label(&row.part.manufacturer),
+            MPN_COL => ui.label(&row.part.mpn),
+            PROCESSES_COL => {
+                // Build in the same order as self.processes, specifically not just iterating over `row.processes`
+                let processes = source
+                    .processes
+                    .iter()
+                    .filter(|process| row.processes.contains(process))
+                    .map(|process| process.to_string())
+                    .collect::<Vec<String>>();
 
-                        if enabled_processes_mut != *enabled_processes {
-                            // NOTE: if we had &mut self here, we could apply the edit state now
-                            self.sender
-                                .send(PartTableUiCommand::ApplyCellEdit {
-                                    edit: PartCellEditState::Processes(enabled_processes_mut),
-                                    cell_index,
-                                })
-                                .expect("sent");
-                        }
-
-                        true
-                    }
-                }
+                let processes_label: String = processes.join(", ");
+                ui.label(processes_label)
             }
-            _ => false,
+            REF_DES_SET_COL => {
+                let label: String = refdes_set_to_string(&row.ref_des_set);
+                ui.label(label)
+            }
+            QUANTITY_COL => ui.label(format!("{}", row.quantity)),
+            _ => unreachable!(),
         };
-
-        if !handled {
-            let _ = match cell_index.column {
-                MANUFACTURER_COL => ui.label(&row.part.manufacturer),
-                MPN_COL => ui.label(&row.part.mpn),
-                PROCESSES_COL => {
-                    // Build in the same order as self.processes, specifically not just iterating over `row.processes`
-                    let processes = self
-                        .processes
-                        .iter()
-                        .filter(|process| row.processes.contains(process))
-                        .map(|process| process.to_string())
-                        .collect::<Vec<String>>();
-
-                    let processes_label: String = processes.join(", ");
-                    ui.label(processes_label)
-                }
-                REF_DES_SET_COL => {
-                    let label: String = refdes_set_to_string(&row.ref_des_set);
-                    ui.label(label)
-                }
-                QUANTITY_COL => ui.label(format!("{}", row.quantity)),
-                _ => unreachable!(),
-            };
-        }
     }
 
     fn rows_to_filter(&self) -> Option<&[usize]> {
@@ -251,7 +246,12 @@ impl DeferredTableRenderer<PartDataSource> for PartRenderer {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PartTableUi {
-    source: Value<(PartDataSource, PartRenderer)>,
+    source: Value<(
+        PartDataSource,
+        PartRenderer,
+        PartEditor,
+        EditorState<PartCellEditState, PartWithState>,
+    )>,
     #[derivative(Debug = "ignore")]
     filter: Filter,
 
@@ -272,8 +272,10 @@ impl PartTableUi {
 
         Self {
             source: Value::new((
-                PartDataSource::new(),
-                PartRenderer::new(component.sender.clone(), processes),
+                PartDataSource::new(processes),
+                PartRenderer::new(),
+                PartEditor::new(component.sender.clone()),
+                EditorState::default(),
             )),
             filter,
             component,
@@ -281,13 +283,13 @@ impl PartTableUi {
     }
 
     pub fn update_processes(&mut self, processes: Vec<ProcessReference>) {
-        let (_source, renderer) = &mut *self.source.lock().unwrap();
+        let (source, _renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
 
-        renderer.processes = processes;
+        source.processes = processes;
     }
 
     pub fn update_parts(&mut self, part_states: PartStates) {
-        let (source, _renderer) = &mut *self.source.lock().unwrap();
+        let (source, _renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
 
         source.update_parts(part_states);
     }
@@ -329,7 +331,7 @@ impl UiComponent for PartTableUi {
     type UiAction = PartTableUiAction;
 
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let (source, renderer) = &mut *self.source.lock().unwrap();
+        let (source, renderer, editor, editor_state) = &mut *self.source.lock().unwrap();
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("parts_table"))
             .min_size((400.0, 400.0).into())
@@ -350,15 +352,13 @@ impl UiComponent for PartTableUi {
                     .name(tr!("table-parts-column-ref-des-set"))
                     .default_dimension(100.0),
             ])
-            .show(ui, source, renderer);
+            .show_and_edit(ui, source, renderer, editor, editor_state);
 
         for action in actions {
             match action {
                 // TODO we need double-click to edit cells, not single-click, then single-click again
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
-
-                    handle_editable_cell_click(source, renderer, cell_index);
                 }
                 Action::ColumnReorder {
                     from,
@@ -391,7 +391,7 @@ impl UiComponent for PartTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-                        let (source, renderer) = &mut *self.source.lock().unwrap();
+                        let (source, renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
 
                         renderer.rows_to_filter = source
                             .rows
@@ -424,8 +424,8 @@ impl UiComponent for PartTableUi {
                 edit: new_edit_state,
                 cell_index,
             } => {
-                let (_source, renderer) = &mut *self.source.lock().unwrap();
-                match renderer.edit_state.as_mut() {
+                let (_source, _renderer, _editor, editor_state) = &mut *self.source.lock().unwrap();
+                match editor_state.state.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
@@ -437,7 +437,7 @@ impl UiComponent for PartTableUi {
                 None
             }
             PartTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
-                let (source, _renderer) = &mut *self.source.lock().unwrap();
+                let (source, _renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
                 let row = &mut source.rows[cell_index.row];
 
                 row.apply_change(edit_state)
