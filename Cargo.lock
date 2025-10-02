@@ -1715,7 +1715,7 @@ dependencies = [
 [[package]]
 name = "egui_deferred_table"
 version = "0.1.5"
-source = "git+https://github.com/makerpnp/egui_deferred_table?rev=a1a6b74f780c7556e3aebb16c68e3ed664734099#a1a6b74f780c7556e3aebb16c68e3ed664734099"
+source = "git+https://github.com/makerpnp/egui_deferred_table?rev=30d3b269e5305f0b2c30696455322b642fc7281e#30d3b269e5305f0b2c30696455322b642fc7281e"
 dependencies = [
  "egui",
  "indexmap 2.11.1",

@@ -7,7 +7,7 @@ use eda_units::eda_units::unit_system::UnitSystem;
 use egui::Ui;
 use egui_deferred_table::{
     Action, ApplyChange, AxisParameters, CellEditState, CellIndex, DeferredTable, DeferredTableDataSource,
-    DeferredTableRenderer, EditableTableRenderer, TableDimensions, apply_reordering, handle_editable_cell_click,
+    DeferredTableRenderer, EditableTableRenderer, EditorState, TableDimensions, apply_reordering,
 };
 use egui_i18n::tr;
 use egui_mobius::Value;
@@ -45,24 +45,26 @@ mod columns {
 }
 use columns::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlacementsDataSource {
     rows: Vec<PlacementsItem>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PlacementsRenderer {
-    phases: Vec<PhaseOverview>,
-
     rows_to_filter: Vec<usize>,
     row_ordering: Option<Vec<usize>>,
     column_ordering: Option<Vec<usize>>,
+}
+
+#[derive(Debug)]
+pub struct PlacementsEditor {
+    phases: Vec<PhaseOverview>,
 
     // a cache to allow easy lookup for the 'is_editable_cell' for the 'placed' cell
     phase_placements_editability_map: BTreeMap<PhaseReference, bool>,
     all_phases_pending: bool,
 
-    edit_state: Option<CellEditState<PlacementsItemCellEditState, PlacementsItem>>,
     sender: Enqueue<PlacementsTableUiCommand>,
 }
 
@@ -104,7 +106,7 @@ impl PlacementsDataSource {
     }
 }
 
-impl PlacementsRenderer {
+impl PlacementsEditor {
     pub fn update_phases(&mut self, mut phases: Vec<PhaseOverview>) {
         phases.sort_by(|a, b| {
             a.phase_reference
@@ -134,21 +136,27 @@ impl PlacementsRenderer {
 }
 
 impl PlacementsRenderer {
-    pub fn new(sender: Enqueue<PlacementsTableUiCommand>) -> Self {
+    pub fn new() -> Self {
         Self {
-            phases: Default::default(),
             rows_to_filter: Default::default(),
             row_ordering: None,
             column_ordering: None,
+        }
+    }
+}
+
+impl PlacementsEditor {
+    pub fn new(sender: Enqueue<PlacementsTableUiCommand>) -> Self {
+        Self {
+            phases: Default::default(),
             all_phases_pending: false,
             phase_placements_editability_map: BTreeMap::new(),
-            edit_state: Default::default(),
             sender,
         }
     }
 }
 
-impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
+impl EditableTableRenderer<PlacementsDataSource> for PlacementsEditor {
     type Value = PlacementsItem;
     type ItemState = PlacementsItemCellEditState;
 
@@ -226,16 +234,96 @@ impl EditableTableRenderer<PlacementsDataSource> for PlacementsRenderer {
             .expect("sent");
     }
 
-    fn set_edit_state(&mut self, edit_state: CellEditState<Self::ItemState, Self::Value>) {
-        self.edit_state.replace(edit_state);
-    }
+    fn render_cell_editor(
+        &self,
+        ui: &mut Ui,
+        cell_index: &CellIndex,
+        state: &mut Self::ItemState,
+        _original_item: &Self::Value,
+        source: &mut PlacementsDataSource,
+    ) {
+        match state {
+            PlacementsItemCellEditState::Placed(value) => {
+                let mut value_mut = value.clone();
+                ui.radio_value(
+                    &mut value_mut,
+                    PlacementStatus::Pending,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)),
+                );
+                ui.radio_value(
+                    &mut value_mut,
+                    PlacementStatus::Placed,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)),
+                );
+                ui.radio_value(
+                    &mut value_mut,
+                    PlacementStatus::Skipped,
+                    tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)),
+                );
 
-    fn edit_state(&self) -> Option<&CellEditState<Self::ItemState, Self::Value>> {
-        self.edit_state.as_ref()
-    }
+                if value_mut != *value {
+                    // NOTE: if we had &mut self here, we could apply the edit state now
+                    self.sender
+                        .send(PlacementsTableUiCommand::ApplyCellEdit {
+                            edit: PlacementsItemCellEditState::Placed(value_mut),
+                            cell_index: *cell_index,
+                        })
+                        .expect("sent");
+                }
+            }
+            PlacementsItemCellEditState::Phase(value) => {
+                let row = &source.rows[cell_index.row];
 
-    fn take_edit_state(&mut self) -> CellEditState<Self::ItemState, Self::Value> {
-        self.edit_state.take().unwrap()
+                let mut value_mut = value.clone();
+
+                ui.add(|ui: &mut Ui| {
+                    egui::ComboBox::from_id_salt(ui.id().with("phase").with(cell_index.row))
+                        .width(ui.available_width())
+                        .selected_text(match &value_mut {
+                            None => tr!("form-common-combo-none"),
+                            Some(phase) => phase.to_string(),
+                        })
+                        .show_ui(ui, |ui| {
+                            // Note: with the arguments to this method, there is no command we can send that will be able
+                            //       to do anything useful with the row as there is probably no API to access the
+                            //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
+                            if ui
+                                .add(egui::Button::selectable(
+                                    value_mut.is_none(),
+                                    tr!("form-common-combo-none")
+                                ))
+                                .clicked()
+                            {
+                                value_mut = None;
+                            }
+
+                            for phase in self.phases.iter()
+                                .filter(|phase| row.state.placement.pcb_side.eq(&phase.pcb_side))
+                            {
+                                if ui
+                                    .add(egui::Button::selectable(
+                                        matches!(&value_mut, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
+                                        phase.phase_reference.to_string(),
+                                    ))
+                                    .clicked()
+                                {
+                                    value_mut = Some(phase.phase_reference.clone());
+                                }
+                            }
+                        }).response
+                });
+
+                if value_mut != *value {
+                    // NOTE: if we had &mut self here, we could apply the edit state now
+                    self.sender
+                        .send(PlacementsTableUiCommand::ApplyCellEdit {
+                            edit: PlacementsItemCellEditState::Phase(value_mut),
+                            cell_index: cell_index.clone(),
+                        })
+                        .expect("sent");
+                }
+            }
+        }
     }
 }
 
@@ -252,137 +340,43 @@ impl DeferredTableRenderer<PlacementsDataSource> for PlacementsRenderer {
     fn render_cell(&self, ui: &mut Ui, cell_index: CellIndex, source: &PlacementsDataSource) {
         let row = &source.rows[cell_index.row];
 
-        let handled = match &self.edit_state {
-            Some(CellEditState::Editing(selected_cell_index, edit, _original_item))
-                if *selected_cell_index == cell_index =>
-            {
-                match edit {
-                    PlacementsItemCellEditState::Placed(value) => {
-                        let mut value_mut = value.clone();
-                        ui.radio_value(
-                            &mut value_mut,
-                            PlacementStatus::Pending,
-                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Pending)),
-                        );
-                        ui.radio_value(
-                            &mut value_mut,
-                            PlacementStatus::Placed,
-                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Placed)),
-                        );
-                        ui.radio_value(
-                            &mut value_mut,
-                            PlacementStatus::Skipped,
-                            tr!(placement_operation_status_to_i18n_key(&PlacementStatus::Skipped)),
-                        );
-
-                        if value_mut != *value {
-                            // NOTE: if we had &mut self here, we could apply the edit state now
-                            self.sender
-                                .send(PlacementsTableUiCommand::ApplyCellEdit {
-                                    edit: PlacementsItemCellEditState::Placed(value_mut),
-                                    cell_index,
-                                })
-                                .expect("sent");
-                        }
-
-                        true
-                    }
-                    PlacementsItemCellEditState::Phase(value) => {
-                        let mut value_mut = value.clone();
-
-                        ui.add(|ui: &mut Ui| {
-                            egui::ComboBox::from_id_salt(ui.id().with("phase").with(cell_index.row))
-                                .width(ui.available_width())
-                                .selected_text(match &value_mut {
-                                    None => tr!("form-common-combo-none"),
-                                    Some(phase) => phase.to_string(),
-                                })
-                                .show_ui(ui, |ui| {
-                                    // Note: with the arguments to this method, there is no command we can send that will be able
-                                    //       to do anything useful with the row as there is probably no API to access the
-                                    //       underlying row instance that is being edited; so we HAVE to edit-in-place here.
-                                    if ui
-                                        .add(egui::Button::selectable(
-                                            value_mut.is_none(),
-                                            tr!("form-common-combo-none")
-                                        ))
-                                        .clicked()
-                                    {
-                                        value_mut = None;
-                                    }
-
-                                    for phase in self.phases.iter()
-                                        .filter(|phase| row.state.placement.pcb_side.eq(&phase.pcb_side))
-                                    {
-                                        if ui
-                                            .add(egui::Button::selectable(
-                                                matches!(&value_mut, Some(other_phase_reference) if other_phase_reference.eq(&phase.phase_reference)),
-                                                phase.phase_reference.to_string(),
-                                            ))
-                                            .clicked()
-                                        {
-                                            value_mut = Some(phase.phase_reference.clone());
-                                        }
-                                    }
-                                }).response
-                        });
-
-                        if value_mut != *value {
-                            // NOTE: if we had &mut self here, we could apply the edit state now
-                            self.sender
-                                .send(PlacementsTableUiCommand::ApplyCellEdit {
-                                    edit: PlacementsItemCellEditState::Phase(value_mut),
-                                    cell_index,
-                                })
-                                .expect("sent");
-                        }
-
-                        true
-                    }
-                }
+        let _ = match cell_index.column {
+            OBJECT_PATH_COL => ui.label(&row.path.to_string()),
+            REF_DES_COL => ui.label(row.state.placement.ref_des.to_string()),
+            PLACE_COL => {
+                let label = tr!(placement_place_to_i18n_key(row.state.placement.place));
+                ui.label(label)
             }
-            _ => false,
+            MANUFACTURER_COL => ui.label(&row.state.placement.part.manufacturer),
+            MPN_COL => ui.label(&row.state.placement.part.mpn),
+            ROTATION_COL => ui.label(format!("{}", &row.state.unit_position.rotation)),
+            X_COL => ui.label(format!("{}", &row.state.unit_position.x)),
+            Y_COL => ui.label(format!("{}", &row.state.unit_position.y)),
+            PCB_SIDE_COL => {
+                let key = pcb_side_to_i18n_key(&row.state.placement.pcb_side);
+                ui.label(tr!(key))
+            }
+            PHASE_COL => {
+                let phase = &row
+                    .state
+                    .phase
+                    .clone()
+                    .map(|reference: Reference| reference.to_string())
+                    .unwrap_or_default();
+                ui.label(phase)
+            }
+            PLACED_COL => {
+                let label = tr!(placement_operation_status_to_i18n_key(&row.state.operation_status));
+                ui.label(label)
+            }
+            STATUS_COL => {
+                let label = tr!(placement_project_status_to_i18n_key(&row.state.project_status));
+                ui.label(label)
+            }
+            ORDERING_COL => ui.label(row.ordering.to_string()),
+
+            _ => unreachable!(),
         };
-
-        if !handled {
-            let _ = match cell_index.column {
-                OBJECT_PATH_COL => ui.label(&row.path.to_string()),
-                REF_DES_COL => ui.label(row.state.placement.ref_des.to_string()),
-                PLACE_COL => {
-                    let label = tr!(placement_place_to_i18n_key(row.state.placement.place));
-                    ui.label(label)
-                }
-                MANUFACTURER_COL => ui.label(&row.state.placement.part.manufacturer),
-                MPN_COL => ui.label(&row.state.placement.part.mpn),
-                ROTATION_COL => ui.label(format!("{}", &row.state.unit_position.rotation)),
-                X_COL => ui.label(format!("{}", &row.state.unit_position.x)),
-                Y_COL => ui.label(format!("{}", &row.state.unit_position.y)),
-                PCB_SIDE_COL => {
-                    let key = pcb_side_to_i18n_key(&row.state.placement.pcb_side);
-                    ui.label(tr!(key))
-                }
-                PHASE_COL => {
-                    let phase = &row
-                        .state
-                        .phase
-                        .clone()
-                        .map(|reference: Reference| reference.to_string())
-                        .unwrap_or_default();
-                    ui.label(phase)
-                }
-                PLACED_COL => {
-                    let label = tr!(placement_operation_status_to_i18n_key(&row.state.operation_status));
-                    ui.label(label)
-                }
-                STATUS_COL => {
-                    let label = tr!(placement_project_status_to_i18n_key(&row.state.project_status));
-                    ui.label(label)
-                }
-                ORDERING_COL => ui.label(row.ordering.to_string()),
-
-                _ => unreachable!(),
-            };
-        }
     }
 
     fn rows_to_filter(&self) -> Option<&[usize]> {
@@ -405,7 +399,12 @@ impl DeferredTableRenderer<PlacementsDataSource> for PlacementsRenderer {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PlacementsTableUi {
-    source: Value<(PlacementsDataSource, PlacementsRenderer)>,
+    source: Value<(
+        PlacementsDataSource,
+        PlacementsRenderer,
+        PlacementsEditor,
+        EditorState<PlacementsItemCellEditState, PlacementsItem>,
+    )>,
     #[derivative(Debug = "ignore")]
     pub(crate) filter: Filter,
 
@@ -427,7 +426,9 @@ impl PlacementsTableUi {
         Self {
             source: Value::new((
                 PlacementsDataSource::new(),
-                PlacementsRenderer::new(component.sender.clone()),
+                PlacementsRenderer::new(),
+                PlacementsEditor::new(component.sender.clone()),
+                EditorState::default(),
             )),
             filter,
 
@@ -436,16 +437,16 @@ impl PlacementsTableUi {
     }
 
     pub fn update_placements(&mut self, placements: Vec<PlacementsItem>, phases: Vec<PhaseOverview>) {
-        let (source, renderer) = &mut *self.source.lock().unwrap();
+        let (source, _renderer, editor, _editor_state) = &mut *self.source.lock().unwrap();
 
         source.update_placements(placements);
-        renderer.update_phases(phases);
+        editor.update_phases(phases);
     }
 
     pub fn update_phases(&mut self, phases: Vec<PhaseOverview>) {
-        let (_source, renderer) = &mut *self.source.lock().unwrap();
+        let (_source, _renderer, editor, _editor_state) = &mut *self.source.lock().unwrap();
 
-        renderer.update_phases(phases);
+        editor.update_phases(phases);
     }
 
     pub fn filter_ui(&self, ui: &mut Ui) {
@@ -504,7 +505,7 @@ impl UiComponent for PlacementsTableUi {
 
     #[profiling::function]
     fn ui<'context>(&self, ui: &mut Ui, _context: &mut Self::UiContext<'context>) {
-        let (source, renderer) = &mut *self.source.lock().unwrap();
+        let (source, renderer, editor, editor_state) = &mut *self.source.lock().unwrap();
 
         let (_response, actions) = DeferredTable::new(ui.make_persistent_id("placements_table"))
             .min_size((400.0, 400.0).into())
@@ -531,15 +532,13 @@ impl UiComponent for PlacementsTableUi {
                 AxisParameters::default().name(tr!("table-placements-column-placed")),
                 AxisParameters::default().name(tr!("table-placements-column-status")),
             ])
-            .show(ui, source, renderer);
+            .show_and_edit(ui, source, renderer, editor, editor_state);
 
         for action in actions {
             match action {
                 // TODO we need double-click to edit cells, not single-click, then single-click again
                 Action::CellClicked(cell_index) => {
                     info!("Cell clicked. cell: {:?}", cell_index);
-
-                    handle_editable_cell_click(source, renderer, cell_index);
 
                     // FUTURE only do this if a *different* cell is clicked, requires tracking the current cell
 
@@ -601,7 +600,7 @@ impl UiComponent for PlacementsTableUi {
 
                 match action {
                     Some(FilterUiAction::ApplyFilter) => {
-                        let (source, renderer) = &mut *self.source.lock().unwrap();
+                        let (source, renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
 
                         renderer.rows_to_filter = source.rows.iter().enumerate().filter_map(|(id, row)|{
 
@@ -651,8 +650,8 @@ impl UiComponent for PlacementsTableUi {
                 edit: new_edit_state,
                 cell_index,
             } => {
-                let (_source, renderer) = &mut *self.source.lock().unwrap();
-                match renderer.edit_state.as_mut() {
+                let (_source, _renderer, _editor, editor_state) = &mut *self.source.lock().unwrap();
+                match editor_state.state.as_mut() {
                     Some(CellEditState::Editing(current_cell_index, current_edit_state, _original_item))
                         if *current_cell_index == cell_index =>
                     {
@@ -664,7 +663,7 @@ impl UiComponent for PlacementsTableUi {
                 None
             }
             PlacementsTableUiCommand::CellEditComplete(cell_index, edit_state, original_item) => {
-                let (source, _renderer) = &mut *self.source.lock().unwrap();
+                let (source, _renderer, _editor, _editor_state) = &mut *self.source.lock().unwrap();
                 let row = &mut source.rows[cell_index.row];
 
                 row.apply_change(edit_state)
