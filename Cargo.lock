@@ -1789,8 +1789,9 @@ dependencies = [
 
 [[package]]
 name = "egui_mobius"
-version = "0.3.0-alpha.31"
-source = "git+https://github.com/makerpnp/egui_mobius?rev=e62f97bfcf97a831bd67dd75ab5eab9585922765#e62f97bfcf97a831bd67dd75ab5eab9585922765"
+version = "0.3.0-alpha.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "835e691c529bcc9d7b4aec5f59e402e8c248585efd0e17122c0db50b54327260"
 dependencies = [
  "futures",
  "serde",
