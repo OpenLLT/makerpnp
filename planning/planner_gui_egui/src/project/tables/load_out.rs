@@ -315,6 +315,9 @@ impl UiComponent for LoadOutTableUi {
             .column_parameters(&vec![
                 AxisParameters::default()
                     .default_dimension(200.0)
+                    .name(tr!("table-load-out-column-reference")),
+                AxisParameters::default()
+                    .default_dimension(200.0)
                     .name(tr!("table-load-out-column-manufacturer")),
                 AxisParameters::default()
                     .default_dimension(200.0)
