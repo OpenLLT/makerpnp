@@ -1,0 +1,47 @@
+[package]
+name = "planning"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+markdown = ["dep:json2markdown"]
+
+[dependencies]
+pnp = { path = "../../pnp/pnp" }
+math = { path = "../../common/math" }
+util = { path = "../../common/util" }
+gerber = { path = "../../gerber/gerber" }
+eda_units = { path = "../../eda/eda_units", features = ["serde"]}
+
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+time = { workspace = true, features = ["serde", "serde-well-known"] }
+rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
+serde = { workspace = true,  features = ["derive"] }
+serde_json = { workspace = true,  features = ["preserve_order"] }
+serde_with = { workspace = true }
+typetag = { workspace = true }
+dyn-eq = { workspace = true }
+dyn-clone = { workspace = true }
+
+as-any = { workspace = true }
+json2markdown = { workspace = true, optional = true }
+
+tracing = { workspace = true }
+
+indexmap = { workspace = true, features = ["serde"] }
+heck = { workspace = true }
+csv = { workspace = true }
+
+nalgebra = { workspace = true }
+
+itertools = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+tap = { workspace = true }
+
+# to enable the default implementations on some structures
+pnp = { path = "../../pnp/pnp", features = ["testing"]}

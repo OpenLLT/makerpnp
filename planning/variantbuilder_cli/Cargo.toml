@@ -1,0 +1,36 @@
+[package]
+name = "variantbuilder_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Important: there should be no direct dependencies on the core classes, only those re-exported by the app.
+variantbuilder_app = { path = "../variantbuilder_app"}
+
+# 3rd party dependencies
+cli = { path = "../../common/cli", features = ["tracing"]}
+clap = { workspace = true, features = ["derive"] }
+clap-verbosity-flag = { workspace = true }
+argfile = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+crux_core = { workspace = true }
+crossbeam-channel = { workspace = true }
+
+[dev-dependencies]
+util = { path = "../../common/util", features = ["testing"]}
+stores = { path = "../stores", features = ["testing"]}
+
+assert_cmd = { workspace = true }
+assert_fs = { workspace = true }
+csv = { workspace = true }
+indoc = { workspace = true }
+tempfile = { workspace = true }
+predicates = { workspace = true }
+predicates-tree = { workspace = true }
+rust_decimal = { workspace = true}
+rust_decimal_macros = { workspace = true}
+
+serde = { workspace = true, features = ["derive"] }

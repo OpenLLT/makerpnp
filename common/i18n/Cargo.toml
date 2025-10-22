@@ -1,0 +1,22 @@
+[package]
+name = "i18n"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+args = ["dep:args"]
+validator = ["json"]
+json = ["dep:serde_json"]
+
+[dependencies]
+# logging
+tracing = { workspace = true }
+
+# gui
+egui-i18n = { workspace = true }
+
+# args
+args = { path = "../args", optional = true }
+
+# json
+serde_json = { workspace = true, optional = true }
