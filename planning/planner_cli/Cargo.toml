@@ -1,0 +1,52 @@
+[package]
+name = "planner_cli"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+markdown = ["planner_app/markdown"]
+
+# features required for testing
+testing = ["markdown"]
+
+[dependencies]
+cli = { path = "../../common/cli", features = ["tracing"] }
+# FIXME remove planning dependency?
+planning = { path = "../planning" }
+planner_app = { path = "../planner_app" }
+pnp = { path = "../../pnp/pnp" }
+stores = { path = "../stores"}
+util = { path = "../../common/util" }
+
+clap = { workspace = true, features = ["derive"] }
+clap-verbosity-flag = { workspace = true }
+argfile = { workspace = true }
+regex = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rust_decimal = { workspace = true }
+nalgebra = { workspace = true }
+serde = { workspace = true }
+
+crux_core = { workspace = true }
+crossbeam-channel = { workspace = true }
+
+[dev-dependencies]
+planner_cli = { path = ".", features = ["testing"] }
+
+util = { path = "../../common/util", features = ["testing"] }
+assert_cmd = { workspace = true  }
+tempfile = { workspace = true  }
+indoc = { workspace = true  }
+predicates = { workspace = true   }
+csv = { workspace = true  }
+rust_decimal_macros = { workspace = true }
+serde = { workspace = true , features = ["derive"] }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+time = { workspace = true  }
+indexmap = { workspace = true }
+typetag = { workspace = true }
+dyn-clone = { workspace = true }
+dyn-eq = { workspace = true }

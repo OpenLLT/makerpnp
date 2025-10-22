@@ -1,0 +1,26 @@
+[package]
+name = "pnp"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+testing = []
+
+[dependencies]
+math = { path = "../../common/math" }
+eda_units = { path = "../../eda/eda_units", features = ["serde"]}
+
+thiserror = { workspace = true }
+rust_decimal = { workspace = true}
+lexical-sort = { workspace = true }
+derivative = { workspace = true }
+num-rational = { workspace = true }
+nalgebra = { workspace = true, features = ["serde-serialize"], default-features = false }
+
+serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
+
+[dev-dependencies]
+pnp = { path = "", features = ["testing"] }
+rstest = { workspace = true }
+

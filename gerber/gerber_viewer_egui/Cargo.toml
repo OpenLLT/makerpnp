@@ -1,0 +1,32 @@
+[package]
+name = "gerber_viewer_egui"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Logging
+log = { workspace = true }
+env_logger = { workspace = true }
+
+# GUI Framework
+egui = { workspace = true }
+eframe = { workspace = true, features = ["default"] }
+epaint = { workspace = true }
+egui_extras = { workspace = true }
+egui_taffy = { workspace = true }
+egui_tool_windows = { workspace = true }
+
+# File Dialog
+rfd = { workspace = true }
+
+# Gerber rendering, types and parser
+gerber_viewer = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+
+# Math
+nalgebra = { workspace = true }
+
+# Units
+eda_units = { path = "../../eda/eda_units", features = ["gerber"] }

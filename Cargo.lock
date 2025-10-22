@@ -331,6 +331,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "args"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2753,8 +2760,8 @@ dependencies = [
 name = "i18n"
 version = "0.1.0"
 dependencies = [
+ "args",
  "egui-i18n",
- "planner_app",
  "serde_json",
  "tracing",
 ]
@@ -4212,6 +4219,7 @@ name = "planner_app"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "args",
  "chrono",
  "crux_core",
  "derivative",
@@ -4276,6 +4284,7 @@ dependencies = [
 name = "planner_gui_egui"
 version = "0.1.0"
 dependencies = [
+ "args",
  "async-std",
  "chrono",
  "derivative",
