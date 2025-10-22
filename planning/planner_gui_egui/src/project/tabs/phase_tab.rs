@@ -339,7 +339,7 @@ impl UiComponent for PhaseTabUi {
                         unit_position,
                     }),
                     None => None,
-                    Some(PlacementsTableUiAction::NewSelection(_)) => {
+                    Some(PlacementsTableUiAction::ApplySelection(_)) => {
                         // Nothing to do.
                         None
                     }

@@ -10,7 +10,7 @@ use egui_deferred_table::{
 use egui_i18n::tr;
 use egui_mobius::Value;
 use egui_mobius::types::Enqueue;
-use planner_app::{PartStates, PartWithState, ProcessReference, RefDes};
+use planner_app::{Part, PartStates, PartWithState, ProcessReference, RefDes};
 use tracing::{debug, info, trace};
 
 use crate::filter::{Filter, FilterUiAction, FilterUiCommand, FilterUiContext};
@@ -309,6 +309,7 @@ pub enum PartTableUiCommand {
         cell_index: CellIndex,
     },
     CellEditComplete(CellIndex, PartCellEditState, PartWithState),
+    NewSelection(Vec<Part>),
 }
 
 #[derive(Debug, Clone)]
@@ -320,6 +321,7 @@ pub enum PartTableUiAction {
         item: PartWithState,
         original_item: PartWithState,
     },
+    ApplySelection(Vec<Part>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -371,6 +373,18 @@ impl UiComponent for PartTableUi {
                     to,
                 } => {
                     apply_reordering(&mut renderer.column_ordering, from, to);
+                }
+                Action::RowSelectionChanged {
+                    selection,
+                } => {
+                    let parts = selection
+                        .iter()
+                        .map(|row| source.rows[*row].part.clone())
+                        .collect::<Vec<_>>();
+                    editor
+                        .sender
+                        .send(PartTableUiCommand::NewSelection(parts))
+                        .expect("sent");
                 }
             }
         }
@@ -448,6 +462,7 @@ impl UiComponent for PartTableUi {
                     })
                     .ok()
             }
+            PartTableUiCommand::NewSelection(parts) => Some(PartTableUiAction::ApplySelection(parts)),
         }
     }
 }
@@ -475,29 +490,3 @@ where
             .join(", ")
     )
 }
-
-//
-// Snippets of code remaining to be ported.
-//
-
-// fn on_highlight_change(&mut self, highlighted: &[&PartStatesRow], unhighlighted: &[&PartStatesRow]) {
-//     trace!(
-//             "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
-//             highlighted, unhighlighted
-//         );
-//
-//     // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
-//     //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
-//     //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
-//
-//     // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected parts instead
-//     //       of the parts themselves?
-//
-//     let parts = highlighted
-//         .iter()
-//         .map(|row| row.part.clone())
-//         .collect::<Vec<_>>();
-//     self.sender
-//         .send(PartsTabUiCommand::NewSelection(parts))
-//         .expect("sent");
-// }

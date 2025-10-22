@@ -492,7 +492,7 @@ pub enum PlacementsTableUiAction {
         design_position: PlacementPositionUnit,
         unit_position: PlacementPositionUnit,
     },
-    NewSelection(Vec<PlacementsItem>),
+    ApplySelection(Vec<PlacementsItem>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -579,6 +579,18 @@ impl UiComponent for PlacementsTableUi {
                     to,
                 } => {
                     apply_reordering(&mut renderer.column_ordering, from, to);
+                }
+                Action::RowSelectionChanged {
+                    selection,
+                } => {
+                    let placement_items = selection
+                        .iter()
+                        .map(|row_index| source.rows[*row_index].clone())
+                        .collect::<Vec<_>>();
+                    editor
+                        .sender
+                        .send(PlacementsTableUiCommand::NewSelection(placement_items))
+                        .expect("sent");
                 }
             }
         }
@@ -686,37 +698,9 @@ impl UiComponent for PlacementsTableUi {
                 design_position,
                 unit_position,
             }),
-            PlacementsTableUiCommand::NewSelection(selection) => Some(PlacementsTableUiAction::NewSelection(selection)),
+            PlacementsTableUiCommand::NewSelection(selection) => {
+                Some(PlacementsTableUiAction::ApplySelection(selection))
+            }
         }
     }
 }
-
-//
-// Snippets of code remaining to be ported.
-//
-
-// fn on_highlight_change(&mut self, highlighted: &[&PlacementsRow], unhighlighted: &[&PlacementsRow]) {
-//     trace!(
-//             "on_highlight_change. highlighted: {:?}, unhighlighted: {:?}",
-//             highlighted, unhighlighted
-//         );
-//
-//     // NOTE: for this to work, this PR is required: https://github.com/kang-sw/egui-data-table/pull/51
-//     //       without it, when making a multi-select, this only ever seems to return a slice with one element, perhaps
-//     //       egui_data_tables is broken, or perhaps our expectations of how the API is supposed to work are incorrect...
-//
-//     // FIXME this is extremely expensive, perhaps we could just send some identifier for the selected placements instead
-//     //       of the placements themselves?
-//
-//     let selection = highlighted
-//         .iter()
-//         .map(|row| PlacementsItem {
-//             path: row.object_path.clone(),
-//             state: row.placement_state.clone(),
-//             ordering: row.ordering,
-//         })
-//         .collect::<Vec<_>>();
-//     self.sender
-//         .send(PlacementsTableUiCommand::NewSelection(selection))
-//         .expect("sent");
-// }

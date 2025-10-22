@@ -343,6 +343,9 @@ impl UiComponent for LoadOutTableUi {
                 } => {
                     apply_reordering(&mut renderer.column_ordering, from, to);
                 }
+                Action::RowSelectionChanged {
+                    ..
+                } => {}
             }
         }
     }

@@ -65,7 +65,6 @@ pub enum PartsTabUiCommand {
 
     // internal
     PartTableUiCommand(PartTableUiCommand),
-    NewSelection(Vec<Part>),
     PartsActionClicked(PartsAction),
     ProcessChanged(ProcessReference),
 }
@@ -205,11 +204,12 @@ impl UiComponent for PartsTabUi {
                             processes,
                         }
                     }
+                    PartTableUiAction::ApplySelection(selection) => {
+                        self.selection = Some(selection);
+
+                        PartsTabUiAction::None
+                    }
                 }),
-            PartsTabUiCommand::NewSelection(selection) => {
-                self.selection = Some(selection);
-                None
-            }
             PartsTabUiCommand::PartsActionClicked(action) => {
                 if let (Some(selection), Some(process)) = (&self.selection, &self.selected_process) {
                     let apply_action = match action {

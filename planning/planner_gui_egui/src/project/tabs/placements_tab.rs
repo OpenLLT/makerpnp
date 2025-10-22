@@ -245,7 +245,7 @@ impl UiComponent for PlacementsTabUi {
                         design_position,
                         unit_position,
                     }),
-                    Some(PlacementsTableUiAction::NewSelection(selection)) => {
+                    Some(PlacementsTableUiAction::ApplySelection(selection)) => {
                         self.selection = Some(selection);
                         None
                     }
