@@ -104,7 +104,7 @@ pub mod fluent_argument_helpers {
         use egui_i18n::fluent_bundle::{FluentArgs, FluentValue};
         use planner_app::Arg;
 
-        pub fn build_fluent_args(args: &HashMap<String, Arg>) -> FluentArgs {
+        pub fn build_fluent_args(args: &HashMap<String, Arg>) -> FluentArgs<'_> {
             let mut fluent_args = FluentArgs::new();
             for (key, value) in args.iter() {
                 match value {

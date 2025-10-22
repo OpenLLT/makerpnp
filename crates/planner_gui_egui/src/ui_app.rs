@@ -434,7 +434,7 @@ impl UiApp {
     /// provide mutable access to the state.
     ///
     /// Safety: it's always safe, because `new` calls `state.write()`
-    fn app_state(&mut self) -> ValueGuard<AppState> {
+    fn app_state(&mut self) -> ValueGuard<'_, AppState> {
         unsafe {
             self.state
                 .assume_init_mut()
