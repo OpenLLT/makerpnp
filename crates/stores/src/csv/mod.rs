@@ -23,12 +23,6 @@ pub mod packages;
 //        is discarded.
 
 #[derive(Debug, serde::Deserialize)]
-enum CSVEdaToolValue {
-    DipTrace,
-    KiCad,
-}
-
-#[derive(Debug, serde::Deserialize)]
 #[serde(rename_all(deserialize = "PascalCase"))]
 pub struct PackageMappingRecord(HashMap<String, String>);
 
