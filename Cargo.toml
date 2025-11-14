@@ -38,8 +38,6 @@ time = { version = "0.3.41" }
 indexmap = { version = "2.9.0" }
 slotmap = { version = "1.0.7" }
 heck = { version = "0.5.0" }
-futures = {  version = "0.3.31" }
-async-std = {  version = "1.13.1" }
 petgraph = { version = "0.8.1"}
 csv = { version = "1.3.1" }
 termtree = { version = "0.5.1"}
@@ -108,8 +106,8 @@ egui_material_icons = { git = "https://github.com/lucasmerlin/hello_egui.git", t
 # 1 - https://github.com/LennysLounge/egui_ltreeview/pull/23
 egui_ltreeview = { git = "https://github.com/makerpnp/egui_ltreeview", rev = "6e44b06e6ab3b22d3c0f3d790be77650ae74cb53" }
 
-egui_deferred_table = { version = "=0.1.6" }
-#egui_deferred_table = { git = "https://github.com/makerpnp/egui_deferred_table", rev = "30d3b269e5305f0b2c30696455322b642fc7281e" }
+#egui_deferred_table = { version = "=0.1.6" }
+egui_deferred_table = { git = "https://github.com/makerpnp/egui_deferred_table", rev = "67f44aaabcc9850c3f0ba2c88d54a468d2a20c5f" }
 #egui_deferred_table = { path = "../../../libraries/rust/egui/egui_deferred_table" }
 
 #egui_double_slider = { version = "0.8.0"}
@@ -151,6 +149,8 @@ puffin_http = { version = "0.16.1" }
 # tasks/async
 tokio = { version = "1.45.1", features = ["full"]}
 crossbeam-channel = { version = "0.5.15" }
+futures = {  version = "0.3.31" }
+async-std = {  version = "1.13.1" }
 
 # Gerber rendering, types and parser
 # Note, these three crates are tightly coupled, ensure that only one of each appears in the dependency tree.

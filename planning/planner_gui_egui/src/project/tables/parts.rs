@@ -352,6 +352,7 @@ impl UiComponent for PartTableUi {
                     .default_dimension(100.0),
                 AxisParameters::default()
                     .name(tr!("table-parts-column-ref-des-set"))
+                    .expandable(true)
                     .default_dimension(100.0),
             ])
             .show_and_edit(ui, source, renderer, editor, editor_state);

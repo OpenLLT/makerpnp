@@ -321,6 +321,7 @@ impl UiComponent for LoadOutTableUi {
                     .name(tr!("table-load-out-column-manufacturer")),
                 AxisParameters::default()
                     .default_dimension(200.0)
+                    .expandable(true)
                     .name(tr!("table-load-out-column-mpn")),
             ])
             .show_and_edit(ui, source, renderer, editor, editor_state);

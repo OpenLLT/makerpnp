@@ -523,6 +523,7 @@ impl UiComponent for PlacementsTableUi {
                     .default_dimension(200.0),
                 AxisParameters::default()
                     .name(tr!("table-placements-column-mpn"))
+                    .expandable(true)
                     .default_dimension(200.0),
                 AxisParameters::default().name(tr!("table-placements-column-rotation")),
                 AxisParameters::default().name(tr!("table-placements-column-x")),
